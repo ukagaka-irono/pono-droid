@@ -68,7 +68,7 @@ fun LicensesScreen(onBack: () -> Unit) {
         ) {
             item {
                 Text(
-                    "pono-droid は次のソフトウェアを利用しています。名前をタップすると全文を表示します。",
+                    "pono-droid と、利用しているソフトウェアのライセンスです。名前をタップすると全文を表示します。",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )

@@ -51,6 +51,10 @@ abstract class GenerateLicenseAssets : DefaultTask() {
         }
 
         val entries = listOf(
+            Entry(
+                "pono-droid", "Apache-2.0", "https://github.com/ukagaka-irono/pono-droid",
+                "Copyright 2026 ukagaka-irono\n\nLicensed under the Apache License, Version 2.0.",
+            ),
             Entry("YAYA", "BSD 3-Clause", "https://github.com/YAYA-shiori/yaya-shiori", read("LICENSE").trim()),
             Entry(
                 "Mersenne Twister (MT19937)", "BSD 3-Clause", "http://www.math.sci.hiroshima-u.ac.jp/m-mat/MT/emt.html",
@@ -117,7 +121,8 @@ abstract class GenerateLicenseAssets : DefaultTask() {
 
 val generateLicenseAssets = tasks.register<GenerateLicenseAssets>("generateLicenseAssets") {
     yayaDir.set(rootProject.layout.projectDirectory.dir("shiori-yaya/src/main/cpp/yaya"))
-    apacheLicense.set(layout.projectDirectory.file("licenses/LICENSE-2.0.txt"))
+    // pono-droid 自体のライセンスファイル（Apache License 2.0 の全文）をそのまま使う
+    apacheLicense.set(rootProject.layout.projectDirectory.file("LICENSE"))
     outputDir.set(layout.buildDirectory.dir("generated/licenses"))
 }
 
