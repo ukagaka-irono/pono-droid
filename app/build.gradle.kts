@@ -132,6 +132,14 @@ androidComponents {
     }
 }
 
+/**
+ * リリース用の署名。鍵と合言葉はリポジトリに置かず、環境変数で渡す（GitHub Actions ではシークレットから）。
+ * 4つ揃っていなければ release は署名なしでビルドされる（そのままでは端末に入れられない）。
+ */
+val releaseKeystore = System.getenv("PONO_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }?.let(::file)
+val releaseSigningReady = releaseKeystore?.isFile == true &&
+    listOf("PONO_KEYSTORE_PASSWORD", "PONO_KEY_ALIAS", "PONO_KEY_PASSWORD").all { !System.getenv(it).isNullOrEmpty() }
+
 android {
     namespace = "net.pono.droid"
     compileSdk = 37
@@ -140,13 +148,26 @@ android {
         applicationId = "net.pono.droid"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        // リリースのワークフローがタグから渡す（-PponoVersionName=0.2.0 -PponoVersionCode=12）
+        versionCode = providers.gradleProperty("ponoVersionCode").orNull?.toInt() ?: 1
+        versionName = providers.gradleProperty("ponoVersionName").orNull ?: "0.1.0"
+    }
+
+    signingConfigs {
+        if (releaseSigningReady) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("PONO_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("PONO_KEY_ALIAS")
+                keyPassword = System.getenv("PONO_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (releaseSigningReady) signingConfig = signingConfigs.getByName("release")
         }
     }
 

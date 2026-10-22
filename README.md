@@ -82,6 +82,45 @@ APK は `app/build/outputs/apk/debug/app-debug.apk` にできます。
 
 > このタスクは、テストがすべて通っても終了コード 1 で失敗扱いになることがあります（原因調査中）。結果は `shiori-yaya/build/reports/androidTests/` で確認してください。
 
+## リリース
+
+`v0.2.0` のようなタグをプッシュすると、GitHub Actions（`.github/workflows/release.yml`）が署名した APK を作り、GitHub Releases に載せます。
+`versionName` はタグから（`v0.2.0` → `0.2.0`）、`versionCode` はワークフローの通し番号から決まります。`-` を含むタグ（`v0.2.0-beta.1` など）はプレリリースになります。
+
+### 最初に一度だけ: 署名鍵を作ってシークレットに登録する
+
+署名鍵はリポジトリに入れないでください。なくすと同じアプリとして更新できなくなるので、手元で安全に保管します。
+
+1. 鍵を作ります（合言葉を聞かれます）。
+
+   ```bash
+   keytool -genkeypair -keystore pono-droid-release.jks -storetype PKCS12 -alias pono-droid -keyalg RSA -keysize 4096 -validity 10000
+   ```
+
+2. GitHub に登録するため、base64 にします。
+
+   ```bash
+   base64 -w0 pono-droid-release.jks > pono-droid-release.jks.base64
+   ```
+
+3. リポジトリの Settings → Secrets and variables → Actions に、次の4つを登録します。
+
+   | 名前 | 中身 |
+   |------|------|
+   | `PONO_KEYSTORE_BASE64` | 2. で作ったファイルの中身 |
+   | `PONO_KEYSTORE_PASSWORD` | キーストアの合言葉 |
+   | `PONO_KEY_ALIAS` | 鍵の別名（上の例では `pono-droid`） |
+   | `PONO_KEY_PASSWORD` | 鍵の合言葉（PKCS12 ではキーストアと同じ） |
+
+### リリースする
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+手元で署名付きのビルドをするときは、同じ名前の環境変数（`PONO_KEYSTORE_FILE` に .jks のパス、ほかの3つ）を設定して `./gradlew :app:assembleRelease` を実行します。設定が無ければ署名なしの APK になります。
+
 ## 構成
 
 ```

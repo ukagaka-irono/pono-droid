@@ -8,3 +8,8 @@ captures/
 .kotlin/
 /.idea/*
 !/.idea/.gitignore
+
+# 署名鍵は絶対にコミットしない
+*.jks
+*.keystore
+*.jks.base64

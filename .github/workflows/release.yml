@@ -1,0 +1,89 @@
+name: Release
+
+# v0.2.0 のようなタグをプッシュすると、署名した APK を作って GitHub Releases に載せる。
+# 署名鍵はリポジトリに置かず、次のシークレットで渡す（作り方は README の「リリース」）:
+#   PONO_KEYSTORE_BASE64   キーストア（.jks）を base64 にしたもの
+#   PONO_KEYSTORE_PASSWORD キーストアの合言葉
+#   PONO_KEY_ALIAS         鍵の別名
+#   PONO_KEY_PASSWORD      鍵の合言葉
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Prepare signing key
+        env:
+          PONO_KEYSTORE_BASE64: ${{ secrets.PONO_KEYSTORE_BASE64 }}
+          PONO_KEYSTORE_PASSWORD: ${{ secrets.PONO_KEYSTORE_PASSWORD }}
+          PONO_KEY_ALIAS: ${{ secrets.PONO_KEY_ALIAS }}
+          PONO_KEY_PASSWORD: ${{ secrets.PONO_KEY_PASSWORD }}
+        run: |
+          for name in PONO_KEYSTORE_BASE64 PONO_KEYSTORE_PASSWORD PONO_KEY_ALIAS PONO_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::シークレット $name がありません（README の「リリース」を参照）"
+              exit 1
+            fi
+          done
+          echo "$PONO_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: Build signed release APK
+        env:
+          PONO_KEYSTORE_FILE: ${{ runner.temp }}/release.jks
+          PONO_KEYSTORE_PASSWORD: ${{ secrets.PONO_KEYSTORE_PASSWORD }}
+          PONO_KEY_ALIAS: ${{ secrets.PONO_KEY_ALIAS }}
+          PONO_KEY_PASSWORD: ${{ secrets.PONO_KEY_PASSWORD }}
+        run: |
+          # タグ v0.2.0 → versionName 0.2.0。versionCode はこのワークフローの通し番号（必ず増える）
+          ./gradlew :baseware:test :app:assembleRelease --stacktrace \
+            -PponoVersionName="${GITHUB_REF_NAME#v}" \
+            -PponoVersionCode="${{ github.run_number }}"
+
+      - name: Verify signature
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          if [ ! -f "$apk" ]; then
+            echo "::error::署名済みの APK ができていません"
+            exit 1
+          fi
+          build_tools="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$build_tools/apksigner" verify --print-certs "$apk"
+          mkdir -p dist
+          cp "$apk" "dist/pono-droid-${GITHUB_REF_NAME}.apk"
+
+      - name: Publish to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # v0.2.0-beta.1 のように - を含むタグはプレリリースにする
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" "dist/pono-droid-${GITHUB_REF_NAME}.apk" \
+            --title "pono-droid ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            $prerelease
+
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
