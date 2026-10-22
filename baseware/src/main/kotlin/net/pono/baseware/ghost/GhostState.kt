@@ -5,7 +5,15 @@ import net.pono.baseware.sakura.Choice
 sealed interface BalloonItem {
     data class Text(val text: String) : BalloonItem
     data object NewLine : BalloonItem
+
+    /** \q の選択肢と、\_a / \__q のリンク。文の中にそのまま置く */
     data class ChoiceItem(val choice: Choice) : BalloonItem
+
+    /** \![*]。次の選択肢の前に付ける印 */
+    data object Marker : BalloonItem
+
+    /** \_l[x,y]。同じ行の中で x を指定されたら、そこから次の列にする（狭いバルーンでは座標どおりに置けないので、列に分けて並べる） */
+    data object Column : BalloonItem
 }
 
 /** キャラクター（\0, \1 ...）1人分の表示状態。[surface] が -1 なら非表示。 */

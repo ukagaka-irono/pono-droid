@@ -534,6 +534,10 @@ class GhostController(
         override fun startAnimation(scope: Int, id: Int) =
             _state.update { it.update(scope) { c -> c.copy(animationRequest = id to ++animationCounter) } }
 
+        override fun addMarker(scope: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.Marker) } }
+
+        override fun moveCursor(scope: Int, x: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.Column) } }
+
         override suspend fun waitClick() {
             val waiter = CompletableDeferred<Unit>()
             clickWaiter = waiter

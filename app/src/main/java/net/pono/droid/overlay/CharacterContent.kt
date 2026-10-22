@@ -4,8 +4,10 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,12 +33,18 @@ import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.pono.baseware.ghost.BalloonItem
+import net.pono.baseware.ghost.BalloonLayout
 import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.sakura.Choice
 
@@ -140,20 +148,17 @@ private fun Balloon(items: List<BalloonItem>, onClick: () -> Unit, onChoice: (Ch
             .clickable(onClick = onClick),
     ) {
         Box(Modifier.heightIn(max = maxHeight).verticalScroll(scroll).padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Column {
-                for (line in toLines(items)) {
-                    when (line) {
-                        is Line.TextLine -> Text(line.text, fontSize = 14.sp, color = Color(0xFF3E2723))
-                        is Line.ChoiceLine -> Text(
-                            // 等幅で揃えるための空白が後ろに付いていることがあるので落とす
-                            text = "▶ " + line.choice.title.trim(),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF1565C0),
-                            modifier = Modifier
-                                .clickable { onChoice(line.choice) }
-                                .padding(vertical = 4.dp),
-                        )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                for (line in BalloonLayout.lines(items)) {
+                    if (line.columns.size == 1) {
+                        BalloonText(line.columns[0], onChoice)
+                    } else {
+                        // \_l で並べた列は、バルーンの幅を等分して横に並べる
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            for (column in line.columns) {
+                                BalloonText(column, onChoice, Modifier.weight(1f))
+                            }
+                        }
                     }
                 }
             }
@@ -161,36 +166,35 @@ private fun Balloon(items: List<BalloonItem>, onClick: () -> Unit, onChoice: (Ch
     }
 }
 
-private sealed interface Line {
-    data class TextLine(val text: String) : Line
-    data class ChoiceLine(val choice: Choice) : Line
-}
+private val TextColor = Color(0xFF3E2723)
+private val ChoiceStyle = TextLinkStyles(
+    style = SpanStyle(color = Color(0xFF1565C0), fontWeight = FontWeight.Medium),
+    pressedStyle = SpanStyle(color = Color(0xFF1565C0), background = Color(0x221565C0)),
+)
 
-/** 選択肢は1行ずつのボタンにし、それ以外は改行で区切ったテキストにする。 */
-private fun toLines(items: List<BalloonItem>): List<Line> {
-    val lines = mutableListOf<Line>()
-    val current = StringBuilder()
-    // 選択肢の直後の \n は、選択肢自体が1行なので空行にしない
-    var afterChoice = false
-    for (item in items) {
-        when (item) {
-            is BalloonItem.Text -> {
-                current.append(item.text)
-                afterChoice = false
-            }
-            BalloonItem.NewLine -> {
-                if (!afterChoice || current.isNotEmpty()) lines += Line.TextLine(current.toString())
-                current.clear()
-                afterChoice = false
-            }
-            is BalloonItem.ChoiceItem -> {
-                if (current.isNotBlank()) lines += Line.TextLine(current.toString())
-                current.clear()
-                lines += Line.ChoiceLine(item.choice)
-                afterChoice = true
+/** 1列分の文。選択肢とリンクは文の中で押せるようにする（\![*] があれば印を付ける） */
+@Composable
+private fun BalloonText(runs: List<BalloonLayout.Run>, onChoice: (Choice) -> Unit, modifier: Modifier = Modifier) {
+    val text = buildAnnotatedString {
+        for (run in runs) {
+            when (run) {
+                is BalloonLayout.Run.Text -> append(run.text)
+                is BalloonLayout.Run.ChoiceRun -> {
+                    if (run.marked) append("▸ ")
+                    withLink(LinkAnnotation.Clickable(tag = run.choice.id, styles = ChoiceStyle) { onChoice(run.choice) }) {
+                        append(run.choice.title)
+                    }
+                }
             }
         }
     }
-    if (current.isNotEmpty()) lines += Line.TextLine(current.toString())
-    return lines
+    // 選択肢を含む行は指で押しやすいよう少し高さを取る
+    val hasChoice = runs.any { it is BalloonLayout.Run.ChoiceRun }
+    Text(
+        text = text,
+        fontSize = 14.sp,
+        lineHeight = if (hasChoice) 24.sp else 20.sp,
+        color = TextColor,
+        modifier = modifier.padding(vertical = if (hasChoice) 2.dp else 0.dp),
+    )
 }

@@ -13,6 +13,12 @@ interface ScriptHost {
     fun addChoice(scope: Int, choice: Choice)
     fun startAnimation(scope: Int, id: Int) {}
 
+    /** `\![*]`。選択肢の前の印 */
+    fun addMarker(scope: Int) {}
+
+    /** `\_l[x,y]` で横の位置を指定された（同じ行で次の列に移る） */
+    fun moveCursor(scope: Int, x: Int) {}
+
     /** `\![updatebymyself]`。ゴースト自身のネットワーク更新を頼まれた */
     fun requestUpdate() {}
 
@@ -118,7 +124,7 @@ class ScriptPlayer(
                             "raise" -> if (a.size >= 2) host.raise(a[1], a.drop(2))
                             "open" -> if (a.getOrNull(1)?.lowercase() == "browser" && a.size >= 3) host.openUrl(a[2])
                             "quicksection" -> quick = a.getOrNull(1)?.lowercase() in setOf("1", "true")
-                            "*" -> {} // 選択肢の前の印。選択肢には自前で印を付けている
+                            "*" -> host.addMarker(scope)
                             "updatebymyself" -> host.requestUpdate()
                             "execute" -> if (a.size < 2 || !host.execute(a[1].lowercase(), a.drop(2))) host.unknownTag(token)
                             // \![bind,カテゴリ,パーツ,1|0]（3つ目が無ければ切り替え）
@@ -127,6 +133,8 @@ class ScriptPlayer(
                             else -> host.unknownTag(token)
                         }
                         "j" -> a.firstOrNull()?.takeIf { it.startsWith("http") }?.let(host::openUrl)
+                        // 横の位置が数で書かれているときだけ（@ 付きの相対指定や縦だけの指定は無視する）
+                        "_l" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { host.moveCursor(scope, it) }
                         in layoutOnlyTags -> {}
                         else -> host.unknownTag(token)
                     }
@@ -138,10 +146,10 @@ class ScriptPlayer(
 
     /**
      * 見た目の細かい調整だけのタグ。バルーンを自前で描いているので、無視しても会話の流れは変わらない。
-     * \_l: カーソル位置、\_n: 自動改行の切り替え、\f: 書式、\b: バルーン切り替え、\t: 割り込み禁止、\* : 選択肢タイムアウト禁止、
+     * \_n: 自動改行の切り替え、\f: 書式、\b: バルーン切り替え、\t: 割り込み禁止、\* : 選択肢タイムアウト禁止、
      * \C: 前のバルーンを消さない（先頭にあるかどうかは GhostController が見る）
      */
-    private val layoutOnlyTags = setOf("_l", "_n", "f", "b", "t", "*", "C")
+    private val layoutOnlyTags = setOf("_n", "f", "b", "t", "*", "C")
 
     private val envPattern = Regex("""%([a-zA-Z][a-zA-Z0-9]*)""")
 
