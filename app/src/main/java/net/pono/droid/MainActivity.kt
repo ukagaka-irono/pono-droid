@@ -31,6 +31,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +40,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,7 +62,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MaterialTheme {
-                GhostListScreen()
+                var showLicenses by rememberSaveable { mutableStateOf(false) }
+                if (showLicenses) {
+                    LicensesScreen(onBack = { showLicenses = false })
+                } else {
+                    GhostListScreen(onShowLicenses = { showLicenses = true })
+                }
             }
         }
     }
@@ -68,7 +75,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun GhostListScreen() {
+private fun GhostListScreen(onShowLicenses: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -97,7 +104,12 @@ private fun GhostListScreen() {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("pono-droid") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("pono-droid") },
+                actions = { TextButton(onClick = onShowLicenses) { Text("ライセンス") } },
+            )
+        },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(
