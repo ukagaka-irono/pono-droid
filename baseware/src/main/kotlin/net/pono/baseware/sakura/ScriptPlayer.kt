@@ -19,6 +19,9 @@ interface ScriptHost {
     /** `\_l[x,y]` で横の位置を指定された（同じ行で次の列に移る） */
     fun moveCursor(scope: Int, x: Int) {}
 
+    /** `\b[n]`。バルーンの番号を選ぶ（-1 ならバルーンを隠す） */
+    fun setBalloonId(scope: Int, id: Int) {}
+
     /** `\![updatebymyself]`。ゴースト自身のネットワーク更新を頼まれた */
     fun requestUpdate() {}
 
@@ -135,6 +138,7 @@ class ScriptPlayer(
                         "j" -> a.firstOrNull()?.takeIf { it.startsWith("http") }?.let(host::openUrl)
                         // 横の位置が数で書かれているときだけ（@ 付きの相対指定や縦だけの指定は無視する）
                         "_l" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { host.moveCursor(scope, it) }
+                        "b" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { host.setBalloonId(scope, it) }
                         in layoutOnlyTags -> {}
                         else -> host.unknownTag(token)
                     }
@@ -146,10 +150,10 @@ class ScriptPlayer(
 
     /**
      * 見た目の細かい調整だけのタグ。バルーンを自前で描いているので、無視しても会話の流れは変わらない。
-     * \_n: 自動改行の切り替え、\f: 書式、\b: バルーン切り替え、\t: 割り込み禁止、\* : 選択肢タイムアウト禁止、
+     * \_n: 自動改行の切り替え、\f: 書式、\t: 割り込み禁止、\* : 選択肢タイムアウト禁止、
      * \C: 前のバルーンを消さない（先頭にあるかどうかは GhostController が見る）
      */
-    private val layoutOnlyTags = setOf("_n", "f", "b", "t", "*", "C")
+    private val layoutOnlyTags = setOf("_n", "f", "t", "*", "C")
 
     private val envPattern = Regex("""%([a-zA-Z][a-zA-Z0-9]*)""")
 

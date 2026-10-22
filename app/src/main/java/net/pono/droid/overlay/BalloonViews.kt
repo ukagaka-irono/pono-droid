@@ -24,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -44,6 +46,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.pono.baseware.balloon.Balloon
 import net.pono.baseware.balloon.BalloonColor
@@ -106,9 +109,17 @@ fun SimpleBalloon(items: List<BalloonItem>, onClick: () -> Unit, onChoice: (Choi
 /**
  * ゴーストのバルーン画像で描く。画像は画面の半分の幅に収まるよう縮め、文字が収まるいちばん小さい大きさを選ぶ
  * （どれにも収まらなければいちばん大きい画像で、文字の範囲をスクロールする）。
+ * [balloonId] は \b[n] の指定で、その画像があれば文字の量に関係なくそれを使う。
  */
 @Composable
-fun SkinBalloon(items: List<BalloonItem>, skin: BalloonSkin, scopeId: Int, onClick: () -> Unit, onChoice: (Choice) -> Unit) {
+fun SkinBalloon(
+    items: List<BalloonItem>,
+    skin: BalloonSkin,
+    scopeId: Int,
+    balloonId: Int?,
+    onClick: () -> Unit,
+    onChoice: (Choice) -> Unit,
+) {
     val images by produceState<List<BalloonSkin.Image>?>(null, skin, scopeId) {
         value = withContext(Dispatchers.IO) { skin.images(scopeId) }
     }
@@ -125,9 +136,13 @@ fun SkinBalloon(items: List<BalloonItem>, skin: BalloonSkin, scopeId: Int, onCli
     val scroll = rememberScrollState()
     AutoScroll(items, scroll)
 
+    // \b[n] で選ばれた画像（無ければ文字の量で選ぶ）
+    val requested = balloonId?.let { id -> skin.balloon.imageForId(scopeId, id) }
+        ?.let { img -> candidates.indexOfFirst { it.index == img.index } }?.takeIf { it >= 0 }
+
     SubcomposeLayout(Modifier.clickable(onClick = onClick)) { _ ->
         // 文字の高さを測って、収まる画像を選ぶ
-        val chosen = candidates.indices.firstOrNull { i ->
+        val chosen = requested ?: candidates.indices.firstOrNull { i ->
             val area = candidates[i].area
             val measured = subcompose("measure$i") { BalloonBody(items, onChoice, style) }
                 .first().measure(Constraints(minWidth = 0, maxWidth = (area.width * scale).toInt()))
@@ -135,19 +150,22 @@ fun SkinBalloon(items: List<BalloonItem>, skin: BalloonSkin, scopeId: Int, onCli
         } ?: candidates.lastIndex
         val image = candidates[chosen]
         val placeable = subcompose("balloon") {
-            SkinFrame(image, scale, scroll) { BalloonBody(items, onChoice, style) }
+            SkinFrame(image, skin, scale, scroll) { BalloonBody(items, onChoice, style) }
         }.first().measure(Constraints())
         layout(placeable.width, placeable.height) { placeable.place(0, 0) }
     }
 }
 
-/** バルーン画像を敷き、文字の範囲に中身を置く */
+/** バルーン画像を敷き、文字の範囲に中身を置く。続きや前があれば矢印を出し、押すと1画面分スクロールする */
 @Composable
-private fun SkinFrame(image: BalloonSkin.Image, scale: Float, scroll: ScrollState, content: @Composable () -> Unit) {
+private fun SkinFrame(image: BalloonSkin.Image, skin: BalloonSkin, scale: Float, scroll: ScrollState, content: @Composable () -> Unit) {
     val density = LocalDensity.current
+    val coroutineScope = rememberCoroutineScope()
     fun px(v: Int) = with(density) { (v * scale).toDp() }
-    Box(Modifier.size(px(image.bitmap.width), px(image.bitmap.height))) {
-        Image(image.bitmap, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.size(px(image.bitmap.width), px(image.bitmap.height)))
+    val w = image.bitmap.width
+    val h = image.bitmap.height
+    Box(Modifier.size(px(w), px(h))) {
+        Image(image.bitmap, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.size(px(w), px(h)))
         Box(
             Modifier
                 .offset(px(image.area.left), px(image.area.top))
@@ -155,6 +173,32 @@ private fun SkinFrame(image: BalloonSkin.Image, scale: Float, scroll: ScrollStat
                 .verticalScroll(scroll),
         ) {
             content()
+        }
+        val page = (image.area.height * scale * 0.8f).toInt()
+        for ((which, visible) in listOf(0 to (scroll.value > 0), 1 to (scroll.value < scroll.maxValue))) {
+            val arrow = skin.arrow(which) ?: continue
+            if (!visible) continue
+            val (x, y) = skin.balloon.arrowPosition(which, w, h, arrow.width, arrow.height)
+            // 矢印は縮めると指より小さくなるので、押せる範囲は矢印を中心に 40dp 取る
+            val arrowW = px(arrow.width)
+            val arrowH = px(arrow.height)
+            val touch = 40.dp
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .offset(px(x) + arrowW / 2 - touch / 2, px(y) + arrowH / 2 - touch / 2)
+                    .size(touch)
+                    .clickable {
+                        coroutineScope.launch { scroll.animateScrollTo(scroll.value + if (which == 0) -page else page) }
+                    },
+            ) {
+                Image(
+                    arrow,
+                    contentDescription = if (which == 0) "前へ" else "続き",
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier.size(arrowW, arrowH),
+                )
+            }
         }
     }
 }
@@ -210,16 +254,27 @@ private fun BalloonText(runs: List<BalloonLayout.Run>, onChoice: (Choice) -> Uni
 
 /** インストール済みのバルーンを、画面に出せる形にしたもの。画像は使うときに読み込んで覚えておく */
 class BalloonSkin(val balloon: Balloon) {
-    class Image(val bitmap: ImageBitmap, val area: TextArea)
+    /** [index] は balloons2.png の 2（\b[n] で選ぶときに使う） */
+    class Image(val bitmap: ImageBitmap, val area: TextArea, val index: Int)
 
     private val cache = HashMap<Int, List<Image>>()
+    private val arrows = HashMap<Int, ImageBitmap?>()
 
     @Synchronized
     fun images(scope: Int): List<Image> = cache.getOrPut(scope) {
+        // 矢印も一緒に読んでおく（描くときに読み込みで待たせない）
+        arrow(0)
+        arrow(1)
         balloon.images(scope).mapNotNull { img ->
             val bmp = ImageTransparency.load(img.file, balloon.pnaFor(img.file), selfAlpha = null) ?: return@mapNotNull null
-            Image(bmp.asImageBitmap(), balloon.textArea(bmp.width, bmp.height))
+            Image(bmp.asImageBitmap(), balloon.textArea(bmp.width, bmp.height), img.index)
         }
+    }
+
+    /** スクロールの矢印（0 が上、1 が下）。無いバルーンなら null */
+    @Synchronized
+    fun arrow(which: Int): ImageBitmap? = arrows.getOrPut(which) {
+        balloon.arrowImage(which)?.let { ImageTransparency.load(it, balloon.pnaFor(it), selfAlpha = null) }?.asImageBitmap()
     }
 
     /** [dpPerPx] は画像の 1px が何 dp になるか。字が小さくなりすぎないよう 12sp は残す */

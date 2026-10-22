@@ -87,10 +87,13 @@ fun CharacterSurface(
 @Composable
 fun CharacterBalloon(scopeId: Int, controller: GhostController, skin: BalloonSkin?) {
     val state by controller.state.collectAsState()
-    val items = state.characters[scopeId]?.balloon ?: return
+    val character = state.characters[scopeId] ?: return
+    val items = character.balloon ?: return
+    // \b[-1] はバルーンを隠す（文字は流れ続ける）
+    if (character.balloonId == -1) return
     val onClick = { controller.onBalloonClick(scopeId) }
     if (skin != null) {
-        SkinBalloon(items, skin, scopeId, onClick, controller::onChoice)
+        SkinBalloon(items, skin, scopeId, character.balloonId, onClick, controller::onChoice)
     } else {
         SimpleBalloon(items, onClick, controller::onChoice)
     }

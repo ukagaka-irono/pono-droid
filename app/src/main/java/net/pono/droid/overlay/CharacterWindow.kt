@@ -127,6 +127,20 @@ class CharacterWindow(
         }
     }
 
+    /** false にすると、表示したままタッチを下（pono-droid の画面など）に通す */
+    fun setTouchable(touchable: Boolean) {
+        for ((view, p) in listOf(surfaceView to params, balloonView to balloonParams)) {
+            val flags = if (touchable) {
+                p.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            } else {
+                p.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            }
+            if (flags == p.flags) continue
+            p.flags = flags
+            if (view.isAttachedToWindow) windowManager.updateViewLayout(view, p)
+        }
+    }
+
     fun dismiss() {
         prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         owner.destroy()

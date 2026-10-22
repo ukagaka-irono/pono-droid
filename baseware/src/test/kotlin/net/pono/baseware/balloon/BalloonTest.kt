@@ -74,6 +74,43 @@ class BalloonTest {
         assertEquals(listOf(1, 3), noKero.images(1).map { it.index })
     }
 
+    @Test
+    fun picksImageForBalloonIdBySide() {
+        val balloon = Balloon(balloonDir("balloons0.png", "balloons1.png", "balloons2.png", "balloons3.png", "balloonk2.png", "balloonk3.png"))
+        // \b[2] は組 2/3 のうち、\0 は偶数（2）、\1 は奇数（3）
+        assertEquals(2, balloon.imageForId(0, 2)?.index)
+        assertEquals(3, balloon.imageForId(1, 2)?.index)
+        // \b[3] と書いても同じ組
+        assertEquals(2, balloon.imageForId(0, 3)?.index)
+        // 無い番号は null（文字の量で選ぶ）
+        assertNull(balloon.imageForId(0, 4))
+    }
+
+    @Test
+    fun arrowPositionsFromDescriptOrTextArea() {
+        val dir = balloonDir("balloons0.png", "arrow0.png")
+        File(dir, "descript.txt").appendText("\narrow0.x,-26\narrow0.y,14\n")
+        val balloon = Balloon(dir)
+        assertEquals(File(dir, "arrow0.png"), balloon.arrowImage(0))
+        assertNull(balloon.arrowImage(1))
+        // 負の値は右端から
+        assertEquals(310 - 26 to 14, balloon.arrowPosition(0, 310, 200, 12, 12))
+        // 書いてなければ文字の範囲の右下
+        assertEquals((310 - 18 - 12) to (200 - 28 - 12), balloon.arrowPosition(1, 310, 200, 12, 12))
+    }
+
+    @Test
+    fun uninstallsOnlyInsideTheBalloonFolder() {
+        val repo = BalloonRepository(tmp.newFolder("balloon"))
+        val inside = File(repo.root, "maid").apply { mkdirs(); File(this, "descript.txt").writeText(descript); File(this, "balloons0.png").writeBytes(byteArrayOf()) }
+        val outside = Balloon(balloonDir("balloons0.png"))
+        assertTrue(repo.uninstall(Balloon(inside)))
+        assertTrue(!inside.exists())
+        // 置き場の外にあるものは消さない
+        assertEquals(false, repo.uninstall(outside))
+        assertTrue(outside.dir.exists())
+    }
+
     private fun nar(vararg files: Pair<String, String>): File {
         val nar = tmp.newFile("test${files.hashCode()}.nar")
         ZipOutputStream(nar.outputStream()).use { zip ->

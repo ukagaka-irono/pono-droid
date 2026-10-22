@@ -19,6 +19,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +36,7 @@ import net.pono.shiori.yaya.RemoteYayaShiori
 /** ゴーストを常駐させる。キャラクターごとのオーバーレイウィンドウを持つ。 */
 class GhostOverlayService : LifecycleService() {
     private var controller: GhostController? = null
+    private var touchJob: Job? = null
     private val windows = mutableListOf<CharacterWindow>()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -98,10 +101,16 @@ class GhostOverlayService : LifecycleService() {
         for (scope in listOf(1, 0)) {
             windows += CharacterWindow(this, scope, c, renderer, balloonSkin, prefs).also { it.show() }
         }
+        // pono-droid の画面が前にある間は、キャラクターがボタンに重なっても押せるようにタッチを通す
+        touchJob = lifecycleScope.launch {
+            appInFront.collect { inFront -> windows.forEach { it.setTouchable(!inFront) } }
+        }
         c.start()
     }
 
     private fun teardown() {
+        touchJob?.cancel()
+        touchJob = null
         windows.forEach { it.dismiss() }
         windows.clear()
         controller = null
@@ -183,6 +192,18 @@ class GhostOverlayService : LifecycleService() {
         private const val ACTION_STOP = "net.pono.droid.STOP"
         private const val ACTION_UPDATE = "net.pono.droid.UPDATE"
         private const val EXTRA_GHOST = "ghost"
+
+        private val _appInFront = MutableStateFlow(false)
+
+        /**
+         * pono-droid の画面が前にあるか。その間はゴーストのウィンドウがタッチを奪わないようにする
+         * （キャラクターがアプリのボタンに重なって押せなくなるため）。
+         */
+        val appInFront: StateFlow<Boolean> = _appInFront.asStateFlow()
+
+        fun setAppInFront(inFront: Boolean) {
+            _appInFront.value = inFront
+        }
 
         private val _running = MutableStateFlow<String?>(null)
 

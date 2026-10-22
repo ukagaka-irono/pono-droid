@@ -25,6 +25,8 @@ data class CharacterState(
     val animationRequest: Pair<Int, Int>? = null,
     /** 着せ替えで身に着けているもの（bindgroup の番号。SERIKO の interval が bind のアニメーション番号と同じ） */
     val binds: Set<Int> = emptySet(),
+    /** \b[n] で選ばれたバルーンの番号。null なら文字の量に合わせて選ぶ、-1 ならバルーンを出さない */
+    val balloonId: Int? = null,
 ) {
     fun appendText(text: String): CharacterState {
         val items = balloon.orEmpty()

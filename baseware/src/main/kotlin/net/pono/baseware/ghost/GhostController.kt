@@ -465,8 +465,9 @@ class GhostController(
         }
     }
 
+    /** バルーンを閉じる。\b[n] で選んだ番号もここで戻す（次のスクリプトはまた文字の量で選ぶ） */
     private fun hideBalloons() {
-        _state.update { s -> s.copy(characters = s.characters.mapValues { it.value.copy(balloon = null) }) }
+        _state.update { s -> s.copy(characters = s.characters.mapValues { it.value.copy(balloon = null, balloonId = null) }) }
     }
 
     private fun resetSurfaces() {
@@ -537,6 +538,8 @@ class GhostController(
         override fun addMarker(scope: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.Marker) } }
 
         override fun moveCursor(scope: Int, x: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.Column) } }
+
+        override fun setBalloonId(scope: Int, id: Int) = _state.update { it.update(scope) { c -> c.copy(balloonId = id) } }
 
         override suspend fun waitClick() {
             val waiter = CompletableDeferred<Unit>()

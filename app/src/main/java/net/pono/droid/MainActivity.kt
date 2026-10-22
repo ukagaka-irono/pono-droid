@@ -89,18 +89,22 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     var ghosts by remember { mutableStateOf<List<GhostItem>>(emptyList()) }
+    var balloons by remember { mutableStateOf<List<Balloon>>(emptyList()) }
     var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     val running by GhostOverlayService.running.collectAsState()
 
     suspend fun reload() {
-        ghosts = withContext(Dispatchers.IO) {
-            val repo = GhostStore.repository(context)
-            repo.list().map { GhostItem(it, repo.balloons) }
-        }
+        val repo = GhostStore.repository(context)
+        ghosts = withContext(Dispatchers.IO) { repo.list().map { GhostItem(it, repo.balloons) } }
+        balloons = withContext(Dispatchers.IO) { repo.balloons.list() }
     }
 
     LaunchedEffect(Unit) { reload() }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { canOverlay = Settings.canDrawOverlays(context) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        canOverlay = Settings.canDrawOverlays(context)
+        GhostOverlayService.setAppInFront(true)
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { GhostOverlayService.setAppInFront(false) }
 
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(Unit) {
@@ -193,6 +197,26 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                         },
                     )
                 }
+                if (balloons.isNotEmpty()) {
+                    item(key = "balloons-header") {
+                        Text("バルーン", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                    }
+                }
+                // 起動中のゴーストが使っているバルーンは、画像を読んでいる途中かもしれないので消させない
+                val inUse = ghosts.firstOrNull { it.ghost.dir.name == running }?.selectedBalloon
+                items(balloons, key = { "balloon:" + it.dir.name }) { balloon ->
+                    BalloonRow(
+                        balloon = balloon,
+                        inUse = balloon.dir.name == inUse,
+                        onUninstall = {
+                            scope.launch {
+                                val ok = withContext(Dispatchers.IO) { GhostStore.repository(context).balloons.uninstall(balloon) }
+                                reload()
+                                snackbar.showSnackbar(if (ok) "削除しました: ${balloon.name}" else "削除できませんでした: ${balloon.name}")
+                            }
+                        },
+                    )
+                }
             }
         }
     }
@@ -233,6 +257,35 @@ private fun GhostItem(ghost: Ghost, balloons: BalloonRepository) = GhostItem(
     balloons = listOf<Pair<String?, String>>(null to "簡易バルーン") + balloons.list().map { it.dir.name to it.name },
     selectedBalloon = ghost.balloon(balloons)?.dir?.name,
 )
+
+/** インストール済みのバルーン1つ。削除は確かめてから */
+@Composable
+private fun BalloonRow(balloon: Balloon, inUse: Boolean, onUninstall: () -> Unit) {
+    var confirm by remember { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(balloon.name + if (inUse) "（使用中）" else "", style = MaterialTheme.typography.bodyLarge)
+                balloon.descript["craftmanw"]?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
+            TextButton(onClick = { confirm = true }, enabled = !inUse) { Text("削除") }
+        }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("バルーンを削除") },
+            text = { Text("「${balloon.name}」を削除しますか？ このバルーンを選んでいたゴーストは、ゴーストの指定のバルーンか簡易バルーンに戻ります。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = false
+                    onUninstall()
+                }) { Text("削除") }
+            },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("やめる") } },
+        )
+    }
+}
 
 /** 「シェル: 名前」のようなボタンと、選ぶためのメニュー。選べるものが1つしか無ければ押せない */
 @Composable

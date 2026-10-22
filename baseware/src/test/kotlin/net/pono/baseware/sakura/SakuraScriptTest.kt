@@ -90,11 +90,14 @@ class SakuraScriptTest {
             override fun bind(scope: Int, category: String, part: String, on: Boolean?) {
                 options += "bind:$scope/$category/$part/$on"
             }
+            override fun setBalloonId(scope: Int, id: Int) {
+                options += "balloon:$scope/$id"
+            }
             override fun unknownTag(tag: Token.Tag) { unknown += tag.name + tag.args }
         }
         ScriptPlayer(charWaitMs = 0).play(
             """\C\![set,balloontimeout,5000]\_n\_l[145]\![*]\q[a,b]\![set,wallpaper,x]\z""" +
-                """\![execute,http-get,https://e.test/a.xml,--async=X,--file=a.xml]\1\![bind,帽子,麦わら,0]""",
+                """\![execute,http-get,https://e.test/a.xml,--async=X,--file=a.xml]\1\![bind,帽子,麦わら,0]\b[2]\0\b2\b[-1]""",
             host,
         )
         assertEquals(
@@ -103,6 +106,10 @@ class SakuraScriptTest {
                 "wallpaper=[x]",
                 "execute:http-get=[https://e.test/a.xml, --async=X, --file=a.xml]",
                 "bind:1/帽子/麦わら/false",
+                // \b[n] と、1桁の省略形 \bn
+                "balloon:1/2",
+                "balloon:0/2",
+                "balloon:0/-1",
             ),
             options,
         )

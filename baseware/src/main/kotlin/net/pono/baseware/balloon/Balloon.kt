@@ -44,8 +44,33 @@ class Balloon(val dir: File) {
         return emptyList()
     }
 
+    /**
+     * \b[n] で選ばれた画像。n はバルーンの組の番号で、向きに合わせて n か n+1 を使う（\0 は偶数、\1 は奇数）。
+     * そのキャラクター用の画像に無ければ null（文字の量で選ぶ）。
+     */
+    fun imageForId(scope: Int, id: Int): BalloonImage? {
+        val images = images(scope)
+        val base = id - id % 2
+        return images.firstOrNull { it.index == base + scope % 2 } ?: images.firstOrNull { it.index == id }
+    }
+
     /** 画像と同名の .pna（アルファ用のグレースケール画像） */
     fun pnaFor(png: File): File? = files[png.nameWithoutExtension.lowercase() + ".pna"]
+
+    /** スクロールの矢印。0 が上向き（前に戻れる）、1 が下向き（続きがある） */
+    fun arrowImage(which: Int): File? = files["arrow$which.png"]
+
+    /**
+     * 矢印を置く位置（画像の左上からのピクセル。負の値は右端・下端から）。
+     * 書いてなければ、文字の範囲の右上と右下に置く。
+     */
+    fun arrowPosition(which: Int, imageWidth: Int, imageHeight: Int, arrowWidth: Int, arrowHeight: Int): Pair<Int, Int> {
+        val area = textArea(imageWidth, imageHeight)
+        val x = descript.int("arrow$which.x")?.let { if (it < 0) imageWidth + it else it } ?: (area.right - arrowWidth)
+        val y = descript.int("arrow$which.y")?.let { if (it < 0) imageHeight + it else it }
+            ?: if (which == 0) area.top else area.bottom - arrowHeight
+        return x.coerceIn(0, maxOf(0, imageWidth - arrowWidth)) to y.coerceIn(0, maxOf(0, imageHeight - arrowHeight))
+    }
 
     /**
      * 文字を書ける範囲。validrect（無ければ origin と wordwrappoint）で決まり、負の値は右端・下端からの距離。
@@ -105,4 +130,11 @@ class BalloonRepository(val root: File) {
 
     /** バルーンの名前（descript.txt の name）で探す。ゴーストの descript.txt の balloon 指定に使う */
     fun findByName(name: String): Balloon? = list().firstOrNull { it.name == name || it.dir.name == name }
+
+    /** バルーンを消す（元に戻せない）。置き場の外は消さない。選んでいたゴーストは次から簡易バルーンか指定のものに戻る */
+    fun uninstall(balloon: Balloon): Boolean {
+        val dir = balloon.dir.canonicalFile
+        if (dir.parentFile != root.canonicalFile) return false
+        return dir.deleteRecursively()
+    }
 }
