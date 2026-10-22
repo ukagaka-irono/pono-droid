@@ -72,6 +72,8 @@ class GhostController(
     private var lastUserActivity = System.currentTimeMillis()
     private var animationCounter = 0
     private var closing = false
+    private var inputSerial = 0
+    private var inputTimeout: Job? = null
 
 
     fun start() {
@@ -300,6 +302,61 @@ class GhostController(
         }
         val s = _state.value
         if (!s.talking && !s.waitingChoice) hideBalloons()
+    }
+
+    // ---- 入力の箱 ----
+
+    /** スクリプトから開く。前の箱が開いていれば差し替える（SSP と同じく1つだけ） */
+    private fun openInput(request: InputRequest) {
+        inputTimeout?.cancel()
+        _state.update { it.copy(input = request) }
+        if (request.timeoutMs > 0) {
+            inputTimeout = scope.launch {
+                delay(request.timeoutMs)
+                if (_state.value.input?.serial == request.serial) onInputCancel(request.serial, timeout = true)
+            }
+        }
+    }
+
+    /** \![close,inputbox,ID]。ID が違えば閉じない（ID 無しなら閉じる） */
+    private fun closeInput(id: String?) {
+        val current = _state.value.input ?: return
+        if (id.isNullOrEmpty() || current.id == id) {
+            inputTimeout?.cancel()
+            _state.update { it.copy(input = null) }
+        }
+    }
+
+    /**
+     * 入力が確定した。SSP と同じイベントを送る:
+     * inputbox は ID が On で始まればそのイベント（Reference0 = 文字）、それ以外は OnUserInput（ID, 文字）。
+     * communicatebox は OnCommunicate（"user", 文字）、teachbox は OnTeach（文字）。
+     * [serial] が今開いている箱と違えば（もう閉じた箱への答えなら）何もしない。
+     */
+    fun onInputSubmit(serial: Int, text: String) {
+        val request = _state.value.input?.takeIf { it.serial == serial } ?: return
+        lastUserActivity = System.currentTimeMillis()
+        inputTimeout?.cancel()
+        _state.update { it.copy(input = null) }
+        when (request.kind) {
+            InputRequest.Kind.INPUT, InputRequest.Kind.PASSWORD ->
+                if (request.id.startsWith("On")) raise(request.id, listOf(text)) else raise("OnUserInput", listOf(request.id, text))
+            InputRequest.Kind.COMMUNICATE -> raise("OnCommunicate", listOf("user", text))
+            InputRequest.Kind.TEACH -> raise("OnTeach", listOf(text))
+        }
+    }
+
+    /** 入力を取り消した（[timeout] なら時間切れ）。OnUserInputCancel などを送る */
+    fun onInputCancel(serial: Int, timeout: Boolean = false) {
+        val request = _state.value.input?.takeIf { it.serial == serial } ?: return
+        inputTimeout?.cancel()
+        _state.update { it.copy(input = null) }
+        val reason = if (timeout) "timeout" else "cancel"
+        when (request.kind) {
+            InputRequest.Kind.INPUT, InputRequest.Kind.PASSWORD -> raise("OnUserInputCancel", listOf(request.id, reason))
+            InputRequest.Kind.COMMUNICATE -> raise("OnCommunicateInputCancel", listOf("", reason))
+            InputRequest.Kind.TEACH -> {}
+        }
     }
 
     fun onChoice(choice: Choice) {
@@ -540,6 +597,18 @@ class GhostController(
         override fun moveCursor(scope: Int, x: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.Column) } }
 
         override fun setBalloonId(scope: Int, id: Int) = _state.update { it.update(scope) { c -> c.copy(balloonId = id) } }
+
+        override fun open(kind: String, args: List<String>): Boolean {
+            val request = InputRequest.fromOpenTag(kind, args, ++inputSerial) ?: return false
+            openInput(request)
+            return true
+        }
+
+        override fun close(kind: String, args: List<String>): Boolean {
+            if (kind !in setOf("inputbox", "passwordinput", "communicatebox", "teachbox")) return false
+            closeInput(args.firstOrNull())
+            return true
+        }
 
         override suspend fun waitClick() {
             val waiter = CompletableDeferred<Unit>()

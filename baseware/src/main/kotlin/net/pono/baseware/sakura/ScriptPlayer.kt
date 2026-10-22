@@ -22,6 +22,12 @@ interface ScriptHost {
     /** `\b[n]`。バルーンの番号を選ぶ（-1 ならバルーンを隠す） */
     fun setBalloonId(scope: Int, id: Int) {}
 
+    /** `\![open,種類,引数...]` のうち、ブラウザ以外（入力の箱など）。扱えたら true */
+    fun open(kind: String, args: List<String>): Boolean = false
+
+    /** `\![close,種類,引数...]`。扱えたら true */
+    fun close(kind: String, args: List<String>): Boolean = false
+
     /** `\![updatebymyself]`。ゴースト自身のネットワーク更新を頼まれた */
     fun requestUpdate() {}
 
@@ -125,7 +131,12 @@ class ScriptPlayer(
                         }
                         "!" -> when (a.firstOrNull()?.lowercase()) {
                             "raise" -> if (a.size >= 2) host.raise(a[1], a.drop(2))
-                            "open" -> if (a.getOrNull(1)?.lowercase() == "browser" && a.size >= 3) host.openUrl(a[2])
+                            "open" -> when {
+                                a.getOrNull(1)?.lowercase() == "browser" && a.size >= 3 -> host.openUrl(a[2])
+                                a.size >= 2 && host.open(a[1].lowercase(), a.drop(2)) -> {}
+                                else -> host.unknownTag(token)
+                            }
+                            "close" -> if (a.size < 2 || !host.close(a[1].lowercase(), a.drop(2))) host.unknownTag(token)
                             "quicksection" -> quick = a.getOrNull(1)?.lowercase() in setOf("1", "true")
                             "*" -> host.addMarker(scope)
                             "updatebymyself" -> host.requestUpdate()

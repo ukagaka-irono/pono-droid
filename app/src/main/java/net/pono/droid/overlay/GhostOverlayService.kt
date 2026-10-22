@@ -24,6 +24,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import net.pono.baseware.ghost.Ghost
 import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.ghost.GhostPlatform
@@ -37,6 +41,7 @@ import net.pono.shiori.yaya.RemoteYayaShiori
 class GhostOverlayService : LifecycleService() {
     private var controller: GhostController? = null
     private var touchJob: Job? = null
+    private var inputJob: Job? = null
     private val windows = mutableListOf<CharacterWindow>()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -92,6 +97,7 @@ class GhostOverlayService : LifecycleService() {
             },
         )
         controller = c
+        _controller.value = c
         _running.value = ghost.dir.name
         c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
         val renderer = SurfaceRenderer(shell)
@@ -101,9 +107,17 @@ class GhostOverlayService : LifecycleService() {
         for (scope in listOf(1, 0)) {
             windows += CharacterWindow(this, scope, c, renderer, balloonSkin, prefs).also { it.show() }
         }
-        // pono-droid の画面が前にある間は、キャラクターがボタンに重なっても押せるようにタッチを通す
+        // pono-droid の画面が前にある間と入力の箱を出している間は、キャラクターがボタンやキーボードに重なっても押せるようにタッチを通す
         touchJob = lifecycleScope.launch {
-            appInFront.collect { inFront -> windows.forEach { it.setTouchable(!inFront) } }
+            combine(appInFront, c.state.map { it.input != null }) { inFront, typing -> inFront || typing }
+                .distinctUntilChanged()
+                .collect { passThrough -> windows.forEach { it.setTouchable(!passThrough) } }
+        }
+        // 入力の箱が開いたら、キーボードを使える画面を出す（開き直されたときも）
+        inputJob = lifecycleScope.launch {
+            c.state.map { it.input?.serial }.distinctUntilChanged().filterNotNull().collect {
+                InputActivity.start(this@GhostOverlayService)
+            }
         }
         c.start()
     }
@@ -111,9 +125,12 @@ class GhostOverlayService : LifecycleService() {
     private fun teardown() {
         touchJob?.cancel()
         touchJob = null
+        inputJob?.cancel()
+        inputJob = null
         windows.forEach { it.dismiss() }
         windows.clear()
         controller = null
+        _controller.value = null
         _running.value = null
     }
 
@@ -204,6 +221,11 @@ class GhostOverlayService : LifecycleService() {
         fun setAppInFront(inFront: Boolean) {
             _appInFront.value = inFront
         }
+
+        private val _controller = MutableStateFlow<GhostController?>(null)
+
+        /** 起動中のゴースト。入力の箱の画面（[InputActivity]）が答えを返すのに使う */
+        val controller: StateFlow<GhostController?> = _controller.asStateFlow()
 
         private val _running = MutableStateFlow<String?>(null)
 
