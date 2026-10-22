@@ -14,6 +14,12 @@ interface Shiori {
     fun request(request: ByteArray): ByteArray?
 
     fun unload()
+
+    /**
+     * SHIORI が異常終了したときに呼んでもらう（別プロセスで動かす実装のため）。どのスレッドから呼ばれてもよいようにすること。
+     * 同じプロセスで動く実装は、落ちればアプリごと落ちるので呼ばない。
+     */
+    fun setOnCrash(listener: () -> Unit) {}
 }
 
 /** descript.txt の `shiori` 名から実装を選ぶ。対応していなければ null を返す。 */

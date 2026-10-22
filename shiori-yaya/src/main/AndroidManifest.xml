@@ -1,2 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- YAYA は別プロセスで動かす。YAYA の中で落ちても、アプリ本体は巻き込まれない -->
+        <service
+            android:name=".YayaService"
+            android:exported="false"
+            android:process=":yaya" />
+    </application>
+</manifest>

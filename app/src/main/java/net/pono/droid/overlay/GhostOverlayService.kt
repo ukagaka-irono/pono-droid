@@ -29,7 +29,7 @@ import net.pono.baseware.shell.Shell
 import net.pono.droid.GhostStore
 import net.pono.droid.MainActivity
 import net.pono.droid.R
-import net.pono.shiori.yaya.YayaShiori
+import net.pono.shiori.yaya.RemoteYayaShiori
 
 /** ゴーストを常駐させる。キャラクターごとのオーバーレイウィンドウを持つ。 */
 class GhostOverlayService : LifecycleService() {
@@ -66,7 +66,7 @@ class GhostOverlayService : LifecycleService() {
         val c = GhostController(
             ghost = ghost,
             shell = shell,
-            shioriFactory = YayaShiori.factory,
+            shioriFactory = RemoteYayaShiori.factory(this),
             scope = lifecycleScope,
             platform = object : GhostPlatform {
                 override fun openUrl(url: String) {

@@ -75,6 +75,30 @@ class YayaShioriTest {
     }
 
     @Test
+    fun remoteProcessAndCrashDetection() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val shiori = RemoteYayaShiori(context)
+        val crashed = java.util.concurrent.CountDownLatch(1)
+        shiori.setOnCrash { crashed.countDown() }
+        val session = ShioriSession(shiori, Charsets.UTF_8)
+        try {
+            assertTrue(session.load(writeGhost("remote", "UTF-8", Charsets.UTF_8)))
+            assertEquals("\\0別プロセスさん、こんにちは", session.get("OnBoot", "別プロセス")?.value)
+
+            // YAYA が落ちたことにする（:yaya のプロセスだけを止める）。テストのプロセスは生き残り、知らせが届く
+            val am = context.getSystemService(android.app.ActivityManager::class.java)
+            val yaya = am.runningAppProcesses.first { it.processName.endsWith(":yaya") }
+            assertTrue(yaya.pid != android.os.Process.myPid())
+            android.os.Process.killProcess(yaya.pid)
+            assertTrue("crash notified", crashed.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            // 落ちた後のリクエストは例外にならず、応答なしになる
+            assertEquals(null, session.get("OnBoot", "x"))
+        } finally {
+            session.unload()
+        }
+    }
+
+    @Test
     fun twoGhostsAtOnce() = runBlocking {
         // multi_load で別々の VM になること（片方を閉じてももう片方は動く）
         val a = ShioriSession(YayaShiori(), Charsets.UTF_8)

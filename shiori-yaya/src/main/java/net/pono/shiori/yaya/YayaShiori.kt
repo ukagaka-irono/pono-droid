@@ -1,7 +1,6 @@
 package net.pono.shiori.yaya
 
 import net.pono.baseware.shiori.Shiori
-import net.pono.baseware.shiori.ShioriFactory
 import java.io.File
 
 internal object YayaNative {
@@ -17,7 +16,10 @@ internal object YayaNative {
     @JvmStatic external fun unload(id: Long): Boolean
 }
 
-/** NDK でビルドした YAYA。1インスタンスが YAYA の VM 1つに対応する。 */
+/**
+ * NDK でビルドした YAYA を、呼び出したプロセスの中で動かす。1インスタンスが YAYA の VM 1つに対応する。
+ * アプリからは [RemoteYayaShiori]（別プロセス）を使う。これは [YayaService] の中とテストで使う。
+ */
 class YayaShiori : Shiori {
     private var id = 0L
 
@@ -35,15 +37,6 @@ class YayaShiori : Shiori {
         if (id > 0) {
             YayaNative.unload(id)
             id = 0
-        }
-    }
-
-    companion object {
-        /** YAYA と、その元になった AYA5 系の DLL 名。 */
-        private val names = setOf("yaya.dll", "aya.dll", "aya5.dll")
-
-        val factory = ShioriFactory { shioriName, _ ->
-            if (shioriName.lowercase() in names) YayaShiori() else null
         }
     }
 }

@@ -127,12 +127,14 @@ git push origin v0.2.0
 app/          Android アプリ（ゴースト一覧、オーバーレイの Service とウィンドウ、Compose の UI）
 baseware/     Android に依存しない Kotlin。descript / surfaces.txt の読み込み、SHIORI/3.0、
               さくらスクリプト、ゴーストの制御（GhostController）、ネットワーク更新
-shiori-yaya/  YAYA を NDK でビルドする Android ライブラリと JNI
+shiori-yaya/  YAYA を NDK でビルドする Android ライブラリ（JNI、別プロセスで動かすサービス）
   src/main/cpp/yaya   YAYA 本体（サブモジュール。手を加えていません）
   src/main/cpp/shim   Android 向けの差し替え（CP932 対応の iconv、statx / shm_open）
 ```
 
 YAYA を Android で動かすための工夫:
+
+- YAYA はアプリとは別のプロセス（`:yaya`）で動かし、Binder（AIDL）でやりとりします。YAYA の中で落ちてもアプリは落ちず、ゴーストを閉じて知らせます。
 
 - YAYA のソースは Shift_JIS なので、ビルド時に Gradle で UTF-8 に変換してからコンパイルします（`#line` で元のファイルを指すので、エラー位置はサブモジュール側を指します）。
 - Android の libc の iconv は CP932 を持たないため、Java の `windows-31j` から変換表を作り、自前の iconv に差し替えています。
@@ -148,7 +150,6 @@ YAYA を Android で動かすための工夫:
 - ネットワーク更新: `delete.txt` には未対応。シェル画像の更新は次の起動から反映されます。
 - インストールできるのはゴーストの `.nar` のみ（シェル・バルーン単体は不可）。アンインストール、シェルの切り替え、複数ゴーストの同時起動は未対応です。
 - SSTP には未対応です。
-- YAYA の内部でクラッシュすると、アプリごと終了します。
 
 ## ライセンス
 

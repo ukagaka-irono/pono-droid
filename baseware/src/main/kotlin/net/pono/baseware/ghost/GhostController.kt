@@ -107,8 +107,19 @@ class GhostController(
         }
         val s = ShioriSession(shiori, ghost.charset)
         if (!s.load(ghost.masterDir)) {
+            s.unload()
             platform.onError("${ghost.name}: SHIORI を読み込めませんでした")
             return false
+        }
+        // SHIORI が別プロセスで落ちたら、話せないゴーストを残さず閉じる（アプリは落ちない）
+        shiori.setOnCrash {
+            scope.launch {
+                if (session !== s || closing) return@launch
+                closing = true
+                platform.onError("${ghost.name}: SHIORI が異常終了しました")
+                cancelScript()
+                shutdown()
+            }
         }
         session = s
         s.get("version")?.value?.let { platform.log("SHIORI version: $it") }
