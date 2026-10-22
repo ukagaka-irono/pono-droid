@@ -15,6 +15,8 @@ data class CharacterState(
     val balloon: List<BalloonItem>? = null,
     /** \i[n] で再生を頼まれたアニメーションと、その回数（同じ ID を続けて頼まれても区別するため） */
     val animationRequest: Pair<Int, Int>? = null,
+    /** 着せ替えで身に着けているもの（bindgroup の番号。SERIKO の interval が bind のアニメーション番号と同じ） */
+    val binds: Set<Int> = emptySet(),
 ) {
     fun appendText(text: String): CharacterState {
         val items = balloon.orEmpty()

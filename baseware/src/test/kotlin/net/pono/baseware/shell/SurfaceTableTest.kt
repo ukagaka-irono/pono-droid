@@ -42,6 +42,47 @@ class SurfaceTableTest {
     }
 
     @Test
+    fun parsesControlFrames() {
+        val table = SurfaceTable.parse(
+            """
+            surface0
+            {
+            animation1.interval,always
+            animation1.pattern0,start,3
+            animation1.pattern1,alternativestart,[4.5]
+            animation1.pattern2,alternativestop,(6,7)
+            animation2.interval,bind
+            animation2.pattern0,overlay,200,0,10,20
+            }
+            """.trimIndent(),
+        )
+        val frames = table[0]!!.animations[1]!!.frames
+        assertEquals(listOf(3), frames[0].targets)
+        assertEquals(listOf(4, 5), frames[1].targets)
+        assertEquals(listOf(6, 7), frames[2].targets)
+        assertEquals(true, frames.all { it.isControl })
+        assertEquals(IntervalKind.BIND, table[0]!!.animations[2]!!.interval.kind)
+    }
+
+    @Test
+    fun readsBindGroupsFromShellDescript() {
+        val dir = java.nio.file.Files.createTempDirectory("shell").toFile()
+        try {
+            java.io.File(dir, "descript.txt").writeText(
+                "charset,UTF-8\nsakura.bindgroup2.name,帽子,麦わら\nsakura.bindgroup2.default,1\nsakura.bindgroup3.name,帽子,ベレー\nkero.bindgroup5.name,服,セーター\n",
+            )
+            val shell = Shell(dir)
+            assertEquals(
+                listOf(BindGroup(2, "帽子", "麦わら", true), BindGroup(3, "帽子", "ベレー", false)),
+                shell.bindGroups(0),
+            )
+            assertEquals(listOf(BindGroup(5, "服", "セーター", false)), shell.bindGroups(1))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun parsesElementsAndOldFormat() {
         val s10 = SurfaceTable.parse(text)[10]!!
         assertEquals(SurfaceElement(1, "overlay", "face.png", 12, 34), s10.elements[1])

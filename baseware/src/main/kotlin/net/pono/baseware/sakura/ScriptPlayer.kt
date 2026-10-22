@@ -19,6 +19,12 @@ interface ScriptHost {
     /** `\![set,name,args...]`。扱えたら true。 */
     fun setOption(name: String, args: List<String>): Boolean = false
 
+    /** `\![execute,name,args...]`（SSP の http-get など）。扱えたら true。 */
+    fun execute(name: String, args: List<String>): Boolean = false
+
+    /** `\![bind,カテゴリ,パーツ,1/0]`（着せ替え）。 */
+    fun bind(scope: Int, category: String, part: String, on: Boolean?) {}
+
     /** `\x`。クリックされるまで戻らない。 */
     suspend fun waitClick()
 
@@ -114,6 +120,9 @@ class ScriptPlayer(
                             "quicksection" -> quick = a.getOrNull(1)?.lowercase() in setOf("1", "true")
                             "*" -> {} // 選択肢の前の印。選択肢には自前で印を付けている
                             "updatebymyself" -> host.requestUpdate()
+                            "execute" -> if (a.size < 2 || !host.execute(a[1].lowercase(), a.drop(2))) host.unknownTag(token)
+                            // \![bind,カテゴリ,パーツ,1|0]（3つ目が無ければ切り替え）
+                            "bind" -> if (a.size >= 3) host.bind(scope, a[1], a[2], a.getOrNull(3)?.let { it == "1" || it.lowercase() == "true" })
                             "set" -> if (a.size >= 2 && !host.setOption(a[1].lowercase(), a.drop(2))) host.unknownTag(token)
                             else -> host.unknownTag(token)
                         }
@@ -129,9 +138,10 @@ class ScriptPlayer(
 
     /**
      * 見た目の細かい調整だけのタグ。バルーンを自前で描いているので、無視しても会話の流れは変わらない。
-     * \_l: カーソル位置、\_n: 自動改行の切り替え、\f: 書式、\b: バルーン切り替え、\t: 割り込み禁止、\* : 選択肢タイムアウト禁止
+     * \_l: カーソル位置、\_n: 自動改行の切り替え、\f: 書式、\b: バルーン切り替え、\t: 割り込み禁止、\* : 選択肢タイムアウト禁止、
+     * \C: 前のバルーンを消さない（先頭にあるかどうかは GhostController が見る）
      */
-    private val layoutOnlyTags = setOf("_l", "_n", "f", "b", "t", "*")
+    private val layoutOnlyTags = setOf("_l", "_n", "f", "b", "t", "*", "C")
 
     private val envPattern = Regex("""%([a-zA-Z][a-zA-Z0-9]*)""")
 

@@ -2,6 +2,7 @@ package net.pono.baseware.ghost
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +14,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import net.pono.baseware.sakura.Choice
 import net.pono.baseware.sakura.ScriptHost
@@ -21,13 +23,13 @@ import net.pono.baseware.sakura.Token
 import net.pono.baseware.shell.Shell
 import net.pono.baseware.shiori.ShioriFactory
 import net.pono.baseware.shiori.ShioriSession
+import net.pono.baseware.update.FetchResult
 import net.pono.baseware.update.HttpFetcher
 import net.pono.baseware.update.NetworkUpdater
 import net.pono.baseware.update.UpdateResult
 import net.pono.baseware.update.UrlConnectionFetcher
 import java.io.File
 import java.util.Calendar
-import java.util.Properties
 
 /** プラットフォーム側に頼むこと。 */
 interface GhostPlatform {
@@ -36,6 +38,9 @@ interface GhostPlatform {
     /** `\-` などでゴーストが終了した */
     fun onQuit()
     fun log(message: String)
+
+    /** ユーザーに知らせるべき失敗（SHIORI が読めないなど） */
+    fun onError(message: String) = log(message)
 }
 
 /**
@@ -68,17 +73,21 @@ class GhostController(
     private var animationCounter = 0
     private var closing = false
 
-    private val profileFile = File(ghost.dir, "pono/profile.properties")
 
     fun start() {
         scope.launch {
             resetSurfaces()
-            if (!loadShiori()) return@launch
+            if (!loadShiori()) {
+                // 話せないゴーストを出しっぱなしにしない
+                closing = true
+                platform.onQuit()
+                return@launch
+            }
 
-            val profile = loadProfile()
+            val profile = ghost.loadProfile()
             val firstBoot = profile.getProperty("booted") == null
             profile.setProperty("booted", "1")
-            saveProfile(profile)
+            ghost.saveProfile(profile)
 
             if (firstBoot) {
                 raise("OnFirstBoot", listOf("0"))
@@ -93,12 +102,12 @@ class GhostController(
     private suspend fun loadShiori(): Boolean {
         val shiori = shioriFactory.create(ghost.shioriName, ghost.masterDir)
         if (shiori == null) {
-            platform.log("SHIORI ${ghost.shioriName} には対応していません")
+            platform.onError("${ghost.name}: ${ghost.shioriName} は未対応です（YAYA のみ対応）")
             return false
         }
         val s = ShioriSession(shiori, ghost.charset)
         if (!s.load(ghost.masterDir)) {
-            platform.log("SHIORI の読み込みに失敗しました")
+            platform.onError("${ghost.name}: SHIORI を読み込めませんでした")
             return false
         }
         session = s
@@ -156,6 +165,52 @@ class GhostController(
         loadShiori()
     }
 
+    /**
+     * SSP の `\![execute,http-get,URL,--async=ID,--file=名前,...]`。
+     * 取ってきた中身を ghost/master/var/名前 に保存し、OnExecuteHTTPComplete / OnExecuteHTTPFailure を送る
+     * （Reference0 = "http-get"、Reference1 = --async の ID、Reference2 = URL、Reference3 = 保存先か失敗の理由）。
+     * 結果のトークは、話している途中なら話し終わるのを待ってから出す。
+     */
+    private fun httpGet(url: String, options: List<String>) {
+        val opts = options.mapNotNull { o ->
+            o.removePrefix("--").split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0].lowercase() to it[1] }
+        }.toMap()
+        val id = opts["async"].orEmpty()
+        scope.launch {
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                deliverHttpResult("OnExecuteHTTPFailure", listOf("http-get", id, url, "invalid url"))
+                return@launch
+            }
+            val result = withContext(Dispatchers.IO) { updateFetcher.fetch(url) }
+            val refs = when (result) {
+                is FetchResult.Ok -> {
+                    val name = opts["file"]?.let(NetworkUpdater::safeFileName)
+                    if (name != null) {
+                        val file = File(ghost.masterDir, "var/$name")
+                        val saved = withContext(Dispatchers.IO) {
+                            runCatching { file.parentFile?.mkdirs(); file.writeBytes(result.bytes) }.isSuccess
+                        }
+                        if (!saved) {
+                            deliverHttpResult("OnExecuteHTTPFailure", listOf("http-get", id, url, "fileio"))
+                            return@launch
+                        }
+                    }
+                    listOf("http-get", id, url, name?.let { "var/$it" }.orEmpty())
+                }
+                else -> {
+                    deliverHttpResult("OnExecuteHTTPFailure", listOf("http-get", id, url, NetworkUpdater.describe(result)))
+                    return@launch
+                }
+            }
+            deliverHttpResult("OnExecuteHTTPComplete", refs)
+        }
+    }
+
+    private suspend fun deliverHttpResult(event: String, references: List<String>) {
+        _state.first { !it.talking && !it.waitingChoice }
+        raise(event, references, userInitiated = false)
+    }
+
     /** イベントを送って話させ、話し終わるまで待つ（バルーンが消えるのは待たない）。 */
     private suspend fun talkAndWait(event: String, references: List<String>) {
         val script = request(event, references) ?: return
@@ -201,6 +256,28 @@ class GhostController(
             else -> raise("OnMouseMultipleClick", refs + count.toString())
         }
     }
+
+    /**
+     * 長押し。スマートフォンには右クリックが無いので、その代わりにする。
+     * SSP と同じく OnMouseClick（Reference5 = 1）を送り、ゴーストが何も返さなければ pono-droid のメニューを出す。
+     */
+    fun onMouseLongPress(scopeId: Int, x: Int, y: Int, collision: String?) {
+        lastUserActivity = System.currentTimeMillis()
+        val refs = listOf(x.toString(), y.toString(), "0", scopeId.toString(), collision.orEmpty(), "1", "touch")
+        scope.launch {
+            val script = request("OnMouseClick", refs)
+            cancelScript()
+            runScript(script ?: basewareMenu(scopeId))
+        }
+    }
+
+    /** 右クリックのメニューの代わり。選択肢の ID は [selectChoice] が pono: で見分ける */
+    private fun basewareMenu(scopeId: Int): String =
+        "\\p[$scopeId]\\_q【${ShioriSession.SENDER}】\\n" +
+            "\\q[ゴーストのメニュー（中クリック）,pono:middle,$scopeId]\\n" +
+            "\\q[ネットワーク更新,pono:update]\\n" +
+            "\\q[ゴーストを終了,pono:close]\\n" +
+            "\\q[閉じる,pono:cancel]\\e"
 
     /** バルーンをタップした。\x の待ちなら進め、話し終わっていれば閉じる。 */
     fun onBalloonClick(scopeId: Int) {
@@ -297,7 +374,8 @@ class GhostController(
 
     private fun runScript(script: String): Job {
         // talking は launch の前に立てる（呼び出し側が「話し終わるまで待つ」ときに取りこぼさないため）
-        hideBalloons()
+        // 先頭が \C なら、今出ているバルーンを消さずに続ける
+        if (!script.startsWith("\\C")) hideBalloons()
         _state.update { it.copy(talking = true) }
         val job = scope.launch {
             val raised = mutableListOf<Pair<String, List<String>>>()
@@ -348,6 +426,19 @@ class GhostController(
     private fun selectChoice(choice: Choice) {
         val id = choice.id
         when {
+            // pono-droid 自身のメニュー（長押し）
+            id.startsWith("pono:") -> {
+                hideBalloons()
+                when (id) {
+                    "pono:middle" -> {
+                        // 中クリック（Reference5 = 2）。ゴーストによってはこれでメニューを開く
+                        val target = choice.references.firstOrNull() ?: "0"
+                        raise("OnMouseClick", listOf("0", "0", "0", target, "", "2", "touch"))
+                    }
+                    "pono:update" -> networkUpdate()
+                    "pono:close" -> close()
+                }
+            }
             id.startsWith("http://") || id.startsWith("https://") -> {
                 hideBalloons()
                 platform.openUrl(id)
@@ -370,10 +461,9 @@ class GhostController(
     private fun resetSurfaces() {
         _state.update {
             GhostState(
-                characters = mapOf(
-                    0 to CharacterState(0, shell.defaultSurface(0)),
-                    1 to CharacterState(1, shell.defaultSurface(1)),
-                ),
+                characters = (0..1).associateWith { scope ->
+                    CharacterState(scope, shell.defaultSurface(scope), binds = shell.bindGroups(scope).filter { g -> g.default }.map { g -> g.id }.toSet())
+                },
                 screenOn = it.screenOn,
             )
         }
@@ -389,6 +479,24 @@ class GhostController(
 
         override fun requestUpdate() {
             updateRequested = true
+        }
+
+        override fun execute(name: String, args: List<String>): Boolean {
+            if (name != "http-get" || args.isEmpty()) return false
+            httpGet(args[0], args.drop(1))
+            return true
+        }
+
+        override fun bind(scope: Int, category: String, part: String, on: Boolean?) {
+            val group = shell.bindGroups(scope).firstOrNull { it.category == category && it.part == part } ?: return
+            _state.update {
+                it.update(scope) { c ->
+                    val enable = on ?: (group.id !in c.binds)
+                    // 同じカテゴリのパーツは1つだけ（服を着替えるように差し替える）
+                    val others = shell.bindGroups(scope).filter { g -> g.category == category }.map { g -> g.id }.toSet()
+                    c.copy(binds = if (enable) c.binds - others + group.id else c.binds - group.id)
+                }
+            }
         }
 
         override fun setOption(name: String, args: List<String>): Boolean {
@@ -451,15 +559,6 @@ class GhostController(
         }
 
         override fun unknownTag(tag: Token.Tag) = platform.log("未対応のタグ: \\${tag.name}${tag.args}")
-    }
-
-    private fun loadProfile() = Properties().apply {
-        if (profileFile.isFile) profileFile.inputStream().use(::load)
-    }
-
-    private fun saveProfile(p: Properties) {
-        profileFile.parentFile?.mkdirs()
-        profileFile.outputStream().use { p.store(it, null) }
     }
 
     companion object {

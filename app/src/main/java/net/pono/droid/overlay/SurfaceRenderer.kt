@@ -23,12 +23,14 @@ class SurfaceRenderer(private val shell: Shell) {
     @Synchronized
     fun render(surfaceId: Int, layers: Map<Int, PatternFrame>): Bitmap? {
         if (surfaceId < 0) return null
+        // レイヤーの番号の小さい順に重ねる（着せ替えは負の番号で、普通のアニメーションより下）
+        val ordered = layers.toSortedMap().values
         // "base" のコマは土台のサーフェスを差し替える
-        val baseOverride = layers.values.lastOrNull { it.method == "base" && it.surface >= 0 }
+        val baseOverride = ordered.lastOrNull { it.method == "base" && it.surface >= 0 }
         val base = baseImage(baseOverride?.surface ?: surfaceId) ?: return null
         val out = base.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(out)
-        for (frame in layers.values) {
+        for (frame in ordered) {
             if (frame.surface < 0 || frame === baseOverride) continue
             val img = baseImage(frame.surface) ?: continue
             val p = if (frame.method == "replace") replacePaint else paint

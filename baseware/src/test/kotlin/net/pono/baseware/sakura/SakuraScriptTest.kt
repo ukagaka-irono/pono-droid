@@ -83,13 +83,29 @@ class SakuraScriptTest {
                 options += "$name=$args"
                 return name == "balloontimeout"
             }
+            override fun execute(name: String, args: List<String>): Boolean {
+                options += "execute:$name=$args"
+                return name == "http-get"
+            }
+            override fun bind(scope: Int, category: String, part: String, on: Boolean?) {
+                options += "bind:$scope/$category/$part/$on"
+            }
             override fun unknownTag(tag: Token.Tag) { unknown += tag.name + tag.args }
         }
         ScriptPlayer(charWaitMs = 0).play(
-            """\![set,balloontimeout,5000]\_n\_l[145]\![*]\q[a,b]\![set,wallpaper,x]\z""",
+            """\C\![set,balloontimeout,5000]\_n\_l[145]\![*]\q[a,b]\![set,wallpaper,x]\z""" +
+                """\![execute,http-get,https://e.test/a.xml,--async=X,--file=a.xml]\1\![bind,帽子,麦わら,0]""",
             host,
         )
-        assertEquals(listOf("balloontimeout=[5000]", "wallpaper=[x]"), options)
+        assertEquals(
+            listOf(
+                "balloontimeout=[5000]",
+                "wallpaper=[x]",
+                "execute:http-get=[https://e.test/a.xml, --async=X, --file=a.xml]",
+                "bind:1/帽子/麦わら/false",
+            ),
+            options,
+        )
         // 扱えなかった \![set,...] と本当に知らないタグだけが報告される
         assertEquals(listOf("![set, wallpaper, x]", "z[]"), unknown)
     }

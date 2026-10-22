@@ -13,11 +13,15 @@ import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
+import android.widget.RemoteViews
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import net.pono.baseware.ghost.Ghost
 import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.ghost.GhostPlatform
@@ -53,8 +57,8 @@ class GhostOverlayService : LifecycleService() {
 
     private fun startGhost(ghost: Ghost) {
         teardown()
-        val shellDir = ghost.defaultShellDir() ?: run {
-            toast("シェルがありません")
+        val shellDir = ghost.shellDir() ?: run {
+            toast("${ghost.name}: シェルがありません")
             stopSelf()
             return
         }
@@ -77,9 +81,15 @@ class GhostOverlayService : LifecycleService() {
                 override fun log(message: String) {
                     Log.i(TAG, message)
                 }
+
+                override fun onError(message: String) {
+                    Log.w(TAG, message)
+                    toast(message)
+                }
             },
         )
         controller = c
+        _running.value = ghost.dir.name
         c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
         val renderer = SurfaceRenderer(shell)
         val prefs = OverlaySettings.prefs(this)
@@ -93,6 +103,7 @@ class GhostOverlayService : LifecycleService() {
         windows.forEach { it.dismiss() }
         windows.clear()
         controller = null
+        _running.value = null
     }
 
     /** 画面が消えている間は、ゴーストのタイマーとアニメーションを止める */
@@ -121,7 +132,16 @@ class GhostOverlayService : LifecycleService() {
 
     private fun startInForeground() {
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "常駐中のゴースト", NotificationManager.IMPORTANCE_LOW))
+        // 重要度が「低」だと「サイレント」欄に折りたたまれて、終了などのボタンが見えない。
+        // 「標準」にして、音とバイブレーションだけ切る（チャンネルの重要度は後から変えられないので作り直す）
+        nm.deleteNotificationChannel(OLD_CHANNEL)
+        nm.createNotificationChannel(
+            NotificationChannel(CHANNEL, "常駐中のゴースト", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
+            },
+        )
         val stop = PendingIntent.getService(
             this, 0, Intent(this, GhostOverlayService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE,
         )
@@ -129,13 +149,23 @@ class GhostOverlayService : LifecycleService() {
             this, 1, Intent(this, GhostOverlayService::class.java).setAction(ACTION_UPDATE), PendingIntent.FLAG_IMMUTABLE,
         )
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        // 通知は先頭のもの以外は折りたたまれ、標準のボタン（addAction）は隠れてしまう。
+        // 折りたたまれた1行の中にもボタンを置いておく
+        val collapsed = RemoteViews(packageName, R.layout.notification_ghost).apply {
+            setTextViewText(R.id.notification_title, "ゴーストが起動しています")
+            setOnClickPendingIntent(R.id.notification_update, update)
+            setOnClickPendingIntent(R.id.notification_stop, stop)
+        }
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("ゴーストが起動しています")
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(collapsed)
             .setContentIntent(open)
             .addAction(0, "ネットワーク更新", update)
             .addAction(0, "終了", stop)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .build()
         ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
     }
@@ -144,12 +174,18 @@ class GhostOverlayService : LifecycleService() {
 
     companion object {
         private const val TAG = "pono"
-        private const val CHANNEL = "ghost"
+        private const val CHANNEL = "ghost_running"
+        private const val OLD_CHANNEL = "ghost"
         private const val NOTIFICATION_ID = 1
         private const val ACTION_START = "net.pono.droid.START"
         private const val ACTION_STOP = "net.pono.droid.STOP"
         private const val ACTION_UPDATE = "net.pono.droid.UPDATE"
         private const val EXTRA_GHOST = "ghost"
+
+        private val _running = MutableStateFlow<String?>(null)
+
+        /** 起動中のゴーストのディレクトリ名（起動していなければ null） */
+        val running: StateFlow<String?> = _running.asStateFlow()
 
         fun start(context: Context, ghostDirName: String) {
             context.startForegroundService(

@@ -4,6 +4,8 @@ import net.pono.baseware.text.Descript
 import net.pono.baseware.text.TextCharsets
 import java.io.File
 
+data class BindGroup(val id: Int, val category: String, val part: String, val default: Boolean)
+
 /** シェル（見た目）のディレクトリ。画像の読み込みはプラットフォーム側で行う。 */
 class Shell(val dir: File) {
     val descript: Descript = Descript.read(File(dir, "descript.txt"))
@@ -15,6 +17,21 @@ class Shell(val dir: File) {
 
     /** 1 なら PNG のアルファをそのまま使う。0 なら .pna か左上の色で透過する。 */
     val useSelfAlpha: Boolean get() = descript.int("seriko.use_self_alpha") == 1
+
+    /**
+     * 着せ替えのパーツ。descript.txt の `sakura.bindgroupN.name,カテゴリ,パーツ` と `sakura.bindgroupN.default,1`。
+     * N は surfaces.txt の interval が bind のアニメーション番号に対応する。
+     */
+    fun bindGroups(scope: Int): List<BindGroup> {
+        val prefix = "${scopeName(scope)}.bindgroup"
+        val pattern = Regex("""^${Regex.escape(prefix)}(\d+)\.name$""")
+        return descript.entries.mapNotNull { (key, value) ->
+            val id = pattern.matchEntire(key)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
+            val parts = value.split(',').map { it.trim() }
+            if (parts.size < 2) return@mapNotNull null
+            BindGroup(id, parts[0], parts[1], descript.int("$prefix$id.default") == 1)
+        }.sortedBy { it.id }
+    }
 
     fun defaultSurface(scope: Int): Int =
         descript.int("${scopeName(scope)}.seriko.defaultsurface") ?: if (scope == 0) 0 else 10

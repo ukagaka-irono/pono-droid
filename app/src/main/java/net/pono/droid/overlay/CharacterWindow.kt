@@ -149,24 +149,37 @@ class CharacterWindow(
     /**
      * サーフェスに触れたときの処理。指の動きに合わせてウィンドウ自体を動かすので、画面座標（raw）で扱う。
      * タップは SSP と同じく1回ごとに知らせ、続けて叩いた回数を数える（1: クリック、2: ダブル、3以上: 多重）。
+     * 動かさずに押し続けると長押し（右クリックの代わり）で、そのときはタップとして数えない。
      */
     val touchHandler = object : SurfaceTouchHandler {
         private val config = ViewConfiguration.get(context)
         private val slop = config.scaledTouchSlop
         private val multiTapSlop = config.scaledDoubleTapSlop
         private val multiTapTimeout = ViewConfiguration.getDoubleTapTimeout().toLong()
+        private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
         private var downRawX = 0f
         private var downRawY = 0f
         private var startX = 0
         private var startY = 0
         private var dragging = false
+        private var longPressed = false
+        private var pendingLongPress: Runnable? = null
         private var tapCount = 0
         private var lastTapTime = 0L
         private var lastTapRawX = 0f
         private var lastTapRawY = 0f
 
+        private fun cancelLongPress() {
+            pendingLongPress?.let(surfaceView::removeCallbacks)
+            pendingLongPress = null
+        }
+
         @SuppressLint("ClickableViewAccessibility")
-        override fun onTouch(event: MotionEvent, onTap: (x: Float, y: Float, count: Int) -> Unit): Boolean {
+        override fun onTouch(
+            event: MotionEvent,
+            onTap: (x: Float, y: Float, count: Int) -> Unit,
+            onLongPress: (x: Float, y: Float) -> Unit,
+        ): Boolean {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downRawX = event.rawX
@@ -174,11 +187,24 @@ class CharacterWindow(
                     startX = params.x
                     startY = params.y
                     dragging = false
+                    longPressed = false
+                    val x = event.x
+                    val y = event.y
+                    cancelLongPress()
+                    pendingLongPress = Runnable {
+                        longPressed = true
+                        tapCount = 0
+                        surfaceView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                        onLongPress(x, y)
+                    }.also { surfaceView.postDelayed(it, longPressTimeout) }
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downRawX
                     val dy = event.rawY - downRawY
-                    if (!dragging && (abs(dx) > slop || abs(dy) > slop)) dragging = true
+                    if (!dragging && !longPressed && (abs(dx) > slop || abs(dy) > slop)) {
+                        dragging = true
+                        cancelLongPress()
+                    }
                     if (dragging) {
                         // END / BOTTOM 基準なので、x と y は右下からの距離
                         params.x = startX + (if (alignEnd) -dx else dx).toInt()
@@ -187,10 +213,14 @@ class CharacterWindow(
                         placeBalloon()
                     }
                 }
-                MotionEvent.ACTION_UP -> if (dragging) {
+                MotionEvent.ACTION_UP -> if (longPressed) {
+                    // 長押しはもう知らせてある
+                } else if (dragging) {
+                    cancelLongPress()
                     prefs.edit().putInt(key("x"), params.x).putInt(key("y"), params.y).apply()
                     tapCount = 0
                 } else {
+                    cancelLongPress()
                     val continued = event.eventTime - lastTapTime <= multiTapTimeout &&
                         abs(event.rawX - lastTapRawX) <= multiTapSlop && abs(event.rawY - lastTapRawY) <= multiTapSlop
                     tapCount = if (continued) tapCount + 1 else 1
@@ -199,7 +229,10 @@ class CharacterWindow(
                     lastTapRawY = event.rawY
                     onTap(event.x, event.y, tapCount)
                 }
-                MotionEvent.ACTION_CANCEL -> tapCount = 0
+                MotionEvent.ACTION_CANCEL -> {
+                    cancelLongPress()
+                    tapCount = 0
+                }
             }
             return true
         }
@@ -222,7 +255,11 @@ private fun FitWindow(corner: Alignment, onSize: (Int, Int) -> Unit, content: @C
 }
 
 interface SurfaceTouchHandler {
-    fun onTouch(event: MotionEvent, onTap: (x: Float, y: Float, count: Int) -> Unit): Boolean
+    fun onTouch(
+        event: MotionEvent,
+        onTap: (x: Float, y: Float, count: Int) -> Unit,
+        onLongPress: (x: Float, y: Float) -> Unit,
+    ): Boolean
 }
 
 /** Service の中で Compose を動かすための LifecycleOwner / SavedStateRegistryOwner。 */

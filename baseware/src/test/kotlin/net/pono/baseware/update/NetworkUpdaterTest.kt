@@ -104,6 +104,31 @@ class NetworkUpdaterTest {
     }
 
     @Test
+    fun appliesDeleteListAfterUpdate() = runTest {
+        val dir = ghostDir("ghost/master/old.dic" to "x", "ghost/master/keep.dic" to "y", "pono/profile.properties" to "booted=1")
+        val deleteList = "ghost/master/old.dic\r\n../outside.txt\r\npono/profile.properties\r\n".toByteArray()
+        val server = FakeServer(
+            mutableMapOf(
+                base + "updates2.dau" to manifest("delete.txt" to deleteList),
+                base + "delete.txt" to deleteList,
+            ),
+        )
+        assertEquals(UpdateResult.Changed(listOf("delete.txt")), NetworkUpdater(dir, server).update(base))
+        assertFalse(File(dir, "ghost/master/old.dic").exists())
+        assertEquals("y", File(dir, "ghost/master/keep.dic").readText())
+        // ゴーストの外と pono/ の中は消さない
+        assertEquals("booted=1", File(dir, "pono/profile.properties").readText())
+    }
+
+    @Test
+    fun validatesFileNamesFromGhosts() {
+        assertEquals("rss_temp.xml", NetworkUpdater.safeFileName("rss_temp.xml"))
+        assertEquals(null, NetworkUpdater.safeFileName("../x"))
+        assertEquals(null, NetworkUpdater.safeFileName("a/b"))
+        assertEquals(null, NetworkUpdater.safeFileName(".hidden"))
+    }
+
+    @Test
     fun reportsHttpErrorsAndBadUrls() = runTest {
         val dir = ghostDir()
         assertEquals(UpdateResult.Failure("404"), NetworkUpdater(dir, FakeServer()).update(base))

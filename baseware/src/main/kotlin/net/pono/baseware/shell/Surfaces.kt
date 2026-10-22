@@ -35,7 +35,10 @@ data class AnimationInterval(val kind: IntervalKind, val arg: Int = 0) {
     }
 }
 
-/** パターンの1コマ。[surface] が -1 ならそのレイヤーを消す。 */
+/**
+ * パターンの1コマ。[surface] が -1 ならそのレイヤーを消す。
+ * start / stop / alternativestart / alternativestop のコマは、操作するアニメーションの番号を [targets] に持つ。
+ */
 data class PatternFrame(
     val method: String,
     val surface: Int,
@@ -43,7 +46,14 @@ data class PatternFrame(
     val waitMaxMs: Int,
     val x: Int,
     val y: Int,
-)
+    val targets: List<Int> = emptyList(),
+) {
+    val isControl: Boolean get() = method in CONTROL_METHODS
+
+    companion object {
+        val CONTROL_METHODS = setOf("start", "stop", "alternativestart", "alternativestop", "insert")
+    }
+}
 
 class Animation(val id: Int) {
     var interval: AnimationInterval = AnimationInterval(IntervalKind.NEVER)
@@ -177,6 +187,11 @@ class SurfaceTable(val definitions: Map<Int, SurfaceDefinition>) {
         private fun parseNewPattern(args: List<String>): PatternFrame? {
             if (args.isEmpty()) return null
             val method = args[0].lowercase()
+            if (method in PatternFrame.CONTROL_METHODS) {
+                // start,3 / alternativestart,[3.5.7] / alternativestart,(3,5) など。数字をすべて拾う
+                val targets = Regex("""\d+""").findAll(args.drop(1).joinToString(",")).map { it.value.toInt() }.toList()
+                return PatternFrame(method, -1, 0, 0, 0, 0, targets)
+            }
             val surface = args.getOrNull(1)?.toIntOrNull() ?: -1
             val (min, max) = parseWait(args.getOrNull(2), 1)
             return PatternFrame(method, surface, min, max, args.getOrNull(3)?.toIntOrNull() ?: 0, args.getOrNull(4)?.toIntOrNull() ?: 0)

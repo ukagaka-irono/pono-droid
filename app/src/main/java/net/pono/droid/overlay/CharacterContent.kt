@@ -61,8 +61,8 @@ fun CharacterSurface(
     val layers by animator.layers.collectAsState()
 
     // 画面が消えている間はアニメーションも止める
-    LaunchedEffect(character.surface, state.screenOn) {
-        if (state.screenOn) animator.show(controller.shell.surfaces[character.surface]) else animator.stop()
+    LaunchedEffect(character.surface, character.binds, state.screenOn) {
+        if (state.screenOn) animator.show(controller.shell.surfaces[character.surface], character.binds) else animator.stop()
     }
     LaunchedEffect(character.animationRequest) {
         character.animationRequest?.let { (id, _) -> animator.start(id) }
@@ -83,12 +83,17 @@ fun CharacterSurface(
         modifier = Modifier
             .size((bmp.width * dpPerImagePx).dp, (bmp.height * dpPerImagePx).dp)
             .onSizeChanged { onHeightChanged(it.height) }
-            .surfaceTouch(touchHandler) { x, y, count ->
-                val ix = (x / pxPerImagePx).toInt()
-                val iy = (y / pxPerImagePx).toInt()
-                val collision = controller.shell.surfaces[character.surface]?.hitTest(ix, iy)
-                controller.onMouseClick(scopeId, ix, iy, collision, count)
-            },
+            .surfaceTouch(
+                touchHandler,
+                onTap = { x, y, count ->
+                    val (ix, iy) = (x / pxPerImagePx).toInt() to (y / pxPerImagePx).toInt()
+                    controller.onMouseClick(scopeId, ix, iy, controller.shell.surfaces[character.surface]?.hitTest(ix, iy), count)
+                },
+                onLongPress = { x, y ->
+                    val (ix, iy) = (x / pxPerImagePx).toInt() to (y / pxPerImagePx).toInt()
+                    controller.onMouseLongPress(scopeId, ix, iy, controller.shell.surfaces[character.surface]?.hitTest(ix, iy))
+                },
+            ),
     )
 }
 
@@ -105,8 +110,11 @@ fun CharacterBalloon(scopeId: Int, controller: GhostController) {
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
-private fun Modifier.surfaceTouch(handler: SurfaceTouchHandler, onTap: (Float, Float, Int) -> Unit) =
-    pointerInteropFilter { handler.onTouch(it, onTap) }
+private fun Modifier.surfaceTouch(
+    handler: SurfaceTouchHandler,
+    onTap: (Float, Float, Int) -> Unit,
+    onLongPress: (Float, Float) -> Unit,
+) = pointerInteropFilter { handler.onTouch(it, onTap, onLongPress) }
 
 @Composable
 private fun Balloon(items: List<BalloonItem>, onClick: () -> Unit, onChoice: (Choice) -> Unit) {

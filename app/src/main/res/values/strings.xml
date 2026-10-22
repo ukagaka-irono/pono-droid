@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">pono-droid</string>
+    <string name="notification_update">更新</string>
+    <string name="notification_stop">終了</string>
 </resources>

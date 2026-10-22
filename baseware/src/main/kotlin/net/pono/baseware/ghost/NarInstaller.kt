@@ -2,6 +2,7 @@ package net.pono.baseware.ghost
 
 import net.pono.baseware.text.Descript
 import net.pono.baseware.text.TextCharsets
+import net.pono.baseware.update.NetworkUpdater
 import java.io.File
 import java.io.IOException
 import java.nio.charset.Charset
@@ -36,6 +37,8 @@ class NarInstaller(private val ghostRoot: File) {
                 out.parentFile?.mkdirs()
                 zip.getInputStream(entry).use { input -> out.outputStream().use { input.copyTo(it) } }
             }
+            // 上書きインストールで古いファイルを消す指示があれば従う
+            NetworkUpdater.applyDeleteList(target)
             return target
         }
     }

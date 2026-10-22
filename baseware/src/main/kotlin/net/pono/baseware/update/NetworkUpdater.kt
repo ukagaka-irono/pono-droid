@@ -72,7 +72,15 @@ class UrlConnectionFetcher(
         } catch (e: SocketTimeoutException) {
             FetchResult.Timeout
         } catch (e: IOException) {
-            FetchResult.Failed(e.javaClass.simpleName)
+            // ゴーストはこの理由をそのまま話すことがあるので、例外の名前ではなく読める言葉にする
+            FetchResult.Failed(
+                when (e) {
+                    is javax.net.ssl.SSLException -> "サーバーの証明書を確認できませんでした"
+                    is java.net.UnknownHostException -> "サーバーが見つかりませんでした"
+                    is java.net.ConnectException -> "サーバーに接続できませんでした"
+                    else -> "通信に失敗しました"
+                },
+            )
         } finally {
             conn.disconnect()
         }
@@ -130,6 +138,8 @@ class NetworkUpdater(
                 dest.parentFile?.mkdirs()
                 File(staging, e.path).copyTo(dest, overwrite = true)
             }
+            // 更新で delete.txt が来たら、書かれているファイルを消す（SSP と同じ）
+            if (targets.any { it.path.equals(DELETE_LIST, ignoreCase = true) }) applyDeleteList(root)
         } catch (e: IOException) {
             return@withContext UpdateResult.Failure("fileio")
         } finally {
@@ -143,16 +153,36 @@ class NetworkUpdater(
         return if (r is FetchResult.HttpError && r.code == 404) fetcher.fetch(base + "updates.txt") else r
     }
 
-    private fun failure(r: FetchResult) = UpdateResult.Failure(
-        when (r) {
+    private fun failure(r: FetchResult) = UpdateResult.Failure(describe(r))
+
+    companion object {
+        const val DELETE_LIST = "delete.txt"
+
+        /** 失敗の理由。SSP と同じく "timeout" と HTTP のステータスはそのまま、それ以外は読める言葉 */
+        fun describe(r: FetchResult): String = when (r) {
             is FetchResult.HttpError -> r.code.toString()
             FetchResult.Timeout -> "timeout"
             is FetchResult.Failed -> r.message
             is FetchResult.Ok -> "unknown"
-        },
-    )
+        }
 
-    companion object {
+        /**
+         * ゴーストのディレクトリ直下の delete.txt（1行に1つ、ゴーストのディレクトリからの相対パス）に
+         * 書かれたファイルを消す。外を指すパスと pono/ の中は無視する。.nar のインストールでも使う。
+         */
+        fun applyDeleteList(root: File) {
+            val list = File(root, DELETE_LIST).takeIf { it.isFile } ?: return
+            for (line in TextCharsets.decode(list.readBytes()).lines()) {
+                val path = line.trim().replace('\\', '/').trimEnd('/')
+                if (path.isEmpty() || path.startsWith("//")) continue
+                val target = safeFile(root.canonicalFile, path) ?: continue
+                if (target.isDirectory) target.deleteRecursively() else target.delete()
+            }
+        }
+
+        /** --file= のようにゴーストから渡されたファイル名。ディレクトリを含むもの・隠しファイルは受け付けない */
+        fun safeFileName(name: String): String? =
+            name.trim().takeIf { it.isNotEmpty() && '/' !in it && '\\' !in it && !it.startsWith(".") }
         fun normalizeBase(homeUrl: String): String? {
             val url = homeUrl.trim()
             if (!url.startsWith("http://") && !url.startsWith("https://")) return null
