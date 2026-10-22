@@ -121,10 +121,18 @@ class GhostController(
 
     // ---- ユーザー操作 ----
 
-    fun onMouseClick(scopeId: Int, x: Int, y: Int, collision: String?, double: Boolean) {
+    /**
+     * SSP と同じく、1回叩くごとに呼ぶ。[count] は続けて叩いた回数で、
+     * 1 なら OnMouseClick、2 なら OnMouseDoubleClick、3 以上なら OnMouseMultipleClick（Reference7 が回数）を送る。
+     */
+    fun onMouseClick(scopeId: Int, x: Int, y: Int, collision: String?, count: Int) {
         lastUserActivity = System.currentTimeMillis()
-        val event = if (double) "OnMouseDoubleClick" else "OnMouseClick"
-        raise(event, listOf(x.toString(), y.toString(), "0", scopeId.toString(), collision.orEmpty(), "0", "touch"), userInitiated = double)
+        val refs = listOf(x.toString(), y.toString(), "0", scopeId.toString(), collision.orEmpty(), "0", "touch")
+        when (count) {
+            1 -> raise("OnMouseClick", refs, userInitiated = false)
+            2 -> raise("OnMouseDoubleClick", refs)
+            else -> raise("OnMouseMultipleClick", refs + count.toString())
+        }
     }
 
     /** バルーンをタップした。\x の待ちなら進め、話し終わっていれば閉じる。 */
@@ -161,11 +169,16 @@ class GhostController(
 
     private suspend fun request(event: String, references: List<String>): String? {
         val s = session ?: return null
-        return requestLock.withLock {
+        val value = requestLock.withLock {
             runCatching { s.get(event, *references.toTypedArray()) }
                 .onFailure { platform.log("$event: ${it.message}") }
                 .getOrNull()?.value
         }
+        // 毎秒・毎分のイベントは多すぎるので、話すときだけ記録する
+        if (value != null || event !in timerEvents) {
+            platform.log("$event $references -> ${value?.take(120) ?: "(no content)"}")
+        }
+        return value
     }
 
     private fun startTimer() {
@@ -200,15 +213,18 @@ class GhostController(
     private fun runScript(script: String): Job {
         val job = scope.launch {
             val raised = mutableListOf<Pair<String, List<String>>>()
+            val host = Host(raised)
             hideBalloons()
             _state.update { it.copy(talking = true) }
             val result = try {
-                player.play(script, Host(raised))
+                player.play(script, host)
             } finally {
                 _state.update { it.copy(talking = false, waitingClick = false) }
             }
 
-            if (result.quit && !closing) {
+            // 終了中（OnClose のスクリプト）なら、話し終えた時点で close() に戻す
+            if (closing) return@launch
+            if (result.quit) {
                 closing = true
                 shutdown()
                 return@launch
@@ -220,7 +236,11 @@ class GhostController(
                 val waiter = CompletableDeferred<Choice?>()
                 choiceWaiter = waiter
                 _state.update { it.copy(waitingChoice = true) }
-                val choice = withTimeoutOrNull(choiceTimeoutMs) { waiter.await() }
+                val choice = if (host.choiceTimeoutMs > 0) {
+                    withTimeoutOrNull(host.choiceTimeoutMs) { waiter.await() }
+                } else {
+                    waiter.await()
+                }
                 _state.update { it.copy(waitingChoice = false) }
                 choiceWaiter = null
                 if (choice == null) {
@@ -229,8 +249,8 @@ class GhostController(
                 } else {
                     selectChoice(choice)
                 }
-            } else {
-                delay(balloonTimeoutMs)
+            } else if (host.balloonTimeoutMs > 0) {
+                delay(host.balloonTimeoutMs)
                 hideBalloons()
             }
         }
@@ -270,6 +290,20 @@ class GhostController(
     }
 
     private inner class Host(private val raised: MutableList<Pair<String, List<String>>>) : ScriptHost {
+        /** このスクリプトのあいだだけ有効。0 以下なら消さない／待ち続ける */
+        var balloonTimeoutMs = this@GhostController.balloonTimeoutMs
+        var choiceTimeoutMs = this@GhostController.choiceTimeoutMs
+
+        override fun setOption(name: String, args: List<String>): Boolean {
+            val ms = args.firstOrNull()?.trim()?.toLongOrNull() ?: return false
+            when (name) {
+                "balloontimeout" -> balloonTimeoutMs = ms
+                "choicetimeout" -> choiceTimeoutMs = ms
+                else -> return false
+            }
+            return true
+        }
+
         override fun setSurface(scope: Int, surface: Int) = _state.update { it.update(scope) { c -> c.copy(surface = surface) } }
 
         override fun appendText(scope: Int, text: String) = _state.update { it.update(scope) { c -> c.appendText(text) } }
@@ -333,5 +367,6 @@ class GhostController(
 
     companion object {
         const val BASEWARE_VERSION = "0.1.0"
+        private val timerEvents = setOf("OnSecondChange", "OnMinuteChange")
     }
 }

@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.PixelFormat
-import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.ViewConfiguration
@@ -82,32 +81,27 @@ class CharacterWindow(
 
     private fun key(name: String) = "window.$scopeId.$name"
 
-    /** サーフェスに触れたときの処理。指の動きに合わせてウィンドウ自体を動かすので、画面座標（raw）で扱う。 */
+    /**
+     * サーフェスに触れたときの処理。指の動きに合わせてウィンドウ自体を動かすので、画面座標（raw）で扱う。
+     * タップは SSP と同じく1回ごとに知らせ、続けて叩いた回数を数える（1: クリック、2: ダブル、3以上: 多重）。
+     */
     val touchHandler = object : SurfaceTouchHandler {
-        private val slop = ViewConfiguration.get(context).scaledTouchSlop
+        private val config = ViewConfiguration.get(context)
+        private val slop = config.scaledTouchSlop
+        private val multiTapSlop = config.scaledDoubleTapSlop
+        private val multiTapTimeout = ViewConfiguration.getDoubleTapTimeout().toLong()
         private var downRawX = 0f
         private var downRawY = 0f
         private var startX = 0
         private var startY = 0
         private var dragging = false
-        private var onTap: ((Float, Float, Boolean) -> Unit)? = null
-
-        private val detector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                if (!dragging) onTap?.invoke(e.x, e.y, false)
-                return true
-            }
-
-            override fun onDoubleTap(e: MotionEvent): Boolean {
-                if (!dragging) onTap?.invoke(e.x, e.y, true)
-                return true
-            }
-        })
+        private var tapCount = 0
+        private var lastTapTime = 0L
+        private var lastTapRawX = 0f
+        private var lastTapRawY = 0f
 
         @SuppressLint("ClickableViewAccessibility")
-        override fun onTouch(event: MotionEvent, onTap: (x: Float, y: Float, double: Boolean) -> Unit): Boolean {
-            this.onTap = onTap
-            detector.onTouchEvent(event)
+        override fun onTouch(event: MotionEvent, onTap: (x: Float, y: Float, count: Int) -> Unit): Boolean {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downRawX = event.rawX
@@ -127,9 +121,19 @@ class CharacterWindow(
                         windowManager.updateViewLayout(view, params)
                     }
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (dragging) {
+                MotionEvent.ACTION_UP -> if (dragging) {
                     prefs.edit().putInt(key("x"), params.x).putInt(key("y"), params.y).apply()
+                    tapCount = 0
+                } else {
+                    val continued = event.eventTime - lastTapTime <= multiTapTimeout &&
+                        abs(event.rawX - lastTapRawX) <= multiTapSlop && abs(event.rawY - lastTapRawY) <= multiTapSlop
+                    tapCount = if (continued) tapCount + 1 else 1
+                    lastTapTime = event.eventTime
+                    lastTapRawX = event.rawX
+                    lastTapRawY = event.rawY
+                    onTap(event.x, event.y, tapCount)
                 }
+                MotionEvent.ACTION_CANCEL -> tapCount = 0
             }
             return true
         }
@@ -137,7 +141,7 @@ class CharacterWindow(
 }
 
 interface SurfaceTouchHandler {
-    fun onTouch(event: MotionEvent, onTap: (x: Float, y: Float, double: Boolean) -> Unit): Boolean
+    fun onTouch(event: MotionEvent, onTap: (x: Float, y: Float, count: Int) -> Unit): Boolean
 }
 
 /** Service の中で Compose を動かすための LifecycleOwner / SavedStateRegistryOwner。 */

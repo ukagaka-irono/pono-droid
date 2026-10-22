@@ -64,4 +64,33 @@ class SakuraScriptTest {
         assertTrue(result.quit)
         assertTrue(result.hasChoices)
     }
+
+    @Test
+    fun playerPassesSetOptionsAndIgnoresLayoutTags() = runTest {
+        val options = mutableListOf<String>()
+        val unknown = mutableListOf<String>()
+        val host = object : ScriptHost {
+            override fun setSurface(scope: Int, surface: Int) {}
+            override fun appendText(scope: Int, text: String) {}
+            override fun newLine(scope: Int) {}
+            override fun clearBalloon(scope: Int) {}
+            override fun addChoice(scope: Int, choice: Choice) {}
+            override suspend fun waitClick() {}
+            override fun raise(event: String, references: List<String>) {}
+            override fun openUrl(url: String) {}
+            override fun envVariable(name: String): String? = null
+            override fun setOption(name: String, args: List<String>): Boolean {
+                options += "$name=$args"
+                return name == "balloontimeout"
+            }
+            override fun unknownTag(tag: Token.Tag) { unknown += tag.name + tag.args }
+        }
+        ScriptPlayer(charWaitMs = 0).play(
+            """\![set,balloontimeout,5000]\_n\_l[145]\![*]\q[a,b]\![set,wallpaper,x]\z""",
+            host,
+        )
+        assertEquals(listOf("balloontimeout=[5000]", "wallpaper=[x]"), options)
+        // 扱えなかった \![set,...] と本当に知らないタグだけが報告される
+        assertEquals(listOf("![set, wallpaper, x]", "z[]"), unknown)
+    }
 }

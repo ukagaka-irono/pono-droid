@@ -87,26 +87,29 @@ fun CharacterContent(
             filterQuality = if (pxPerImagePx >= 1.5f) FilterQuality.None else FilterQuality.Low,
             modifier = Modifier
                 .size((bmp.width * dpPerImagePx).dp, (bmp.height * dpPerImagePx).dp)
-                .surfaceTouch(touchHandler) { x, y, double ->
+                .surfaceTouch(touchHandler) { x, y, count ->
                     val ix = (x / pxPerImagePx).toInt()
                     val iy = (y / pxPerImagePx).toInt()
                     val collision = controller.shell.surfaces[character.surface]?.hitTest(ix, iy)
-                    controller.onMouseClick(scopeId, ix, iy, collision, double)
+                    controller.onMouseClick(scopeId, ix, iy, collision, count)
                 },
         )
     }
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
-private fun Modifier.surfaceTouch(handler: SurfaceTouchHandler, onTap: (Float, Float, Boolean) -> Unit) =
+private fun Modifier.surfaceTouch(handler: SurfaceTouchHandler, onTap: (Float, Float, Int) -> Unit) =
     pointerInteropFilter { handler.onTouch(it, onTap) }
 
 @Composable
 private fun Balloon(items: List<BalloonItem>, onClick: () -> Unit, onChoice: (Choice) -> Unit) {
     val scroll = rememberScrollState()
-    LaunchedEffect(items.size, (items.lastOrNull() as? BalloonItem.Text)?.text?.length) {
-        scroll.animateScrollTo(scroll.maxValue)
+    // 文字を出している間だけ最後まで追いかける。選択肢で終わるとき（メニューなど）は先頭の問いかけを見せたいので動かさない
+    val last = items.lastOrNull()
+    LaunchedEffect(items.size, (last as? BalloonItem.Text)?.text?.length) {
+        if (last !is BalloonItem.ChoiceItem) scroll.animateScrollTo(scroll.maxValue)
     }
+    val maxHeight = (LocalConfiguration.current.screenHeightDp / 2).coerceIn(220, 400).dp
     // \0 は右端、\1 は左端から（既定ではそれぞれ 16dp 内側に）出るので、
     // 画面の半分から余白を引いた幅に収めれば2人が同時に話しても重ならない
     val maxWidth = (LocalConfiguration.current.screenWidthDp / 2 - 24).coerceIn(120, 280).dp
@@ -120,13 +123,14 @@ private fun Balloon(items: List<BalloonItem>, onClick: () -> Unit, onChoice: (Ch
             .border(1.5.dp, Color(0xFF8D6E63), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
     ) {
-        Box(Modifier.heightIn(max = 220.dp).verticalScroll(scroll).padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Box(Modifier.heightIn(max = maxHeight).verticalScroll(scroll).padding(horizontal = 12.dp, vertical = 8.dp)) {
             Column {
                 for (line in toLines(items)) {
                     when (line) {
                         is Line.TextLine -> Text(line.text, fontSize = 14.sp, color = Color(0xFF3E2723))
                         is Line.ChoiceLine -> Text(
-                            text = "▶ " + line.choice.title,
+                            // 等幅で揃えるための空白が後ろに付いていることがあるので落とす
+                            text = "▶ " + line.choice.title.trim(),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = Color(0xFF1565C0),

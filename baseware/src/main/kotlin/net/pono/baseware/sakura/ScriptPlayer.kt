@@ -13,6 +13,9 @@ interface ScriptHost {
     fun addChoice(scope: Int, choice: Choice)
     fun startAnimation(scope: Int, id: Int) {}
 
+    /** `\![set,name,args...]`。扱えたら true。 */
+    fun setOption(name: String, args: List<String>): Boolean = false
+
     /** `\x`。クリックされるまで戻らない。 */
     suspend fun waitClick()
 
@@ -106,9 +109,12 @@ class ScriptPlayer(
                             "raise" -> if (a.size >= 2) host.raise(a[1], a.drop(2))
                             "open" -> if (a.getOrNull(1)?.lowercase() == "browser" && a.size >= 3) host.openUrl(a[2])
                             "quicksection" -> quick = a.getOrNull(1)?.lowercase() in setOf("1", "true")
+                            "*" -> {} // 選択肢の前の印。選択肢には自前で印を付けている
+                            "set" -> if (a.size >= 2 && !host.setOption(a[1].lowercase(), a.drop(2))) host.unknownTag(token)
                             else -> host.unknownTag(token)
                         }
                         "j" -> a.firstOrNull()?.takeIf { it.startsWith("http") }?.let(host::openUrl)
+                        in layoutOnlyTags -> {}
                         else -> host.unknownTag(token)
                     }
                 }
@@ -116,6 +122,12 @@ class ScriptPlayer(
         }
         return PlayResult(quit, hasChoices)
     }
+
+    /**
+     * 見た目の細かい調整だけのタグ。バルーンを自前で描いているので、無視しても会話の流れは変わらない。
+     * \_l: カーソル位置、\_n: 自動改行の切り替え、\f: 書式、\b: バルーン切り替え、\t: 割り込み禁止、\* : 選択肢タイムアウト禁止
+     */
+    private val layoutOnlyTags = setOf("_l", "_n", "f", "b", "t", "*")
 
     private val envPattern = Regex("""%([a-zA-Z][a-zA-Z0-9]*)""")
 
