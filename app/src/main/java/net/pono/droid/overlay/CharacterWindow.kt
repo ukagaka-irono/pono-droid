@@ -4,12 +4,19 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.PixelFormat
+import android.os.Build
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.Constraints
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -21,8 +28,11 @@ import net.pono.baseware.ghost.GhostController
 import kotlin.math.abs
 
 /**
- * キャラクター1人分のオーバーレイウィンドウ。サーフェスとバルーンを縦に並べる。
- * ウィンドウは画面の下端を基準に置くので、バルーンが出てもキャラクターの位置は動かない。
+ * キャラクター1人分のオーバーレイ。サーフェスとバルーンを別々のウィンドウにし、バルーンをサーフェスの真上に置く。
+ *
+ * Android のオーバーレイは透明な画素のタッチを下のアプリに渡せない（ウィンドウの矩形の中はすべてこちらが受け取る）。
+ * 1つのウィンドウに縦に並べるとキャラクターの横の空きまでタッチを奪うので、分けてそれぞれ中身の大きさにする。
+ * どちらも画面の下端を基準に置くので、バルーンが出てもキャラクターの位置は動かない。
  */
 class CharacterWindow(
     private val context: Context,
@@ -33,10 +43,11 @@ class CharacterWindow(
 ) {
     private val windowManager = context.getSystemService(WindowManager::class.java)
     private val owner = OverlayOwner()
-    private val view = ComposeView(context)
+    private val surfaceView = ComposeView(context)
+    private val balloonView = ComposeView(context)
     private val alignEnd = scopeId == 0
 
-    private val params = WindowManager.LayoutParams(
+    private fun overlayParams() = WindowManager.LayoutParams(
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -44,10 +55,20 @@ class CharacterWindow(
         PixelFormat.TRANSLUCENT,
     ).apply {
         gravity = Gravity.BOTTOM or (if (alignEnd) Gravity.END else Gravity.START)
+        // ウィンドウの出入りや移動のアニメーションは要らない（ドラッグや再描画のたびに走ると重い）
+        windowAnimations = 0
+        if (Build.VERSION.SDK_INT >= 34) setCanPlayMoveAnimation(false)
+    }
+
+    private val params = overlayParams().apply {
         val density = context.resources.displayMetrics.density
         x = prefs.getInt(key("x"), (16 * density).toInt())
         y = prefs.getInt(key("y"), (48 * density).toInt())
     }
+    private val balloonParams = overlayParams()
+
+    /** サーフェスの高さ（px）。バルーンはこの分だけ上に置く */
+    private var surfaceHeight = 0
 
     // アプリの画面で大きさを変えたら、起動中のゴーストにもすぐ反映する
     private val scale = mutableFloatStateOf(OverlaySettings.characterScale(prefs))
@@ -56,27 +77,71 @@ class CharacterWindow(
     }
 
     fun show() {
-        view.setViewTreeLifecycleOwner(owner)
-        view.setViewTreeSavedStateRegistryOwner(owner)
-        view.setContent {
-            CharacterContent(
-                scopeId = scopeId,
-                controller = controller,
-                renderer = renderer,
-                alignEnd = alignEnd,
-                dpPerImagePx = scale.floatValue,
-                touchHandler = touchHandler,
-            )
+        for (v in listOf(surfaceView, balloonView)) {
+            v.setViewTreeLifecycleOwner(owner)
+            v.setViewTreeSavedStateRegistryOwner(owner)
+        }
+        val corner = if (alignEnd) Alignment.BottomEnd else Alignment.BottomStart
+        surfaceView.setContent {
+            FitWindow(corner, onSize = { w, h -> resize(surfaceView, params, w, h) }) {
+                CharacterSurface(
+                    scopeId = scopeId,
+                    controller = controller,
+                    renderer = renderer,
+                    dpPerImagePx = scale.floatValue,
+                    touchHandler = touchHandler,
+                    onHeightChanged = { h ->
+                        if (h != surfaceHeight) {
+                            surfaceHeight = h
+                            placeBalloon()
+                        }
+                    },
+                )
+            }
+        }
+        balloonView.setContent {
+            FitWindow(corner, onSize = { w, h -> resize(balloonView, balloonParams, w, h) }) {
+                CharacterBalloon(scopeId, controller)
+            }
         }
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         owner.resume()
-        windowManager.addView(view, params)
+        windowManager.addView(surfaceView, params)
+        placeBalloon(add = true)
+    }
+
+    /**
+     * ウィンドウを中身と同じ大きさ（px）に固定する。
+     * WRAP_CONTENT のままだと、文字が1つ増えたりアニメーションのコマが変わったりして再描画するたびに
+     * ウィンドウの配置がやり直され（端末によってはそのたびにウィンドウのアニメーションも走る）、電池を食う。
+     */
+    private fun resize(view: ComposeView, p: WindowManager.LayoutParams, width: Int, height: Int) {
+        if (p.width == width && p.height == height) return
+        // 測っている最中にウィンドウを変えないよう、レイアウトが終わってから反映する
+        view.post {
+            if (p.width == width && p.height == height) return@post
+            p.width = width
+            p.height = height
+            if (view.isAttachedToWindow) windowManager.updateViewLayout(view, p)
+        }
     }
 
     fun dismiss() {
         prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         owner.destroy()
-        runCatching { windowManager.removeView(view) }
+        runCatching { windowManager.removeView(surfaceView) }
+        runCatching { windowManager.removeView(balloonView) }
+    }
+
+    /** バルーンのウィンドウをサーフェスの真上に合わせる */
+    private fun placeBalloon(add: Boolean = false) {
+        balloonParams.x = params.x
+        balloonParams.y = params.y + surfaceHeight
+        if (add) {
+            windowManager.addView(balloonView, balloonParams)
+        } else if (balloonView.isAttachedToWindow) {
+            windowManager.updateViewLayout(balloonView, balloonParams)
+        }
     }
 
     private fun key(name: String) = "window.$scopeId.$name"
@@ -118,7 +183,8 @@ class CharacterWindow(
                         // END / BOTTOM 基準なので、x と y は右下からの距離
                         params.x = startX + (if (alignEnd) -dx else dx).toInt()
                         params.y = startY - dy.toInt()
-                        windowManager.updateViewLayout(view, params)
+                        windowManager.updateViewLayout(surfaceView, params)
+                        placeBalloon()
                     }
                 }
                 MotionEvent.ACTION_UP -> if (dragging) {
@@ -137,6 +203,21 @@ class CharacterWindow(
             }
             return true
         }
+    }
+}
+
+/**
+ * 中身をウィンドウの大きさに縛られずに測り、その大きさを [onSize] で知らせる。中身が無ければ 0×0。
+ * ウィンドウが中身より小さい間（大きくなる途中）は [corner] に寄せて描く。
+ */
+@Composable
+private fun FitWindow(corner: Alignment, onSize: (Int, Int) -> Unit, content: @Composable () -> Unit) {
+    Layout(content = content, modifier = Modifier.wrapContentSize(corner, unbounded = true)) { measurables, _ ->
+        val placeables = measurables.map { it.measure(Constraints()) }
+        val width = placeables.maxOfOrNull { it.width } ?: 0
+        val height = placeables.maxOfOrNull { it.height } ?: 0
+        onSize(width, height)
+        layout(width, height) { placeables.forEach { it.place(0, 0) } }
     }
 }
 

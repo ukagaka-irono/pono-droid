@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -22,13 +22,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -41,16 +41,18 @@ import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.sakura.Choice
 
 /**
+ * キャラクターのサーフェス（SERIKO のアニメーション込み）。
  * @param dpPerImagePx シェル画像の 1px を何 dp で表示するか
+ * @param onHeightChanged 表示しているサーフェスの高さ（px）。バルーンのウィンドウをその上に置くのに使う
  */
 @Composable
-fun CharacterContent(
+fun CharacterSurface(
     scopeId: Int,
     controller: GhostController,
     renderer: SurfaceRenderer,
-    alignEnd: Boolean,
     dpPerImagePx: Float,
     touchHandler: SurfaceTouchHandler,
+    onHeightChanged: (Int) -> Unit,
 ) {
     val state by controller.state.collectAsState()
     val character = state.characters[scopeId] ?: return
@@ -58,8 +60,9 @@ fun CharacterContent(
     val animator = remember { SerikoAnimator(coroutineScope) }
     val layers by animator.layers.collectAsState()
 
-    LaunchedEffect(character.surface) {
-        animator.show(controller.shell.surfaces[character.surface])
+    // 画面が消えている間はアニメーションも止める
+    LaunchedEffect(character.surface, state.screenOn) {
+        if (state.screenOn) animator.show(controller.shell.surfaces[character.surface]) else animator.stop()
     }
     LaunchedEffect(character.animationRequest) {
         character.animationRequest?.let { (id, _) -> animator.start(id) }
@@ -69,32 +72,36 @@ fun CharacterContent(
         value = withContext(Dispatchers.Default) { renderer.render(character.surface, layers) }
     }
 
-    Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
-        character.balloon?.let { items ->
-            Balloon(
-                items = items,
-                onClick = { controller.onBalloonClick(scopeId) },
-                onChoice = controller::onChoice,
-            )
-        }
-        val bmp = bitmap ?: return@Column
-        val density = LocalDensity.current
-        val pxPerImagePx = with(density) { dpPerImagePx.dp.toPx() }
-        Image(
-            bitmap = bmp.asImageBitmap(),
-            contentDescription = controller.ghost.name,
-            // 拡大するときはドット絵がぼやけないよう補間しない
-            filterQuality = if (pxPerImagePx >= 1.5f) FilterQuality.None else FilterQuality.Low,
-            modifier = Modifier
-                .size((bmp.width * dpPerImagePx).dp, (bmp.height * dpPerImagePx).dp)
-                .surfaceTouch(touchHandler) { x, y, count ->
-                    val ix = (x / pxPerImagePx).toInt()
-                    val iy = (y / pxPerImagePx).toInt()
-                    val collision = controller.shell.surfaces[character.surface]?.hitTest(ix, iy)
-                    controller.onMouseClick(scopeId, ix, iy, collision, count)
-                },
-        )
-    }
+    val bmp = bitmap ?: return
+    val density = LocalDensity.current
+    val pxPerImagePx = with(density) { dpPerImagePx.dp.toPx() }
+    Image(
+        bitmap = bmp.asImageBitmap(),
+        contentDescription = controller.ghost.name,
+        // 拡大するときはドット絵がぼやけないよう補間しない
+        filterQuality = if (pxPerImagePx >= 1.5f) FilterQuality.None else FilterQuality.Low,
+        modifier = Modifier
+            .size((bmp.width * dpPerImagePx).dp, (bmp.height * dpPerImagePx).dp)
+            .onSizeChanged { onHeightChanged(it.height) }
+            .surfaceTouch(touchHandler) { x, y, count ->
+                val ix = (x / pxPerImagePx).toInt()
+                val iy = (y / pxPerImagePx).toInt()
+                val collision = controller.shell.surfaces[character.surface]?.hitTest(ix, iy)
+                controller.onMouseClick(scopeId, ix, iy, collision, count)
+            },
+    )
+}
+
+/** キャラクターのバルーン。話していないときは何も描かない（ウィンドウの大きさが 0 になり、タッチも奪わない）。 */
+@Composable
+fun CharacterBalloon(scopeId: Int, controller: GhostController) {
+    val state by controller.state.collectAsState()
+    val items = state.characters[scopeId]?.balloon ?: return
+    Balloon(
+        items = items,
+        onClick = { controller.onBalloonClick(scopeId) },
+        onChoice = controller::onChoice,
+    )
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -111,15 +118,16 @@ private fun Balloon(items: List<BalloonItem>, onClick: () -> Unit, onChoice: (Ch
     }
     val maxHeight = (LocalConfiguration.current.screenHeightDp / 2).coerceIn(220, 400).dp
     // \0 は右端、\1 は左端から（既定ではそれぞれ 16dp 内側に）出るので、
-    // 画面の半分から余白を引いた幅に収めれば2人が同時に話しても重ならない
-    val maxWidth = (LocalConfiguration.current.screenWidthDp / 2 - 24).coerceIn(120, 280).dp
+    // 画面の半分から余白を引いた幅に収めれば2人が同時に話しても重ならない。
+    // 幅は固定にする（文字が増えるたびにウィンドウの幅が変わらないように。高さは行が増えたときだけ変わる）
+    val width = (LocalConfiguration.current.screenWidthDp / 2 - 24).coerceIn(120, 280).dp
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = Color.White,
         shadowElevation = 4.dp,
         modifier = Modifier
             .padding(bottom = 4.dp)
-            .widthIn(min = 120.dp, max = maxWidth)
+            .width(width)
             .border(1.5.dp, Color(0xFF8D6E63), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
     ) {

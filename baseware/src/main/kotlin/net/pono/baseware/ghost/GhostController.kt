@@ -248,7 +248,25 @@ class GhostController(
         return value
     }
 
+    /**
+     * 画面が消えたら毎秒・毎分のイベントを止め、点いたら再開する（電池のため）。
+     * 止めている間は SHIORI を起こさないので、ゴーストが勝手に話し出すこともない。
+     */
+    fun setScreenOn(on: Boolean) {
+        if (_state.value.screenOn == on) return
+        _state.update { it.copy(screenOn = on) }
+        platform.log(if (on) "screen on: timer resumed" else "screen off: timer paused")
+        if (!on) {
+            timerJob?.cancel()
+            timerJob = null
+        } else if (session != null && !closing) {
+            startTimer()
+        }
+    }
+
     private fun startTimer() {
+        timerJob?.cancel()
+        if (!_state.value.screenOn) return
         timerJob = scope.launch {
             var lastMinute = Calendar.getInstance().get(Calendar.MINUTE)
             while (isActive) {
@@ -350,12 +368,15 @@ class GhostController(
     }
 
     private fun resetSurfaces() {
-        _state.value = GhostState(
-            characters = mapOf(
-                0 to CharacterState(0, shell.defaultSurface(0)),
-                1 to CharacterState(1, shell.defaultSurface(1)),
-            ),
-        )
+        _state.update {
+            GhostState(
+                characters = mapOf(
+                    0 to CharacterState(0, shell.defaultSurface(0)),
+                    1 to CharacterState(1, shell.defaultSurface(1)),
+                ),
+                screenOn = it.screenOn,
+            )
+        }
     }
 
     private inner class Host(private val raised: MutableList<Pair<String, List<String>>>) : ScriptHost {

@@ -4,10 +4,13 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.net.Uri
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
@@ -77,6 +80,7 @@ class GhostOverlayService : LifecycleService() {
             },
         )
         controller = c
+        c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
         val renderer = SurfaceRenderer(shell)
         val prefs = OverlaySettings.prefs(this)
         for (scope in listOf(1, 0)) {
@@ -91,7 +95,26 @@ class GhostOverlayService : LifecycleService() {
         controller = null
     }
 
+    /** 画面が消えている間は、ゴーストのタイマーとアニメーションを止める */
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            controller?.setScreenOn(intent.action == Intent.ACTION_SCREEN_ON)
+        }
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        registerReceiver(
+            screenReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_SCREEN_OFF)
+            },
+        )
+    }
+
     override fun onDestroy() {
+        unregisterReceiver(screenReceiver)
         teardown()
         super.onDestroy()
     }

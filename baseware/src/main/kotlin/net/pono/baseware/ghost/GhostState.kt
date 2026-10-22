@@ -32,6 +32,8 @@ data class GhostState(
     val talking: Boolean = false,
     val waitingClick: Boolean = false,
     val waitingChoice: Boolean = false,
+    /** 画面が消えている間は false。タイマーのイベントと SERIKO のアニメーションを止める */
+    val screenOn: Boolean = true,
 ) {
     fun update(scope: Int, f: (CharacterState) -> CharacterState): GhostState {
         val current = characters[scope] ?: CharacterState(scope, -1)

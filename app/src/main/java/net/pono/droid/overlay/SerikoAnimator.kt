@@ -56,6 +56,7 @@ class SerikoAnimator(private val scope: CoroutineScope) {
     }
 
     fun stop() {
+        current = null
         jobs.forEach { it.cancel() }
         jobs.clear()
         running.values.forEach { it.cancel() }
