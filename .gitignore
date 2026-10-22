@@ -1,0 +1,10 @@
+*.iml
+.gradle/
+/local.properties
+build/
+.cxx/
+.externalNativeBuild/
+captures/
+.kotlin/
+/.idea/*
+!/.idea/.gitignore

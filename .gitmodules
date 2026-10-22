@@ -1,0 +1,3 @@
+[submodule "shiori-yaya/src/main/cpp/yaya"]
+	path = shiori-yaya/src/main/cpp/yaya
+	url = https://github.com/YAYA-shiori/yaya-shiori.git
