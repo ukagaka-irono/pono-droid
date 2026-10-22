@@ -107,6 +107,7 @@ tasks.matching { it.name.startsWith("configureCMake") || it.name.startsWith("bui
 
 dependencies {
     implementation(project(":baseware"))
+    androidTestImplementation(libs.kotlinx.coroutines.core)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.junit)
