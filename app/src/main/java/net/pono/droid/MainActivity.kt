@@ -56,7 +56,10 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import net.pono.baseware.balloon.Balloon
+import net.pono.baseware.balloon.BalloonRepository
 import net.pono.baseware.ghost.Ghost
+import net.pono.baseware.ghost.NarInstaller
 import net.pono.baseware.shell.Shell
 import net.pono.droid.overlay.GhostOverlayService
 import net.pono.droid.overlay.OverlaySettings
@@ -90,7 +93,10 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     val running by GhostOverlayService.running.collectAsState()
 
     suspend fun reload() {
-        ghosts = withContext(Dispatchers.IO) { GhostStore.repository(context).list().map(::GhostItem) }
+        ghosts = withContext(Dispatchers.IO) {
+            val repo = GhostStore.repository(context)
+            repo.list().map { GhostItem(it, repo.balloons) }
+        }
     }
 
     LaunchedEffect(Unit) { reload() }
@@ -106,7 +112,17 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
         scope.launch {
             val result = withContext(Dispatchers.IO) { runCatching { GhostStore.install(context, uri) } }
             result.onSuccess { reload() }
-            snackbar.showSnackbar(result.fold({ "インストールしました: ${it.name}" }, { "インストールできませんでした: ${it.message}" }))
+            snackbar.showSnackbar(
+                result.fold(
+                    { r ->
+                        when (r.type) {
+                            NarInstaller.Type.GHOST -> "ゴーストをインストールしました: ${Ghost(r.dir).name}"
+                            NarInstaller.Type.BALLOON -> "バルーンをインストールしました: ${Balloon(r.dir).name}（ゴーストごとに選べます）"
+                        }
+                    },
+                    { "インストールできませんでした: ${it.message}" },
+                ),
+            )
         }
     }
 
@@ -161,6 +177,13 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                                 if (isRunning) GhostOverlayService.start(context, dirName)
                             }
                         },
+                        onSelectBalloon = { balloon ->
+                            scope.launch {
+                                withContext(Dispatchers.IO) { item.ghost.selectBalloon(balloon) }
+                                reload()
+                                if (isRunning) GhostOverlayService.start(context, dirName)
+                            }
+                        },
                         onUninstall = {
                             scope.launch {
                                 val ok = withContext(Dispatchers.IO) { GhostStore.repository(context).uninstall(item.ghost) }
@@ -192,19 +215,45 @@ private fun CharacterScaleSlider() {
     }
 }
 
-/** 一覧の1行に出すもの。シェルの名前を読むのにファイルを開くので、まとめて IO スレッドで作る */
+/** 一覧の1行に出すもの。シェルやバルーンの名前を読むのにファイルを開くので、まとめて IO スレッドで作る */
 private data class GhostItem(
     val ghost: Ghost,
     /** shell/ の下のディレクトリ名 → シェルの名前 */
     val shells: List<Pair<String, String>>,
     val selectedShell: String?,
+    /** バルーン置き場のディレクトリ名 → バルーンの名前。null は pono-droid の簡易バルーン */
+    val balloons: List<Pair<String?, String>>,
+    val selectedBalloon: String?,
 )
 
-private fun GhostItem(ghost: Ghost) = GhostItem(
+private fun GhostItem(ghost: Ghost, balloons: BalloonRepository) = GhostItem(
     ghost = ghost,
     shells = ghost.shellDirs.map { it.name to Shell(it).name },
     selectedShell = ghost.shellDir()?.name,
+    balloons = listOf<Pair<String?, String>>(null to "簡易バルーン") + balloons.list().map { it.dir.name to it.name },
+    selectedBalloon = ghost.balloon(balloons)?.dir?.name,
 )
+
+/** 「シェル: 名前」のようなボタンと、選ぶためのメニュー。選べるものが1つしか無ければ押せない */
+@Composable
+private fun <T> SelectButton(label: String, options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    val current = options.firstOrNull { it.first == selected }?.second ?: "なし"
+    Box(modifier) {
+        TextButton(onClick = { open = true }, enabled = options.size > 1) { Text("$label: $current") }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            for ((value, name) in options) {
+                DropdownMenuItem(
+                    text = { Text(if (value == selected) "✓ $name" else name) },
+                    onClick = {
+                        open = false
+                        if (value != selected) onSelect(value)
+                    },
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun GhostRow(
@@ -213,11 +262,11 @@ private fun GhostRow(
     enabled: Boolean,
     onStart: () -> Unit,
     onSelectShell: (String) -> Unit,
+    onSelectBalloon: (String?) -> Unit,
     onUninstall: () -> Unit,
 ) {
     val ghost = item.ghost
     var confirmUninstall by remember { mutableStateOf(false) }
-    var shellMenu by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -232,25 +281,11 @@ private fun GhostRow(
                 Button(onClick = onStart, enabled = enabled) { Text(if (running) "再起動" else "起動") }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                val shellName = item.shells.firstOrNull { it.first == item.selectedShell }?.second ?: "なし"
-                Box(Modifier.weight(1f)) {
-                    // シェルが1つしか無ければ選ぶものが無いので、名前を出すだけにする
-                    TextButton(onClick = { shellMenu = true }, enabled = item.shells.size > 1) { Text("シェル: $shellName") }
-                    DropdownMenu(expanded = shellMenu, onDismissRequest = { shellMenu = false }) {
-                        for ((dir, name) in item.shells) {
-                            DropdownMenuItem(
-                                text = { Text(if (dir == item.selectedShell) "✓ $name" else name) },
-                                onClick = {
-                                    shellMenu = false
-                                    if (dir != item.selectedShell) onSelectShell(dir)
-                                },
-                            )
-                        }
-                    }
-                }
+                SelectButton("シェル", item.shells, item.selectedShell, { it?.let(onSelectShell) }, Modifier.weight(1f))
                 // 起動中に消すと、動いているゴーストのファイルが無くなるので先に終了してもらう
                 TextButton(onClick = { confirmUninstall = true }, enabled = !running) { Text("削除") }
             }
+            SelectButton("バルーン", item.balloons, item.selectedBalloon, onSelectBalloon)
         }
     }
     if (confirmUninstall) {

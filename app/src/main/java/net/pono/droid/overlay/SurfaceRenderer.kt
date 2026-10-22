@@ -1,7 +1,6 @@
 package net.pono.droid.overlay
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.PorterDuff
@@ -59,41 +58,8 @@ class SurfaceRenderer(private val shell: Shell) {
         out
     }
 
+    /** シェルは seriko.use_self_alpha で決め打ち（0 なら PNG にアルファがあっても .pna か左上の色で抜く） */
     private fun load(file: File): Bitmap? = images.getOrPut(file) {
-        val opts = BitmapFactory.Options().apply {
-            inMutable = true
-            inPreferredConfig = Bitmap.Config.ARGB_8888
-        }
-        val bmp = BitmapFactory.decodeFile(file.path, opts) ?: return@getOrPut null
-        if (!shell.useSelfAlpha) {
-            val pna = shell.pnaFor(file)?.let { BitmapFactory.decodeFile(it.path) }
-            if (pna != null && pna.width == bmp.width && pna.height == bmp.height) applyPna(bmp, pna) else applyColorKey(bmp)
-        }
-        bmp
-    }
-
-    private fun applyColorKey(bmp: Bitmap) {
-        val px = IntArray(bmp.width * bmp.height)
-        bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
-        val key = px[0] or 0xFF000000.toInt()
-        for (i in px.indices) {
-            if ((px[i] or 0xFF000000.toInt()) == key) px[i] = 0
-        }
-        bmp.setHasAlpha(true)
-        bmp.setPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
-    }
-
-    /** .pna はグレースケールで、明るさがそのままアルファになる。 */
-    private fun applyPna(bmp: Bitmap, pna: Bitmap) {
-        val px = IntArray(bmp.width * bmp.height)
-        val alpha = IntArray(px.size)
-        bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
-        pna.getPixels(alpha, 0, bmp.width, 0, 0, bmp.width, bmp.height)
-        for (i in px.indices) {
-            val a = alpha[i] and 0xFF
-            px[i] = (px[i] and 0x00FFFFFF) or (a shl 24)
-        }
-        bmp.setHasAlpha(true)
-        bmp.setPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
+        ImageTransparency.load(file, shell.pnaFor(file), selfAlpha = shell.useSelfAlpha)
     }
 }

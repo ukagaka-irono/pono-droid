@@ -1,5 +1,7 @@
 package net.pono.baseware.ghost
 
+import net.pono.baseware.balloon.Balloon
+import net.pono.baseware.balloon.BalloonRepository
 import net.pono.baseware.text.Descript
 import net.pono.baseware.text.TextCharsets
 import java.io.File
@@ -34,6 +36,22 @@ class Ghost(val dir: File) {
         saveProfile(loadProfile().apply { setProperty(PROFILE_SHELL, shellDirName) })
     }
 
+    /**
+     * 使うバルーン。選んであればそれ、無ければゴーストの descript.txt の balloon 指定。
+     * どちらもインストールされていなければ null（pono-droid の簡易バルーンを使う）。
+     */
+    fun balloon(balloons: BalloonRepository): Balloon? =
+        when (val selected = loadProfile().getProperty(PROFILE_BALLOON)) {
+            BALLOON_SIMPLE -> null
+            null -> descript["balloon"]?.let(balloons::findByName)
+            else -> balloons.find(selected)
+        }
+
+    /** バルーンを選ぶ。null なら pono-droid の簡易バルーン */
+    fun selectBalloon(balloonDirName: String?) {
+        saveProfile(loadProfile().apply { setProperty(PROFILE_BALLOON, balloonDirName ?: BALLOON_SIMPLE) })
+    }
+
     val isValid: Boolean get() = File(masterDir, "descript.txt").isFile
 
     // pono-droid がゴーストごとに覚えておくこと（初回起動したか、選んだシェルなど）
@@ -50,10 +68,17 @@ class Ghost(val dir: File) {
 
     private companion object {
         const val PROFILE_SHELL = "shell"
+        const val PROFILE_BALLOON = "balloon"
+
+        /** 簡易バルーンを選んだ印（ディレクトリ名と重ならないよう / を含める） */
+        const val BALLOON_SIMPLE = "/simple"
     }
 }
 
-class GhostRepository(val root: File) {
+/**
+ * ゴースト置き場。バルーンは [balloons]（既定ではゴースト置き場と同じ階層の balloon/）に置く。
+ */
+class GhostRepository(val root: File, val balloons: BalloonRepository = BalloonRepository(File(root.parentFile, "balloon"))) {
     init {
         root.mkdirs()
     }
@@ -63,7 +88,7 @@ class GhostRepository(val root: File) {
 
     fun find(dirName: String): Ghost? = Ghost(File(root, dirName)).takeIf { it.isValid }
 
-    fun installer() = NarInstaller(root)
+    fun installer() = NarInstaller(root, balloons.root)
 
     /** ゴーストを消す（元に戻せない）。置き場の外は消さない */
     fun uninstall(ghost: Ghost): Boolean {

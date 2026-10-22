@@ -8,13 +8,19 @@ import java.io.IOException
 import java.nio.charset.Charset
 import java.util.zip.ZipFile
 
-/** .nar（zip）をゴースト置き場に展開する。今はゴーストのみ対応する。 */
-class NarInstaller(private val ghostRoot: File) {
+/**
+ * .nar（zip）を展開する。ゴーストはゴースト置き場に、バルーンはバルーン置き場に入れる。
+ * ゴーストの .nar に balloon/ フォルダが入っていれば、そのバルーンもバルーン置き場に入れる（SSP と同じ）。
+ */
+class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
 
     class InstallException(message: String) : IOException(message)
 
-    /** @return 展開先のゴーストディレクトリ */
-    fun install(nar: File): File {
+    enum class Type { GHOST, BALLOON }
+
+    data class Result(val type: Type, val dir: File)
+
+    fun install(nar: File): Result {
         // 古いアーカイバで作られた nar はファイル名が CP932 のことがある
         val zip = openZip(nar, Charsets.UTF_8) ?: openZip(nar, TextCharsets.CP932)
             ?: throw InstallException("nar を開けません")
@@ -23,11 +29,14 @@ class NarInstaller(private val ghostRoot: File) {
             val installEntry = entries.firstOrNull { normalize(it.name).equals("install.txt", ignoreCase = true) }
                 ?: throw InstallException("install.txt がありません")
             val install = Descript.parse(TextCharsets.decode(zip.getInputStream(installEntry).readBytes()))
-            val type = install["type"]?.lowercase()
-            if (type != "ghost") throw InstallException("ゴースト以外（type=$type）はまだ対応していません")
+            val type = when (install["type"]?.lowercase()) {
+                "ghost" -> Type.GHOST
+                "balloon" -> Type.BALLOON
+                else -> throw InstallException("ゴーストとバルーン以外（type=${install["type"]}）はまだ対応していません")
+            }
             val dirName = install["directory"]?.let(::safeName) ?: throw InstallException("install.txt に directory がありません")
 
-            val target = File(ghostRoot, dirName)
+            val target = File(if (type == Type.GHOST) ghostRoot else balloonRoot, dirName)
             val canonicalTarget = target.canonicalFile
             for (entry in entries) {
                 val out = File(target, normalize(entry.name)).canonicalFile
@@ -39,7 +48,17 @@ class NarInstaller(private val ghostRoot: File) {
             }
             // 上書きインストールで古いファイルを消す指示があれば従う
             NetworkUpdater.applyDeleteList(target)
-            return target
+            if (type == Type.GHOST) installBundledBalloons(target)
+            return Result(type, target)
+        }
+    }
+
+    /** ゴーストに同梱のバルーン（balloon/名前/descript.txt）をバルーン置き場に写す */
+    private fun installBundledBalloons(ghostDir: File) {
+        val bundled = File(ghostDir, "balloon").listFiles { f -> File(f, "descript.txt").isFile }.orEmpty()
+        for (dir in bundled) {
+            val name = safeName(dir.name) ?: continue
+            dir.copyRecursively(File(balloonRoot, name), overwrite = true)
         }
     }
 

@@ -92,9 +92,11 @@ class GhostOverlayService : LifecycleService() {
         _running.value = ghost.dir.name
         c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
         val renderer = SurfaceRenderer(shell)
+        // 選んだバルーン（無ければゴーストの指定）。どちらも無ければ簡易バルーン
+        val balloonSkin = ghost.balloon(GhostStore.repository(this).balloons)?.let(::BalloonSkin)
         val prefs = OverlaySettings.prefs(this)
         for (scope in listOf(1, 0)) {
-            windows += CharacterWindow(this, scope, c, renderer, prefs).also { it.show() }
+            windows += CharacterWindow(this, scope, c, renderer, balloonSkin, prefs).also { it.show() }
         }
         c.start()
     }

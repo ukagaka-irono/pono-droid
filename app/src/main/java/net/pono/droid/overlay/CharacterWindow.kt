@@ -39,6 +39,7 @@ class CharacterWindow(
     private val scopeId: Int,
     private val controller: GhostController,
     private val renderer: SurfaceRenderer,
+    private val balloonSkin: BalloonSkin?,
     private val prefs: SharedPreferences,
 ) {
     private val windowManager = context.getSystemService(WindowManager::class.java)
@@ -101,7 +102,7 @@ class CharacterWindow(
         }
         balloonView.setContent {
             FitWindow(corner, onSize = { w, h -> resize(balloonView, balloonParams, w, h) }) {
-                CharacterBalloon(scopeId, controller)
+                CharacterBalloon(scopeId, controller, balloonSkin)
             }
         }
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
