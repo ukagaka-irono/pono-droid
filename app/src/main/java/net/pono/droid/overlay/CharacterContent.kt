@@ -26,8 +26,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,15 +40,16 @@ import net.pono.baseware.ghost.BalloonItem
 import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.sakura.Choice
 
-/** シェル画像の 1px を何 dp で表示するか。 */
-private const val DP_PER_IMAGE_PX = 0.5f
-
+/**
+ * @param dpPerImagePx シェル画像の 1px を何 dp で表示するか
+ */
 @Composable
 fun CharacterContent(
     scopeId: Int,
     controller: GhostController,
     renderer: SurfaceRenderer,
     alignEnd: Boolean,
+    dpPerImagePx: Float,
     touchHandler: SurfaceTouchHandler,
 ) {
     val state by controller.state.collectAsState()
@@ -76,12 +79,14 @@ fun CharacterContent(
         }
         val bmp = bitmap ?: return@Column
         val density = LocalDensity.current
-        val pxPerImagePx = with(density) { DP_PER_IMAGE_PX.dp.toPx() }
+        val pxPerImagePx = with(density) { dpPerImagePx.dp.toPx() }
         Image(
             bitmap = bmp.asImageBitmap(),
             contentDescription = controller.ghost.name,
+            // 拡大するときはドット絵がぼやけないよう補間しない
+            filterQuality = if (pxPerImagePx >= 1.5f) FilterQuality.None else FilterQuality.Low,
             modifier = Modifier
-                .size((bmp.width * DP_PER_IMAGE_PX).dp, (bmp.height * DP_PER_IMAGE_PX).dp)
+                .size((bmp.width * dpPerImagePx).dp, (bmp.height * dpPerImagePx).dp)
                 .surfaceTouch(touchHandler) { x, y, double ->
                     val ix = (x / pxPerImagePx).toInt()
                     val iy = (y / pxPerImagePx).toInt()
@@ -102,13 +107,16 @@ private fun Balloon(items: List<BalloonItem>, onClick: () -> Unit, onChoice: (Ch
     LaunchedEffect(items.size, (items.lastOrNull() as? BalloonItem.Text)?.text?.length) {
         scroll.animateScrollTo(scroll.maxValue)
     }
+    // \0 は右端、\1 は左端から（既定ではそれぞれ 16dp 内側に）出るので、
+    // 画面の半分から余白を引いた幅に収めれば2人が同時に話しても重ならない
+    val maxWidth = (LocalConfiguration.current.screenWidthDp / 2 - 24).coerceIn(120, 280).dp
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = Color.White,
         shadowElevation = 4.dp,
         modifier = Modifier
             .padding(bottom = 4.dp)
-            .widthIn(min = 120.dp, max = 260.dp)
+            .widthIn(min = 120.dp, max = maxWidth)
             .border(1.5.dp, Color(0xFF8D6E63), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
     ) {

@@ -9,6 +9,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.WindowManager
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleRegistry
@@ -49,6 +50,12 @@ class CharacterWindow(
         y = prefs.getInt(key("y"), (48 * density).toInt())
     }
 
+    // アプリの画面で大きさを変えたら、起動中のゴーストにもすぐ反映する
+    private val scale = mutableFloatStateOf(OverlaySettings.characterScale(prefs))
+    private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+        if (key == OverlaySettings.KEY_CHARACTER_SCALE) scale.floatValue = OverlaySettings.characterScale(p)
+    }
+
     fun show() {
         view.setViewTreeLifecycleOwner(owner)
         view.setViewTreeSavedStateRegistryOwner(owner)
@@ -58,14 +65,17 @@ class CharacterWindow(
                 controller = controller,
                 renderer = renderer,
                 alignEnd = alignEnd,
+                dpPerImagePx = scale.floatValue,
                 touchHandler = touchHandler,
             )
         }
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
         owner.resume()
         windowManager.addView(view, params)
     }
 
     fun dismiss() {
+        prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         owner.destroy()
         runCatching { windowManager.removeView(view) }
     }

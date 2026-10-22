@@ -77,7 +77,7 @@ class GhostOverlayService : LifecycleService() {
         )
         controller = c
         val renderer = SurfaceRenderer(shell)
-        val prefs = getSharedPreferences("overlay", Context.MODE_PRIVATE)
+        val prefs = OverlaySettings.prefs(this)
         for (scope in listOf(1, 0)) {
             windows += CharacterWindow(this, scope, c, renderer, prefs).also { it.show() }
         }
