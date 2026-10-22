@@ -13,6 +13,9 @@ interface ScriptHost {
     fun addChoice(scope: Int, choice: Choice)
     fun startAnimation(scope: Int, id: Int) {}
 
+    /** `\![updatebymyself]`。ゴースト自身のネットワーク更新を頼まれた */
+    fun requestUpdate() {}
+
     /** `\![set,name,args...]`。扱えたら true。 */
     fun setOption(name: String, args: List<String>): Boolean = false
 
@@ -110,6 +113,7 @@ class ScriptPlayer(
                             "open" -> if (a.getOrNull(1)?.lowercase() == "browser" && a.size >= 3) host.openUrl(a[2])
                             "quicksection" -> quick = a.getOrNull(1)?.lowercase() in setOf("1", "true")
                             "*" -> {} // 選択肢の前の印。選択肢には自前で印を付けている
+                            "updatebymyself" -> host.requestUpdate()
                             "set" -> if (a.size >= 2 && !host.setOption(a[1].lowercase(), a.drop(2))) host.unknownTag(token)
                             else -> host.unknownTag(token)
                         }

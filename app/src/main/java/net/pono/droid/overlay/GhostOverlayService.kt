@@ -33,6 +33,7 @@ class GhostOverlayService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
             ACTION_STOP -> controller?.close() ?: stopSelf()
+            ACTION_UPDATE -> controller?.networkUpdate() ?: toast("ゴーストが起動していません")
             ACTION_START -> {
                 startInForeground()
                 val dirName = intent.getStringExtra(EXTRA_GHOST)
@@ -101,11 +102,15 @@ class GhostOverlayService : LifecycleService() {
         val stop = PendingIntent.getService(
             this, 0, Intent(this, GhostOverlayService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE,
         )
+        val update = PendingIntent.getService(
+            this, 1, Intent(this, GhostOverlayService::class.java).setAction(ACTION_UPDATE), PendingIntent.FLAG_IMMUTABLE,
+        )
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("ゴーストが起動しています")
             .setContentIntent(open)
+            .addAction(0, "ネットワーク更新", update)
             .addAction(0, "終了", stop)
             .setOngoing(true)
             .build()
@@ -120,6 +125,7 @@ class GhostOverlayService : LifecycleService() {
         private const val NOTIFICATION_ID = 1
         private const val ACTION_START = "net.pono.droid.START"
         private const val ACTION_STOP = "net.pono.droid.STOP"
+        private const val ACTION_UPDATE = "net.pono.droid.UPDATE"
         private const val EXTRA_GHOST = "ghost"
 
         fun start(context: Context, ghostDirName: String) {
@@ -130,6 +136,11 @@ class GhostOverlayService : LifecycleService() {
 
         fun stop(context: Context) {
             context.startService(Intent(context, GhostOverlayService::class.java).setAction(ACTION_STOP))
+        }
+
+        /** 起動中のゴーストのネットワーク更新 */
+        fun update(context: Context) {
+            context.startService(Intent(context, GhostOverlayService::class.java).setAction(ACTION_UPDATE))
         }
     }
 }

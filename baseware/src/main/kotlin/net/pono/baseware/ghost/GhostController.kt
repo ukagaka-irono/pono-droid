@@ -7,6 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -20,6 +21,10 @@ import net.pono.baseware.sakura.Token
 import net.pono.baseware.shell.Shell
 import net.pono.baseware.shiori.ShioriFactory
 import net.pono.baseware.shiori.ShioriSession
+import net.pono.baseware.update.HttpFetcher
+import net.pono.baseware.update.NetworkUpdater
+import net.pono.baseware.update.UpdateResult
+import net.pono.baseware.update.UrlConnectionFetcher
 import java.io.File
 import java.util.Calendar
 import java.util.Properties
@@ -47,6 +52,7 @@ class GhostController(
     private val player: ScriptPlayer = ScriptPlayer(),
     private val balloonTimeoutMs: Long = 15_000,
     private val choiceTimeoutMs: Long = 30_000,
+    private val updateFetcher: HttpFetcher = UrlConnectionFetcher("${ShioriSession.SENDER}/$BASEWARE_VERSION"),
 ) {
     private val _state = MutableStateFlow(GhostState())
     val state: StateFlow<GhostState> = _state.asStateFlow()
@@ -67,21 +73,7 @@ class GhostController(
     fun start() {
         scope.launch {
             resetSurfaces()
-            val shiori = shioriFactory.create(ghost.shioriName, ghost.masterDir)
-            if (shiori == null) {
-                platform.log("SHIORI ${ghost.shioriName} には対応していません")
-                return@launch
-            }
-            val s = ShioriSession(shiori, ghost.charset)
-            if (!s.load(ghost.masterDir)) {
-                platform.log("SHIORI の読み込みに失敗しました")
-                return@launch
-            }
-            session = s
-            s.get("version")?.value?.let { platform.log("SHIORI version: $it") }
-            s.notify("basewareversion", ShioriSession.SENDER, BASEWARE_VERSION)
-            s.notify("OnNotifySelfInfo", ghost.name, ghost.sakuraName, ghost.keroName, shell.name, shell.dir.absolutePath + "/", "", "")
-            s.notify("ownerghostname", ghost.name)
+            if (!loadShiori()) return@launch
 
             val profile = loadProfile()
             val firstBoot = profile.getProperty("booted") == null
@@ -95,6 +87,81 @@ class GhostController(
             }
             startTimer()
         }
+    }
+
+    /** SHIORI を読み込み、起動時の NOTIFY を送る。 */
+    private suspend fun loadShiori(): Boolean {
+        val shiori = shioriFactory.create(ghost.shioriName, ghost.masterDir)
+        if (shiori == null) {
+            platform.log("SHIORI ${ghost.shioriName} には対応していません")
+            return false
+        }
+        val s = ShioriSession(shiori, ghost.charset)
+        if (!s.load(ghost.masterDir)) {
+            platform.log("SHIORI の読み込みに失敗しました")
+            return false
+        }
+        session = s
+        s.get("version")?.value?.let { platform.log("SHIORI version: $it") }
+        s.notify("basewareversion", ShioriSession.SENDER, BASEWARE_VERSION)
+        s.notify("OnNotifySelfInfo", ghost.name, ghost.sakuraName, ghost.keroName, shell.name, shell.dir.absolutePath + "/", "", "")
+        s.notify("ownerghostname", ghost.name)
+        return true
+    }
+
+    // ---- ネットワーク更新 ----
+
+    private var updating = false
+
+    /**
+     * SSP と同じ流れでネットワーク更新する: OnUpdateBegin → OnUpdateReady → OnUpdateComplete / OnUpdateFailure。
+     * 辞書が変わったら SHIORI を読み込み直してから OnUpdateComplete を送る。シェルの変更は次の起動から反映される。
+     */
+    fun networkUpdate() {
+        if (updating || closing) return
+        updating = true
+        scope.launch {
+            try {
+                val refs = { r0: String, r1: String -> listOf(r0, r1, "", "ghost") }
+                val homeUrl = ghost.descript["homeurl"]
+                if (homeUrl.isNullOrBlank()) {
+                    raise("OnUpdateFailure", refs("none", ""))
+                    return@launch
+                }
+                talkAndWait("OnUpdateBegin", listOf(ghost.name, ghost.dir.absolutePath + "/", "", "ghost"))
+                val result = NetworkUpdater(ghost.dir, updateFetcher).update(homeUrl) { count ->
+                    // Reference0 は「ファイル数 - 1」（SSP の仕様）
+                    talkAndWait("OnUpdateReady", refs((count - 1).toString(), ""))
+                }
+                platform.log("network update: $result")
+                when (result) {
+                    UpdateResult.NoChange -> raise("OnUpdateComplete", refs("none", ""))
+                    is UpdateResult.Changed -> {
+                        reloadShiori()
+                        raise("OnUpdateComplete", refs("changed", result.files.joinToString(",")))
+                    }
+                    is UpdateResult.Failure -> raise("OnUpdateFailure", refs(result.reason, ""))
+                }
+            } finally {
+                updating = false
+            }
+        }
+    }
+
+    private suspend fun reloadShiori() {
+        requestLock.withLock {
+            session?.unload()
+            session = null
+        }
+        loadShiori()
+    }
+
+    /** イベントを送って話させ、話し終わるまで待つ（バルーンが消えるのは待たない）。 */
+    private suspend fun talkAndWait(event: String, references: List<String>) {
+        val script = request(event, references) ?: return
+        cancelScript()
+        runScript(script)
+        _state.first { !it.talking }
     }
 
     /** OnClose を送り、そのスクリプトが終わったら SHIORI を閉じる。 */
@@ -211,11 +278,12 @@ class GhostController(
     }
 
     private fun runScript(script: String): Job {
+        // talking は launch の前に立てる（呼び出し側が「話し終わるまで待つ」ときに取りこぼさないため）
+        hideBalloons()
+        _state.update { it.copy(talking = true) }
         val job = scope.launch {
             val raised = mutableListOf<Pair<String, List<String>>>()
             val host = Host(raised)
-            hideBalloons()
-            _state.update { it.copy(talking = true) }
             val result = try {
                 player.play(script, host)
             } finally {
@@ -229,6 +297,7 @@ class GhostController(
                 shutdown()
                 return@launch
             }
+            if (host.updateRequested) networkUpdate()
             for ((event, refs) in raised) raise(event, refs)
             if (raised.isNotEmpty()) return@launch
 
@@ -293,6 +362,13 @@ class GhostController(
         /** このスクリプトのあいだだけ有効。0 以下なら消さない／待ち続ける */
         var balloonTimeoutMs = this@GhostController.balloonTimeoutMs
         var choiceTimeoutMs = this@GhostController.choiceTimeoutMs
+
+        /** `\![updatebymyself]`。スクリプトが終わってから始める */
+        var updateRequested = false
+
+        override fun requestUpdate() {
+            updateRequested = true
+        }
 
         override fun setOption(name: String, args: List<String>): Boolean {
             val ms = args.firstOrNull()?.trim()?.toLongOrNull() ?: return false

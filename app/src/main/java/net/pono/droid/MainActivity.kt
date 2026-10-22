@@ -118,6 +118,7 @@ private fun GhostListScreen() {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { importNar.launch(arrayOf("*/*")) }) { Text(".nar をインストール") }
+                OutlinedButton(onClick = { GhostOverlayService.update(context) }) { Text("更新") }
                 OutlinedButton(onClick = { GhostOverlayService.stop(context) }) { Text("終了") }
             }
             CharacterScaleSlider()
