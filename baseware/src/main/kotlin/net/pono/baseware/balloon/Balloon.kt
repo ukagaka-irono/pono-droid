@@ -35,8 +35,9 @@ class Balloon(val dir: File) {
         val prefixes = if (scope == 0) listOf("balloons") else listOf("balloonk", "balloons")
         val parity = if (scope == 0) 0 else 1
         for (prefix in prefixes) {
+            // 番号が桁あふれするファイル名（細工されたバルーン）は無いものとして扱う
             val all = files.values.mapNotNull { f ->
-                Regex("""^${prefix}(\d+)\.png$""").matchEntire(f.name.lowercase())?.let { BalloonImage(f, it.groupValues[1].toInt()) }
+                Regex("""^${prefix}(\d+)\.png$""").matchEntire(f.name.lowercase())?.groupValues?.get(1)?.toIntOrNull()?.let { BalloonImage(f, it) }
             }.sortedBy { it.index }
             if (all.isEmpty()) continue
             return all.filter { it.index % 2 == parity }.ifEmpty { all }

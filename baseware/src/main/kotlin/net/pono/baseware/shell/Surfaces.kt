@@ -60,6 +60,11 @@ class Animation(val id: Int) {
     val patterns = sortedMapOf<Int, PatternFrame>()
 
     val frames: List<PatternFrame> get() = patterns.values.toList()
+
+    /** コマ数の上限を超えたら捨てる */
+    fun putPattern(index: Int, frame: PatternFrame) {
+        if (index in patterns || patterns.size < SurfaceDefinition.MAX_PATTERNS) patterns[index] = frame
+    }
 }
 
 class SurfaceDefinition(val id: Int) {
@@ -67,7 +72,17 @@ class SurfaceDefinition(val id: Int) {
     val animations = sortedMapOf<Int, Animation>()
     val collisions = sortedMapOf<Int, Collision>()
 
-    fun animation(id: Int) = animations.getOrPut(id) { Animation(id) }
+    /** 上限を超えたら新しい番号は受け付けない（null）。細工した surfaces.txt でアニメーションを無数に作らせないため */
+    fun animation(id: Int): Animation? =
+        animations[id] ?: if (animations.size < MAX_PARTS) Animation(id).also { animations[id] = it } else null
+
+    companion object {
+        /** 1つのサーフェスが持てる element / collision / animation の数 */
+        const val MAX_PARTS = 1024
+
+        /** 1つのアニメーションのコマ数 */
+        const val MAX_PATTERNS = 4096
+    }
 
     fun hitTest(x: Int, y: Int): String? = collisions.values.firstOrNull { it.contains(x, y) }?.id
 }
@@ -115,9 +130,15 @@ class SurfaceTable(val definitions: Map<Int, SurfaceDefinition>) {
                     targets = null
                     continue
                 }
-                for (id in targets) {
-                    applyLine(defs.getOrPut(id) { SurfaceDefinition(id) }, line)
+                // "surface0 { element0,... }" のように同じ行で閉じることもある
+                val closes = line.endsWith("}")
+                if (closes) line = line.removeSuffix("}").trim()
+                if (line.isNotEmpty()) {
+                    for (id in targets) {
+                        applyLine(defs.getOrPut(id) { SurfaceDefinition(id) }, line)
+                    }
                 }
+                if (closes) targets = null
             }
             return SurfaceTable(defs)
         }
@@ -128,57 +149,74 @@ class SurfaceTable(val definitions: Map<Int, SurfaceDefinition>) {
             val exclude = mutableSetOf<Int>()
             for (token in header.split(',').map { it.trim() }) {
                 val m = surfaceRange.matchEntire(token) ?: continue
-                val from = m.groupValues[2].toInt()
+                // 桁あふれの番号は飛ばす。"surface0-999999999" のような範囲でメモリを食いつぶさないよう、幅と総数に上限を置く
+                val from = m.groupValues[2].toIntOrNull() ?: continue
                 val to = m.groupValues[3].toIntOrNull() ?: from
+                val low = minOf(from, to)
+                val high = maxOf(from, to)
+                if (high.toLong() - low > MAX_RANGE_SPAN) continue
                 val set = if (m.groupValues[1] == "!") exclude else include
-                for (i in minOf(from, to)..maxOf(from, to)) set += i
+                for (i in low..high) {
+                    if (set.size >= MAX_IDS_PER_HEADER) break
+                    set += i
+                }
             }
             return (include - exclude).toList()
         }
+
+        private const val MAX_RANGE_SPAN = 10_000
+        private const val MAX_IDS_PER_HEADER = 20_000
 
         private fun applyLine(def: SurfaceDefinition, line: String) {
             val key = line.substringBefore(',').trim().lowercase()
             val args = line.substringAfter(',', "").split(',').map { it.trim() }
 
+            // 番号が桁あふれしていれば（細工された surfaces.txt）その行は無視する。数にも上限を置く
             element.matchEntire(key)?.let { m ->
-                if (args.size >= 4) {
-                    def.elements[m.groupValues[1].toInt()] = SurfaceElement(
-                        m.groupValues[1].toInt(), args[0].lowercase(), args[1], args[2].toIntOrNull() ?: 0, args[3].toIntOrNull() ?: 0,
-                    )
+                val id = m.groupValues[1].toIntOrNull() ?: return
+                if (args.size >= 4 && (id in def.elements || def.elements.size < SurfaceDefinition.MAX_PARTS)) {
+                    def.elements[id] = SurfaceElement(id, args[0].lowercase(), args[1], args[2].toIntOrNull() ?: 0, args[3].toIntOrNull() ?: 0)
                 }
                 return
             }
             collision.matchEntire(key)?.let { m ->
+                val id = m.groupValues[1].toIntOrNull() ?: return
                 val n = args.take(4).map { it.toIntOrNull() }
-                if (args.size >= 5 && n.all { it != null }) {
-                    def.collisions[m.groupValues[1].toInt()] = Collision(n[0]!!, n[1]!!, n[2]!!, n[3]!!, args[4])
+                if (args.size >= 5 && n.all { it != null } && (id in def.collisions || def.collisions.size < SurfaceDefinition.MAX_PARTS)) {
+                    def.collisions[id] = Collision(n[0]!!, n[1]!!, n[2]!!, n[3]!!, args[4])
                 }
                 return
             }
             collisionEx.matchEntire(key)?.let { m ->
                 // collisionexN,ID,形状,座標... 当たり判定は外接矩形で近似する
+                val id = m.groupValues[1].toIntOrNull() ?: return
                 val coords = args.drop(2).mapNotNull { it.toIntOrNull() }
-                if (args.size >= 3 && coords.size >= 4) {
+                if (args.size >= 3 && coords.size >= 4 && (id in def.collisions || def.collisions.size < SurfaceDefinition.MAX_PARTS)) {
                     val xs = coords.filterIndexed { i, _ -> i % 2 == 0 }
                     val ys = coords.filterIndexed { i, _ -> i % 2 == 1 }
-                    def.collisions[m.groupValues[1].toInt()] = Collision(xs.min(), ys.min(), xs.max(), ys.max(), args[0])
+                    def.collisions[id] = Collision(xs.min(), ys.min(), xs.max(), ys.max(), args[0])
                 }
                 return
             }
             newAnimation.matchEntire(key)?.let { m ->
-                val anim = def.animation(m.groupValues[1].toInt())
+                val anim = m.groupValues[1].toIntOrNull()?.let(def::animation) ?: return
                 when {
                     m.groupValues[2] == "interval" -> anim.interval = AnimationInterval.parse(args.joinToString(","))
-                    m.groupValues[3].isNotEmpty() -> parseNewPattern(args)?.let { anim.patterns[m.groupValues[3].toInt()] = it }
+                    m.groupValues[3].isNotEmpty() -> m.groupValues[3].toIntOrNull()?.let { index ->
+                        parseNewPattern(args)?.let { anim.putPattern(index, it) }
+                    }
                 }
                 return
             }
             oldInterval.matchEntire(key)?.let { m ->
-                def.animation(m.groupValues[1].toInt()).interval = AnimationInterval.parse(args.joinToString(","))
+                val anim = m.groupValues[1].toIntOrNull()?.let(def::animation) ?: return
+                anim.interval = AnimationInterval.parse(args.joinToString(","))
                 return
             }
             oldPattern.matchEntire(key)?.let { m ->
-                parseOldPattern(args)?.let { def.animation(m.groupValues[1].toInt()).patterns[m.groupValues[2].toInt()] = it }
+                val anim = m.groupValues[1].toIntOrNull()?.let(def::animation) ?: return
+                val index = m.groupValues[2].toIntOrNull() ?: return
+                parseOldPattern(args)?.let { anim.putPattern(index, it) }
                 return
             }
         }
@@ -189,7 +227,7 @@ class SurfaceTable(val definitions: Map<Int, SurfaceDefinition>) {
             val method = args[0].lowercase()
             if (method in PatternFrame.CONTROL_METHODS) {
                 // start,3 / alternativestart,[3.5.7] / alternativestart,(3,5) など。数字をすべて拾う
-                val targets = Regex("""\d+""").findAll(args.drop(1).joinToString(",")).map { it.value.toInt() }.toList()
+                val targets = Regex("""\d+""").findAll(args.drop(1).joinToString(",")).mapNotNull { it.value.toIntOrNull() }.toList()
                 return PatternFrame(method, -1, 0, 0, 0, 0, targets)
             }
             val surface = args.getOrNull(1)?.toIntOrNull() ?: -1

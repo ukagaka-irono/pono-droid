@@ -95,8 +95,13 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
 
     suspend fun reload() {
         val repo = GhostStore.repository(context)
-        ghosts = withContext(Dispatchers.IO) { repo.list().map { GhostItem(it, repo.balloons) } }
-        balloons = withContext(Dispatchers.IO) { repo.balloons.list() }
+        // 壊れたゴーストやバルーンがあっても一覧は出す（出なければ消すこともできない）
+        ghosts = withContext(Dispatchers.IO) {
+            runCatching { repo.list() }.getOrDefault(emptyList()).map { ghost ->
+                runCatching { GhostItem(ghost, repo.balloons) }.getOrElse { GhostItem(ghost, emptyList(), null, emptyList(), null) }
+            }
+        }
+        balloons = withContext(Dispatchers.IO) { runCatching { repo.balloons.list() }.getOrDefault(emptyList()) }
     }
 
     LaunchedEffect(Unit) { reload() }
@@ -252,7 +257,7 @@ private data class GhostItem(
 
 private fun GhostItem(ghost: Ghost, balloons: BalloonRepository) = GhostItem(
     ghost = ghost,
-    shells = ghost.shellDirs.map { it.name to Shell(it).name },
+    shells = ghost.shellDirs.map { dir -> dir.name to runCatching { Shell(dir).name }.getOrDefault(dir.name) },
     selectedShell = ghost.shellDir()?.name,
     balloons = listOf<Pair<String?, String>>(null to "簡易バルーン") + balloons.list().map { it.dir.name to it.name },
     selectedBalloon = ghost.balloon(balloons)?.dir?.name,

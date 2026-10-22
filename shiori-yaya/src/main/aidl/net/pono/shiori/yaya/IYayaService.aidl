@@ -9,4 +9,7 @@ interface IYayaService {
     byte[] request(long handle, in byte[] request);
 
     void unload(long handle);
+
+    /** :yaya のプロセス ID。辞書が無限ループして request が戻らないとき、プロセスごと止めるのに使う */
+    int getPid();
 }

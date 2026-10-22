@@ -15,17 +15,19 @@ data class ShioriRequest(
         val sb = StringBuilder()
         sb.append(method.name).append(" SHIORI/3.0\r\n")
         sb.append("Charset: ").append(charsetHeaderName(charset)).append("\r\n")
-        sb.append("Sender: ").append(sender).append("\r\n")
+        sb.append("Sender: ").append(sanitize(sender)).append("\r\n")
         sb.append("SenderType: internal\r\n")
         sb.append("SecurityLevel: local\r\n")
-        sb.append("ID: ").append(id).append("\r\n")
-        headers.forEach { (k, v) -> sb.append(k).append(": ").append(sanitize(v)).append("\r\n") }
+        sb.append("ID: ").append(sanitize(id)).append("\r\n")
+        headers.forEach { (k, v) -> sb.append(sanitize(k)).append(": ").append(sanitize(v)).append("\r\n") }
         references.forEachIndexed { i, v -> sb.append("Reference").append(i).append(": ").append(sanitize(v)).append("\r\n") }
         sb.append("\r\n")
         return sb.toString().toByteArray(charset)
     }
 
-    private fun sanitize(v: String) = v.replace("\r\n", "\u0001").replace('\r', '\u0001').replace('\n', '\u0001')
+    /** 改行はヘッダを壊す（別のヘッダを差し込める）し、NUL は C の文字列をそこで切るので、どちらも通さない */
+    private fun sanitize(v: String) =
+        v.replace("\r\n", "\u0001").replace('\r', '\u0001').replace('\n', '\u0001').replace('\u0000', '\u0001')
 
     companion object {
         fun charsetHeaderName(charset: Charset): String =

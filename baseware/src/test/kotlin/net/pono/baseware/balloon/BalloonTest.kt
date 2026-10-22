@@ -45,6 +45,14 @@ class BalloonTest {
     }
 
     @Test
+    fun ignoresImageNamesWithOverflowingNumbers() {
+        val balloon = Balloon(balloonDir("balloons0.png", "balloons99999999999.png", "balloonk1.png"))
+        assertTrue(balloon.isValid)
+        assertEquals(listOf(0), balloon.images(0).map { it.index })
+        assertEquals(listOf(1), balloon.images(1).map { it.index })
+    }
+
+    @Test
     fun readsTextAreaAndColors() {
         val balloon = Balloon(balloonDir("balloons0.png"))
         // 負の値は右端・下端からの距離

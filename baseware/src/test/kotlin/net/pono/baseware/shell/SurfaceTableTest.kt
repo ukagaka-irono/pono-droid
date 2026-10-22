@@ -30,6 +30,32 @@ class SurfaceTableTest {
     """.trimIndent()
 
     @Test
+    fun survivesHostileNumbersAndRanges() {
+        val hostile = """
+            surface99999999999 { element0,overlay,a.png,0,0 }
+            surface0-2000000000 { collision0,0,0,1,1,X }
+            surface5 {
+            element99999999999,overlay,a.png,0,0
+            animation99999999999.interval,always
+            1pattern99999999999,0,0,overlay,0,0
+            animation1.pattern0,alternativestart,[99999999999.2]
+            animation1.pattern99999999999,overlay,0,0,0,0
+            }
+        """.trimIndent()
+        val table = SurfaceTable.parse(hostile)
+        // 桁あふれの番号は飛ばし、巨大な範囲は無視する（落ちない・メモリを食いつぶさない）
+        assertEquals(setOf(5), table.definitions.keys)
+        val s5 = table[5]!!
+        assertEquals(emptySet<Int>(), s5.elements.keys)
+        assertEquals(listOf(1), s5.animations.keys.toList())
+        assertEquals(listOf(2), s5.animations[1]!!.patterns[0]!!.targets)
+
+        // 1つのサーフェスの部品の数にも上限がある
+        val many = "surface0 {\n" + (0 until SurfaceDefinition.MAX_PARTS + 100).joinToString("\n") { "element$it,overlay,a.png,0,0" } + "\n}"
+        assertEquals(SurfaceDefinition.MAX_PARTS, SurfaceTable.parse(many)[0]!!.elements.size)
+    }
+
+    @Test
     fun parsesNewFormat() {
         val table = SurfaceTable.parse(text)
         assertEquals(setOf(0, 2, 4, 10), table.definitions.keys)

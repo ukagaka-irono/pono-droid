@@ -23,6 +23,7 @@ class RemoteYayaShiori(context: Context) : Shiori {
     @Volatile private var service: IYayaService? = null
     private var binder: IBinder? = null
     private var handle = 0L
+    @Volatile private var pid = 0
     @Volatile private var onCrash: (() -> Unit)? = null
     @Volatile private var unloading = false
 
@@ -52,8 +53,18 @@ class RemoteYayaShiori(context: Context) : Shiori {
         check(Looper.myLooper() != Looper.getMainLooper()) { "load() must not be called on the main thread" }
         if (!context.bindService(Intent(context, YayaService::class.java), connection, Context.BIND_AUTO_CREATE)) return false
         if (!connected.await(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) return false
+        pid = call { it.pid } ?: 0
         handle = call { it.load(dir.absolutePath) } ?: 0
         return handle > 0
+    }
+
+    /** 辞書が固まって戻ってこない。:yaya のプロセスを止める（落ちた扱いになり、[setOnCrash] に知らせが届く） */
+    override fun abort() {
+        val p = pid
+        if (p > 0 && p != android.os.Process.myPid()) {
+            Log.w(TAG, "YAYA is not responding; killing process $p")
+            android.os.Process.killProcess(p)
+        }
     }
 
     override fun request(request: ByteArray): ByteArray? =

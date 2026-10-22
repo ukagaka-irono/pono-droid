@@ -1,5 +1,6 @@
 package net.pono.baseware.ghost
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,12 +24,15 @@ import net.pono.baseware.sakura.Token
 import net.pono.baseware.shell.Shell
 import net.pono.baseware.shiori.ShioriFactory
 import net.pono.baseware.shiori.ShioriSession
+import net.pono.baseware.shiori.ShioriTimeoutException
 import net.pono.baseware.update.FetchResult
 import net.pono.baseware.update.HttpFetcher
 import net.pono.baseware.update.NetworkUpdater
+import net.pono.baseware.update.NullOutputStream
 import net.pono.baseware.update.UpdateResult
 import net.pono.baseware.update.UrlConnectionFetcher
 import java.io.File
+import java.io.IOException
 import java.util.Calendar
 
 /** プラットフォーム側に頼むこと。 */
@@ -74,6 +78,7 @@ class GhostController(
     private var closing = false
     private var inputSerial = 0
     private var inputTimeout: Job? = null
+    private var httpGetsInFlight = 0
 
 
     fun start() {
@@ -108,8 +113,9 @@ class GhostController(
             return false
         }
         val s = ShioriSession(shiori, ghost.charset)
-        if (!s.load(ghost.masterDir)) {
-            s.unload()
+        // 読み込みで固まる辞書（load で無限ループ）は時間切れの例外になる
+        if (!runCatching { s.load(ghost.masterDir) }.getOrDefault(false)) {
+            runCatching { s.unload() }
             platform.onError("${ghost.name}: SHIORI を読み込めませんでした")
             return false
         }
@@ -124,10 +130,18 @@ class GhostController(
             }
         }
         session = s
-        s.get("version")?.value?.let { platform.log("SHIORI version: $it") }
-        s.notify("basewareversion", ShioriSession.SENDER, BASEWARE_VERSION)
-        s.notify("OnNotifySelfInfo", ghost.name, ghost.sakuraName, ghost.keroName, shell.name, shell.dir.absolutePath + "/", "", "")
-        s.notify("ownerghostname", ghost.name)
+        val notified = runCatching {
+            s.get("version")?.value?.let { platform.log("SHIORI version: $it") }
+            s.notify("basewareversion", ShioriSession.SENDER, BASEWARE_VERSION)
+            s.notify("OnNotifySelfInfo", ghost.name, ghost.sakuraName, ghost.keroName, shell.name, shell.dir.absolutePath + "/", "", "")
+            s.notify("ownerghostname", ghost.name)
+        }
+        if (notified.isFailure) {
+            session = null
+            runCatching { s.unload() }
+            platform.onError("${ghost.name}: SHIORI が応答しません")
+            return false
+        }
         return true
     }
 
@@ -143,8 +157,8 @@ class GhostController(
         if (updating || closing) return
         updating = true
         scope.launch {
+            val refs = { r0: String, r1: String -> listOf(r0, r1, "", "ghost") }
             try {
-                val refs = { r0: String, r1: String -> listOf(r0, r1, "", "ghost") }
                 val homeUrl = ghost.descript["homeurl"]
                 if (homeUrl.isNullOrBlank()) {
                     raise("OnUpdateFailure", refs("none", ""))
@@ -164,6 +178,12 @@ class GhostController(
                     }
                     is UpdateResult.Failure -> raise("OnUpdateFailure", refs(result.reason, ""))
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 更新サーバーが返した変な一覧などで落ちないように。ゴーストには失敗として伝える
+                platform.log("network update failed: $e")
+                raise("OnUpdateFailure", refs(if (e is IOException) "fileio" else "unknown", ""))
             } finally {
                 updating = false
             }
@@ -194,28 +214,45 @@ class GhostController(
                 deliverHttpResult("OnExecuteHTTPFailure", listOf("http-get", id, url, "invalid url"))
                 return@launch
             }
-            val result = withContext(Dispatchers.IO) { updateFetcher.fetch(url) }
-            val refs = when (result) {
-                is FetchResult.Ok -> {
-                    val name = opts["file"]?.let(NetworkUpdater::safeFileName)
-                    if (name != null) {
-                        val file = File(ghost.masterDir, "var/$name")
-                        val saved = withContext(Dispatchers.IO) {
-                            runCatching { file.parentFile?.mkdirs(); file.writeBytes(result.bytes) }.isSuccess
-                        }
-                        if (!saved) {
-                            deliverHttpResult("OnExecuteHTTPFailure", listOf("http-get", id, url, "fileio"))
-                            return@launch
-                        }
-                    }
-                    listOf("http-get", id, url, name?.let { "var/$it" }.orEmpty())
-                }
-                else -> {
-                    deliverHttpResult("OnExecuteHTTPFailure", listOf("http-get", id, url, NetworkUpdater.describe(result)))
-                    return@launch
-                }
+            // 毎秒頼まれても際限なく通信しないよう、同時に走る数に上限を置く
+            if (httpGetsInFlight >= MAX_HTTP_GETS) {
+                deliverHttpResult("OnExecuteHTTPFailure", listOf("http-get", id, url, "busy"))
+                return@launch
             }
-            deliverHttpResult("OnExecuteHTTPComplete", refs)
+            httpGetsInFlight++
+            val (ok, detail) = try {
+                withContext(Dispatchers.IO) { download(url, opts["file"]?.let(NetworkUpdater::safeFileName)) }
+            } finally {
+                httpGetsInFlight--
+            }
+            deliverHttpResult(if (ok) "OnExecuteHTTPComplete" else "OnExecuteHTTPFailure", listOf("http-get", id, url, detail))
+        }
+    }
+
+    /**
+     * [url] の中身を ghost/master/var/[name] に保存する（[name] が無ければ中身は捨てて、届いたかだけ見る）。
+     * 大きな応答をメモリに溜めないよう、ファイルに流しながら受け取る。
+     * @return 成功なら true と保存先（var/名前）、失敗なら false と理由
+     */
+    private fun download(url: String, name: String?): Pair<Boolean, String> {
+        if (name == null) {
+            return when (val r = updateFetcher.fetch(url, NullOutputStream, HTTP_GET_MAX_BYTES)) {
+                FetchResult.Ok -> true to ""
+                else -> false to NetworkUpdater.describe(r)
+            }
+        }
+        val file = File(ghost.masterDir, "var/$name")
+        val part = File(file.path + ".part")
+        return try {
+            file.parentFile?.mkdirs()
+            val r = part.outputStream().use { updateFetcher.fetch(url, it, HTTP_GET_MAX_BYTES) }
+            if (r != FetchResult.Ok) return false to NetworkUpdater.describe(r)
+            if (!part.renameTo(file)) part.copyTo(file, overwrite = true)
+            true to "var/$name"
+        } catch (e: IOException) {
+            false to "fileio"
+        } finally {
+            part.delete()
         }
     }
 
@@ -338,11 +375,16 @@ class GhostController(
         lastUserActivity = System.currentTimeMillis()
         inputTimeout?.cancel()
         _state.update { it.copy(input = null) }
+        // ユーザーが打った文字（パスワードのこともある）はログに残さない
         when (request.kind) {
             InputRequest.Kind.INPUT, InputRequest.Kind.PASSWORD ->
-                if (request.id.startsWith("On")) raise(request.id, listOf(text)) else raise("OnUserInput", listOf(request.id, text))
-            InputRequest.Kind.COMMUNICATE -> raise("OnCommunicate", listOf("user", text))
-            InputRequest.Kind.TEACH -> raise("OnTeach", listOf(text))
+                if (request.id.startsWith("On")) {
+                    raise(request.id, listOf(text), sensitive = true)
+                } else {
+                    raise("OnUserInput", listOf(request.id, text), sensitive = true)
+                }
+            InputRequest.Kind.COMMUNICATE -> raise("OnCommunicate", listOf("user", text), sensitive = true)
+            InputRequest.Kind.TEACH -> raise("OnTeach", listOf(text), sensitive = true)
         }
     }
 
@@ -369,26 +411,34 @@ class GhostController(
     /**
      * イベントを SHIORI に送り、返ってきたスクリプトを再生する。
      * [userInitiated] なら話している途中でも割り込む。そうでなければ話していないときだけ再生する。
+     * [sensitive] ならユーザーの入力を含むので、ログに残さない。
+     * [chain] は `\![raise]` で続けて起こされた回数（スクリプトが自分を起こし続けるのを止めるため）。
      */
-    fun raise(event: String, references: List<String>, userInitiated: Boolean = true) {
+    fun raise(event: String, references: List<String>, userInitiated: Boolean = true, sensitive: Boolean = false, chain: Int = 0) {
         scope.launch {
-            val script = request(event, references) ?: return@launch
+            val script = request(event, references, sensitive) ?: return@launch
             if (!userInitiated && (_state.value.talking || _state.value.waitingChoice)) return@launch
             cancelScript()
-            runScript(script)
+            runScript(script, chain)
         }
     }
 
-    private suspend fun request(event: String, references: List<String>): String? {
+    private suspend fun request(event: String, references: List<String>, sensitive: Boolean = false): String? {
         val s = session ?: return null
         val value = requestLock.withLock {
             runCatching { s.get(event, *references.toTypedArray()) }
-                .onFailure { platform.log("$event: ${it.message}") }
+                .onFailure {
+                    if (it is ShioriTimeoutException) platform.onError("${ghost.name}: SHIORI が応答しません") else platform.log("$event: ${it.message}")
+                }
                 .getOrNull()?.value
         }
         // 毎秒・毎分のイベントは多すぎるので、話すときだけ記録する
         if (value != null || event !in timerEvents) {
-            platform.log("$event $references -> ${value?.take(120) ?: "(no content)"}")
+            if (sensitive) {
+                platform.log("$event [入力] -> ${if (value != null) "(script)" else "(no content)"}")
+            } else {
+                platform.log("$event $references -> ${value?.take(120) ?: "(no content)"}")
+            }
         }
         return value
     }
@@ -440,7 +490,7 @@ class GhostController(
         choiceWaiter = null
     }
 
-    private fun runScript(script: String): Job {
+    private fun runScript(script: String, chain: Int = 0): Job {
         // talking は launch の前に立てる（呼び出し側が「話し終わるまで待つ」ときに取りこぼさないため）
         // 先頭が \C なら、今出ているバルーンを消さずに続ける
         if (!script.startsWith("\\C")) hideBalloons()
@@ -462,8 +512,15 @@ class GhostController(
                 return@launch
             }
             if (host.updateRequested) networkUpdate()
-            for ((event, refs) in raised) raise(event, refs)
-            if (raised.isNotEmpty()) return@launch
+            if (raised.isNotEmpty()) {
+                // \![raise] が \![raise] を呼び続けると SHIORI を叩き続けてしまうので、連鎖の長さに上限を置く
+                if (chain >= MAX_RAISE_CHAIN) {
+                    platform.log("\\![raise] の連鎖が $MAX_RAISE_CHAIN 回を超えたので止めました: ${raised.map { it.first }}")
+                } else {
+                    for ((event, refs) in raised) raise(event, refs, chain = chain + 1)
+                }
+                return@launch
+            }
 
             if (result.hasChoices) {
                 val waiter = CompletableDeferred<Choice?>()
@@ -626,7 +683,11 @@ class GhostController(
             raised += event to references
         }
 
-        override fun openUrl(url: String) = platform.openUrl(url)
+        /** 開くのはウェブのページだけ。tel: や他のアプリのスキームをゴーストに開かせない */
+        override fun openUrl(url: String) {
+            val lower = url.lowercase()
+            if (lower.startsWith("http://") || lower.startsWith("https://")) platform.openUrl(url) else platform.log("開けない URL: $url")
+        }
 
         override fun envVariable(name: String): String? {
             val now = Calendar.getInstance()
@@ -651,5 +712,14 @@ class GhostController(
     companion object {
         const val BASEWARE_VERSION = "0.1.0"
         private val timerEvents = setOf("OnSecondChange", "OnMinuteChange")
+
+        /** `\![raise]` から起きたスクリプトがさらに `\![raise]` できる回数 */
+        const val MAX_RAISE_CHAIN = 16
+
+        /** 同時に走らせる http-get の数 */
+        const val MAX_HTTP_GETS = 4
+
+        /** http-get で受け取る大きさの上限 */
+        const val HTTP_GET_MAX_BYTES = 64L * 1024 * 1024
     }
 }

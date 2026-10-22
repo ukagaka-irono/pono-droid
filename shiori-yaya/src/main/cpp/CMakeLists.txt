@@ -24,7 +24,13 @@ add_library(yaya SHARED
     ${VENDOR_CXX_SOURCES}
     ${YAYA_DIR}/sqlite3_yaya.c
     shim/pono_iconv.cpp
+    shim/pono_sandbox.cpp
     jni_shiori.cpp)
+
+# サブモジュールの警告は手を入れないので黙らせる。自前のコードは NDK 既定の警告（-Werror=format-security など）のまま
+set_source_files_properties(
+    ${YAYA_SOURCES} ${GUMBO_SOURCES} ${VENDOR_CXX_SOURCES} ${YAYA_DIR}/sqlite3_yaya.c
+    PROPERTIES COMPILE_OPTIONS -w)
 
 # shim を先に置き、<iconv.h> を CP932 対応の自前実装に差し替える
 target_include_directories(yaya PRIVATE
@@ -35,7 +41,12 @@ target_include_directories(yaya PRIVATE
 target_compile_definitions(yaya PRIVATE POSIX _FILE_OFFSET_BITS=64)
 target_compile_options(yaya PRIVATE
     -fvisibility=hidden
-    $<$<COMPILE_LANGUAGE:CXX>:-std=c++11 -fvisibility-inlines-hidden -include ${CMAKE_CURRENT_SOURCE_DIR}/shim/android_compat.h>
-    -Wno-everything)
-target_link_options(yaya PRIVATE -Wl,-z,max-page-size=16384)
+    $<$<COMPILE_LANGUAGE:CXX>:-std=c++11 -fvisibility-inlines-hidden -include ${CMAKE_CURRENT_SOURCE_DIR}/shim/android_compat.h>)
+# YAYA が呼ぶ libc の関数を shim/pono_sandbox.cpp の __wrap_ 版に差し替える（ゴーストにできることを絞る）
+set(PONO_WRAPPED_SYMBOLS
+    dlopen dlsym fork chdir
+    open __open_2 fopen opendir stat lstat access readlink
+    unlink remove rename mkdir rmdir utimes)
+list(TRANSFORM PONO_WRAPPED_SYMBOLS PREPEND "-Wl,--wrap=")
+target_link_options(yaya PRIVATE -Wl,-z,max-page-size=16384 ${PONO_WRAPPED_SYMBOLS})
 target_link_libraries(yaya PRIVATE log)

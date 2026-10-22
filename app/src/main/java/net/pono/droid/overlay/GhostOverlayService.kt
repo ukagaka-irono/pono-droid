@@ -4,10 +4,12 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.PowerManager
@@ -40,6 +42,7 @@ import net.pono.shiori.yaya.RemoteYayaShiori
 /** ゴーストを常駐させる。キャラクターごとのオーバーレイウィンドウを持つ。 */
 class GhostOverlayService : LifecycleService() {
     private var controller: GhostController? = null
+    private val debuggable by lazy { (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0 }
     private var touchJob: Job? = null
     private var inputJob: Job? = null
     private val windows = mutableListOf<CharacterWindow>()
@@ -77,8 +80,18 @@ class GhostOverlayService : LifecycleService() {
             shioriFactory = RemoteYayaShiori.factory(this),
             scope = lifecycleScope,
             platform = object : GhostPlatform {
+                /** ウェブのページだけ開く。ゴーストのスクリプトに他のアプリ（電話や決済など）を起動させない */
                 override fun openUrl(url: String) {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    val uri = Uri.parse(url)
+                    if (uri.scheme?.lowercase() !in setOf("http", "https")) {
+                        Log.w(TAG, "unsupported url scheme: $url")
+                        return
+                    }
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (e: ActivityNotFoundException) {
+                        toast("ブラウザが見つかりません")
+                    }
                 }
 
                 override fun onQuit() {
@@ -86,8 +99,9 @@ class GhostOverlayService : LifecycleService() {
                     stopSelf()
                 }
 
+                // ゴーストとのやりとり（ユーザーの操作も含む）はデバッグビルドでだけ残す
                 override fun log(message: String) {
-                    Log.i(TAG, message)
+                    if (debuggable) Log.i(TAG, message)
                 }
 
                 override fun onError(message: String) {

@@ -3,6 +3,7 @@ package net.pono.shiori.yaya
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.os.Process
 import java.io.File
 
 /**
@@ -16,8 +17,9 @@ class YayaService : Service() {
 
     private val binder = object : IYayaService.Stub() {
         override fun load(dir: String): Long = synchronized(lock) {
-            val shiori = YayaShiori()
-            if (!shiori.load(File(dir))) return 0
+            val masterDir = File(dir)
+            val shiori = YayaShiori(YayaShiori.Sandbox.forGhost(this@YayaService, masterDir))
+            if (!shiori.load(masterDir)) return 0
             val handle = nextHandle++
             shioris[handle] = shiori
             handle
@@ -31,6 +33,9 @@ class YayaService : Service() {
             shioris.remove(handle)?.unload()
             Unit
         }
+
+        // lock は取らない。request で固まっているときに呼ばれても答えられるように
+        override fun getPid(): Int = Process.myPid()
     }
 
     override fun onBind(intent: Intent): IBinder = binder

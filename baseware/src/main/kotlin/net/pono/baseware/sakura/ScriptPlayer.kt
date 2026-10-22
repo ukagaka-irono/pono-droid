@@ -146,7 +146,7 @@ class ScriptPlayer(
                             "set" -> if (a.size >= 2 && !host.setOption(a[1].lowercase(), a.drop(2))) host.unknownTag(token)
                             else -> host.unknownTag(token)
                         }
-                        "j" -> a.firstOrNull()?.takeIf { it.startsWith("http") }?.let(host::openUrl)
+                        "j" -> a.firstOrNull()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }?.let(host::openUrl)
                         // 横の位置が数で書かれているときだけ（@ 付きの相対指定や縦だけの指定は無視する）
                         "_l" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { host.moveCursor(scope, it) }
                         "b" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { host.setBalloonId(scope, it) }

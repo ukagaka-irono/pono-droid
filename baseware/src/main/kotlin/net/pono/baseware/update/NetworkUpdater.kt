@@ -3,12 +3,15 @@ package net.pono.baseware.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.pono.baseware.text.TextCharsets
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URI
 import java.net.URLEncoder
+import java.security.DigestOutputStream
 import java.security.MessageDigest
 
 /** updates2.dau / updates.txt の1行。[path] はゴーストのディレクトリからの相対パス（区切りは /）。 */
@@ -30,22 +33,32 @@ object UpdateManifest {
 }
 
 sealed interface FetchResult {
-    class Ok(val bytes: ByteArray) : FetchResult
+    data object Ok : FetchResult
     data class HttpError(val code: Int) : FetchResult
     data object Timeout : FetchResult
     data class Failed(val message: String) : FetchResult
 }
 
+/** 取ってきた中身は [sink] に流す（大きなファイルをメモリに溜めないため）。[maxBytes] を超えたら途中でやめて Failed。 */
 fun interface HttpFetcher {
-    fun fetch(url: String): FetchResult
+    fun fetch(url: String, sink: OutputStream, maxBytes: Long): FetchResult
+}
+
+/** 小さなもの（更新の一覧など）向け。中身は Ok のときだけ意味がある */
+fun HttpFetcher.fetchBytes(url: String, maxBytes: Long): Pair<FetchResult, ByteArray> {
+    val out = ByteArrayOutputStream()
+    return fetch(url, out, maxBytes) to out.toByteArray()
+}
+
+/** 中身を捨てる（届いたかどうかだけ知りたいとき） */
+object NullOutputStream : OutputStream() {
+    override fun write(b: Int) {}
+    override fun write(b: ByteArray, off: Int, len: Int) {}
 }
 
 /** HttpURLConnection を使う実装。Android でもそのまま動く。 */
-class UrlConnectionFetcher(
-    private val userAgent: String,
-    private val maxBytes: Long = 64L * 1024 * 1024,
-) : HttpFetcher {
-    override fun fetch(url: String): FetchResult {
+class UrlConnectionFetcher(private val userAgent: String) : HttpFetcher {
+    override fun fetch(url: String, sink: OutputStream, maxBytes: Long): FetchResult {
         val conn = try {
             URI(url).toURL().openConnection() as HttpURLConnection
         } catch (e: Exception) {
@@ -57,18 +70,19 @@ class UrlConnectionFetcher(
             conn.setRequestProperty("User-Agent", userAgent)
             val code = conn.responseCode
             if (code !in 200..299) return FetchResult.HttpError(code)
-            val bytes = conn.inputStream.use { input ->
-                val out = java.io.ByteArrayOutputStream()
+            if (conn.contentLengthLong > maxBytes) return FetchResult.Failed("file too large")
+            conn.inputStream.use { input ->
                 val buf = ByteArray(16 * 1024)
+                var total = 0L
                 while (true) {
                     val n = input.read(buf)
                     if (n < 0) break
-                    out.write(buf, 0, n)
-                    if (out.size() > maxBytes) return FetchResult.Failed("file too large")
+                    total += n
+                    if (total > maxBytes) return FetchResult.Failed("file too large")
+                    sink.write(buf, 0, n)
                 }
-                out.toByteArray()
             }
-            FetchResult.Ok(bytes)
+            FetchResult.Ok
         } catch (e: SocketTimeoutException) {
             FetchResult.Timeout
         } catch (e: IOException) {
@@ -98,40 +112,47 @@ sealed interface UpdateResult {
 /**
  * SSP 互換のネットワーク更新。homeurl の updates2.dau（無ければ updates.txt）を読み、
  * MD5 が違うファイルだけを落としてくる。全部そろって MD5 が合ってから入れ替えるので、途中で失敗しても元のまま。
+ * 更新サーバーの言うことは信用しない: パスはゴーストのディレクトリの中に限り、大きさと数にも上限を置く。
  */
 class NetworkUpdater(
     private val ghostDir: File,
     private val fetcher: HttpFetcher,
 ) {
+    private class Manifest(val base: String, val entries: List<UpdateEntry>)
+
     /** @param onReady 落とすファイル数が決まったとき（0 件なら呼ばない） */
     suspend fun update(homeUrl: String, onReady: suspend (count: Int) -> Unit = {}): UpdateResult = withContext(Dispatchers.IO) {
-        val base = normalizeBase(homeUrl) ?: return@withContext UpdateResult.Failure("invalid homeurl")
-
-        val manifestText = when (val r = fetchManifest(base)) {
-            is FetchResult.Ok -> TextCharsets.decode(r.bytes)
-            else -> return@withContext failure(r)
-        }
-        val entries = UpdateManifest.parse(manifestText)
+        val declared = normalizeBase(homeUrl) ?: return@withContext UpdateResult.Failure("invalid homeurl")
+        val (manifest, fetched) = fetchManifest(declared)
+        if (manifest == null) return@withContext failure(fetched)
+        val entries = manifest.entries
         if (entries.isEmpty()) return@withContext UpdateResult.Failure("invalid updates list")
+        if (entries.size > MAX_FILES) return@withContext UpdateResult.Failure("too many files")
 
         val root = ghostDir.canonicalFile
-        val targets = entries.filter { e ->
-            val file = safeFile(root, e.path) ?: return@filter false
-            !file.isFile || md5(file.readBytes()) != e.md5
-        }
-        if (targets.isEmpty()) return@withContext UpdateResult.NoChange
-        onReady(targets.size)
-
-        // いったん作業用ディレクトリに落とし、すべて MD5 が合ってから入れ替える
-        val staging = File(root, "pono/update-staging").apply { deleteRecursively(); mkdirs() }
+        val staging = File(root, "$PONO_DIR/update-staging")
         try {
+            val targets = entries.filter { e ->
+                val file = safeFile(root, e.path) ?: return@filter false
+                !file.isFile || md5(file) != e.md5
+            }
+            if (targets.isEmpty()) return@withContext UpdateResult.NoChange
+            onReady(targets.size)
+
+            // いったん作業用ディレクトリに落とし、すべて MD5 が合ってから入れ替える。落としながら MD5 を取る
+            staging.deleteRecursively()
+            staging.mkdirs()
+            var total = 0L
             for (e in targets) {
-                val bytes = when (val r = fetcher.fetch(base + encodePath(e.path))) {
-                    is FetchResult.Ok -> r.bytes
-                    else -> return@withContext failure(r)
+                val dest = File(staging, e.path).apply { parentFile?.mkdirs() }
+                val digest = MessageDigest.getInstance("MD5")
+                val result = DigestOutputStream(dest.outputStream(), digest).use {
+                    fetcher.fetch(manifest.base + encodePath(e.path), it, MAX_FILE_BYTES)
                 }
-                if (md5(bytes) != e.md5) return@withContext UpdateResult.Failure("md5 miss")
-                File(staging, e.path).apply { parentFile?.mkdirs() }.writeBytes(bytes)
+                if (result != FetchResult.Ok) return@withContext failure(result)
+                if (hex(digest.digest()) != e.md5) return@withContext UpdateResult.Failure("md5 miss")
+                total += dest.length()
+                if (total > MAX_TOTAL_BYTES) return@withContext UpdateResult.Failure("file too large")
             }
             for (e in targets) {
                 val dest = safeFile(root, e.path)!!
@@ -140,17 +161,37 @@ class NetworkUpdater(
             }
             // 更新で delete.txt が来たら、書かれているファイルを消す（SSP と同じ）
             if (targets.any { it.path.equals(DELETE_LIST, ignoreCase = true) }) applyDeleteList(root)
+            UpdateResult.Changed(targets.map { it.path })
         } catch (e: IOException) {
-            return@withContext UpdateResult.Failure("fileio")
+            UpdateResult.Failure("fileio")
         } finally {
             staging.deleteRecursively()
         }
-        UpdateResult.Changed(targets.map { it.path })
     }
 
-    private fun fetchManifest(base: String): FetchResult {
-        val r = fetcher.fetch(base + "updates2.dau")
-        return if (r is FetchResult.HttpError && r.code == 404) fetcher.fetch(base + "updates.txt") else r
+    /**
+     * 更新の一覧を取ってくる。homeurl が http:// でも、まず https:// で試す
+     * （通れば経路上で書き換えられない）。だめなら書かれたとおり http:// を使う。
+     * @return 取れなければ null と、その理由
+     */
+    private fun fetchManifest(declared: String): Pair<Manifest?, FetchResult> {
+        val https = declared.takeIf { it.startsWith("http://") }?.let { "https://" + it.removePrefix("http://") }
+        if (https != null) {
+            val (result, bytes) = fetchManifestAt(https)
+            if (result == FetchResult.Ok) {
+                val entries = UpdateManifest.parse(TextCharsets.decode(bytes))
+                if (entries.isNotEmpty()) return Manifest(https, entries) to result
+            }
+        }
+        val (result, bytes) = fetchManifestAt(declared)
+        if (result != FetchResult.Ok) return null to result
+        return Manifest(declared, UpdateManifest.parse(TextCharsets.decode(bytes))) to result
+    }
+
+    private fun fetchManifestAt(base: String): Pair<FetchResult, ByteArray> {
+        val r = fetcher.fetchBytes(base + "updates2.dau", MAX_MANIFEST_BYTES)
+        val first = r.first
+        return if (first is FetchResult.HttpError && first.code == 404) fetcher.fetchBytes(base + "updates.txt", MAX_MANIFEST_BYTES) else r
     }
 
     private fun failure(r: FetchResult) = UpdateResult.Failure(describe(r))
@@ -158,12 +199,20 @@ class NetworkUpdater(
     companion object {
         const val DELETE_LIST = "delete.txt"
 
+        /** pono-droid がゴーストごとに覚えておくもの（profile など）。更新で触らせない */
+        const val PONO_DIR = "pono"
+
+        const val MAX_MANIFEST_BYTES = 4L * 1024 * 1024
+        const val MAX_FILE_BYTES = 256L * 1024 * 1024
+        const val MAX_TOTAL_BYTES = 1024L * 1024 * 1024
+        const val MAX_FILES = 20_000
+
         /** 失敗の理由。SSP と同じく "timeout" と HTTP のステータスはそのまま、それ以外は読める言葉 */
         fun describe(r: FetchResult): String = when (r) {
             is FetchResult.HttpError -> r.code.toString()
             FetchResult.Timeout -> "timeout"
             is FetchResult.Failed -> r.message
-            is FetchResult.Ok -> "unknown"
+            FetchResult.Ok -> "unknown"
         }
 
         /**
@@ -172,34 +221,62 @@ class NetworkUpdater(
          */
         fun applyDeleteList(root: File) {
             val list = File(root, DELETE_LIST).takeIf { it.isFile } ?: return
+            val canonicalRoot = root.canonicalFile
             for (line in TextCharsets.decode(list.readBytes()).lines()) {
                 val path = line.trim().replace('\\', '/').trimEnd('/')
-                if (path.isEmpty() || path.startsWith("//")) continue
-                val target = safeFile(root.canonicalFile, path) ?: continue
+                if (path.isEmpty()) continue
+                val target = safeFile(canonicalRoot, path) ?: continue
                 if (target.isDirectory) target.deleteRecursively() else target.delete()
             }
         }
 
         /** --file= のようにゴーストから渡されたファイル名。ディレクトリを含むもの・隠しファイルは受け付けない */
         fun safeFileName(name: String): String? =
-            name.trim().takeIf { it.isNotEmpty() && '/' !in it && '\\' !in it && !it.startsWith(".") }
+            name.trim().takeIf { it.isNotEmpty() && '/' !in it && '\\' !in it && '\u0000' !in it && !it.startsWith(".") }
+
         fun normalizeBase(homeUrl: String): String? {
             val url = homeUrl.trim()
             if (!url.startsWith("http://") && !url.startsWith("https://")) return null
             return if (url.endsWith("/")) url else "$url/"
         }
 
-        /** ゴーストのディレクトリの外や管理用の pono/ を指すパスは受け付けない。 */
+        /**
+         * 更新サーバーや delete.txt が言うパスを、[root]（正規化済み）の中のファイルにする。
+         * 外を指すもの、管理用の pono/ を指すもの、変な書き方（"./pono/x"、"a//b"、NUL）は受け付けない（null）。
+         */
         fun safeFile(root: File, path: String): File? {
-            if (path.startsWith("/") || path.split('/').any { it == ".." } || path.startsWith("pono/")) return null
-            val file = File(root, path).canonicalFile
-            return file.takeIf { it.path.startsWith(root.path + File.separator) }
+            if (path.isEmpty() || path.startsWith("/") || '\u0000' in path) return null
+            if (path.split('/').any { it.isEmpty() || it == "." || it == ".." }) return null
+            val file = try {
+                File(root, path).canonicalFile
+            } catch (e: IOException) {
+                return null
+            }
+            if (!file.path.startsWith(root.path + File.separator)) return null
+            val pono = File(root, PONO_DIR).path
+            if (file.path == pono || file.path.startsWith(pono + File.separator)) return null
+            return file
         }
 
         private fun encodePath(path: String) =
             path.split('/').joinToString("/") { URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
 
-        fun md5(bytes: ByteArray): String =
-            MessageDigest.getInstance("MD5").digest(bytes).joinToString("") { "%02x".format(it) }
+        fun md5(bytes: ByteArray): String = hex(MessageDigest.getInstance("MD5").digest(bytes))
+
+        /** ファイルをメモリに全部読まずに MD5 を取る */
+        fun md5(file: File): String {
+            val digest = MessageDigest.getInstance("MD5")
+            file.inputStream().use { input ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    digest.update(buf, 0, n)
+                }
+            }
+            return hex(digest.digest())
+        }
+
+        private fun hex(bytes: ByteArray) = bytes.joinToString("") { "%02x".format(it) }
     }
 }

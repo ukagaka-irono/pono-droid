@@ -290,17 +290,33 @@ class BalloonSkin(val balloon: Balloon) {
 
 /** 伺かの画像の透過。PNG にアルファがあればそのまま、無ければ .pna か左上の色で抜く */
 object ImageTransparency {
+    /** 1辺の上限。ゴーストの画像は信用しないので、細工された巨大な PNG でメモリを使い切らせない */
+    const val MAX_SIDE = 4096
+    const val MAX_PIXELS = 8_000_000L
+
     /** @param selfAlpha true / false で決め打ち、null なら画像にアルファがあるかで決める */
     fun load(file: java.io.File, pna: java.io.File?, selfAlpha: Boolean?): Bitmap? {
+        if (!fits(file)) return null
         val opts = BitmapFactory.Options().apply {
             inMutable = true
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
         val bmp = BitmapFactory.decodeFile(file.path, opts) ?: return null
         if (selfAlpha ?: bmp.hasAlpha()) return bmp
-        val pnaBmp = pna?.let { BitmapFactory.decodeFile(it.path) }
+        val pnaBmp = pna?.takeIf(::fits)?.let { BitmapFactory.decodeFile(it.path) }
         if (pnaBmp != null && pnaBmp.width == bmp.width && pnaBmp.height == bmp.height) applyPna(bmp, pnaBmp) else applyColorKey(bmp)
         return bmp
+    }
+
+    /** 画像の大きさだけ先に読んで、大きすぎるもの（と読めないもの）は弾く */
+    private fun fits(file: java.io.File): Boolean {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, bounds)
+        val w = bounds.outWidth
+        val h = bounds.outHeight
+        val ok = w in 1..MAX_SIDE && h in 1..MAX_SIDE && w.toLong() * h <= MAX_PIXELS
+        if (!ok) android.util.Log.w("pono", "image skipped (unreadable or too large): ${file.name} ${w}x$h")
+        return ok
     }
 
     private fun applyColorKey(bmp: Bitmap) {
