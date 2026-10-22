@@ -1,0 +1,54 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+# 同じブランチ（PR）に続けてプッシュしたら、古い実行は止める
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      # YAYA とその依存ライブラリ（parson / tinyxml2 / sqlite / gumbo / uka_regexp）はサブモジュール
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      # baseware は JDK 17 のツールチェーンでビルドする。Gradle 自体は最後に書いた 21 で動かす
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # Android SDK は runner に入っている。compileSdk 37 のプラットフォームと NDK / CMake は
+      # 足りなければ Android Gradle Plugin がビルド中にインストールする
+      - name: Build debug APK and run unit tests
+        run: ./gradlew :baseware:test :app:assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: pono-droid-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: baseware-test-reports
+          path: baseware/build/reports/tests/
+          if-no-files-found: ignore
