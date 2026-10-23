@@ -26,6 +26,14 @@ class SspCompatibilityTest {
         state.first { s -> s.characters[scope]?.balloon?.any { it is BalloonItem.Text } == true }
     }.characters[scope]!!.balloon!!.filterIsInstance<BalloonItem.Text>().joinToString("") { it.text }
 
+    /**
+     * [id] の選択肢が出て、選ばれるのを待つ状態になるまで待つ。
+     * 選択肢は話している途中に出るが、選べるのは話し終わって待ちに入ってから（それより前に選ぶと捨てられる）
+     */
+    private suspend fun GhostController.awaitChoices(id: String) = withTimeout(5000) {
+        state.first { s -> s.waitingChoice && s.characters[0]?.balloon?.any { it is BalloonItem.ChoiceItem && it.choice.id == id } == true }
+    }
+
     @Test
     fun scriptsGoThroughOnTranslate() = runBlocking {
         val shiori = ScriptedShiori(mapOf("OnFirstBoot" to """\0元の文""", "OnTranslate" to """\0訳した文"""))
@@ -195,7 +203,7 @@ class SspCompatibilityTest {
 
             // おすすめ → 2つ目（区切りの次）を選ぶと OnRecommendsiteChoice が送られ、script: の URL は再生される
             controller.onChoice(Choice("おすすめ！", "pono:sites", listOf("recommend", "0")))
-            withTimeout(5000) { controller.state.first { s -> s.characters[0]?.balloon?.any { it is BalloonItem.ChoiceItem && it.choice.id == "pono:site" } == true } }
+            controller.awaitChoices("pono:site")
             controller.onChoice(Choice("掲示板", "pono:site", listOf("recommend", "0", "2")))
             assertEquals(listOf("掲示板", "script:\\0板", "", "recommend", "0", "2"), shiori.awaitEvent("OnRecommendsiteChoice"))
             // 答えのトーク（サイトだ）のあとに script: の URL が再生される
@@ -205,9 +213,9 @@ class SspCompatibilityTest {
 
             // シェルの切り替え（メニューから）: OnShellChanging → 切り替え → OnShellChanged
             controller.onMouseLongPress(0, 0, 0, null)
-            withTimeout(5000) { controller.state.first { it.waitingChoice } }
+            controller.awaitChoices("pono:shells")
             controller.onChoice(Choice("シェル", "pono:shells", listOf("0")))
-            withTimeout(5000) { controller.state.first { s -> s.characters[0]?.balloon?.any { it is BalloonItem.ChoiceItem && it.choice.id == "pono:shell" } == true } }
+            controller.awaitChoices("pono:shell")
             controller.onChoice(Choice("二つ目", "pono:shell", listOf("second")))
             assertEquals(listOf("二つ目", "master", second.absolutePath + "/"), shiori.awaitEvent("OnShellChanging"))
             assertEquals(listOf("二つ目", "テスト", second.absolutePath + "/"), shiori.awaitEvent("OnShellChanged"))
