@@ -1523,6 +1523,12 @@ class GhostController(
             return true
         }
 
+        /** \s[...]。シェルの surface.alias（と surfaces.txt の name）の別名なら、その番号（候補が複数ならランダムに1つ）にする */
+        override fun setSurface(scope: Int, surface: String) {
+            val id = shell.surfaces.resolve(scope, surface) ?: return platform.log("知らないサーフェスです: \\s[$surface]")
+            setSurface(scope, id)
+        }
+
         override fun setSurface(scope: Int, surface: Int) {
             val changed = _state.value.characters[scope]?.surface != surface
             _state.update { it.update(scope) { c -> c.copy(surface = surface) } }

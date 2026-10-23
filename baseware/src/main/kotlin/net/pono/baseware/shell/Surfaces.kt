@@ -1,5 +1,7 @@
 package net.pono.baseware.shell
 
+import kotlin.random.Random
+
 /** surfaces.txt の定義。座標はすべて元画像のピクセル単位。 */
 
 data class SurfaceElement(val id: Int, val method: String, val file: String, val x: Int, val y: Int)
@@ -68,6 +70,9 @@ class Animation(val id: Int) {
 }
 
 class SurfaceDefinition(val id: Int) {
+    /** `name,定義名`（SSP 2.8.24）。\s[定義名] で、番号の代わりにこの名前で呼べる */
+    var name: String? = null
+
     val elements = sortedMapOf<Int, SurfaceElement>()
     val animations = sortedMapOf<Int, Animation>()
     val collisions = sortedMapOf<Int, Collision>()
@@ -131,8 +136,25 @@ class SurfaceDefinition(val id: Int) {
     fun hitTest(x: Int, y: Int): String? = collisions.values.firstOrNull { it.contains(x, y) }?.id
 }
 
-class SurfaceTable(val definitions: Map<Int, SurfaceDefinition>) {
+/**
+ * @param aliases キャラクター（0 が sakura、1 が kero、2 以降が charN）ごとの surface.alias。別名 → サーフェス番号の候補
+ */
+class SurfaceTable(
+    val definitions: Map<Int, SurfaceDefinition>,
+    val aliases: Map<Int, Map<String, List<Int>>> = emptyMap(),
+) {
     operator fun get(id: Int): SurfaceDefinition? = definitions[id]
+
+    /**
+     * \s[...] の指定（番号・surface.alias の別名・`name,定義名`）を、そのキャラクターのサーフェス番号にする。
+     * 別名に候補が複数あれば1つを選ぶ（SSP と同じくランダム）。番号でも別名があれば別名を使う。わからなければ null
+     */
+    fun resolve(scope: Int, key: String, random: Random = Random.Default): Int? {
+        val k = key.trim()
+        aliases[scope]?.get(k)?.takeIf { it.isNotEmpty() }?.let { return it.random(random) }
+        k.toIntOrNull()?.let { return it }
+        return definitions.values.firstOrNull { it.name == k }?.id
+    }
 
     companion object {
         val EMPTY = SurfaceTable(emptyMap())
@@ -149,8 +171,11 @@ class SurfaceTable(val definitions: Map<Int, SurfaceDefinition>) {
 
         fun parse(text: String): SurfaceTable {
             val defs = sortedMapOf<Int, SurfaceDefinition>()
+            val aliases = HashMap<Int, MutableMap<String, List<Int>>>()
             var header = StringBuilder()
             var targets: List<Int>? = null
+            // sakura.surface.alias などのブロックの中なら、そのキャラクターの番号
+            var aliasScope: Int? = null
 
             for (raw in text.lineSequence()) {
                 var line = raw.substringBefore("//").trim()
@@ -167,26 +192,60 @@ class SurfaceTable(val definitions: Map<Int, SurfaceDefinition>) {
                         if (header.isNotEmpty()) header.append(',')
                         header.append(line.substring(0, brace))
                     }
-                    targets = surfaceIds(header.toString())
+                    aliasScope = aliasScope(header.toString())
+                    targets = if (aliasScope != null) emptyList() else surfaceIds(header.toString())
                     header = StringBuilder()
                     line = line.substring(brace + 1).trim()
                     if (line.isEmpty()) continue
                 }
                 if (line.startsWith("}")) {
                     targets = null
+                    aliasScope = null
                     continue
                 }
                 // "surface0 { element0,... }" のように同じ行で閉じることもある
                 val closes = line.endsWith("}")
                 if (closes) line = line.removeSuffix("}").trim()
                 if (line.isNotEmpty()) {
-                    for (id in targets) {
-                        applyLine(defs.getOrPut(id) { SurfaceDefinition(id) }, line)
+                    val scope = aliasScope
+                    if (scope != null) {
+                        addAlias(aliases.getOrPut(scope) { LinkedHashMap() }, line)
+                    } else {
+                        for (id in targets) {
+                            applyLine(defs.getOrPut(id) { SurfaceDefinition(id) }, line)
+                        }
                     }
                 }
-                if (closes) targets = null
+                if (closes) {
+                    targets = null
+                    aliasScope = null
+                }
             }
-            return SurfaceTable(defs)
+            return SurfaceTable(defs, aliases)
+        }
+
+        private val aliasHeader = Regex("""^(sakura|kero|char(\d+))\.surface\.alias$""", RegexOption.IGNORE_CASE)
+
+        /**
+         * "sakura.surface.alias" / "kero.surface.alias" / "char2.surface.alias" ならキャラクターの番号、それ以外は null。
+         * ブロックの前の行（"charset,UTF-8" など）もヘッダにつながってくるので、区切った項目ごとに見る
+         */
+        private fun aliasScope(header: String): Int? {
+            val m = header.split(',').asReversed().firstNotNullOfOrNull { aliasHeader.matchEntire(it.trim()) } ?: return null
+            return when (m.groupValues[1].lowercase()) {
+                "sakura" -> 0
+                "kero" -> 1
+                else -> m.groupValues[2].toIntOrNull()
+            }
+        }
+
+        /** "照れ,[1,101,201]" を読む（SSP と同じく区切りは . でもよい）。別名の数と候補の数には上限を置く */
+        private fun addAlias(into: MutableMap<String, List<Int>>, line: String) {
+            val key = line.substringBefore(',').trim()
+            if (key.isEmpty() || (key !in into && into.size >= SurfaceDefinition.MAX_PARTS)) return
+            val ids = Regex("""-?\d+""").findAll(line.substringAfter(',', ""))
+                .mapNotNull { it.value.toIntOrNull() }.take(SurfaceDefinition.MAX_PARTS).toList()
+            if (ids.isNotEmpty()) into[key] = ids
         }
 
         /**
@@ -227,6 +286,11 @@ class SurfaceTable(val definitions: Map<Int, SurfaceDefinition>) {
         private fun applyLine(def: SurfaceDefinition, line: String) {
             val key = line.substringBefore(',').trim().lowercase()
             val args = line.substringAfter(',', "").split(',').map { it.trim() }
+
+            if (key == "name") {
+                def.name = line.substringAfter(',', "").trim().takeIf { it.isNotEmpty() }
+                return
+            }
 
             // 番号が桁あふれしていれば（細工された surfaces.txt）その行は無視する。数にも上限を置く
             element.matchEntire(key)?.let { m ->

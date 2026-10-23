@@ -11,6 +11,7 @@ class Shell(val dir: File) {
     val descript: Descript = Descript.read(File(dir, "descript.txt"))
     /**
      * surfaces.txt と、surfaces_xxx.txt のように分けて書かれた定義（SSP と同じく surfaces*.txt を全部読む）。
+     * 古いシェルの alias.txt（surface.alias だけを書いたファイル）も一緒に読む。
      * ファイルごとに文字コードが違うことがあるので、それぞれ読んでからつなぐ
      */
     val surfaces: SurfaceTable = dir.listFiles { f -> f.isFile && DEFINITION_FILE.matches(f.name.lowercase()) }
@@ -83,8 +84,8 @@ class Shell(val dir: File) {
     private val surfaceFile = Regex("""^surface0*(\d+)\.png$""")
 
     companion object {
-        /** サーフェスの定義ファイル（surfaces.txt、surfaces_xxx.txt、surfaces2.txt など） */
-        private val DEFINITION_FILE = Regex("""^surfaces.*\.txt$""")
+        /** サーフェスの定義ファイル（surfaces.txt、surfaces_xxx.txt、surfaces2.txt など）と alias.txt */
+        private val DEFINITION_FILE = Regex("""^(surfaces.*|alias)\.txt$""")
 
         fun scopeName(scope: Int) = when (scope) {
             0 -> "sakura"

@@ -32,6 +32,11 @@ data class TextStyle(
 /** さくらスクリプトの実行結果を受け取る側（見た目を持つ側）。 */
 interface ScriptHost {
     fun setSurface(scope: Int, surface: Int)
+
+    /** `\s[...]` の指定そのまま（番号か、シェルの surface.alias の別名）。既定では番号だけ扱う */
+    fun setSurface(scope: Int, surface: String) {
+        surface.trim().toIntOrNull()?.let { setSurface(scope, it) }
+    }
     fun appendText(scope: Int, text: String)
     fun newLine(scope: Int)
     fun clearBalloon(scope: Int)
@@ -210,7 +215,7 @@ class ScriptPlayer(
                 "1", "u" -> scope = 1
                 // 番号には上限を置く（細工したスクリプトにキャラクターのウィンドウを無数に作らせない）
                 "p" -> scope = a.firstOrNull()?.trim()?.toIntOrNull()?.takeIf { it in 0..MAX_SCOPE } ?: scope
-                "s" -> a.firstOrNull()?.toIntOrNull()?.let { host.setSurface(scope, it) }
+                "s" -> a.firstOrNull()?.takeIf { it.isNotBlank() }?.let { host.setSurface(scope, it) }
                 "i" -> a.firstOrNull()?.toIntOrNull()?.let { host.startAnimation(scope, it) }
                 "n" -> for (t in targets()) host.newLine(t)
                 // \_s で始めて \_s で終わる。引数が無ければ \0 と \1、あれば並べたキャラクター

@@ -2,6 +2,7 @@ package net.pono.baseware.shell
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SurfaceTableTest {
@@ -148,6 +149,67 @@ class SurfaceTableTest {
         assertEquals(AnimationInterval(IntervalKind.RANDOM, 3), anim.interval)
         assertEquals(PatternFrame("overlay", 101, 50, 50, 1, 2), anim.frames[0])
         assertEquals("Bust", s10.hitTest(5, 10))
+    }
+
+    @Test
+    fun resolvesSurfaceAliasesAndNames() {
+        val table = SurfaceTable.parse(
+            """
+            sakura.surface.alias
+            {
+            素,[0]
+            照れ,[1,101,201]
+            35,[55]
+            }
+            kero.surface.alias
+            {
+            300,[600]
+            }
+            char2.surface.alias { 笑顔,[205] }
+
+            surface0 { element0,base,a.png,0,0 }
+            surface77
+            {
+            name,ないしょ
+            element0,base,b.png,0,0
+            }
+            """.trimIndent(),
+        )
+        assertEquals(0, table.resolve(0, "素"))
+        // 候補が複数なら、その中から選ぶ
+        repeat(20) { assertTrue(table.resolve(0, "照れ") in setOf(1, 101, 201)) }
+        // 番号にも別名を付けられる（Emily/Phase4.5 の 35 → 55）
+        assertEquals(55, table.resolve(0, "35"))
+        // 別名はキャラクターごと
+        assertEquals(35, table.resolve(1, "35"))
+        assertEquals(600, table.resolve(1, "300"))
+        assertEquals(205, table.resolve(2, "笑顔"))
+        // surfaces.txt の name でも呼べる
+        assertEquals(77, table.resolve(0, "ないしょ"))
+        assertEquals(-1, table.resolve(0, "-1"))
+        assertNull(table.resolve(0, "知らない"))
+        // 別名のブロックはサーフェスとして読まない
+        assertEquals(setOf(0, 77), table.definitions.keys)
+    }
+
+    @Test
+    fun aliasAcceptsDotSeparators() {
+        val table = SurfaceTable.parse("sakura.surface.alias\n{\n驚き,[2.12]\n}\n")
+        assertTrue(table.resolve(0, "驚き") in setOf(2, 12))
+    }
+
+    @Test
+    fun shellReadsAliasTxt() {
+        val dir = kotlin.io.path.createTempDirectory("shell").toFile()
+        try {
+            java.io.File(dir, "descript.txt").writeText("charset,UTF-8\nname,master\n")
+            java.io.File(dir, "surfaces.txt").writeText("charset,UTF-8\nsurface0 { element0,base,a.png,0,0 }\n")
+            // 古いシェルは別名を alias.txt に書く
+            java.io.File(dir, "alias.txt").writeText("charset,UTF-8\nsakura.surface.alias\n{\n照れ,[1]\n}\n")
+            assertEquals(1, Shell(dir).surfaces.resolve(0, "照れ"))
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 
     @Test
