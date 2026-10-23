@@ -35,6 +35,10 @@ import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -241,6 +245,17 @@ private fun SkinFrame(image: BalloonSkin.Image, skin: BalloonSkin, scale: Float,
 /** バルーンの中身。行ごとに文を並べ、\_l で分けた列は横に等分して並べる */
 @Composable
 fun BalloonBody(items: List<BalloonItem>, onChoice: (Choice) -> Unit, style: BalloonTextStyle) {
+    // \_b[ファイル,x,y] の画像は文字の下に置く
+    Box {
+        for (img in BalloonLayout.placedImages(items)) {
+            BalloonPicture(img.path, img.opaque, style.spPerPx, Modifier.offset((img.x * style.spPerPx).dp, (img.y * style.spPerPx).dp))
+        }
+        BalloonLines(items, onChoice, style)
+    }
+}
+
+@Composable
+private fun BalloonLines(items: List<BalloonItem>, onChoice: (Choice) -> Unit, style: BalloonTextStyle) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         for (line in BalloonLayout.lines(items)) {
             val align = when (line.align) {
@@ -274,8 +289,11 @@ private fun BalloonText(
         style = SpanStyle(color = style.choiceColor, fontWeight = FontWeight.Medium),
         pressedStyle = SpanStyle(color = style.choiceColor, background = style.choiceColor.copy(alpha = 0.15f)),
     )
+    val density = LocalDensity.current
+    // \_b[ファイル,inline] の画像は1文字として文の中に置く（大きさは先に画像の寸法だけ読んで決める）
+    val inlineContent = HashMap<String, InlineTextContent>()
     val text = buildAnnotatedString {
-        for (run in runs) {
+        runs.forEachIndexed { index, run ->
             when (run) {
                 is BalloonLayout.Run.Text -> {
                     if (run.style == TextStyle.Default) append(run.text) else withStyle(style.span(run.style)) { append(run.text) }
@@ -285,6 +303,14 @@ private fun BalloonText(
                     withLink(LinkAnnotation.Clickable(tag = run.choice.id, styles = links) { onChoice(run.choice) }) {
                         append(run.choice.title)
                     }
+                }
+                is BalloonLayout.Run.Image -> {
+                    val (w, h) = ImageTransparency.size(java.io.File(run.path)) ?: return@forEachIndexed
+                    val id = "img$index"
+                    appendInlineContent(id, "□")
+                    inlineContent[id] = InlineTextContent(
+                        with(density) { Placeholder((w * style.spPerPx).dp.toSp(), (h * style.spPerPx).dp.toSp(), PlaceholderVerticalAlign.TextBottom) },
+                    ) { BalloonPicture(run.path, run.opaque, style.spPerPx, Modifier) }
                 }
             }
         }
@@ -297,8 +323,22 @@ private fun BalloonText(
         lineHeight = style.fontSize * (if (hasChoice) 1.7f else 1.4f),
         color = style.textColor,
         textAlign = align,
+        inlineContent = inlineContent,
         modifier = modifier.padding(vertical = if (hasChoice) 2.dp else 0.dp),
     )
+}
+
+/** \_b の画像。[dpPerPx] は画像の 1px を何 dp で描くか。読めない・大きすぎる画像は出さない */
+@Composable
+private fun BalloonPicture(path: String, opaque: Boolean, dpPerPx: Float, modifier: Modifier) {
+    val bitmap by produceState<ImageBitmap?>(null, path, opaque) {
+        // 左上の色を透過色にする（opaque なら抜かない）。PNG にアルファがあればそれを使う
+        value = withContext(Dispatchers.IO) {
+            ImageTransparency.load(java.io.File(path), null, selfAlpha = if (opaque) true else null)?.asImageBitmap()
+        }
+    }
+    val bmp = bitmap ?: return
+    Image(bmp, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = modifier.size((bmp.width * dpPerPx).dp, (bmp.height * dpPerPx).dp))
 }
 
 /** インストール済みのバルーンを、画面に出せる形にしたもの。画像は使うときに読み込んで覚えておく */
@@ -356,6 +396,14 @@ object ImageTransparency {
         val pnaBmp = pna?.takeIf(::fits)?.let { BitmapFactory.decodeFile(it.path) }
         if (pnaBmp != null && pnaBmp.width == bmp.width && pnaBmp.height == bmp.height) applyPna(bmp, pnaBmp) else applyColorKey(bmp)
         return bmp
+    }
+
+    /** 画像の寸法（読めないか大きすぎるなら null）。中身は読まない */
+    fun size(file: java.io.File): Pair<Int, Int>? {
+        if (!fits(file)) return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, bounds)
+        return bounds.outWidth to bounds.outHeight
     }
 
     /** 画像の大きさだけ先に読んで、大きすぎるもの（と読めないもの）は弾く */

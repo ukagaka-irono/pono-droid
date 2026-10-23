@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import net.pono.baseware.balloon.Balloon
 import net.pono.baseware.sakura.Choice
+import net.pono.baseware.sakura.MoveCommand
 import net.pono.baseware.sakura.ScriptHost
 import net.pono.baseware.sakura.ScriptPlayer
 import net.pono.baseware.sakura.TextAlign
@@ -97,7 +98,16 @@ interface GhostPlatform {
 
     /** バルーンが切り替わった（null なら簡易バルーン） */
     fun onBalloonChanged(balloon: Balloon?) {}
+
+    /**
+     * ゴーストを切り替える（\![change,ghost] とメニュー）。このゴーストは SHIORI を閉じ終わっている。
+     * [dirName] のゴーストを、[previous] を伝えて起動する（OnGhostChanged）。既定では終了するだけ
+     */
+    fun switchGhost(dirName: String, previous: PreviousGhost) = onQuit()
 }
+
+/** ゴーストの切り替えで、次のゴーストに伝える前のゴーストのこと（OnGhostChanged の Reference） */
+data class PreviousGhost(val sakuraName: String, val script: String, val name: String, val path: String)
 
 /**
  * ゴースト1体を動かす。SHIORI にイベントを送り、返ってきたさくらスクリプトを再生して [state] に反映する。
@@ -120,6 +130,8 @@ class GhostController(
     /** ゴーストに伝える pono-droid のバージョン（basewareversion、%property[baseware.version]、通信の User-Agent） */
     private val basewareVersion: String = BASEWARE_VERSION,
     private val updateFetcher: HttpFetcher = UrlConnectionFetcher("${ShioriSession.SENDER}/$basewareVersion"),
+    /** 別のゴーストから切り替わって起動したとき、その前のゴースト（OnGhostChanged を送る） */
+    private val previous: PreviousGhost? = null,
 ) {
     private val _state = MutableStateFlow(GhostState())
     val state: StateFlow<GhostState> = _state.asStateFlow()
@@ -173,10 +185,19 @@ class GhostController(
             profile.setProperty("booted", "1")
             ghost.saveProfile(profile)
 
-            if (firstBoot) {
-                raise("OnFirstBoot", listOf("0"))
+            // 切り替わって来たときは OnGhostChanged。答えが無ければ OnBoot（SSP と同じ）
+            val changed = if (!firstBoot && previous != null) {
+                request(
+                    "OnGhostChanged",
+                    listOf(previous.sakuraName, previous.script, previous.name, previous.path, "", "", "", shell.name),
+                )
             } else {
-                raise("OnBoot", listOf(shell.name, "", "", "", "", "", "", ""))
+                null
+            }
+            when {
+                firstBoot -> raise("OnFirstBoot", listOf("0"))
+                changed != null -> runScript(changed)
+                else -> raise("OnBoot", listOf(shell.name, "", "", "", "", "", "", ""))
             }
             startTimer()
         }
@@ -422,14 +443,58 @@ class GhostController(
         }
     }
 
-    private suspend fun shutdown() {
+    /** SHIORI を閉じて終わる。[switchTo] があれば、そのゴーストに切り替える */
+    private suspend fun shutdown(switchTo: Pair<Ghost, PreviousGhost>? = null) {
         timerJob?.cancel()
         timers.values.forEach { it.cancel() }
         timers.clear()
         platform.stopSound()
         session?.unload()
         session = null
-        platform.onQuit()
+        if (switchTo != null) platform.switchGhost(switchTo.first.dir.name, switchTo.second) else platform.onQuit()
+    }
+
+    // ---- ゴーストの切り替え ----
+
+    /**
+     * 別のゴーストに切り替える（\![change,ghost,名前] とメニュー）。[name] はゴースト名・本体側の名前・ディレクトリ名、
+     * random / sequential / lastinstalled。メニューから（[byUser]）か --option=raise-event なら先に OnGhostChanging
+     * （答えが無ければ OnClose）で別れを話してもらう。スクリプトからなら、そのスクリプトが話し終わってから切り替える
+     */
+    fun changeGhost(name: String, byUser: Boolean = false): Boolean {
+        if (closing) return false
+        val ghosts = repository?.list() ?: return false
+        val self = ghost.dir.canonicalFile
+        val others = ghosts.filter { it.dir.canonicalFile != self }
+        val target = when (name.lowercase()) {
+            "random" -> others.randomOrNull()
+            "sequential" -> ghosts.getOrNull((ghosts.indexOfFirst { it.dir.canonicalFile == self } + 1) % ghosts.size.coerceAtLeast(1))
+                ?.takeIf { it.dir.canonicalFile != self }
+            "lastinstalled" -> others.maxByOrNull { it.dir.lastModified() }
+            else -> others.firstOrNull { it.name == name || it.sakuraName == name || it.dir.name == name }
+        } ?: run {
+            platform.log("切り替え先のゴーストがありません: $name")
+            return false
+        }
+        closing = true
+        timerJob?.cancel()
+        scope.launch {
+            val farewell = if (byUser) {
+                val script = request("OnGhostChanging", listOf(target.sakuraName, "manual", target.name, target.dir.absolutePath + "/"))
+                    ?: request("OnClose", listOf("user"))
+                if (script != null) {
+                    cancelScript()
+                    runScript(script)
+                }
+                script.orEmpty()
+            } else {
+                lastScript
+            }
+            // 話し終わるのを待つ（スクリプトからの切り替えなら、そのスクリプトの残りを話し終えてから）
+            withTimeoutOrNull(CHANGE_WAIT_MS) { _state.first { !it.talking } }
+            shutdown(target to PreviousGhost(ghost.sakuraName, farewell, ghost.name, ghost.dir.absolutePath + "/"))
+        }
+        return true
     }
 
     // ---- キャラクター ----
@@ -514,7 +579,10 @@ class GhostController(
     // ---- 音 ----
 
     /** ghost/master からの相対パス（か絶対パス）。ゴーストのディレクトリの外は鳴らさない */
-    private fun soundFile(name: String): File? {
+    private fun soundFile(name: String): File? = ghostFile(name)
+
+    /** ghost/master からの相対パス（か絶対パス）のファイル。ゴーストのディレクトリの外は使わない（画像・音） */
+    private fun ghostFile(name: String): File? {
         val raw = name.trim().replace('\\', '/')
         val file = if (raw.startsWith("/")) File(raw) else File(ghost.masterDir, raw)
         val canonical = runCatching { file.canonicalFile }.getOrNull() ?: return null
@@ -611,6 +679,7 @@ class GhostController(
         }
         sb.append("\\q[ゴーストのメニュー（中クリック）,pono:middle,$scopeId]\\n")
         if (shell.bindGroups(scopeId).isNotEmpty()) sb.append("\\q[きせかえ,pono:dressup,$scopeId]\\n")
+        if ((repository?.list()?.size ?: 0) > 1) sb.append("\\q[ゴースト切り替え,pono:ghosts,$scopeId]\\n")
         if (ghost.shellDirs.size > 1) sb.append("\\q[シェル,pono:shells,$scopeId]\\n")
         if (repository != null) sb.append("\\q[バルーン,pono:balloons,$scopeId]\\n")
         if (readmeFile() != null) sb.append("\\q[${quote(resource("readmebuttoncaption") ?: "Read Me")},pono:readme]\\n")
@@ -646,6 +715,18 @@ class GhostController(
         for (dir in ghost.shellDirs) {
             val name = runCatching { Shell(dir).name }.getOrDefault(dir.name)
             sb.append("\\q[${quote((if (dir == shell.dir) "● " else "○ ") + name)},pono:shell,${dir.name}]\\n")
+        }
+        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        return sb.toString()
+    }
+
+    /** 入っているほかのゴースト。選ぶとそのゴーストに切り替える */
+    private fun ghostsMenu(scopeId: Int): String {
+        val self = ghost.dir.canonicalFile
+        val sb = StringBuilder("\\p[$scopeId]\\_q")
+        for (g in repository?.list().orEmpty()) {
+            if (g.dir.canonicalFile == self) continue
+            sb.append("\\q[${quote(g.name)},pono:ghost,${quote(g.dir.name)}]\\n")
         }
         sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
         return sb.toString()
@@ -1031,6 +1112,8 @@ class GhostController(
                     "pono:shells" -> runScript(shellsMenu(scopeId))
                     "pono:shell" -> refs.firstOrNull()?.let { changeShell(it, byUser = true) }
                     "pono:balloons" -> runScript(balloonsMenu(scopeId))
+                    "pono:ghosts" -> runScript(ghostsMenu(scopeId))
+                    "pono:ghost" -> refs.firstOrNull()?.let { changeGhost(it, byUser = true) }
                     "pono:balloon" -> refs.firstOrNull()?.let { changeBalloon(it) }
                     "pono:readme" -> readmeFile()?.let { platform.showText(ghost.name, readmeText()) }
                 }
@@ -1299,6 +1382,8 @@ class GhostController(
 
         override suspend fun waitSound() = platform.waitSound()
 
+        override fun changeGhost(name: String, raiseEvent: Boolean): Boolean = this@GhostController.changeGhost(name, raiseEvent)
+
         override fun change(kind: String, name: String): Boolean {
             when (kind) {
                 "shell" -> changeShell(name)
@@ -1306,6 +1391,46 @@ class GhostController(
                 else -> return false
             }
             return true
+        }
+
+        override fun setOption(scope: Int, name: String, args: List<String>): Boolean {
+            // --time などのオプションは読み飛ばす（すぐに変える）
+            val numbers = args.map { it.trim() }.filterNot { it.startsWith("--") }.mapNotNull { it.toFloatOrNull() }
+            when (name) {
+                // \![set,scaling,倍率] / \![set,scaling,横倍率,縦倍率]（%）。負なら反転。大きすぎる値は抑える
+                "scaling" -> {
+                    val x = numbers.getOrNull(0) ?: return false
+                    val y = numbers.getOrNull(1) ?: x
+                    fun clamp(v: Float) = (v / 100f).coerceIn(-MAX_SCALING, MAX_SCALING)
+                    _state.update { it.update(scope) { c -> c.copy(scaleX = clamp(x), scaleY = clamp(y)) } }
+                }
+                // \![set,alpha,0〜100]。負の値は「そのまま」
+                "alpha" -> {
+                    val a = numbers.getOrNull(0) ?: return false
+                    if (a >= 0) _state.update { it.update(scope) { c -> c.copy(alpha = (a / 100f).coerceIn(0f, 1f)) } }
+                }
+                else -> return setOption(name, args)
+            }
+            return true
+        }
+
+        override fun move(scope: Int, command: MoveCommand) {
+            _state.update { it.update(scope) { c -> c.copy(move = ++animationCounter to command) } }
+        }
+
+        override fun setPosition(scope: Int, x: Int?, y: Int?) {
+            // 固定していない（出ていない）キャラクターを放すときに、わざわざ作らない
+            if (x == null || y == null) {
+                if (_state.value.characters[scope]?.pinned == null) return
+                _state.update { it.update(scope) { c -> c.copy(pinned = null) } }
+            } else {
+                _state.update { it.update(scope) { c -> c.copy(pinned = x to y) } }
+            }
+        }
+
+        override fun addImage(scope: Int, file: String, x: Int?, y: Int?, opaque: Boolean) {
+            val f = ghostFile(file) ?: return platform.log("画像が見つかりません: $file")
+            _state.update { it.update(scope) { c -> c.append(BalloonItem.Image(f.path, x, y, opaque)) } }
         }
 
         override fun setOption(name: String, args: List<String>): Boolean {
@@ -1488,6 +1613,12 @@ class GhostController(
 
         /** \p[N] で使えるキャラクターの番号の上限（ウィンドウをいくつも作らせないため） */
         const val MAX_SCOPE = ScriptPlayer.MAX_SCOPE
+
+        /** \![set,scaling] の倍率の上限（4 = 400%）。画面より大きなウィンドウを作らせない */
+        const val MAX_SCALING = 4f
+
+        /** ゴーストを切り替えるとき、前のゴーストが話し終わるのを待つ長さ */
+        const val CHANGE_WAIT_MS = 30_000L
 
         /** メニューと [changeBalloon] で簡易バルーンを表す名前（ディレクトリ名と重ならないよう / を含める） */
         const val SIMPLE_BALLOON = "/simple"

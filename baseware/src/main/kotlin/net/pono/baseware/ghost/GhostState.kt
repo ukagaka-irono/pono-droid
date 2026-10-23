@@ -1,6 +1,7 @@
 package net.pono.baseware.ghost
 
 import net.pono.baseware.sakura.Choice
+import net.pono.baseware.sakura.MoveCommand
 import net.pono.baseware.sakura.TextAlign
 import net.pono.baseware.sakura.TextStyle
 
@@ -20,6 +21,12 @@ sealed interface BalloonItem {
 
     /** \f[align,...]。今の行の寄せ方（次の行からは左寄せに戻る） */
     data class Align(val align: TextAlign) : BalloonItem
+
+    /**
+     * \_b。[path] はゴーストのディレクトリの中の画像。[x] / [y] があればバルーンのその位置（文字の下）、
+     * 無ければ文字の中に1文字として置く。[opaque] なら左上の色を抜かない
+     */
+    data class Image(val path: String, val x: Int?, val y: Int?, val opaque: Boolean) : BalloonItem
 }
 
 /** SERIKO への頼み（\i[n]、\![anim,...]）。表示する側が順番に実行する */
@@ -50,6 +57,15 @@ data class CharacterState(
     val binds: Set<Int> = emptySet(),
     /** \b[n] で選ばれたバルーンの番号。null なら文字の量に合わせて選ぶ、-1 ならバルーンを出さない */
     val balloonId: Int? = null,
+    /** \![set,scaling,横,縦] の倍率（1 で等倍、負なら反転） */
+    val scaleX: Float = 1f,
+    val scaleY: Float = 1f,
+    /** \![set,alpha,n] の不透明度（0〜1） */
+    val alpha: Float = 1f,
+    /** いちばん新しい \![move] と通し番号。表示する側は、まだ動かしていない番号なら動かす */
+    val move: Pair<Int, MoveCommand>? = null,
+    /** \![set,position,x,y] で固定した画面の位置（ウィンドウの左上）。固定している間はドラッグで動かせない */
+    val pinned: Pair<Int, Int>? = null,
 ) {
     fun appendText(text: String, style: TextStyle = TextStyle.Default): CharacterState {
         val items = balloon.orEmpty()

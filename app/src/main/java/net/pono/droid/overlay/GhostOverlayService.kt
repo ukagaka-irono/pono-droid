@@ -41,6 +41,7 @@ import net.pono.baseware.ghost.DeviceInfo
 import net.pono.baseware.ghost.Ghost
 import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.ghost.GhostPlatform
+import net.pono.baseware.ghost.PreviousGhost
 import net.pono.baseware.shell.Shell
 import net.pono.droid.AppVersion
 import net.pono.droid.GhostStore
@@ -57,6 +58,10 @@ class GhostOverlayService : LifecycleService() {
     private var touchJob: Job? = null
     private var inputJob: Job? = null
     private var scopesJob: Job? = null
+    private var positionsJob: Job? = null
+
+    /** 動かし終えた \![move] の通し番号（キャラクターごと） */
+    private val handledMoves = HashMap<Int, Int>()
     private var passThrough = false
     private val sound = SoundPlayer()
     private val windows = mutableListOf<CharacterWindow>()
@@ -80,7 +85,8 @@ class GhostOverlayService : LifecycleService() {
         return START_NOT_STICKY
     }
 
-    private fun startGhost(ghost: Ghost) {
+    /** @param previous 切り替える前のゴースト（OnGhostChanged で渡す）。ふつうの起動なら null */
+    private fun startGhost(ghost: Ghost, previous: PreviousGhost? = null) {
         teardown()
         val shellDir = ghost.shellDir() ?: run {
             toast("${ghost.name}: シェルがありません")
@@ -97,6 +103,7 @@ class GhostOverlayService : LifecycleService() {
             balloon = balloon,
             repository = repo,
             basewareVersion = AppVersion.of(this).name,
+            previous = previous,
             shioriFactory = RemoteShiori.factory(this),
             scope = lifecycleScope,
             platform = object : GhostPlatform {
@@ -160,6 +167,17 @@ class GhostOverlayService : LifecycleService() {
                     stopSelf()
                 }
 
+                /** いまのゴーストを閉じて、サービスは止めずに次のゴーストを起こす */
+                override fun switchGhost(dirName: String, previous: PreviousGhost) {
+                    val next = GhostStore.repository(this@GhostOverlayService).find(dirName)
+                    if (next == null) {
+                        onQuit()
+                        return
+                    }
+                    // 閉じる処理の途中で呼ばれるので、落ち着いてから入れ替える
+                    lifecycleScope.launch { startGhost(next, previous) }
+                }
+
                 // ゴーストとのやりとり（ユーザーの操作も含む）はデバッグビルドでだけ残す
                 override fun log(message: String) {
                     if (debuggable) Log.i(TAG, message)
@@ -176,6 +194,7 @@ class GhostOverlayService : LifecycleService() {
         _running.value = ghost.dir.name
         c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
         createWindows(c)
+        watchPositions(c)
         // pono-droid の画面が前にある間と入力の箱を出している間は、キャラクターがボタンやキーボードに重なっても押せるようにタッチを通す
         touchJob = lifecycleScope.launch {
             combine(appInFront, c.state.map { it.input != null }) { inFront, typing -> inFront || typing }
@@ -211,6 +230,28 @@ class GhostOverlayService : LifecycleService() {
         }
     }
 
+    /** \![move] と \![set,position] を、キャラクターのウィンドウに伝える */
+    private fun watchPositions(c: GhostController) {
+        handledMoves.clear()
+        positionsJob?.cancel()
+        positionsJob = lifecycleScope.launch {
+            c.state.map { s -> s.characters.mapValues { (_, ch) -> ch.move?.first to ch.pinned } }
+                .distinctUntilChanged()
+                .collect { applyPositions(c) }
+        }
+    }
+
+    private fun applyPositions(c: GhostController) {
+        for ((scope, ch) in c.state.value.characters) {
+            val window = windows.firstOrNull { it.scopeId == scope } ?: continue
+            window.setPinned(ch.pinned)
+            val (serial, move) = ch.move ?: continue
+            if (handledMoves[scope] == serial) continue
+            handledMoves[scope] = serial
+            window.move(move) { id -> windows.firstOrNull { it.scopeId == id }?.screenRect() }
+        }
+    }
+
     private fun ensureWindows(c: GhostController, scopes: Set<Int>) {
         val shown = windows.map { it.scopeId }.toSet()
         // 後から足したウィンドウほど上に重なるので、\1 → 3人目以降 → \0 の順に作る（\0 がいちばん上）
@@ -222,6 +263,8 @@ class GhostOverlayService : LifecycleService() {
                 it.setTouchable(!passThrough)
             }
         }
+        // 後から出てきたキャラクターへの \![move] も、ウィンドウができてから動かす
+        if (order.isNotEmpty()) applyPositions(c)
     }
 
     /** シェルやバルーンが切り替わったら、ウィンドウを作り直す */
@@ -239,6 +282,8 @@ class GhostOverlayService : LifecycleService() {
         inputJob = null
         scopesJob?.cancel()
         scopesJob = null
+        positionsJob?.cancel()
+        positionsJob = null
         windows.forEach { it.dismiss() }
         windows.clear()
         controller = null

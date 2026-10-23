@@ -17,6 +17,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -25,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.pono.baseware.ghost.AnimationCommand
 import net.pono.baseware.ghost.GhostController
+import kotlin.math.abs
 
 /**
  * キャラクターのサーフェス（SERIKO のアニメーション込み）。
@@ -71,28 +74,46 @@ fun CharacterSurface(
 
     val bmp = bitmap ?: return
     val density = LocalDensity.current
-    val pxPerImagePx = with(density) { dpPerImagePx.dp.toPx() }
+    // \![set,scaling] の倍率（負なら反転）。大きさは絶対値で決め、向きは描くときに裏返す
+    val sx = character.scaleX.takeIf { it != 0f } ?: 1f
+    val sy = character.scaleY.takeIf { it != 0f } ?: 1f
+    val pxPerImagePxX = with(density) { (dpPerImagePx * abs(sx)).dp.toPx() }
+    val pxPerImagePxY = with(density) { (dpPerImagePx * abs(sy)).dp.toPx() }
+
+    /** 指の位置（ウィンドウの px）をシェル画像の座標にする。反転していれば裏返す */
+    fun imagePoint(x: Float, y: Float): Pair<Int, Int> {
+        val ix = (x / pxPerImagePxX).toInt().let { if (sx < 0) bmp.width - 1 - it else it }
+        val iy = (y / pxPerImagePxY).toInt().let { if (sy < 0) bmp.height - 1 - it else it }
+        return ix to iy
+    }
+    fun hit(p: Pair<Int, Int>) = controller.shell.surfaces[character.surface]?.hitTest(p.first, p.second)
     Image(
         bitmap = bmp.asImageBitmap(),
         contentDescription = controller.ghost.name,
         // 拡大するときはドット絵がぼやけないよう補間しない
-        filterQuality = if (pxPerImagePx >= 1.5f) FilterQuality.None else FilterQuality.Low,
+        filterQuality = if (minOf(pxPerImagePxX, pxPerImagePxY) >= 1.5f) FilterQuality.None else FilterQuality.Low,
+        contentScale = ContentScale.FillBounds,
         modifier = Modifier
-            .size((bmp.width * dpPerImagePx).dp, (bmp.height * dpPerImagePx).dp)
+            .size((bmp.width * dpPerImagePx * abs(sx)).dp, (bmp.height * dpPerImagePx * abs(sy)).dp)
+            .graphicsLayer {
+                scaleX = if (sx < 0) -1f else 1f
+                scaleY = if (sy < 0) -1f else 1f
+                alpha = character.alpha
+            }
             .onSizeChanged { onHeightChanged(it.height) }
             .surfaceTouch(
                 touchHandler,
                 onDown = { x, y ->
-                    val (ix, iy) = (x / pxPerImagePx).toInt() to (y / pxPerImagePx).toInt()
-                    controller.onMouseDown(scopeId, ix, iy, controller.shell.surfaces[character.surface]?.hitTest(ix, iy))
+                    val p = imagePoint(x, y)
+                    controller.onMouseDown(scopeId, p.first, p.second, hit(p))
                 },
                 onTap = { x, y, count ->
-                    val (ix, iy) = (x / pxPerImagePx).toInt() to (y / pxPerImagePx).toInt()
-                    controller.onMouseUp(scopeId, ix, iy, controller.shell.surfaces[character.surface]?.hitTest(ix, iy), count)
+                    val p = imagePoint(x, y)
+                    controller.onMouseUp(scopeId, p.first, p.second, hit(p), count)
                 },
                 onLongPress = { x, y ->
-                    val (ix, iy) = (x / pxPerImagePx).toInt() to (y / pxPerImagePx).toInt()
-                    controller.onMouseLongPress(scopeId, ix, iy, controller.shell.surfaces[character.surface]?.hitTest(ix, iy))
+                    val p = imagePoint(x, y)
+                    controller.onMouseLongPress(scopeId, p.first, p.second, hit(p))
                 },
             ),
     )

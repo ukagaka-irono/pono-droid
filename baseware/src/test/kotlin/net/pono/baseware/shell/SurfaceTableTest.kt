@@ -149,4 +149,31 @@ class SurfaceTableTest {
         assertEquals(PatternFrame("overlay", 101, 50, 50, 1, 2), anim.frames[0])
         assertEquals("Bust", s10.hitTest(5, 10))
     }
+
+    @Test
+    fun insertPutsAnotherDressUpBetweenParts() {
+        // 10 の「後ろ髪 → (11 を差し込む) → 前髪」。11 は 10 の中に出し、自分の番号の位置には出さない
+        val table = SurfaceTable.parse(
+            """
+            surface0 {
+            animation10.interval,bind
+            animation10.pattern0,overlay,100,0,0,0
+            animation10.pattern1,insert,11
+            animation10.pattern2,overlay,102,0,0,0
+            animation11.interval,bind
+            animation11.pattern0,overlay,110,0,0,0
+            animation12.interval,bind
+            animation12.pattern0,overlay,120,0,0,0
+            animation12.pattern1,parallelstart,[1.2]
+            }
+            """.trimIndent(),
+        )
+        val def = table[0]!!
+        assertEquals(listOf(100, 110, 102, 120), def.bindFrames(setOf(10, 11, 12)).map { it.surface })
+        // 差し込む方を身に着けていなければ、その場所には何も出さない
+        assertEquals(listOf(100, 102), def.bindFrames(setOf(10)).map { it.surface })
+        // 差し込み先を外していれば、差し込まれる方も出ない（SSP と同じ）
+        assertEquals(listOf<Int>(), def.bindFrames(setOf(11)).map { it.surface })
+        assertEquals(listOf(1, 2), def.animations[12]!!.frames[1].targets)
+    }
 }

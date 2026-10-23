@@ -170,6 +170,9 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 - タグ: 文字と待ち（`\0 \1 \p \s \i \n \c \w \_w \_q \x \e \-`）、選択肢とリンク（`\q \__q \_a`、`script:` の ID）、`\f` の文字装飾（bold / italic / underline / strike / color / height / align / sub / sup / default）、`\_u \_m \&`、`\b[n]`、`\_l`、`\![raise] \![notify] \![embed] \![timerraise] \![get,property]` と `%property[...]`（system.* / baseware.* / ghostlist / balloonlist / currentghost の一部）、`\![open,inputbox / passwordinput / communicatebox / teachbox / readme / configurationdialog]`、`\![set,balloontimeout / choicetimeout]`、`\![bind]`、`\![execute,http-get]`、`\![updatebymyself]`、`\![reload,shiori]`、`\![enter,passivemode]`
 - サウンド: `\8` `\_v` `\_V` `\![sound,play / loop / stop / wait]`（`--volume`）。ゴーストのディレクトリの中のファイルだけ鳴らします。
 - 切り替え: `\![change,shell]` / `\![change,balloon]`（random も可）と OnShellChanging / OnShellChanged / OnBalloonChange、着せ替えの OnDressupChanged。
+- ゴーストの切り替え: `\![change,ghost,名前]`（random / sequential / lastinstalled、`--option=raise-event`）と長押しメニューの「ゴースト切り替え」。メニューからなら OnGhostChanging（答えが無ければ OnClose）で別れを話してから切り替え、切り替わった先には OnGhostChanged（答えが無ければ OnBoot）を送ります。
+- 見た目: `\_s`（`\_s[ID,...]`）の同期、バルーンの中の画像 `\_b[ファイル,x,y]` / `\_b[ファイル,inline]`（`opaque`）、`\![set,scaling]`（反転も可）、`\![set,alpha]`、`\![anim,offset / clear / stop]`、SERIKO の `insert`（着せ替えの重なり順）と `parallelstart` / `parallelstop`。
+- ウィンドウ: `\![move]` / `\![moveasync]`（新旧どちらの書式も。基準は screen・me・スコープ番号、`--base-offset` / `--move-offset`）、`\![set,position]` / `\![reset,position]`。座標は画面のピクセルで、画面の外には出しません。
 - 入力: `\![open,dateinput / timeinput / sliderinput / textareabox]`（OnUserInput と OnTextAreaInput）。
 - 長押しのメニューは SSP のオーナードローメニューに合わせて、SHIORI の `sakura.recommendsites` / `portalsites`（と `*buttoncaption`）、きせかえ、シェル、バルーン、Read Me、ネットワーク更新を出します。おすすめを選ぶと OnRecommendsiteChoice を送ります。
 - Windows のウィンドウやトレイ向けのタグ（`\![set,trayicon]`、`\![lock,repaint]`、`\4`〜`\7` など）は黙って読み飛ばします。
@@ -179,8 +182,9 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 - SHIORI は YAYA・里々・華和梨・Kagari に対応しています。美坂・偽林檎など、ほかの SHIORI のゴーストは動きません。
 - SAORI（YAYA の `LOADLIB` / `REQUESTLIB`、里々・華和梨の SAORI）、YAYA の `EXECUTE`、Kagari（Lua）の C モジュール・`os.execute`・`io.popen` は、ゴーストにネイティブコードやシェルを動かさせないために止めています。これらに頼るゴーストは一部の機能が動きません。
 - `\_l` による選択肢の横並びは、座標どおりではなく列に分けて並べます。
-- バルーンの中の画像（`\_b`）、`\_s` の同期、`\![change,ghost]`、`\![set,scaling / alpha]`、`\![move]`、`\![anim,...]` には未対応です。サウンドは同時に鳴らせるのが1回分とループ1つまでです。
-- SERIKO の `insert`、サーフェスの別名（alias）には未対応です。楕円・多角形の当たり判定は外接矩形で近似します。
+- サウンドは同時に鳴らせるのが1回分とループ1つまでです。
+- `\![move]` で他のゴーストを基準にすることはできません（複数ゴーストの同時起動が無いため）。`point.basepos` は見ず、`base` はウィンドウの中央・下端として扱います。`\![set,zorder]` / `\![set,sticky-window]` は読み飛ばします。
+- サーフェスの別名（alias）には未対応です。楕円・多角形の当たり判定は外接矩形で近似します。
 - オーバーレイの透明な部分もタッチを受け取ります。Android の制約で画素単位では透過できないため、キャラクターと吹き出しを別々のウィンドウにして、塞ぐ範囲をそれぞれの矩形に絞っています。
 - ネットワーク更新: シェル画像の更新は次の起動から反映されます。
 - インストールできるのはゴーストとバルーンの `.nar`（シェル単体は不可）。複数ゴーストの同時起動は未対応です。

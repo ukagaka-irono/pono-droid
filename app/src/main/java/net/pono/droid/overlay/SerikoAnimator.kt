@@ -39,14 +39,9 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         currentBinds = binds
         def ?: return
         // 着せ替えは動かさず、パターンのコマを全部重ねて出しておく
-        setRaw(
-            def.animations.values
-                .filter { it.interval.kind == IntervalKind.BIND && it.id in binds }
-                .flatMap { anim -> anim.frames.filterNot { it.isControl }.mapIndexed { i, f -> bindLayer(anim.id, i) to f } }
-                .toMap(),
-        )
+        setRaw(def.bindFrames(binds).mapIndexed { i, f -> BIND_LAYER_BASE + i to f }.toMap())
         for (anim in def.animations.values) {
-            if (anim.frames.all { it.isControl && it.method != "start" && it.method != "alternativestart" }) continue
+            if (anim.frames.all { it.isControl && it.method !in STARTERS }) continue
             jobs += when (anim.interval.kind) {
                 IntervalKind.ALWAYS -> scope.launch { while (isActive) playOnce(anim) }
                 IntervalKind.RUNONCE -> scope.launch { playOnce(anim) }
@@ -127,8 +122,9 @@ class SerikoAnimator(private val scope: CoroutineScope) {
             when (frame.method) {
                 "start" -> frame.targets.firstOrNull()?.let(::start)
                 "alternativestart" -> frame.targets.randomOrNull()?.let(::start)
-                "stop", "alternativestop" -> frame.targets.forEach(::clear)
-                "insert" -> {} // 他のアニメーションのコマを差し込む。まだ扱わない
+                "parallelstart" -> frame.targets.forEach(::start)
+                "stop", "alternativestop", "parallelstop" -> frame.targets.forEach(::clear)
+                "insert" -> {} // 着せ替えの中でだけ意味がある（bindFrames で扱う）
                 else -> {
                     setRaw(raw + (anim.id to frame))
                     val wait = if (frame.waitMaxMs > frame.waitMinMs) Random.nextInt(frame.waitMinMs, frame.waitMaxMs + 1) else frame.waitMinMs
@@ -143,6 +139,8 @@ class SerikoAnimator(private val scope: CoroutineScope) {
 
     private companion object {
         /** 着せ替えのコマは、普通のアニメーション（番号 = アニメーション番号）より下に重ねる */
-        fun bindLayer(animId: Int, index: Int) = -1_000_000 + animId * 1_000 + index
+        const val BIND_LAYER_BASE = -1_000_000
+
+        private val STARTERS = setOf("start", "alternativestart", "parallelstart")
     }
 }

@@ -44,6 +44,12 @@ interface ScriptHost {
     /** `\![*]`。選択肢の前の印 */
     fun addMarker(scope: Int) {}
 
+    /**
+     * `\_b[ファイル,x,y]` / `\_b[ファイル,inline]`。バルーンに画像を置く（[x] / [y] が null なら文字の中に1文字として）。
+     * [opaque] なら左上の色を抜かない
+     */
+    fun addImage(scope: Int, file: String, x: Int?, y: Int?, opaque: Boolean) {}
+
     /** `\_l[x,y]` で横の位置を指定された（同じ行で次の列に移る） */
     fun moveCursor(scope: Int, x: Int) {}
 
@@ -67,6 +73,9 @@ interface ScriptHost {
 
     /** `\![set,name,args...]`。扱えたら true。 */
     fun setOption(name: String, args: List<String>): Boolean = false
+
+    /** `\![set,name,args...]` のうち、今のキャラクターにかかるもの（scaling / alpha など）。扱えなければ [setOption] に回す */
+    fun setOption(scope: Int, name: String, args: List<String>): Boolean = setOption(name, args)
 
     /** `\![execute,name,args...]`（SSP の http-get など）。扱えたら true。 */
     fun execute(name: String, args: List<String>): Boolean = false
@@ -113,6 +122,15 @@ interface ScriptHost {
     /** `\![change,shell|balloon,名前]`。扱えたら true */
     fun change(kind: String, name: String): Boolean = false
 
+    /** `\![change,ghost,名前]`。[raiseEvent] なら先に OnGhostChanging を送る。扱えたら true */
+    fun changeGhost(name: String, raiseEvent: Boolean): Boolean = false
+
+    /** `\![move]` / `\![moveasync]`。キャラクターのウィンドウを動かす（待つのは ScriptPlayer 側） */
+    fun move(scope: Int, command: MoveCommand) {}
+
+    /** `\![set,position,x,y,スコープ]`。[x] / [y] に固定してドラッグさせない。null なら固定をやめる（`\![reset,position]`） */
+    fun setPosition(scope: Int, x: Int?, y: Int?) {}
+
     fun openUrl(url: String)
 
     /** `%username` などの環境変数。知らない名前なら null。 */
@@ -149,6 +167,12 @@ class ScriptPlayer(
         // \f の飾り（キャラクターごと）
         private val styles = HashMap<Int, TextStyle>()
 
+        // \_s のシンクロナイズセクション。null でなければ、文字と改行をこのキャラクター全員に出す
+        private var sync: List<Int>? = null
+
+        /** 文字や改行を出す先 */
+        private fun targets(): List<Int> = sync ?: listOf(scope)
+
         suspend fun run(script: String, depth: Int) {
             for (token in SakuraScript.tokenize(script)) {
                 if (ended) return
@@ -166,13 +190,13 @@ class ScriptPlayer(
                 return
             }
             if (quick || charWaitMs <= 0) {
-                host.appendText(scope, expanded)
+                for (t in targets()) host.appendText(t, expanded)
             } else {
                 // サロゲートペアを分けないよう、コードポイント単位で出す
                 var i = 0
                 while (i < expanded.length) {
                     val n = Character.charCount(expanded.codePointAt(i))
-                    host.appendText(scope, expanded.substring(i, i + n))
+                    for (t in targets()) host.appendText(t, expanded.substring(i, i + n))
                     i += n
                     delay(charWaitMs)
                 }
@@ -188,7 +212,23 @@ class ScriptPlayer(
                 "p" -> scope = a.firstOrNull()?.trim()?.toIntOrNull()?.takeIf { it in 0..MAX_SCOPE } ?: scope
                 "s" -> a.firstOrNull()?.toIntOrNull()?.let { host.setSurface(scope, it) }
                 "i" -> a.firstOrNull()?.toIntOrNull()?.let { host.startAnimation(scope, it) }
-                "n" -> host.newLine(scope)
+                "n" -> for (t in targets()) host.newLine(t)
+                // \_s で始めて \_s で終わる。引数が無ければ \0 と \1、あれば並べたキャラクター
+                "_s" -> sync = if (sync != null) {
+                    null
+                } else {
+                    a.mapNotNull { it.trim().toIntOrNull()?.takeIf { n -> n in 0..MAX_SCOPE } }.ifEmpty { listOf(0, 1) }
+                }
+                "_b" -> a.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }?.let { file ->
+                    val opts = a.drop(1).map { it.trim().lowercase() }
+                    val inline = opts.firstOrNull() == "inline"
+                    host.addImage(
+                        scope, file,
+                        if (inline) null else opts.getOrNull(0)?.toIntOrNull() ?: 0,
+                        if (inline) null else opts.getOrNull(1)?.toIntOrNull() ?: 0,
+                        "opaque" in opts,
+                    )
+                }
                 "c" -> host.clearBalloon(scope)
                 "w" -> if (!quick) delay((a.firstOrNull()?.toLongOrNull() ?: 1) * unitWaitMs)
                 "_w", "__w" -> if (!quick) delay(a.firstOrNull()?.toLongOrNull() ?: 0)
@@ -276,7 +316,22 @@ class ScriptPlayer(
                 }
                 "change" -> when {
                     a.size >= 3 && a[1].lowercase() in setOf("shell", "balloon") && host.change(a[1].lowercase(), a[2]) -> {}
+                    // \![change,ghost,名前(,--option=raise-event)]
+                    a.size >= 3 && a[1].lowercase() == "ghost" &&
+                        host.changeGhost(a[2].trim(), a.drop(3).any { it.trim().lowercase() == "--option=raise-event" }) -> {}
                     else -> host.unknownTag(token)
+                }
+                // \![move] は動き終わるまで待ち、\![moveasync] は待たずに続ける
+                "move", "moveasync" -> {
+                    val move = MoveCommand.parse(a.drop(1)) ?: return host.unknownTag(token)
+                    host.move(scope, move)
+                    if (command == "move" && !quick && move.timeMs > 0) delay(move.timeMs)
+                }
+                "reset" -> when (a.getOrNull(1)?.lowercase()) {
+                    // \![reset,position] は、\![set,position] で固定したキャラクター全員を放す
+                    "position" -> for (s in 0..MAX_SCOPE) host.setPosition(s, null, null)
+                    // zorder / sticky-window など、ほかのものは pono-droid に無い
+                    else -> {}
                 }
                 "enter", "leave" -> when (a.getOrNull(1)?.lowercase()) {
                     "passivemode" -> host.setPassive(command == "enter")
@@ -292,8 +347,15 @@ class ScriptPlayer(
                 "bind", "bind-noevent" -> if (a.size >= 3) host.bind(scope, a[1], a[2], a.getOrNull(3)?.let { it == "1" || it.lowercase() == "true" })
                 "set" -> when {
                     a.size < 2 -> host.unknownTag(token)
+                    // \![set,position,x,y,スコープ]（スコープを省くと今のキャラクター）
+                    a[1].lowercase() == "position" -> {
+                        val x = a.getOrNull(2)?.trim()?.toIntOrNull()
+                        val y = a.getOrNull(3)?.trim()?.toIntOrNull()
+                        val target = a.getOrNull(4)?.trim()?.toIntOrNull() ?: scope
+                        if (x != null && y != null && target in 0..MAX_SCOPE) host.setPosition(target, x, y) else host.unknownTag(token)
+                    }
                     a[1].lowercase() in silentSetOptions -> {}
-                    !host.setOption(a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
+                    !host.setOption(scope, a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
                 }
                 // ウィンドウの重なりや他のゴースト・プラグインなど、pono-droid に無いものは黙って飛ばす
                 in silentCommands -> {}
@@ -347,11 +409,11 @@ class ScriptPlayer(
      * \C: 前のバルーンを消さない（先頭にあるかどうかは GhostController が見る）、
      * \4〜\7 / \v / \z: ウィンドウの移動や表示、\_s: 両方のバルーンに出す（片方だけに出す）、\__t: 時刻、\_e: 終わり
      */
-    private val layoutOnlyTags = setOf("_n", "t", "*", "C", "4", "5", "6", "7", "v", "z", "_s", "__t", "_e")
+    private val layoutOnlyTags = setOf("_n", "t", "*", "C", "4", "5", "6", "7", "v", "z", "__t", "_e")
 
     /** `\![コマンド,...]` のうち、pono-droid に無い仕組み（ウィンドウの重なり・効果・他のゴースト・プラグイン）向けのもの */
     private val silentCommands = setOf(
-        "lock", "unlock", "reset", "effect", "effect2", "filter", "updateother",
+        "lock", "unlock", "effect", "effect2", "filter", "updateother",
         "timernotify", "raiseother", "timerraiseother", "notifyother", "timernotifyother",
         "raiseplugin", "timerraiseplugin", "notifyplugin", "timernotifyplugin", "executesntp",
     )
@@ -360,7 +422,7 @@ class ScriptPlayer(
     private val silentSetOptions = setOf(
         "trayicon", "tasktrayicon", "trayballoon", "tasktrayballoon", "windowstate", "wallpaper",
         "otherghosttalk", "othersurfacechange", "sticky-window", "zorder", "alignmentondesktop", "alignmenttodesktop",
-        "position", "autoscroll", "balloonwait", "balloonmarker", "balloonalign", "balloonoffset", "balloonnum",
+        "autoscroll", "balloonwait", "balloonmarker", "balloonalign", "balloonoffset", "balloonnum",
         "serikotalk", "syncobject", "shioridebugmode", "property",
     )
 

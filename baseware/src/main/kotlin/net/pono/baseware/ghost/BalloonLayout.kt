@@ -14,10 +14,16 @@ object BalloonLayout {
 
         /** [marked] は \![*] の印を付けるか */
         data class ChoiceRun(val choice: Choice, val marked: Boolean) : Run
+
+        /** \_b[ファイル,inline]。文字の中に1文字として置く画像 */
+        data class Image(val path: String, val opaque: Boolean) : Run
     }
 
     /** 1行。列が1つなら普通の行、2つ以上なら横に並べる。[align] は \f[align] の寄せ方 */
     data class Line(val columns: List<List<Run>>, val align: TextAlign = TextAlign.LEFT)
+
+    /** \_b[ファイル,x,y]。バルーンの x, y（文字の下）に置く画像 */
+    data class PlacedImage(val path: String, val x: Int, val y: Int, val opaque: Boolean)
 
     fun lines(items: List<BalloonItem>): List<Line> {
         val lines = mutableListOf<Line>()
@@ -56,10 +62,17 @@ object BalloonLayout {
                     current() += Run.ChoiceRun(item.choice.copy(title = item.choice.title.trim()), marker)
                     marker = false
                 }
+                is BalloonItem.Image -> if (item.x == null || item.y == null) current() += Run.Image(item.path, item.opaque)
             }
         }
         // 最後の \n の後ろの空行は出さない
         if (columns.size > 1 || current().isNotEmpty()) endLine()
         return lines
     }
+
+    /** 文字の中ではなく、位置を指定して置く画像（\_b[ファイル,x,y]） */
+    fun placedImages(items: List<BalloonItem>): List<PlacedImage> =
+        items.filterIsInstance<BalloonItem.Image>().mapNotNull { img ->
+            if (img.x == null || img.y == null) null else PlacedImage(img.path, img.x, img.y, img.opaque)
+        }
 }

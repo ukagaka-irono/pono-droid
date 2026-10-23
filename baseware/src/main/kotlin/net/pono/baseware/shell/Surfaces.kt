@@ -51,7 +51,7 @@ data class PatternFrame(
     val isControl: Boolean get() = method in CONTROL_METHODS
 
     companion object {
-        val CONTROL_METHODS = setOf("start", "stop", "alternativestart", "alternativestop", "insert")
+        val CONTROL_METHODS = setOf("start", "stop", "alternativestart", "alternativestop", "parallelstart", "parallelstop", "insert")
     }
 }
 
@@ -75,6 +75,34 @@ class SurfaceDefinition(val id: Int) {
     /** 上限を超えたら新しい番号は受け付けない（null）。細工した surfaces.txt でアニメーションを無数に作らせないため */
     fun animation(id: Int): Animation? =
         animations[id] ?: if (animations.size < MAX_PARTS) Animation(id).also { animations[id] = it } else null
+
+    /**
+     * 身に着けている着せ替え（interval が bind）のコマを、重ねる順（下から）に並べる。
+     * `insert,ID` の位置には着せ替え ID のコマを差し込む（入れ子も可）。差し込まれる着せ替えは、自分の番号の位置には出さない。
+     * ID を身に着けていなければ何も出さない（SSP と同じ）
+     */
+    fun bindFrames(binds: Set<Int>): List<PatternFrame> {
+        val bindAnims = animations.values.filter { it.interval.kind == IntervalKind.BIND }
+        val inserted = bindAnims.flatMap { a -> a.frames.filter { it.method == "insert" }.flatMap { it.targets } }.toSet()
+        val out = mutableListOf<PatternFrame>()
+        fun expand(anim: Animation, visiting: Set<Int>) {
+            for (f in anim.frames) {
+                if (f.method == "insert") {
+                    for (id in f.targets) {
+                        if (id in visiting || id !in binds) continue
+                        val target = animations[id]?.takeIf { it.interval.kind == IntervalKind.BIND } ?: continue
+                        expand(target, visiting + id)
+                    }
+                } else if (!f.isControl) {
+                    out += f
+                }
+            }
+        }
+        for (anim in bindAnims) {
+            if (anim.id in binds && anim.id !in inserted) expand(anim, setOf(anim.id))
+        }
+        return out
+    }
 
     companion object {
         /** 1つのサーフェスが持てる element / collision / animation の数 */

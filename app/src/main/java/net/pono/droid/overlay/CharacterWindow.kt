@@ -1,9 +1,12 @@
 package net.pono.droid.overlay
 
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.PixelFormat
+import android.graphics.Point
+import android.graphics.Rect
 import android.os.Build
 import android.view.Gravity
 import android.view.MotionEvent
@@ -17,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.Constraints
+import androidx.core.animation.doOnEnd
+import androidx.core.view.doOnLayout
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -25,6 +30,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import net.pono.baseware.ghost.GhostController
+import net.pono.baseware.sakura.MoveCommand
 import kotlin.math.abs
 
 /**
@@ -143,6 +149,7 @@ class CharacterWindow(
     }
 
     fun dismiss() {
+        moveAnimator?.cancel()
         prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         owner.destroy()
         runCatching { windowManager.removeView(surfaceView) }
@@ -157,6 +164,126 @@ class CharacterWindow(
             windowManager.addView(balloonView, balloonParams)
         } else if (balloonView.isAttachedToWindow) {
             windowManager.updateViewLayout(balloonView, balloonParams)
+        }
+    }
+
+    // ---- \![move] と \![set,position] ----
+
+    /** \![set,position] で固定されている間はドラッグで動かさない */
+    private var pinned = false
+    private var moveAnimator: ValueAnimator? = null
+
+    /** 画面全体（ナビゲーションバーなども含む）。SSP の screen と同じく左上が原点 */
+    private fun screenBounds(): Rect =
+        if (Build.VERSION.SDK_INT >= 30) {
+            windowManager.currentWindowMetrics.bounds
+        } else {
+            context.resources.displayMetrics.let { Rect(0, 0, it.widthPixels, it.heightPixels) }
+        }
+
+    /** [origin] を測ったときの画面の大きさ。回転などで変わったら測り直す */
+    private var originFor: Rect? = null
+    private var originCache: Point? = null
+
+    /**
+     * ウィンドウの x / y を数える原点（下と右か左の端）の画面での位置。
+     * ナビゲーションバーなどの分だけ画面の端からずれているので、実際のウィンドウの位置から割り出す。
+     * 画面上の位置は配置が終わるまで params に追いつかないので、画面の大きさが変わらない限り最初に測ったものを使う
+     */
+    private fun origin(): Point {
+        val bounds = screenBounds()
+        originCache?.takeIf { originFor == bounds }?.let { return it }
+        val loc = IntArray(2).also(surfaceView::getLocationOnScreen)
+        val x = if (alignEnd) loc[0] + surfaceView.width + params.x else loc[0] - params.x
+        return Point(x, loc[1] + surfaceView.height + params.y).also {
+            originCache = it
+            originFor = bounds
+        }
+    }
+
+    /** サーフェスのウィンドウの、画面での矩形（SSP と同じく左上が原点） */
+    fun screenRect(): Rect {
+        val w = surfaceView.width
+        val h = surfaceView.height
+        val o = origin()
+        val left = if (alignEnd) o.x - params.x - w else o.x + params.x
+        val top = o.y - params.y - h
+        return Rect(left, top, left + w, top + h)
+    }
+
+    /**
+     * \![move]。[baseRect] は基準にするキャラクターの矩形（無ければ画面を基準にする）。
+     * まだ大きさが決まっていなければ、測り終わってから動かす
+     */
+    fun move(command: MoveCommand, baseRect: (Int) -> Rect?) {
+        surfaceView.doOnLayout {
+            val own = screenRect()
+            val base = when (val b = command.base) {
+                MoveCommand.Base.Screen -> screenBounds()
+                MoveCommand.Base.Me -> own
+                is MoveCommand.Base.Scope -> baseRect(b.id) ?: screenBounds()
+            }
+            val left = command.x?.let { base.left + anchorX(base, command.baseOffset.h) + it - anchorX(own, command.moveOffset.h) }
+            val top = command.y?.let { base.top + anchorY(base, command.baseOffset.v) + it - anchorY(own, command.moveOffset.v) }
+            animateTo(left ?: own.left, top ?: own.top, command.timeMs, save = true)
+        }
+    }
+
+    /** \![set,position,x,y]（null なら固定をやめる） */
+    fun setPinned(position: Pair<Int, Int>?) {
+        pinned = position != null
+        position ?: return
+        surfaceView.doOnLayout { animateTo(position.first, position.second, 0, save = false) }
+    }
+
+    /** 矩形の中の、横の基準の位置（矩形の左からの距離）。base は真ん中とする */
+    private fun anchorX(r: Rect, edge: MoveCommand.Edge) = when (edge) {
+        MoveCommand.Edge.START -> 0
+        MoveCommand.Edge.END -> r.width()
+        MoveCommand.Edge.CENTER, MoveCommand.Edge.BASE -> r.width() / 2
+    }
+
+    /** 矩形の中の、縦の基準の位置（矩形の上からの距離）。base は足元（下端）とする */
+    private fun anchorY(r: Rect, edge: MoveCommand.Edge) = when (edge) {
+        MoveCommand.Edge.START -> 0
+        MoveCommand.Edge.CENTER -> r.height() / 2
+        MoveCommand.Edge.END, MoveCommand.Edge.BASE -> r.height()
+    }
+
+    /** 左上を ([left], [top]) にする。画面の外には出さない。[timeMs] が 0 ならすぐに */
+    private fun animateTo(left: Int, top: Int, timeMs: Long, save: Boolean) {
+        moveAnimator?.cancel()
+        val w = surfaceView.width
+        val h = surfaceView.height
+        val o = origin()
+        // 下はウィンドウを置ける範囲の下端（ナビゲーションバーの上）まで
+        fun clamp(v: Int, size: Int, min: Int, max: Int) = if (size >= max - min) v.coerceIn(max - size, min) else v.coerceIn(min, max - size)
+        val bounds = screenBounds()
+        val toLeft = clamp(left, w, bounds.left, bounds.right)
+        val toTop = clamp(top, h, bounds.top, minOf(bounds.bottom, o.y))
+        val toX = if (alignEnd) o.x - toLeft - w else toLeft - o.x
+        val toY = o.y - toTop - h
+        fun apply(x: Int, y: Int) {
+            params.x = x
+            params.y = y
+            if (surfaceView.isAttachedToWindow) windowManager.updateViewLayout(surfaceView, params)
+            placeBalloon()
+        }
+        fun finish() {
+            apply(toX, toY)
+            if (save) prefs.edit().putInt(key("x"), params.x).putInt(key("y"), params.y).apply()
+        }
+        if (timeMs <= 0) return finish()
+        val fromX = params.x
+        val fromY = params.y
+        moveAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = timeMs
+            addUpdateListener { a ->
+                val t = a.animatedValue as Float
+                apply(fromX + ((toX - fromX) * t).toInt(), fromY + ((toY - fromY) * t).toInt())
+            }
+            doOnEnd { finish() }
+            start()
         }
     }
 
@@ -228,7 +355,7 @@ class CharacterWindow(
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downRawX
                     val dy = event.rawY - downRawY
-                    if (!dragging && !longPressed && (abs(dx) > slop || abs(dy) > slop)) {
+                    if (!dragging && !longPressed && !pinned && (abs(dx) > slop || abs(dy) > slop)) {
                         dragging = true
                         cancelLongPress()
                     }
