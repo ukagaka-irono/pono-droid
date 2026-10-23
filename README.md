@@ -114,12 +114,28 @@ APK は `app/build/outputs/apk/debug/app-debug.apk` にできます。
 
 ### リリースする
 
+`develop` を `main` に取り込んでから、`main` にタグを付けます。
+
 ```bash
+git checkout main
+git merge --ff-only develop
+git push origin main
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
 手元で署名付きのビルドをするときは、同じ名前の環境変数（`PONO_KEYSTORE_FILE` に .jks のパス、ほかの3つ）を設定して `./gradlew :app:assembleRelease` を実行します。設定が無ければ署名なしの APK になります。
+
+## ブランチ
+
+| ブランチ | 役目 |
+|----------|------|
+| `main` | リリースしたもの。リリースのときだけ `develop` から取り込み、タグ（`v0.2.0` など）を付ける |
+| `develop` | 開発中のもの。ふだんの作業はここに取り込む |
+| `feature/名前` | 新しい機能。`develop` から切り、終わったら `develop` に取り込んで消す |
+| `fix/名前` | 不具合の修正。`develop` から切り、`develop` に取り込んで消す。リリース済みの版を急いで直すときは `main` から切って `main` に取り込み、`develop` にも取り込む |
+
+GitHub Actions のビルドとテストは、どのブランチへのプッシュとプルリクエストでも走ります。
 
 ## 構成
 
