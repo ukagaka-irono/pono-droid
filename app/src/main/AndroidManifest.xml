@@ -30,16 +30,6 @@
             android:name=".TextViewerActivity"
             android:exported="false" />
 
-        <!-- ゴーストの入力の箱。オーバーレイの上に出すだけなので、履歴にもアプリの画面にも混ぜない -->
-        <activity
-            android:name=".overlay.InputActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTask"
-            android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar"
-            android:windowSoftInputMode="adjustResize|stateVisible" />
-
         <service
             android:name=".overlay.GhostOverlayService"
             android:exported="false"

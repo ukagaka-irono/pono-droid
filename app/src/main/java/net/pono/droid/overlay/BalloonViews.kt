@@ -106,14 +106,14 @@ data class BalloonTextStyle(
     }
 }
 
-private fun BalloonColor.toColor() = Color(r, g, b)
+internal fun BalloonColor.toColor() = Color(r, g, b)
 
 /**
  * \0 と \1 は画面の右端・左端から出るので、画面の半分から余白を引いた幅に収めれば2人が同時に話しても重ならない。
  * 幅は固定にする（文字が増えるたびにウィンドウの幅が変わらないように。高さは行が増えたときだけ変わる）
  */
 @Composable
-private fun balloonMaxWidth(): Dp = (LocalConfiguration.current.screenWidthDp / 2 - 24).coerceIn(120, 280).dp
+internal fun balloonMaxWidth(): Dp = (LocalConfiguration.current.screenWidthDp / 2 - 24).coerceIn(120, 280).dp
 
 /** 文字を出している間だけ最後まで追いかける。選択肢で終わるとき（メニューなど）は先頭の問いかけを見せたいので動かさない */
 @Composable
@@ -381,6 +381,19 @@ class BalloonSkin(val balloon: Balloon) {
             val bmp = ImageTransparency.load(img.file, balloon.pnaFor(img.file), selfAlpha = null) ?: return@mapNotNull null
             Image(bmp.asImageBitmap(), balloon.textArea(bmp.width, bmp.height), img.index)
         }
+    }
+
+    private val communicates = HashMap<Boolean, Image?>()
+
+    /**
+     * 入力の箱の画像（balloonc0.png、[multiLine] なら balloonc5.png）。[Image.area] は入力欄の範囲。
+     * 無いバルーンか読めなければ null
+     */
+    @Synchronized
+    fun communicate(multiLine: Boolean): Image? = communicates.getOrPut(multiLine) {
+        val file = balloon.communicateImage(multiLine) ?: return@getOrPut null
+        val bmp = ImageTransparency.load(file, balloon.pnaFor(file), selfAlpha = null) ?: return@getOrPut null
+        Image(bmp.asImageBitmap(), balloon.communicateBox(file, bmp.width, bmp.height), 0)
     }
 
     /** スクロールの矢印（0 が上、1 が下）。無いバルーンなら null */

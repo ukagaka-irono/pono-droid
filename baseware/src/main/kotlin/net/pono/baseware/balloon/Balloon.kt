@@ -74,14 +74,15 @@ class Balloon(val dir: File) {
     }
 
     /**
-     * 文字を書ける範囲。validrect（無ければ origin と wordwrappoint）で決まり、負の値は右端・下端からの距離。
+     * 文字を書ける範囲。SSP と同じく、書き始めは origin、折り返しは wordwrappoint.x（無ければ validrect）。
+     * 右と下は 0 以下なら右端・下端からの距離（validrect.right,0 は右端）。
      */
     fun textArea(imageWidth: Int, imageHeight: Int): TextArea {
-        fun fromRight(v: Int) = if (v < 0) imageWidth + v else v
-        fun fromBottom(v: Int) = if (v < 0) imageHeight + v else v
-        val left = descript.int("validrect.left") ?: descript.int("origin.x") ?: DEFAULT_MARGIN
-        val top = descript.int("validrect.top") ?: descript.int("origin.y") ?: DEFAULT_MARGIN
-        val right = (descript.int("validrect.right") ?: descript.int("wordwrappoint.x"))?.let(::fromRight) ?: (imageWidth - DEFAULT_MARGIN)
+        fun fromRight(v: Int) = if (v <= 0) imageWidth + v else v
+        fun fromBottom(v: Int) = if (v <= 0) imageHeight + v else v
+        val left = descript.int("origin.x") ?: descript.int("validrect.left") ?: DEFAULT_MARGIN
+        val top = descript.int("origin.y") ?: descript.int("validrect.top") ?: DEFAULT_MARGIN
+        val right = (descript.int("wordwrappoint.x") ?: descript.int("validrect.right"))?.let(::fromRight) ?: (imageWidth - DEFAULT_MARGIN)
         val bottom = descript.int("validrect.bottom")?.let(::fromBottom) ?: (imageHeight - DEFAULT_MARGIN)
         // 範囲がおかしいバルーンでも文字が消えないよう、画像の中に最低限の大きさは残す
         val minW = minOf(MIN_SIZE, imageWidth)
@@ -90,6 +91,40 @@ class Balloon(val dir: File) {
         val t = top.coerceIn(0, imageHeight - minH)
         return TextArea(l, t, right.coerceIn(l + minW, imageWidth), bottom.coerceIn(t + minH, imageHeight))
     }
+
+    // ---- 入力の箱（SSP の communicatebox / inputbox など） ----
+
+    /**
+     * 入力の箱の画像。1行の箱は balloonc0.png、[multiLine]（textareabox）は balloonc5.png（無ければ balloonc0.png）。
+     * 無いバルーンなら null（pono-droid の簡易な見た目で出す）
+     */
+    fun communicateImage(multiLine: Boolean): File? =
+        (if (multiLine) files["balloonc5.png"] else null) ?: files["balloonc0.png"]
+
+    /**
+     * 入力欄を置く範囲（画像の左上からのピクセル）。画像ごとの balloonc*s.txt、なければ descript.txt の
+     * communicatebox.x / y / width / height。書いてなければ画像の四辺から 8 ピクセル内側（SSP と同じ）
+     */
+    fun communicateBox(image: File, imageWidth: Int, imageHeight: Int): TextArea {
+        val own = files[image.nameWithoutExtension.lowercase() + "s.txt"]?.let(Descript::read)
+        fun int(key: String) = own?.int(key) ?: descript.int(key)
+        val left = int("communicatebox.x") ?: COMMUNICATE_MARGIN
+        val top = int("communicatebox.y") ?: COMMUNICATE_MARGIN
+        val width = int("communicatebox.width") ?: (imageWidth - left - COMMUNICATE_MARGIN)
+        val height = int("communicatebox.height") ?: (imageHeight - top - COMMUNICATE_MARGIN)
+        // 画像からはみ出す指定でも、入力欄は画像の中に最低限の大きさで残す
+        val minW = minOf(MIN_SIZE, imageWidth)
+        val minH = minOf(MIN_SIZE, imageHeight)
+        val l = left.coerceIn(0, imageWidth - minW)
+        val t = top.coerceIn(0, imageHeight - minH)
+        return TextArea(l, t, (l + width).coerceIn(l + minW, imageWidth), (t + height).coerceIn(t + minH, imageHeight))
+    }
+
+    /** 入力欄の文字の色（communicatebox.font.color） */
+    val communicateFontColor: BalloonColor? get() = color("communicatebox.font.color")
+
+    /** 入力欄の背景の色（communicatebox.background.color）。null なら画像の上に透かして書く */
+    val communicateBackground: BalloonColor? get() = color("communicatebox.background.color")
 
     /** 文字の大きさ（ピクセル） */
     val fontHeight: Int get() = descript.int("font.height") ?: 12
@@ -116,6 +151,9 @@ class Balloon(val dir: File) {
     private companion object {
         const val DEFAULT_MARGIN = 16
         const val MIN_SIZE = 16
+
+        /** communicatebox の指定が無いときの、入力欄と画像の端の間（SSP と同じ 8 ピクセル） */
+        const val COMMUNICATE_MARGIN = 8
     }
 }
 

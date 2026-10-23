@@ -167,6 +167,27 @@ class CharacterWindow(
         }
     }
 
+    // ---- 入力の箱 ----
+
+    /**
+     * 入力の箱（\![open,inputbox] など）を開いた・閉じた。バルーンのウィンドウはふだんキーボードの入力を受けない
+     * （受けると他のアプリで文字が打てなくなる）ので、開いている間だけ受けるようにする。
+     * [secure] ならスクリーンショットや画面の記録に写さない（パスワード）。
+     * キーボードが出ると、オーバーレイのウィンドウはシステムがキーボードの上に寄せるので、こちらで持ち上げなくてよい
+     */
+    fun setInputOpen(open: Boolean, secure: Boolean) {
+        var flags = balloonParams.flags
+        flags = if (open) flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv() else flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        flags = if (open && secure) flags or WindowManager.LayoutParams.FLAG_SECURE else flags and WindowManager.LayoutParams.FLAG_SECURE.inv()
+        balloonParams.flags = flags
+        balloonParams.softInputMode = if (open) {
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+        } else {
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_UNSPECIFIED
+        }
+        if (balloonView.isAttachedToWindow) windowManager.updateViewLayout(balloonView, balloonParams)
+    }
+
     // ---- \![move] と \![set,position] ----
 
     /** \![set,position] で固定されている間はドラッグで動かさない */

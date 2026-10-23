@@ -35,7 +35,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import net.pono.baseware.balloon.Balloon
@@ -45,6 +44,7 @@ import net.pono.baseware.ghost.Ghost
 import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.ghost.GhostPlatform
 import net.pono.baseware.ghost.GhostRepository
+import net.pono.baseware.ghost.InputRequest
 import net.pono.baseware.ghost.PreviousGhost
 import net.pono.baseware.shell.Shell
 import net.pono.droid.AppVersion
@@ -213,20 +213,19 @@ class GhostOverlayService : LifecycleService() {
         c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
         createWindows(c)
         watchPositions(c)
-        // pono-droid の画面が前にある間と入力の箱を出している間は、キャラクターがボタンやキーボードに重なっても押せるようにタッチを通す
+        // pono-droid の画面が前にある間は、キャラクターがボタンに重なっても押せるようにタッチを通す。
+        // ただし入力の箱を出している間は、箱に触れられるように通さない
         touchJob = lifecycleScope.launch {
-            combine(appInFront, c.state.map { it.input != null }) { inFront, typing -> inFront || typing }
+            combine(appInFront, c.state.map { it.input != null }) { inFront, typing -> inFront && !typing }
                 .distinctUntilChanged()
                 .collect { pass ->
                     passThrough = pass
                     windows.forEach { it.setTouchable(!pass) }
                 }
         }
-        // 入力の箱が開いたら、キーボードを使える画面を出す（開き直されたときも）
+        // 入力の箱は \0 のバルーンに出す。開いている間だけ、そのウィンドウがキーボードの入力を受ける
         inputJob = lifecycleScope.launch {
-            c.state.map { it.input?.serial }.distinctUntilChanged().filterNotNull().collect {
-                InputActivity.start(this@GhostOverlayService)
-            }
+            c.state.map { it.input?.kind }.distinctUntilChanged().collect { applyInput(c) }
         }
         c.start()
         // SHIORI を読み終わるまで、アプリの一覧にも読み込み中と出す（start で読み込み中になる）
@@ -273,6 +272,12 @@ class GhostOverlayService : LifecycleService() {
             handledMoves[scope] = serial
             window.move(move) { id -> windows.firstOrNull { it.scopeId == id }?.screenRect() }
         }
+    }
+
+    /** 入力の箱を開いているかを \0 のウィンドウに伝える（作り直したウィンドウにも） */
+    private fun applyInput(c: GhostController) {
+        val kind = c.state.value.input?.kind
+        windows.firstOrNull { it.scopeId == 0 }?.setInputOpen(kind != null, secure = kind == InputRequest.Kind.PASSWORD)
     }
 
     private fun ensureWindows(c: GhostController, scopes: Set<Int>) {
@@ -436,7 +441,7 @@ class GhostOverlayService : LifecycleService() {
 
         private val _controller = MutableStateFlow<GhostController?>(null)
 
-        /** 起動中のゴースト。入力の箱の画面（[InputActivity]）が答えを返すのに使う */
+        /** 起動中のゴースト */
         val controller: StateFlow<GhostController?> = _controller.asStateFlow()
 
         private val _running = MutableStateFlow<String?>(null)

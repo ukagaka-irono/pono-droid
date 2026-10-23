@@ -55,13 +55,31 @@ class BalloonTest {
     @Test
     fun readsTextAreaAndColors() {
         val balloon = Balloon(balloonDir("balloons0.png"))
-        // 負の値は右端・下端からの距離
-        assertEquals(TextArea(22, 24, 310 - 18, 200 - 28), balloon.textArea(310, 200))
+        // 折り返しは wordwrappoint.x（validrect.right より優先）。負の値は右端・下端からの距離
+        assertEquals(TextArea(22, 24, 310 - 20, 200 - 28), balloon.textArea(310, 200))
         assertEquals(12, balloon.fontHeight)
         assertEquals(BalloonColor(58, 40, 68), balloon.fontColor)
         // リンクの色が無ければ、カーソルの色で代わりにする
         assertNull(balloon.anchorColor)
         assertEquals(BalloonColor(74, 52, 86), balloon.choiceColor)
+    }
+
+    @Test
+    fun textStartsAtOriginAndZeroMeansEdge() {
+        // Emily/Phase4.5 のバルーンの書き方。validrect は 0 で「端まで」、文字は origin から wordwrappoint まで
+        val dir = tmp.newFolder("emily")
+        File(dir, "descript.txt").writeText(
+            "charset,UTF-8\norigin.x,20\norigin.y,40\nwordwrappoint.x,-34\n" +
+                "validrect.left,0\nvalidrect.top,40\nvalidrect.right,0\nvalidrect.bottom,-10\n",
+        )
+        File(dir, "balloons0.png").writeBytes(byteArrayOf())
+        assertEquals(TextArea(20, 40, 340 - 34, 300 - 10), Balloon(dir).textArea(340, 300))
+
+        // validrect.right,0 だけなら右端まで
+        val dir2 = tmp.newFolder("edge")
+        File(dir2, "descript.txt").writeText("charset,UTF-8\nvalidrect.right,0\nvalidrect.bottom,0\n")
+        File(dir2, "balloons0.png").writeBytes(byteArrayOf())
+        assertEquals(TextArea(16, 16, 340, 300), Balloon(dir2).textArea(340, 300))
     }
 
     @Test
@@ -103,8 +121,8 @@ class BalloonTest {
         assertNull(balloon.arrowImage(1))
         // 負の値は右端から
         assertEquals(310 - 26 to 14, balloon.arrowPosition(0, 310, 200, 12, 12))
-        // 書いてなければ文字の範囲の右下
-        assertEquals((310 - 18 - 12) to (200 - 28 - 12), balloon.arrowPosition(1, 310, 200, 12, 12))
+        // 書いてなければ文字の範囲（右は wordwrappoint.x）の右下
+        assertEquals((310 - 20 - 12) to (200 - 28 - 12), balloon.arrowPosition(1, 310, 200, 12, 12))
     }
 
     @Test
@@ -159,5 +177,44 @@ class BalloonTest {
         assertNull(ghost.balloon(repo.balloons))
         ghost.selectBalloon("maid_classic")
         assertEquals("Maid Classic", ghost.balloon(repo.balloons)?.name)
+    }
+
+    @Test
+    fun readsCommunicateBox() {
+        val dir = balloonDir("balloons0.png", "balloonc0.png", "balloonc5.png")
+        File(dir, "descript.txt").appendText(
+            "\ncommunicatebox.x,22\ncommunicatebox.y,32\ncommunicatebox.width,296\ncommunicatebox.height,24\n" +
+                "communicatebox.font.color.r,10\ncommunicatebox.font.color.g,20\ncommunicatebox.font.color.b,30\n",
+        )
+        // balloonc5s.txt は balloonc5.png だけの指定（descript.txt より優先）
+        File(dir, "balloonc5s.txt").writeText("charset,UTF-8\ncommunicatebox.y,10\ncommunicatebox.height,120\n")
+        val balloon = Balloon(dir)
+        val c0 = balloon.communicateImage(multiLine = false)!!
+        val c5 = balloon.communicateImage(multiLine = true)!!
+        assertEquals("balloonc0.png", c0.name)
+        assertEquals("balloonc5.png", c5.name)
+        assertEquals(TextArea(22, 32, 22 + 296, 32 + 24), balloon.communicateBox(c0, 340, 64))
+        assertEquals(TextArea(22, 10, 22 + 296, 10 + 120), balloon.communicateBox(c5, 340, 160))
+        assertEquals(BalloonColor(10, 20, 30), balloon.communicateFontColor)
+        assertNull(balloon.communicateBackground)
+        // 画像からはみ出す指定は画像の中に収める
+        assertEquals(TextArea(22, 32, 100, 50), balloon.communicateBox(c0, 100, 50))
+    }
+
+    @Test
+    fun communicateBoxDefaultsToEightPixelsInside() {
+        val balloon = Balloon(balloonDir("balloons0.png", "balloonc0.png"))
+        val c0 = balloon.communicateImage(multiLine = true)!!
+        // balloonc5.png が無ければ複数行の箱も balloonc0.png
+        assertEquals("balloonc0.png", c0.name)
+        assertEquals(TextArea(8, 8, 192, 42), balloon.communicateBox(c0, 200, 50))
+        assertNull(Balloon(balloonDir2("balloons0.png")).communicateImage(multiLine = false))
+    }
+
+    private fun balloonDir2(vararg images: String): File {
+        val dir = tmp.newFolder("plain")
+        File(dir, "descript.txt").writeText(descript)
+        for (name in images) File(dir, name).writeBytes(byteArrayOf())
+        return dir
     }
 }

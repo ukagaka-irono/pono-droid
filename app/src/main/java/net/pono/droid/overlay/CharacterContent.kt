@@ -2,6 +2,7 @@ package net.pono.droid.overlay
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -13,6 +14,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.FilterQuality
@@ -26,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.pono.baseware.ghost.AnimationCommand
+import net.pono.baseware.ghost.CharacterState
 import net.pono.baseware.ghost.GhostController
 import kotlin.math.abs
 
@@ -127,9 +130,19 @@ fun CharacterSurface(
 fun CharacterBalloon(scopeId: Int, controller: GhostController, skin: BalloonSkin?) {
     val state by controller.state.collectAsState()
     val character = state.characters[scopeId] ?: return
+    // 入力の箱は SSP と同じく \0 のバルーンの位置に、話している文の下に出す
+    val input = state.input?.takeIf { scopeId == 0 }
+    Column(horizontalAlignment = if (scopeId == 1) Alignment.Start else Alignment.End) {
+        TalkBalloon(scopeId, character, state.loading, controller, skin)
+        if (input != null) InputBalloon(input, skin, controller::onInputSubmit, controller::onInputCancel)
+    }
+}
+
+@Composable
+private fun TalkBalloon(scopeId: Int, character: CharacterState, loading: String?, controller: GhostController, skin: BalloonSkin?) {
     val items = character.balloon ?: run {
         // 読み込み中は \0 の上に小さな吹き出しで知らせる（話し始めたら普通のバルーンに替わる）
-        if (scopeId == 0) state.loading?.let { LoadingBalloon(it) }
+        if (scopeId == 0) loading?.let { LoadingBalloon(it) }
         return
     }
     // \b[-1] はバルーンを隠す（文字は流れ続ける）
