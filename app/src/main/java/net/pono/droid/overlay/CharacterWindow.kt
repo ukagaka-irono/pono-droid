@@ -36,7 +36,7 @@ import kotlin.math.abs
  */
 class CharacterWindow(
     private val context: Context,
-    private val scopeId: Int,
+    val scopeId: Int,
     private val controller: GhostController,
     private val renderer: SurfaceRenderer,
     private val balloonSkin: BalloonSkin?,
@@ -46,7 +46,8 @@ class CharacterWindow(
     private val owner = OverlayOwner()
     private val surfaceView = ComposeView(context)
     private val balloonView = ComposeView(context)
-    private val alignEnd = scopeId == 0
+    // \0 は右下、\1 は左下。3人目以降は \0 の左に並べる（ドラッグで動かせる）
+    private val alignEnd = scopeId != 1
 
     private fun overlayParams() = WindowManager.LayoutParams(
         WindowManager.LayoutParams.WRAP_CONTENT,
@@ -63,8 +64,8 @@ class CharacterWindow(
 
     private val params = overlayParams().apply {
         val density = context.resources.displayMetrics.density
-        x = prefs.getInt(key("x"), (16 * density).toInt())
-        y = prefs.getInt(key("y"), (48 * density).toInt())
+        x = prefs.getInt(key("x"), defaultX(density))
+        y = prefs.getInt(key("y"), defaultY(density))
     }
     private val balloonParams = overlayParams()
 
@@ -160,6 +161,15 @@ class CharacterWindow(
     }
 
     private fun key(name: String) = "window.$scopeId.$name"
+
+    /** 3人目以降の最初の位置。画面の右から 1/4 ずつずらし、3人ごとに一段上げる */
+    private fun defaultX(density: Float): Int {
+        if (scopeId < 2) return (16 * density).toInt()
+        val width = context.resources.displayMetrics.widthPixels
+        return (16 * density).toInt() + ((scopeId - 2) % 3 + 1) * width / 4
+    }
+
+    private fun defaultY(density: Float): Int = ((48 + if (scopeId < 2) 0 else (scopeId - 2) / 3 * 160) * density).toInt()
 
     /**
      * サーフェスに触れたときの処理。指の動きに合わせてウィンドウ自体を動かすので、画面座標（raw）で扱う。

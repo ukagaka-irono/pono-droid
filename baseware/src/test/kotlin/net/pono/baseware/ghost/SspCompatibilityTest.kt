@@ -249,6 +249,29 @@ class SspCompatibilityTest {
     }
 
     @Test
+    fun thirdCharactersAreShownFromDescriptAndScripts() = runBlocking {
+        // Emily/Phase4.5 のエミリオのように、ゴーストの descript.txt に char2 がある
+        val ghost = tmp.newTestGhost(extraDescript = "char2.name,Emilio\r\nchar2.seriko.defaultsurface,200\r\n")
+        val shiori = ScriptedShiori(mapOf("OnFirstBoot" to """\p[2]\s[205]やあ\p[4]\s[3]\p[99999]\s[1]"""))
+        val scope = testScope()
+        try {
+            val controller = testController(ghost, shiori, scope)
+            assertEquals(listOf(0, 1, 2), controller.characterScopes)
+            assertEquals(200, controller.defaultSurface(2))
+            controller.start()
+            assertEquals("やあ", controller.awaitText(2))
+            // 番号の上限を超えた \p は無視して、直前のキャラクター（\p[4]）のまま \s[1] を受ける
+            withTimeout(5000) { controller.state.first { it.characters[4]?.surface == 1 } }
+            val chars = controller.state.value.characters
+            assertEquals(205, chars[2]!!.surface)
+            assertFalse(99999 in chars)
+            assertEquals("Emilio", controller.property("currentghost.scope(2).name"))
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
     fun everyAnimationRequestInAScriptIsKept() = runBlocking {
         // 1つのスクリプトの \i をすべて、\![anim,...] と一緒に出された順に残す
         val shiori = ScriptedShiori(mapOf("OnFirstBoot" to """\0\i[1]\i[2]\![anim,offset,2,5,6]\i[3]\![anim,clear,1]\![anim,stop]\![anim,pause,3]ok"""))

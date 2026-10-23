@@ -40,8 +40,15 @@ class Shell(val dir: File) {
         }.sortedBy { it.id }
     }
 
-    fun defaultSurface(scope: Int): Int =
-        descript.int("${scopeName(scope)}.seriko.defaultsurface") ?: if (scope == 0) 0 else 10
+    /** シェルの descript.txt で決めてある最初のサーフェス。無ければ null（ゴーストの descript.txt か既定の値を使う） */
+    fun defaultSurfaceOrNull(scope: Int): Int? = descript.int("${scopeName(scope)}.seriko.defaultsurface")
+
+    /** 最初のサーフェス。\0 は 0、\1 は 10、3人目からは決めていなければ出さない（-1） */
+    fun defaultSurface(scope: Int): Int = defaultSurfaceOrNull(scope) ?: when (scope) {
+        0 -> 0
+        1 -> 10
+        else -> -1
+    }
 
     private val files: Map<String, File> by lazy {
         dir.listFiles()?.associateBy { it.name.lowercase() }.orEmpty()

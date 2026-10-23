@@ -233,7 +233,7 @@ class GhostController(
     private suspend fun notifyEnvironment(s: ShioriSession) {
         s.notify(
             "OnNotifyBalloonInfo", balloon?.name.orEmpty(), balloon?.let { it.dir.absolutePath + "/" }.orEmpty(),
-            balloon?.let { b -> (0..1).joinToString(" ") { scope -> "$scope:" + b.images(scope).joinToString(",") { it.index.toString() } } }.orEmpty(),
+            balloon?.let { b -> characterScopes.joinToString(" ") { scope -> "$scope:" + b.images(scope).joinToString(",") { it.index.toString() } } }.orEmpty(),
         )
         s.notify("OnNotifyShellInfo", shell.name, shell.dir.absolutePath + "/", shell.surfaceIds().joinToString(","))
         val dressup = dressupInfo()
@@ -264,7 +264,7 @@ class GhostController(
     }
 
     /** OnNotifyDressupInfo の Reference: [キャラ ID, カテゴリ, パーツ, オプション, 有効 1/0, サムネイル] を 0x01 でつないだもの */
-    private fun dressupInfo(): List<String> = (0..1).flatMap { scope ->
+    private fun dressupInfo(): List<String> = characterScopes.flatMap { scope ->
         val binds = _state.value.characters[scope]?.binds.orEmpty()
         shell.bindGroups(scope).map { g ->
             listOf(scope.toString(), g.category, g.part, "", if (g.id in binds) "1" else "0", "").joinToString("\u0001")
@@ -432,6 +432,24 @@ class GhostController(
         platform.onQuit()
     }
 
+    // ---- キャラクター ----
+
+    /**
+     * このゴーストのキャラクター。\0 と \1 に加え、descript.txt に charN.name か charN.seriko.defaultsurface がある \p[N]
+     * （Emily/Phase4.5 のエミリオなど）。スクリプトが \p[N] で話しかけた番号も、そのとき加わる
+     */
+    val characterScopes: List<Int>
+        get() = listOf(0, 1) + (2..MAX_SCOPE).filter { n ->
+            ghost.descript["char$n.name"] != null || defaultSurfaceDeclared(n)
+        }
+
+    private fun defaultSurfaceDeclared(scope: Int) =
+        shell.defaultSurfaceOrNull(scope) != null || ghost.descript.int("${Shell.scopeName(scope)}.seriko.defaultsurface") != null
+
+    /** 最初のサーフェス。シェルの descript.txt、なければゴーストの descript.txt（SSP と同じ）、どちらも無ければ既定の値 */
+    fun defaultSurface(scope: Int): Int =
+        shell.defaultSurfaceOrNull(scope) ?: ghost.descript.int("${Shell.scopeName(scope)}.seriko.defaultsurface") ?: shell.defaultSurface(scope)
+
     // ---- シェルとバルーンの切り替え ----
 
     /**
@@ -473,7 +491,7 @@ class GhostController(
         val path = next?.let { it.dir.absolutePath + "/" }.orEmpty()
         notify(
             "OnNotifyBalloonInfo", listOf(next?.name.orEmpty(), path,
-                next?.let { b -> (0..1).joinToString(" ") { s -> "$s:" + b.images(s).joinToString(",") { it.index.toString() } } }.orEmpty()),
+                next?.let { b -> characterScopes.joinToString(" ") { s -> "$s:" + b.images(s).joinToString(",") { it.index.toString() } } }.orEmpty()),
         )
         raise("OnBalloonChange", listOf(next?.name.orEmpty(), path))
     }
@@ -1052,8 +1070,8 @@ class GhostController(
     private fun resetSurfaces() {
         _state.update {
             GhostState(
-                characters = (0..1).associateWith { scope ->
-                    CharacterState(scope, shell.defaultSurface(scope), binds = shell.bindGroups(scope).filter { g -> g.default }.map { g -> g.id }.toSet())
+                characters = characterScopes.associateWith { scope ->
+                    CharacterState(scope, defaultSurface(scope), binds = shell.bindGroups(scope).filter { g -> g.default }.map { g -> g.id }.toSet())
                 },
                 screenOn = it.screenOn,
                 passive = it.passive,
@@ -1207,7 +1225,7 @@ class GhostController(
                     else -> null
                 }
             }
-            key == "scope.count" -> "2"
+            key == "scope.count" -> characterScopes.size.toString()
             key.startsWith("balloon.scope(") -> {
                 val m = Regex("""^balloon\.scope\((\d+)\)\.(.*)$""").find(key) ?: return null
                 val scope = m.groupValues[1].toIntOrNull() ?: return null
@@ -1224,7 +1242,7 @@ class GhostController(
                 val scope = m.groupValues[1].toIntOrNull() ?: return null
                 when (m.groupValues[2]) {
                     "surface.num" -> (s.characters[scope]?.surface ?: -1).toString()
-                    "seriko.defaultsurface" -> shell.defaultSurface(scope).toString()
+                    "seriko.defaultsurface" -> defaultSurface(scope).toString()
                     "name" -> if (scope == 0) ghost.sakuraName else if (scope == 1) ghost.keroName else ghost.descript["char$scope.name"].orEmpty()
                     "scaling" -> "100"
                     "x", "y" -> "0"
@@ -1467,6 +1485,9 @@ class GhostController(
 
         /** `\![timerraise]` で同時に予約できる数 */
         const val MAX_TIMERS = 32
+
+        /** \p[N] で使えるキャラクターの番号の上限（ウィンドウをいくつも作らせないため） */
+        const val MAX_SCOPE = ScriptPlayer.MAX_SCOPE
 
         /** メニューと [changeBalloon] で簡易バルーンを表す名前（ディレクトリ名と重ならないよう / を含める） */
         const val SIMPLE_BALLOON = "/simple"

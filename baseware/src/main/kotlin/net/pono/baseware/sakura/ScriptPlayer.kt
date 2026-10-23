@@ -184,7 +184,8 @@ class ScriptPlayer(
             when (token.name) {
                 "0", "h" -> scope = 0
                 "1", "u" -> scope = 1
-                "p" -> scope = a.firstOrNull()?.toIntOrNull() ?: scope
+                // 番号には上限を置く（細工したスクリプトにキャラクターのウィンドウを無数に作らせない）
+                "p" -> scope = a.firstOrNull()?.trim()?.toIntOrNull()?.takeIf { it in 0..MAX_SCOPE } ?: scope
                 "s" -> a.firstOrNull()?.toIntOrNull()?.let { host.setSurface(scope, it) }
                 "i" -> a.firstOrNull()?.toIntOrNull()?.let { host.startAnimation(scope, it) }
                 "n" -> host.newLine(scope)
@@ -386,6 +387,9 @@ class ScriptPlayer(
 
     companion object {
         const val MAX_EMBED_DEPTH = 8
+
+        /** \p[N] で使えるキャラクターの番号の上限 */
+        const val MAX_SCOPE = 15
 
         /** "0x22EE" か "8942" を文字コードにする。文字として書けない値は null */
         fun parseCode(s: String): Int? {

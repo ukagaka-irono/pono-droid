@@ -56,6 +56,7 @@ class GhostOverlayService : LifecycleService() {
     private val debuggable by lazy { (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0 }
     private var touchJob: Job? = null
     private var inputJob: Job? = null
+    private var scopesJob: Job? = null
     private var passThrough = false
     private val sound = SoundPlayer()
     private val windows = mutableListOf<CharacterWindow>()
@@ -193,13 +194,30 @@ class GhostOverlayService : LifecycleService() {
         c.start()
     }
 
-    /** キャラクターのウィンドウを、いまのシェルとバルーンで作る */
+    /** いまのシェルとバルーン（キャラクターのウィンドウで共有する） */
+    private var renderer: SurfaceRenderer? = null
+    private var balloonSkin: BalloonSkin? = null
+
+    /**
+     * キャラクターのウィンドウを、いまのシェルとバルーンで作る。\0 と \1 のほか、3人目以降のキャラクター（\p[2] など）にも作り、
+     * スクリプトが新しい \p[N] に話しかけたら、そのときに足す
+     */
     private fun createWindows(c: GhostController) {
-        val renderer = SurfaceRenderer(c.shell)
-        val balloonSkin = c.balloon?.let(::BalloonSkin)
+        renderer = SurfaceRenderer(c.shell)
+        balloonSkin = c.balloon?.let(::BalloonSkin)
+        scopesJob?.cancel()
+        scopesJob = lifecycleScope.launch {
+            c.state.map { it.characters.keys }.distinctUntilChanged().collect { scopes -> ensureWindows(c, scopes) }
+        }
+    }
+
+    private fun ensureWindows(c: GhostController, scopes: Set<Int>) {
+        val shown = windows.map { it.scopeId }.toSet()
+        // 後から足したウィンドウほど上に重なるので、\1 → 3人目以降 → \0 の順に作る（\0 がいちばん上）
+        val order = scopes.filter { it !in shown }.sortedBy { if (it == 0) Int.MAX_VALUE else it }
         val prefs = OverlaySettings.prefs(this)
-        for (scope in listOf(1, 0)) {
-            windows += CharacterWindow(this, scope, c, renderer, balloonSkin, prefs).also {
+        for (scope in order) {
+            windows += CharacterWindow(this, scope, c, renderer ?: return, balloonSkin, prefs).also {
                 it.show()
                 it.setTouchable(!passThrough)
             }
@@ -219,6 +237,8 @@ class GhostOverlayService : LifecycleService() {
         touchJob = null
         inputJob?.cancel()
         inputJob = null
+        scopesJob?.cancel()
+        scopesJob = null
         windows.forEach { it.dismiss() }
         windows.clear()
         controller = null
