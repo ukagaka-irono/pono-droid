@@ -1,6 +1,7 @@
 package net.pono.baseware.ghost
 
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -32,8 +33,13 @@ class SurfaceAliasTest {
             // 本体は 35 → 55、相方は 300 → 600。照れ（1 か 101）は途中で 35 に替わっている
             assertEquals(55, s.characters[0]!!.surface)
             assertEquals(600, s.characters[1]!!.surface)
-            // OnSurfaceChange には別名ではなく本当の番号を伝える
-            assertTrue(shiori.events.filter { it.first == "OnSurfaceChange" }.any { it.second.getOrNull(2)?.startsWith("0,1,") == true || it.second.getOrNull(2)?.startsWith("0,101,") == true })
+            // OnSurfaceChange には別名ではなく本当の番号を伝える。NOTIFY は SHIORI のスレッドで送るので、届くのを待つ
+            fun toldRealNumber() = synchronized(shiori.events) {
+                shiori.events.filter { it.first == "OnSurfaceChange" }
+                    .any { it.second.getOrNull(2)?.startsWith("0,1,") == true || it.second.getOrNull(2)?.startsWith("0,101,") == true }
+            }
+            withTimeout(5000) { while (!toldRealNumber()) delay(10) }
+            assertTrue(toldRealNumber())
         } finally {
             scope.cancel()
         }
