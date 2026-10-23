@@ -10,7 +10,7 @@ import java.util.zip.ZipFile
 
 /**
  * .nar（zip）を展開する。ゴーストはゴースト置き場に、バルーンはバルーン置き場に入れる。
- * ゴーストの .nar に balloon/ フォルダが入っていれば、そのバルーンもバルーン置き場に入れる（SSP と同じ）。
+ * ゴーストの .nar に同梱のバルーンがあれば、そのバルーンもバルーン置き場に入れる（SSP と同じ）。
  */
 class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
 
@@ -48,13 +48,29 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
             }
             // 上書きインストールで古いファイルを消す指示があれば従う
             NetworkUpdater.applyDeleteList(target)
-            if (type == Type.GHOST) installBundledBalloons(target)
+            if (type == Type.GHOST) installBundledBalloons(target, install)
             return Result(type, target)
         }
     }
 
-    /** ゴーストに同梱のバルーン（balloon/名前/descript.txt）をバルーン置き場に写す */
-    private fun installBundledBalloons(ghostDir: File) {
+    /**
+     * ゴーストに同梱のバルーンをバルーン置き場に写す。
+     * install.txt に balloon.directory があれば、.nar の中の balloon.source.directory のフォルダ
+     * （書いてなければ balloon.directory と同じ名前）を、balloon.directory の名前で入れる（SSP と同じ。Emily/Phase4.5 など）。
+     * 無ければ、balloon/名前/descript.txt の形で入っているものをその名前で入れる
+     */
+    private fun installBundledBalloons(ghostDir: File, install: Descript) {
+        val name = install["balloon.directory"]?.let(::safeName)
+        if (name != null) {
+            val sourceName = install["balloon.source.directory"]?.let(::normalize)?.trim()?.takeIf { it.isNotEmpty() } ?: name
+            val root = ghostDir.canonicalFile
+            val source = File(root, sourceName).canonicalFile
+            // .nar の外（ゴーストのフォルダの外）を指していたら写さない
+            if (source.path.startsWith(root.path + File.separator) && File(source, "descript.txt").isFile) {
+                source.copyRecursively(File(balloonRoot, name), overwrite = true)
+                return
+            }
+        }
         val bundled = File(ghostDir, "balloon").listFiles { f -> File(f, "descript.txt").isFile }.orEmpty()
         for (dir in bundled) {
             val name = safeName(dir.name) ?: continue

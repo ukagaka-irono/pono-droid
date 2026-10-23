@@ -180,6 +180,49 @@ class BalloonTest {
     }
 
     @Test
+    fun installsBalloonNamedInInstallTxt() {
+        val repo = GhostRepository(File(tmp.root, "files/ghost"))
+        // Emily/Phase4.5 と同じ書き方。.nar の balloon/ に直接入っているバルーンを emily4 として入れる
+        val emily = nar(
+            "install.txt" to "type,ghost\ndirectory,emily4\nballoon.directory,emily4\nballoon.source.directory,balloon\n",
+            "ghost/master/descript.txt" to "name,Emily\nballoon,emily4\n",
+            "balloon/descript.txt" to "name,Balloon for Emily\n",
+            "balloon/balloons0.png" to "",
+        )
+        repo.installer().install(emily)
+        assertEquals("Balloon for Emily", repo.balloons.find("emily4")?.name)
+        // ゴーストの descript.txt の balloon 指定（ディレクトリ名）で見つかる
+        assertEquals("Balloon for Emily", repo.find("emily4")!!.balloon(repo.balloons)?.name)
+
+        // balloon.source.directory が無ければ、balloon.directory と同じ名前のフォルダから
+        val same = nar(
+            "install.txt" to "type,ghost\ndirectory,g2\nballoon.directory,b2\n",
+            "ghost/master/descript.txt" to "name,テスト2\n",
+            "b2/descript.txt" to "name,バルーン2\n",
+            "b2/balloons0.png" to "",
+        )
+        repo.installer().install(same)
+        assertEquals("バルーン2", repo.balloons.find("b2")?.name)
+    }
+
+    @Test
+    fun bundledBalloonSourceMustStayInsideTheNar() {
+        val root = File(tmp.root, "files/ghost")
+        val repo = GhostRepository(root)
+        // ゴースト置き場にある別のゴーストのフォルダを、バルーンとして写させない
+        val other = File(root, "other").apply { mkdirs() }
+        File(other, "descript.txt").writeText("name,よそのフォルダ\n")
+        File(other, "balloons0.png").writeBytes(byteArrayOf())
+        val evil = nar(
+            "install.txt" to "type,ghost\ndirectory,g3\nballoon.directory,stolen\nballoon.source.directory,../other\n",
+            "ghost/master/descript.txt" to "name,テスト3\n",
+        )
+        repo.installer().install(evil)
+        assertNull(repo.balloons.find("stolen"))
+        assertTrue(!File(repo.balloons.root, "stolen").exists())
+    }
+
+    @Test
     fun readsCommunicateBox() {
         val dir = balloonDir("balloons0.png", "balloonc0.png", "balloonc5.png")
         File(dir, "descript.txt").appendText(
