@@ -19,15 +19,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -92,6 +95,10 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     var balloons by remember { mutableStateOf<List<Balloon>>(emptyList()) }
     var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     val running by GhostOverlayService.running.collectAsState()
+    val loading by GhostOverlayService.loading.collectAsState()
+    // 一覧を読み終わるまでは「ゴーストがありません」と言わない
+    var listed by remember { mutableStateOf(false) }
+    var installing by remember { mutableStateOf(false) }
     val version = remember { AppVersion.of(context) }
 
     suspend fun reload() {
@@ -103,6 +110,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
             }
         }
         balloons = withContext(Dispatchers.IO) { runCatching { repo.balloons.list() }.getOrDefault(emptyList()) }
+        listed = true
     }
 
     LaunchedEffect(Unit) { reload() }
@@ -120,7 +128,13 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     val importNar = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
         scope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { GhostStore.install(context, uri) } }
+            // 大きな .nar は展開に時間がかかるので、終わるまでボタンを止めて進んでいることを出す
+            installing = true
+            val result = try {
+                withContext(Dispatchers.IO) { runCatching { GhostStore.install(context, uri) } }
+            } finally {
+                installing = false
+            }
             result.onSuccess { reload() }
             snackbar.showSnackbar(
                 result.fold(
@@ -162,12 +176,20 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { importNar.launch(arrayOf("*/*")) }) { Text(".nar をインストール") }
+                Button(onClick = { importNar.launch(arrayOf("*/*")) }, enabled = !installing) {
+                    Text(if (installing) "インストール中…" else ".nar をインストール")
+                }
                 OutlinedButton(onClick = { GhostOverlayService.update(context) }) { Text("更新") }
                 OutlinedButton(onClick = { GhostOverlayService.stop(context) }) { Text("終了") }
             }
+            if (installing) LinearProgressIndicator(Modifier.fillMaxWidth())
             CharacterScaleSlider()
-            if (ghosts.isEmpty()) {
+            if (!listed) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Text("ゴーストを読み込み中…", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else if (ghosts.isEmpty()) {
                 Text("ゴーストがありません。.nar ファイルをインストールしてください。", style = MaterialTheme.typography.bodyMedium)
             }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -177,6 +199,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                     GhostRow(
                         item = item,
                         running = isRunning,
+                        loading = loading == dirName,
                         enabled = canOverlay,
                         onStart = { GhostOverlayService.start(context, dirName) },
                         onSelectShell = { shell ->
@@ -326,6 +349,7 @@ private fun <T> SelectButton(label: String, options: List<Pair<T, String>>, sele
 private fun GhostRow(
     item: GhostItem,
     running: Boolean,
+    loading: Boolean,
     enabled: Boolean,
     onStart: () -> Unit,
     onSelectShell: (String) -> Unit,
@@ -338,19 +362,31 @@ private fun GhostRow(
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(ghost.name + if (running) "（起動中）" else "", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        ghost.name + when {
+                            loading -> "（読み込み中）"
+                            running -> "（起動中）"
+                            else -> ""
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                    )
                     Text(
                         listOf(ghost.sakuraName, ghost.keroName).filter { it.isNotEmpty() }.joinToString(" / ") + "  (${ghost.shioriName})",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
                 Spacer(Modifier.width(8.dp))
-                Button(onClick = onStart, enabled = enabled) { Text(if (running) "再起動" else "起動") }
+                if (loading) {
+                    // 読み込んでいる間は起動し直させない（押しても最初からやり直しになるだけ）
+                    CircularProgressIndicator(Modifier.padding(horizontal = 24.dp).size(24.dp), strokeWidth = 2.dp)
+                } else {
+                    Button(onClick = onStart, enabled = enabled) { Text(if (running) "再起動" else "起動") }
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SelectButton("シェル", item.shells, item.selectedShell, { it?.let(onSelectShell) }, Modifier.weight(1f))
                 // 起動中に消すと、動いているゴーストのファイルが無くなるので先に終了してもらう
-                TextButton(onClick = { confirmUninstall = true }, enabled = !running) { Text("削除") }
+                TextButton(onClick = { confirmUninstall = true }, enabled = !running && !loading) { Text("削除") }
             }
             SelectButton("バルーン", item.balloons, item.selectedBalloon, onSelectBalloon)
         }

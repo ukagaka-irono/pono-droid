@@ -100,6 +100,8 @@ data class GhostState(
     val input: InputRequest? = null,
     /** \![enter,passivemode]。バルーンと選択肢が時間で消えず、ゴーストは「話せない」と伝えられる */
     val passive: Boolean = false,
+    /** SHIORI やシェルを読み込んでいる間に出す文。null なら読み込み中ではない */
+    val loading: String? = null,
 ) {
     fun update(scope: Int, f: (CharacterState) -> CharacterState): GhostState {
         val current = characters[scope] ?: CharacterState(scope, -1)

@@ -171,9 +171,17 @@ class GhostController(
     private var lastBattery: BatteryInfo? = null
 
     fun start() {
+        // 辞書の大きいゴーストは読み込みに数秒かかるので、その間は読み込み中と出しておく。
+        // 呼んだ側がすぐ「読み込み中か」を見られるよう、launch の前に立てる
+        _state.update { it.copy(loading = "読み込み中…") }
         scope.launch {
             resetSurfaces()
-            if (!loadShiori()) {
+            val loaded = try {
+                loadShiori()
+            } finally {
+                _state.update { it.copy(loading = null) }
+            }
+            if (!loaded) {
                 // 話せないゴーストを出しっぱなしにしない
                 closing = true
                 platform.onQuit()
@@ -523,12 +531,21 @@ class GhostController(
      */
     fun changeShell(name: String, byUser: Boolean = false) {
         scope.launch {
-            val dirs = ghost.shellDirs
-            val dir = when (name) {
-                "random" -> dirs.randomOrNull()
-                else -> dirs.firstOrNull { it.name == name } ?: dirs.firstOrNull { runCatching { Shell(it).name }.getOrNull() == name }
-            } ?: return@launch platform.log("シェルがありません: $name")
-            val next = Shell(dir)
+            // surfaces.txt の大きいシェルもあるので、読むのは画面を描くスレッドの外で。その間は読み込み中と出す
+            _state.update { it.copy(loading = "シェルを読み込み中…") }
+            val found = try {
+                withContext(Dispatchers.Default) {
+                    val dirs = ghost.shellDirs
+                    val dir = when (name) {
+                        "random" -> dirs.randomOrNull()
+                        else -> dirs.firstOrNull { it.name == name } ?: dirs.firstOrNull { runCatching { Shell(it).name }.getOrNull() == name }
+                    }
+                    dir?.let { it to Shell(it) }
+                }
+            } finally {
+                _state.update { it.copy(loading = null) }
+            }
+            val (dir, next) = found ?: return@launch platform.log("シェルがありません: $name")
             if (byUser) talkAndWait("OnShellChanging", listOf(next.name, shell.name, dir.absolutePath + "/"))
             cancelScript()
             hideBalloons()
@@ -1158,6 +1175,7 @@ class GhostController(
                 },
                 screenOn = it.screenOn,
                 passive = it.passive,
+                loading = it.loading,
             )
         }
     }

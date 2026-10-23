@@ -26,7 +26,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +36,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import net.pono.baseware.balloon.Balloon
 import net.pono.baseware.ghost.BatteryInfo
@@ -41,6 +44,7 @@ import net.pono.baseware.ghost.DeviceInfo
 import net.pono.baseware.ghost.Ghost
 import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.ghost.GhostPlatform
+import net.pono.baseware.ghost.GhostRepository
 import net.pono.baseware.ghost.PreviousGhost
 import net.pono.baseware.shell.Shell
 import net.pono.droid.AppVersion
@@ -57,6 +61,8 @@ class GhostOverlayService : LifecycleService() {
     private val debuggable by lazy { (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0 }
     private var touchJob: Job? = null
     private var inputJob: Job? = null
+    private var startJob: Job? = null
+    private var loadingJob: Job? = null
     private var scopesJob: Job? = null
     private var positionsJob: Job? = null
 
@@ -88,15 +94,27 @@ class GhostOverlayService : LifecycleService() {
     /** @param previous 切り替える前のゴースト（OnGhostChanged で渡す）。ふつうの起動なら null */
     private fun startGhost(ghost: Ghost, previous: PreviousGhost? = null) {
         teardown()
-        val shellDir = ghost.shellDir() ?: run {
-            toast("${ghost.name}: シェルがありません")
-            stopSelf()
-            return
+        _loading.value = ghost.dir.name
+        startJob = lifecycleScope.launch {
+            // シェルの定義（surfaces*.txt）は大きいこともあるので、画面を描くスレッドの外で読む
+            val loaded = withContext(Dispatchers.Default) {
+                val shellDir = ghost.shellDir() ?: return@withContext null
+                val repo = GhostStore.repository(this@GhostOverlayService)
+                // 選んだバルーン（無ければゴーストの指定）。どちらも無ければ簡易バルーン
+                Triple(Shell(shellDir), repo, ghost.balloon(repo.balloons))
+            }
+            if (loaded == null) {
+                _loading.value = null
+                toast("${ghost.name}: シェルがありません")
+                stopSelf()
+                return@launch
+            }
+            val (shell, repo, balloon) = loaded
+            runGhost(ghost, previous, shell, repo, balloon)
         }
-        val shell = Shell(shellDir)
-        val repo = GhostStore.repository(this)
-        // 選んだバルーン（無ければゴーストの指定）。どちらも無ければ簡易バルーン
-        val balloon = ghost.balloon(repo.balloons)
+    }
+
+    private fun runGhost(ghost: Ghost, previous: PreviousGhost?, shell: Shell, repo: GhostRepository, balloon: Balloon?) {
         val c = GhostController(
             ghost = ghost,
             shell = shell,
@@ -211,6 +229,11 @@ class GhostOverlayService : LifecycleService() {
             }
         }
         c.start()
+        // SHIORI を読み終わるまで、アプリの一覧にも読み込み中と出す（start で読み込み中になる）
+        loadingJob = lifecycleScope.launch {
+            c.state.first { it.loading == null }
+            _loading.value = null
+        }
     }
 
     /** いまのシェルとバルーン（キャラクターのウィンドウで共有する） */
@@ -275,6 +298,11 @@ class GhostOverlayService : LifecycleService() {
     }
 
     private fun teardown() {
+        startJob?.cancel()
+        startJob = null
+        loadingJob?.cancel()
+        loadingJob = null
+        _loading.value = null
         sound.stop()
         touchJob?.cancel()
         touchJob = null
@@ -415,6 +443,11 @@ class GhostOverlayService : LifecycleService() {
 
         /** 起動中のゴーストのディレクトリ名（起動していなければ null） */
         val running: StateFlow<String?> = _running.asStateFlow()
+
+        private val _loading = MutableStateFlow<String?>(null)
+
+        /** 起動しようとして、シェルや SHIORI を読み込んでいる最中のゴースト（ディレクトリ名） */
+        val loading: StateFlow<String?> = _loading.asStateFlow()
 
         fun start(context: Context, ghostDirName: String) {
             context.startForegroundService(

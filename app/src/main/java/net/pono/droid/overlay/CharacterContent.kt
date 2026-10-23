@@ -127,7 +127,11 @@ fun CharacterSurface(
 fun CharacterBalloon(scopeId: Int, controller: GhostController, skin: BalloonSkin?) {
     val state by controller.state.collectAsState()
     val character = state.characters[scopeId] ?: return
-    val items = character.balloon ?: return
+    val items = character.balloon ?: run {
+        // 読み込み中は \0 の上に小さな吹き出しで知らせる（話し始めたら普通のバルーンに替わる）
+        if (scopeId == 0) state.loading?.let { LoadingBalloon(it) }
+        return
+    }
     // \b[-1] はバルーンを隠す（文字は流れ続ける）
     if (character.balloonId == -1) return
     val onClick = { controller.onBalloonClick(scopeId) }

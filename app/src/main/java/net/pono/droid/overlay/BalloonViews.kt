@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -141,6 +142,28 @@ fun SimpleBalloon(items: List<BalloonItem>, onClick: () -> Unit, onChoice: (Choi
     ) {
         Box(Modifier.heightIn(max = maxHeight).verticalScroll(scroll).padding(horizontal = 12.dp, vertical = 8.dp)) {
             BalloonBody(items, onChoice, BalloonTextStyle.Simple)
+        }
+    }
+}
+
+/** SHIORI やシェルを読み込んでいる間に出す、くるくる回る印と [text] だけの小さな吹き出し（簡易バルーンと同じ見た目） */
+@Composable
+fun LoadingBalloon(text: String) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = Color.White,
+        shadowElevation = 4.dp,
+        modifier = Modifier
+            .padding(bottom = 4.dp)
+            .border(1.5.dp, Color(0xFF8D6E63), RoundedCornerShape(12.dp)),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CircularProgressIndicator(Modifier.size(16.dp), color = Color(0xFF8D6E63), strokeWidth = 2.dp)
+            Text(text, color = Color(0xFF3E2723), fontSize = 14.sp)
         }
     }
 }
