@@ -66,6 +66,16 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         running[id] = scope.launch { playOnce(anim) }
     }
 
+    /** 話した文字の数が [from] から [to] に増えた。interval が talk,N のアニメーション（口パクなど）を動かす */
+    fun talk(from: Int, to: Int) {
+        current?.talkAnimations(from, to)?.forEach { start(it.id) }
+    }
+
+    /** スクリプトを話し終えた（\e まで来た）。interval が yen-e のアニメーションを動かす */
+    fun scriptEnd() {
+        current?.yenEAnimations?.forEach { start(it.id) }
+    }
+
     /** `\![anim,offset,ID,x,y]`。表示中のコマも、これから出すコマもずらす */
     fun setOffset(id: Int, x: Int, y: Int) {
         if (x == 0 && y == 0) offsets.remove(id) else offsets[id] = x to y

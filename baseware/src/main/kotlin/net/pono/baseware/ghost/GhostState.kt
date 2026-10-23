@@ -66,6 +66,8 @@ data class CharacterState(
     val move: Pair<Int, MoveCommand>? = null,
     /** \![set,position,x,y] で固定した画面の位置（ウィンドウの左上）。固定している間はドラッグで動かせない */
     val pinned: Pair<Int, Int>? = null,
+    /** このキャラクターがこれまでに話した文字の数。SERIKO の talk,N（N 文字ごとに動く口パクなど）に使う */
+    val talkCount: Int = 0,
 ) {
     fun appendText(text: String, style: TextStyle = TextStyle.Default): CharacterState {
         val items = balloon.orEmpty()
@@ -76,6 +78,7 @@ data class CharacterState(
             } else {
                 items + BalloonItem.Text(text, style)
             },
+            talkCount = talkCount + text.length,
         )
     }
 
@@ -102,6 +105,8 @@ data class GhostState(
     val passive: Boolean = false,
     /** SHIORI やシェルを読み込んでいる間に出す文。null なら読み込み中ではない */
     val loading: String? = null,
+    /** 最後まで話し終えた（\e まで来た）スクリプトの数。SERIKO の yen-e（話し終わりに動く）に使う */
+    val scriptEnds: Int = 0,
 ) {
     fun update(scope: Int, f: (CharacterState) -> CharacterState): GhostState {
         val current = characters[scope] ?: CharacterState(scope, -1)

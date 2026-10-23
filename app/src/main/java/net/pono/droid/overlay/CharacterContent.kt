@@ -71,6 +71,18 @@ fun CharacterSurface(
         }
     }
 
+    // 話した文字の数が増えたら talk,N の、話し終えたら yen-e のアニメーションを動かす（シェルを替えると数え直すので、減ったら合わせるだけ）
+    var talked by remember { mutableIntStateOf(character.talkCount) }
+    LaunchedEffect(character.talkCount) {
+        if (character.talkCount > talked && state.screenOn) animator.talk(talked, character.talkCount)
+        talked = character.talkCount
+    }
+    var ended by remember { mutableIntStateOf(state.scriptEnds) }
+    LaunchedEffect(state.scriptEnds) {
+        if (state.scriptEnds > ended && state.screenOn) animator.scriptEnd()
+        ended = state.scriptEnds
+    }
+
     val bitmap by produceState<Bitmap?>(null, character.surface, layers) {
         value = withContext(Dispatchers.Default) { renderer.render(character.surface, layers) }
     }

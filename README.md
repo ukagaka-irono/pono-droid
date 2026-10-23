@@ -171,7 +171,7 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 - サウンド: `\8` `\_v` `\_V` `\![sound,play / loop / stop / wait]`（`--volume`）。ゴーストのディレクトリの中のファイルだけ鳴らします。
 - 切り替え: `\![change,shell]` / `\![change,balloon]`（random も可）と OnShellChanging / OnShellChanged / OnBalloonChange、着せ替えの OnDressupChanged。
 - ゴーストの切り替え: `\![change,ghost,名前]`（random / sequential / lastinstalled、`--option=raise-event`）と長押しメニューの「ゴースト切り替え」。メニューからなら OnGhostChanging（答えが無ければ OnClose）で別れを話してから切り替え、切り替わった先には OnGhostChanged（答えが無ければ OnBoot）を送ります。
-- 見た目: `\_s`（`\_s[ID,...]`）の同期、バルーンの中の画像 `\_b[ファイル,x,y]` / `\_b[ファイル,inline]`（`opaque`）、`\![set,scaling]`（反転も可）、`\![set,alpha]`、`\![anim,offset / clear / stop]`、SERIKO の `insert`（着せ替えの重なり順）と `parallelstart` / `parallelstop`。
+- 見た目: `\_s`（`\_s[ID,...]`）の同期、バルーンの中の画像 `\_b[ファイル,x,y]` / `\_b[ファイル,inline]`（`opaque`）、`\![set,scaling]`（反転も可）、`\![set,alpha]`、`\![anim,offset / clear / stop]`、SERIKO の `insert`（着せ替えの重なり順）と `parallelstart` / `parallelstop`、`talk,N`（話している間 N 文字ごとに動く口パクなど）と `yen-e`（話し終わりに動く）。
 - ウィンドウ: `\![move]` / `\![moveasync]`（新旧どちらの書式も。基準は screen・me・スコープ番号、`--base-offset` / `--move-offset`）、`\![set,position]` / `\![reset,position]`。座標は画面のピクセルで、画面の外には出しません。
 - 入力: `\![open,dateinput / timeinput / sliderinput / textareabox]`（OnUserInput と OnTextAreaInput）。入力の箱は SSP と同じく \0 のバルーンの位置に出します。バルーンに `balloonc0.png`（複数行は `balloonc5.png`）があればそれを敷いて `communicatebox.x / y / width / height` の範囲に入力欄を置き、無ければ簡易バルーンと同じ見た目の箱にします。戻るボタンで取り消せます。
 - 長押しのメニューは SSP のオーナードローメニューに合わせて、SHIORI の `sakura.recommendsites` / `portalsites`（と `*buttoncaption`）、きせかえ、シェル、バルーン、Read Me、ネットワーク更新を出します。おすすめを選ぶと OnRecommendsiteChoice を送ります。

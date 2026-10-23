@@ -148,6 +148,9 @@ class GhostController(
     private var userName = userName
     private var session: ShioriSession? = null
     private var scriptJob: Job? = null
+
+    /** runScript した回数。いちばん新しいスクリプトがどれかを見分ける */
+    private var scriptRuns = 0
     private var timerJob: Job? = null
     private val requestLock = Mutex()
     private var clickWaiter: CompletableDeferred<Unit>? = null
@@ -1046,13 +1049,19 @@ class GhostController(
         if (!script.startsWith("\\C")) hideBalloons()
         _state.update { it.copy(talking = true) }
         lastScript = script
+        val run = ++scriptRuns
         val job = scope.launch {
             val raised = mutableListOf<Pair<String, List<String>>>()
             val host = Host(raised)
+            // 割り込まれずに最後まで話したかどうか（話し終わりの SERIKO、yen-e を動かす）
+            var ended = false
             val result = try {
-                player.play(script, host)
+                player.play(script, host).also { ended = true }
             } finally {
-                _state.update { it.copy(talking = false, waitingClick = false) }
+                // 割り込まれて止まったスクリプトが、後から始まったスクリプトの「話している」を消さないようにする
+                if (run == scriptRuns) {
+                    _state.update { it.copy(talking = false, waitingClick = false, scriptEnds = if (ended) it.scriptEnds + 1 else it.scriptEnds) }
+                }
             }
 
             // 終了中（OnClose のスクリプト）なら、話し終えた時点で close() に戻す
@@ -1176,6 +1185,7 @@ class GhostController(
                 screenOn = it.screenOn,
                 passive = it.passive,
                 loading = it.loading,
+                scriptEnds = it.scriptEnds,
             )
         }
     }

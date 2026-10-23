@@ -151,6 +151,33 @@ class SurfaceTableTest {
     }
 
     @Test
+    fun talkAnimationsPlayEveryNCharacters() {
+        val def = SurfaceTable.parse(
+            """
+            surface0 {
+            animation1.interval,talk,4
+            animation1.pattern0,overlay,10,50,0,0
+            animation2.interval,talk,1
+            animation2.pattern0,overlay,20,50,0,0
+            animation3.interval,yen-e
+            animation3.pattern0,overlay,30,50,0,0
+            animation4.interval,sometimes
+            animation4.pattern0,overlay,40,50,0,0
+            }
+            """.trimIndent(),
+        )[0]!!
+        // 1 文字ごとのものは毎回、4 文字ごとのものは 4 の倍数をまたいだときだけ
+        assertEquals(listOf(2), def.talkAnimations(0, 1).map { it.id })
+        assertEquals(listOf(1, 2), def.talkAnimations(3, 4).map { it.id })
+        assertEquals(listOf(2), def.talkAnimations(4, 7).map { it.id })
+        // \_q などで一度にたくさん出ても1回だけ
+        assertEquals(listOf(1, 2), def.talkAnimations(0, 20).map { it.id })
+        // 増えていなければ何も動かさない
+        assertEquals(emptyList<Int>(), def.talkAnimations(5, 5).map { it.id })
+        assertEquals(listOf(3), def.yenEAnimations.map { it.id })
+    }
+
+    @Test
     fun insertPutsAnotherDressUpBetweenParts() {
         // 10 の「後ろ髪 → (11 を差し込む) → 前髪」。11 は 10 の中に出し、自分の番号の位置には出さない
         val table = SurfaceTable.parse(

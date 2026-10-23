@@ -77,6 +77,22 @@ class SurfaceDefinition(val id: Int) {
         animations[id] ?: if (animations.size < MAX_PARTS) Animation(id).also { animations[id] = it } else null
 
     /**
+     * 話した文字の数が [from] から [to] に増えたときに動かす、interval が talk,N のアニメーション（SSP と同じく N 文字ごと）。
+     * 一度にたくさん出たとき（\_q など）でも、1つのアニメーションは1回だけ動かす
+     */
+    fun talkAnimations(from: Int, to: Int): List<Animation> {
+        if (to <= from) return emptyList()
+        return animations.values.filter { anim ->
+            if (anim.interval.kind != IntervalKind.TALK) return@filter false
+            val every = anim.interval.arg.coerceAtLeast(1)
+            to / every > from / every
+        }
+    }
+
+    /** スクリプトを話し終えた（\e まで来た）ときに動かす、interval が yen-e のアニメーション */
+    val yenEAnimations: List<Animation> get() = animations.values.filter { it.interval.kind == IntervalKind.YEN_E }
+
+    /**
      * 身に着けている着せ替え（interval が bind）のコマを、重ねる順（下から）に並べる。
      * `insert,ID` の位置には着せ替え ID のコマを差し込む（入れ子も可）。差し込まれる着せ替えは、自分の番号の位置には出さない。
      * ID を身に着けていなければ何も出さない（SSP と同じ）
