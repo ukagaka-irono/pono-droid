@@ -59,6 +59,15 @@ class Shell(val dir: File) {
 
     fun hasSurface(id: Int): Boolean = surfaceImage(id) != null || surfaces[id]?.elements?.isNotEmpty() == true
 
+    /** あるサーフェスの番号（画像があるものと、surfaces.txt で element を組むもの）。OnNotifyShellInfo で伝える */
+    fun surfaceIds(): List<Int> {
+        val fromFiles = files.keys.mapNotNull { surfaceFile.matchEntire(it)?.groupValues?.get(1)?.toIntOrNull() }
+        val fromTable = surfaces.definitions.filterValues { it.elements.isNotEmpty() }.keys
+        return (fromFiles + fromTable).toSortedSet().toList()
+    }
+
+    private val surfaceFile = Regex("""^surface0*(\d+)\.png$""")
+
     companion object {
         fun scopeName(scope: Int) = when (scope) {
             0 -> "sakura"

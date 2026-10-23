@@ -1,0 +1,194 @@
+package net.pono.baseware.ghost
+
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import net.pono.baseware.sakura.Choice
+import net.pono.baseware.sakura.TextStyle
+import net.pono.baseware.update.FetchResult
+import net.pono.baseware.update.HttpFetcher
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
+
+/** SSP と同じイベント・タグ・プロパティが届くこと */
+class SspCompatibilityTest {
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    private suspend fun GhostController.awaitText(scope: Int = 0): String = withTimeout(5000) {
+        state.first { s -> s.characters[scope]?.balloon?.any { it is BalloonItem.Text } == true }
+    }.characters[scope]!!.balloon!!.filterIsInstance<BalloonItem.Text>().joinToString("") { it.text }
+
+    @Test
+    fun scriptsGoThroughOnTranslate() = runBlocking {
+        val shiori = ScriptedShiori(mapOf("OnFirstBoot" to """\0元の文""", "OnTranslate" to """\0訳した文"""))
+        val scope = testScope()
+        try {
+            val controller = testController(tmp.newTestGhost(), shiori, scope)
+            controller.start()
+            assertEquals("訳した文", controller.awaitText())
+            assertEquals(listOf("""\0元の文"""), shiori.awaitEvent("OnTranslate"))
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun bootNotifiesEnvironmentAndUsesShioriResources() = runBlocking {
+        val shiori = ScriptedShiori(mapOf("homeurl" to "https://shiori.test/g/", "username" to "太郎", "OnFirstBoot" to """\0%usernameさん"""))
+        val platform = RecordingPlatform().apply {
+            device = DeviceInfo(osVersion = "14", arch = "arm64-v8a", cpuCount = 8, memoryTotalMb = 4096, memoryFreeMb = 1024, uptimeSeconds = 3600, screenWidth = 1080, screenHeight = 2400, dpi = 420)
+            battery = BatteryInfo(percent = 80, charging = true, plugged = true)
+        }
+        val requested = mutableListOf<String>()
+        val fetcher = HttpFetcher { url, _, _ -> requested += url; FetchResult.HttpError(404) }
+        val scope = testScope()
+        try {
+            val controller = testController(tmp.newTestGhost(), shiori, scope, platform, fetcher)
+            controller.start()
+            assertEquals("太郎さん", controller.awaitText())
+            val ids = shiori.events.map { it.first }
+            for (expected in listOf("OnNotifySelfInfo", "OnNotifyBalloonInfo", "OnNotifyShellInfo", "OnNotifyUserInfo", "OnNotifyOSInfo", "OnDisplayChange", "OnNotifyInternationalInfo", "OnBatteryNotify")) {
+                assertTrue(expected, expected in ids)
+            }
+            assertEquals(listOf("Android,14,Android 14", "arm64-v8a,0,", "4194304,4194304", "60"), shiori.awaitEvent("OnNotifyOSInfo"))
+            assertEquals(listOf("32", "1080", "2400"), shiori.awaitEvent("OnDisplayChange"))
+            assertEquals(listOf("80", "-1", "online", "high,charging"), shiori.awaitEvent("OnBatteryNotify"))
+            assertEquals(listOf("太郎", "", "", "undef"), shiori.awaitEvent("OnNotifyUserInfo"))
+
+            // ネットワーク更新は SHIORI の homeurl を使う
+            controller.networkUpdate()
+            shiori.awaitEvent("OnUpdateFailure")
+            assertEquals(listOf("https://shiori.test/g/updates2.dau", "https://shiori.test/g/updates.txt"), requested)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun anchorsUseAnchorEventsAndScriptChoicesRunInline() = runBlocking {
+        val shiori = ScriptedShiori(mapOf("OnFirstBoot" to """\0\_a[ID1,x]link\_a\q[直接,script:\0直接の文]""", "OnAnchorSelect" to """\0選んだ"""))
+        val scope = testScope()
+        try {
+            val controller = testController(tmp.newTestGhost(), shiori, scope)
+            controller.start()
+            withTimeout(5000) { controller.state.first { it.waitingChoice } }
+            controller.onChoice(Choice("link", "ID1", listOf("x"), anchor = true))
+            // OnAnchorSelectEx に答えが無ければ OnAnchorSelect
+            assertEquals(listOf("link", "ID1", "x"), shiori.awaitEvent("OnAnchorSelectEx"))
+            assertEquals(listOf("ID1", "x"), shiori.awaitEvent("OnAnchorSelect"))
+            assertEquals("選んだ", controller.awaitText())
+
+            controller.onBalloonClick(0)
+            shiori.awaitEvent("OnBalloonClose")
+            controller.raise("OnFirstBoot", emptyList())
+            withTimeout(5000) { controller.state.first { it.waitingChoice } }
+            controller.onChoice(Choice("直接", "script:\\0直接の文"))
+            assertEquals("直接の文", controller.awaitText())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun mouseUpSuppressesClickWhenAnswered() = runBlocking {
+        val shiori = ScriptedShiori(mapOf("OnMouseUp" to """\0押した"""))
+        val scope = testScope()
+        try {
+            val controller = testController(tmp.newTestGhost(), shiori, scope)
+            controller.start()
+            shiori.awaitEvent("OnFirstBoot")
+            controller.onMouseDown(0, 1, 2, "Head")
+            assertEquals(listOf("1", "2", "0", "0", "Head", "0", "touch"), shiori.awaitEvent("OnMouseDown"))
+            controller.onMouseUp(0, 1, 2, "Head", 1)
+            assertEquals("押した", controller.awaitText())
+            delay(200)
+            assertEquals(0, shiori.count("OnMouseClick"))
+            // 答えが無ければ OnMouseClick。ダブルクリックは答えの有無によらず送る
+            controller.onMouseUp(0, 1, 2, "Head", 2)
+            shiori.awaitEvent("OnMouseDoubleClick")
+            Unit
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun surfaceChangesAndBalloonEventsAreReported() = runBlocking {
+        val shiori = ScriptedShiori(
+            mapOf("OnFirstBoot" to """\0\s[5]\1\s[12]ok""", "OnBalloonTimeout" to """\0time""", "OnBreakTest" to """\0長い\_w[3000]話"""),
+        )
+        val scope = testScope()
+        try {
+            val controller = GhostController(
+                ghost = tmp.newTestGhost(),
+                shell = net.pono.baseware.shell.Shell(File(tmp.root, "ghost/shell/master")),
+                shioriFactory = { _, _ -> shiori },
+                scope = scope,
+                platform = RecordingPlatform(),
+                player = net.pono.baseware.sakura.ScriptPlayer(charWaitMs = 0),
+                balloonTimeoutMs = 300,
+            )
+            controller.start()
+            assertEquals("ok", controller.awaitText(1))
+            val changes = withTimeout(5000) {
+                while (shiori.count("OnSurfaceChange") < 2) delay(10)
+                shiori.events.filter { it.first == "OnSurfaceChange" }.map { it.second }
+            }
+            assertEquals(listOf("5", "10", "0,5,0,0"), changes[0])
+            assertEquals(listOf("5", "12", "1,12,0,0"), changes[1])
+            // バルーンが時間で消えたら OnBalloonTimeout
+            assertEquals(listOf("""\0\s[5]\1\s[12]ok""", "0"), shiori.awaitEvent("OnBalloonTimeout"))
+            assertEquals("time", controller.awaitText())
+            // 話している途中にバルーンを叩くと OnBalloonBreak
+            controller.onBalloonClick(0)
+            shiori.awaitEvent("OnBalloonClose")
+            controller.raise("OnBreakTest", emptyList())
+            assertEquals("長い", controller.awaitText())
+            controller.onBalloonClick(0)
+            assertEquals(listOf("""\0長い\_w[3000]話""", "0", ""), shiori.awaitEvent("OnBalloonBreak"))
+            assertFalse(controller.state.value.talking)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun timerRaisePassiveModeAndProperties() = runBlocking {
+        val shiori = ScriptedShiori(mapOf("OnFirstBoot" to """\0\![timerraise,100,1,OnTimerTest,a]\![enter,passivemode]\f[bold,1]太い\![open,readme]"""))
+        val platform = RecordingPlatform()
+        val scope = testScope()
+        try {
+            val ghost = tmp.newTestGhost()
+            File(ghost.masterDir, "readme.txt").writeText("説明")
+            val controller = testController(ghost, shiori, scope, platform)
+            controller.start()
+            assertEquals(listOf("a"), shiori.awaitEvent("OnTimerTest"))
+            withTimeout(5000) { controller.state.first { it.passive } }
+            // パッシブモードでは「話せる」が 0
+            assertEquals("0", shiori.awaitEvent("OnSecondChange")[3])
+            val bold = controller.state.value.characters[0]!!.balloon!!.filterIsInstance<BalloonItem.Text>().first { it.text == "太い" }
+            assertEquals(TextStyle(bold = true), bold.style)
+            assertEquals(listOf("テスト" to "説明"), platform.texts)
+
+            assertEquals("pono-droid", controller.property("baseware.name"))
+            assertEquals("テスト", controller.property("currentghost.name"))
+            assertEquals("1", controller.property("ghostlist.count"))
+            assertEquals("テスト", controller.property("ghostlist.index(0).name"))
+            assertEquals("2", controller.property("currentghost.scope.count"))
+            assertEquals("master", controller.property("currentghost.shelllist.current.name"))
+            assertEquals("talking,passive".takeIf { controller.state.value.talking } ?: "passive", controller.property("currentghost.status"))
+            assertEquals(java.util.Calendar.getInstance().get(java.util.Calendar.YEAR).toString(), controller.property("system.year"))
+            assertFalse(controller.property("system.os.locale").isNullOrEmpty())
+        } finally {
+            scope.cancel()
+        }
+    }
+}

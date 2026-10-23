@@ -1,5 +1,6 @@
 package net.pono.droid.overlay
 
+import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,8 +12,12 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
 import android.net.Uri
+import android.os.BatteryManager
+import android.os.Build
 import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.widget.RemoteViews
@@ -30,6 +35,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+import net.pono.baseware.ghost.BatteryInfo
+import net.pono.baseware.ghost.DeviceInfo
 import net.pono.baseware.ghost.Ghost
 import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.ghost.GhostPlatform
@@ -37,6 +44,7 @@ import net.pono.baseware.shell.Shell
 import net.pono.droid.GhostStore
 import net.pono.droid.MainActivity
 import net.pono.droid.R
+import net.pono.droid.TextViewerActivity
 import net.pono.shiori.yaya.RemoteYayaShiori
 
 /** ゴーストを常駐させる。キャラクターごとのオーバーレイウィンドウを持つ。 */
@@ -74,12 +82,44 @@ class GhostOverlayService : LifecycleService() {
             return
         }
         val shell = Shell(shellDir)
+        val repo = GhostStore.repository(this)
+        // 選んだバルーン（無ければゴーストの指定）。どちらも無ければ簡易バルーン
+        val balloon = ghost.balloon(repo.balloons)
         val c = GhostController(
             ghost = ghost,
             shell = shell,
+            balloon = balloon,
+            repository = repo,
             shioriFactory = RemoteYayaShiori.factory(this),
             scope = lifecycleScope,
             platform = object : GhostPlatform {
+                override fun deviceInfo(): DeviceInfo {
+                    val memory = ActivityManager.MemoryInfo().also { getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
+                    val metrics = resources.displayMetrics
+                    return DeviceInfo(
+                        osName = "Android",
+                        osVersion = Build.VERSION.RELEASE.orEmpty(),
+                        osBuild = Build.VERSION.SDK_INT.toString(),
+                        arch = Build.SUPPORTED_ABIS.firstOrNull().orEmpty(),
+                        cpuCount = Runtime.getRuntime().availableProcessors(),
+                        memoryTotalMb = memory.totalMem / (1024 * 1024),
+                        memoryFreeMb = memory.availMem / (1024 * 1024),
+                        uptimeSeconds = SystemClock.elapsedRealtime() / 1000,
+                        screenWidth = metrics.widthPixels,
+                        screenHeight = metrics.heightPixels,
+                        dpi = metrics.densityDpi,
+                    )
+                }
+
+                override fun batteryInfo(): BatteryInfo? =
+                    registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let(::batteryInfo)
+
+                override fun showText(title: String, text: String) = TextViewerActivity.start(this@GhostOverlayService, title, text)
+
+                override fun openSettings() {
+                    startActivity(Intent(this@GhostOverlayService, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+
                 /** ウェブのページだけ開く。ゴーストのスクリプトに他のアプリ（電話や決済など）を起動させない */
                 override fun openUrl(url: String) {
                     val uri = Uri.parse(url)
@@ -115,8 +155,7 @@ class GhostOverlayService : LifecycleService() {
         _running.value = ghost.dir.name
         c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
         val renderer = SurfaceRenderer(shell)
-        // 選んだバルーン（無ければゴーストの指定）。どちらも無ければ簡易バルーン
-        val balloonSkin = ghost.balloon(GhostStore.repository(this).balloons)?.let(::BalloonSkin)
+        val balloonSkin = balloon?.let(::BalloonSkin)
         val prefs = OverlaySettings.prefs(this)
         for (scope in listOf(1, 0)) {
             windows += CharacterWindow(this, scope, c, renderer, balloonSkin, prefs).also { it.show() }
@@ -155,6 +194,24 @@ class GhostOverlayService : LifecycleService() {
         }
     }
 
+    /** 電池の状態はゴーストに伝える（OnBatteryNotify。変わったときだけ送るかは controller が見る） */
+    private val batteryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            controller?.onBatteryChanged(batteryInfo(intent))
+        }
+    }
+
+    private fun batteryInfo(intent: Intent): BatteryInfo {
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
+        return BatteryInfo(
+            percent = if (level >= 0 && scale > 0) level * 100 / scale else -1,
+            charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL,
+            plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0,
+        )
+    }
+
     override fun onCreate() {
         super.onCreate()
         registerReceiver(
@@ -164,10 +221,19 @@ class GhostOverlayService : LifecycleService() {
                 addAction(Intent.ACTION_SCREEN_OFF)
             },
         )
+        registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+    }
+
+    /** 画面の向きが変わった（OnDisplayChange） */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val metrics = resources.displayMetrics
+        controller?.onDisplayChanged(metrics.widthPixels, metrics.heightPixels)
     }
 
     override fun onDestroy() {
         unregisterReceiver(screenReceiver)
+        unregisterReceiver(batteryReceiver)
         teardown()
         super.onDestroy()
     }

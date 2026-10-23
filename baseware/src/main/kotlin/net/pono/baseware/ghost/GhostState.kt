@@ -1,9 +1,12 @@
 package net.pono.baseware.ghost
 
 import net.pono.baseware.sakura.Choice
+import net.pono.baseware.sakura.TextAlign
+import net.pono.baseware.sakura.TextStyle
 
 sealed interface BalloonItem {
-    data class Text(val text: String) : BalloonItem
+    /** [style] は \f で決めた飾り */
+    data class Text(val text: String, val style: TextStyle = TextStyle.Default) : BalloonItem
     data object NewLine : BalloonItem
 
     /** \q の選択肢と、\_a / \__q のリンク。文の中にそのまま置く */
@@ -14,6 +17,9 @@ sealed interface BalloonItem {
 
     /** \_l[x,y]。同じ行の中で x を指定されたら、そこから次の列にする（狭いバルーンでは座標どおりに置けないので、列に分けて並べる） */
     data object Column : BalloonItem
+
+    /** \f[align,...]。今の行の寄せ方（次の行からは左寄せに戻る） */
+    data class Align(val align: TextAlign) : BalloonItem
 }
 
 /** キャラクター（\0, \1 ...）1人分の表示状態。[surface] が -1 なら非表示。 */
@@ -28,11 +34,15 @@ data class CharacterState(
     /** \b[n] で選ばれたバルーンの番号。null なら文字の量に合わせて選ぶ、-1 ならバルーンを出さない */
     val balloonId: Int? = null,
 ) {
-    fun appendText(text: String): CharacterState {
+    fun appendText(text: String, style: TextStyle = TextStyle.Default): CharacterState {
         val items = balloon.orEmpty()
         val last = items.lastOrNull()
         return copy(
-            balloon = if (last is BalloonItem.Text) items.dropLast(1) + BalloonItem.Text(last.text + text) else items + BalloonItem.Text(text),
+            balloon = if (last is BalloonItem.Text && last.style == style) {
+                items.dropLast(1) + BalloonItem.Text(last.text + text, style)
+            } else {
+                items + BalloonItem.Text(text, style)
+            },
         )
     }
 
@@ -48,6 +58,8 @@ data class GhostState(
     val screenOn: Boolean = true,
     /** 開いている入力の箱（\![open,inputbox,...] など）。答えるか取り消すまで残る */
     val input: InputRequest? = null,
+    /** \![enter,passivemode]。バルーンと選択肢が時間で消えず、ゴーストは「話せない」と伝えられる */
+    val passive: Boolean = false,
 ) {
     fun update(scope: Int, f: (CharacterState) -> CharacterState): GhostState {
         val current = characters[scope] ?: CharacterState(scope, -1)

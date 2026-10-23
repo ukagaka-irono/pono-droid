@@ -68,9 +68,13 @@ fun CharacterSurface(
             .onSizeChanged { onHeightChanged(it.height) }
             .surfaceTouch(
                 touchHandler,
+                onDown = { x, y ->
+                    val (ix, iy) = (x / pxPerImagePx).toInt() to (y / pxPerImagePx).toInt()
+                    controller.onMouseDown(scopeId, ix, iy, controller.shell.surfaces[character.surface]?.hitTest(ix, iy))
+                },
                 onTap = { x, y, count ->
                     val (ix, iy) = (x / pxPerImagePx).toInt() to (y / pxPerImagePx).toInt()
-                    controller.onMouseClick(scopeId, ix, iy, controller.shell.surfaces[character.surface]?.hitTest(ix, iy), count)
+                    controller.onMouseUp(scopeId, ix, iy, controller.shell.surfaces[character.surface]?.hitTest(ix, iy), count)
                 },
                 onLongPress = { x, y ->
                     val (ix, iy) = (x / pxPerImagePx).toInt() to (y / pxPerImagePx).toInt()
@@ -102,7 +106,8 @@ fun CharacterBalloon(scopeId: Int, controller: GhostController, skin: BalloonSki
 @OptIn(ExperimentalComposeUiApi::class)
 private fun Modifier.surfaceTouch(
     handler: SurfaceTouchHandler,
+    onDown: (Float, Float) -> Unit,
     onTap: (Float, Float, Int) -> Unit,
     onLongPress: (Float, Float) -> Unit,
-) = pointerInteropFilter { handler.onTouch(it, onTap, onLongPress) }
+) = pointerInteropFilter { handler.onTouch(it, onDown, onTap, onLongPress) }
 

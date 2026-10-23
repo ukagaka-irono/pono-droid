@@ -17,14 +17,20 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import net.pono.baseware.balloon.Balloon
 import net.pono.baseware.sakura.Choice
 import net.pono.baseware.sakura.ScriptHost
 import net.pono.baseware.sakura.ScriptPlayer
+import net.pono.baseware.sakura.TextAlign
+import net.pono.baseware.sakura.TextStyle
 import net.pono.baseware.sakura.Token
 import net.pono.baseware.shell.Shell
 import net.pono.baseware.shiori.ShioriFactory
+import net.pono.baseware.shiori.ShioriMethod
+import net.pono.baseware.shiori.ShioriRequest
 import net.pono.baseware.shiori.ShioriSession
 import net.pono.baseware.shiori.ShioriTimeoutException
+import net.pono.baseware.text.TextCharsets
 import net.pono.baseware.update.FetchResult
 import net.pono.baseware.update.HttpFetcher
 import net.pono.baseware.update.NetworkUpdater
@@ -34,6 +40,27 @@ import net.pono.baseware.update.UrlConnectionFetcher
 import java.io.File
 import java.io.IOException
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+
+/** 端末の情報。OnNotifyOSInfo・OnDisplayChange・プロパティで伝える。分からないところは空や 0 でよい */
+data class DeviceInfo(
+    val osName: String = "Android",
+    val osVersion: String = "",
+    val osBuild: String = "",
+    val arch: String = "",
+    val cpuCount: Int = 0,
+    val memoryTotalMb: Long = 0,
+    val memoryFreeMb: Long = 0,
+    val uptimeSeconds: Long = 0,
+    val screenWidth: Int = 0,
+    val screenHeight: Int = 0,
+    val dpi: Int = 0,
+)
+
+/** 電池の状態。[percent] は -1 なら不明 */
+data class BatteryInfo(val percent: Int, val charging: Boolean, val plugged: Boolean)
 
 /** プラットフォーム側に頼むこと。 */
 interface GhostPlatform {
@@ -45,6 +72,16 @@ interface GhostPlatform {
 
     /** ユーザーに知らせるべき失敗（SHIORI が読めないなど） */
     fun onError(message: String) = log(message)
+
+    /** 端末の情報。null なら OnNotifyOSInfo などを送らない */
+    fun deviceInfo(): DeviceInfo? = null
+    fun batteryInfo(): BatteryInfo? = null
+
+    /** readme のような長い文を見せる（\![open,readme]） */
+    fun showText(title: String, text: String) {}
+
+    /** pono-droid の設定画面（SSP の本体設定やゴーストエクスプローラの代わり） */
+    fun openSettings() {}
 }
 
 /**
@@ -57,7 +94,11 @@ class GhostController(
     private val shioriFactory: ShioriFactory,
     private val scope: CoroutineScope,
     private val platform: GhostPlatform,
-    private val userName: String = "ユーザ",
+    /** 使っているバルーン（null なら pono-droid の簡易バルーン） */
+    private val balloon: Balloon? = null,
+    /** 入っているゴーストとバルーンの一覧（プロパティシステムの ghostlist などに使う） */
+    private val repository: GhostRepository? = null,
+    userName: String = "ユーザ",
     private val player: ScriptPlayer = ScriptPlayer(),
     private val balloonTimeoutMs: Long = 15_000,
     private val choiceTimeoutMs: Long = 30_000,
@@ -66,6 +107,8 @@ class GhostController(
     private val _state = MutableStateFlow(GhostState())
     val state: StateFlow<GhostState> = _state.asStateFlow()
 
+    /** %username。SHIORI が username リソースを返せばそれに変わる */
+    private var userName = userName
     private var session: ShioriSession? = null
     private var scriptJob: Job? = null
     private var timerJob: Job? = null
@@ -80,6 +123,15 @@ class GhostController(
     private var inputTimeout: Job? = null
     private var httpGetsInFlight = 0
 
+    /** 最後に再生したスクリプト（OnBalloonClose などで伝える） */
+    private var lastScript = ""
+
+    /** \![timerraise] の予約（イベント名ごとに1つ） */
+    private val timers = HashMap<String, Job>()
+
+    /** SHIORI の homeurl リソース。descript.txt より優先する */
+    private var homeUrlOverride: String? = null
+    private var lastBattery: BatteryInfo? = null
 
     fun start() {
         scope.launch {
@@ -133,8 +185,15 @@ class GhostController(
         val notified = runCatching {
             s.get("version")?.value?.let { platform.log("SHIORI version: $it") }
             s.notify("basewareversion", ShioriSession.SENDER, BASEWARE_VERSION)
-            s.notify("OnNotifySelfInfo", ghost.name, ghost.sakuraName, ghost.keroName, shell.name, shell.dir.absolutePath + "/", "", "")
+            s.notify(
+                "OnNotifySelfInfo", ghost.name, ghost.sakuraName, ghost.keroName, shell.name, shell.dir.absolutePath + "/",
+                balloon?.name.orEmpty(), balloon?.let { it.dir.absolutePath + "/" }.orEmpty(),
+            )
             s.notify("ownerghostname", ghost.name)
+            // SHIORI が持っていればそちらを使う（SSP と同じ）
+            homeUrlOverride = s.get("homeurl")?.value?.trim()?.takeIf { it.isNotEmpty() }
+            s.get("username")?.value?.trim()?.takeIf { it.isNotEmpty() }?.let { userName = it }
+            notifyEnvironment(s)
         }
         if (notified.isFailure) {
             session = null
@@ -143,6 +202,59 @@ class GhostController(
             return false
         }
         return true
+    }
+
+    /** SSP が起動時に NOTIFY で伝える、シェル・バルーン・着せ替え・ユーザー・端末の情報 */
+    private suspend fun notifyEnvironment(s: ShioriSession) {
+        s.notify(
+            "OnNotifyBalloonInfo", balloon?.name.orEmpty(), balloon?.let { it.dir.absolutePath + "/" }.orEmpty(),
+            balloon?.let { b -> (0..1).joinToString(" ") { scope -> "$scope:" + b.images(scope).joinToString(",") { it.index.toString() } } }.orEmpty(),
+        )
+        s.notify("OnNotifyShellInfo", shell.name, shell.dir.absolutePath + "/", shell.surfaceIds().joinToString(","))
+        val dressup = dressupInfo()
+        if (dressup.isNotEmpty()) s.notify("OnNotifyDressupInfo", *dressup.toTypedArray())
+        s.notify("OnNotifyUserInfo", userName, "", "", "undef")
+        platform.deviceInfo()?.let { d ->
+            s.notify(
+                "OnNotifyOSInfo",
+                "${d.osName},${d.osVersion},${d.osName} ${d.osVersion}".trim(),
+                "${d.arch},0,",
+                "${d.memoryTotalMb * 1024},${d.memoryTotalMb * 1024}",
+                (d.uptimeSeconds / 60).toString(),
+            )
+            s.notify("OnDisplayChange", "32", d.screenWidth.toString(), d.screenHeight.toString())
+        }
+        val tz = TimeZone.getDefault()
+        val now = Date()
+        val locale = Locale.getDefault()
+        // SSP の約束では UTC より進んでいる地域が負（日本なら -540）
+        s.notify(
+            "OnNotifyInternationalInfo", (-(tz.getOffset(now.time) / 60_000)).toString(),
+            if (tz.inDaylightTime(now)) "1" else "0", locale.country, locale.language,
+        )
+        platform.batteryInfo()?.let { b ->
+            lastBattery = b
+            s.notify("OnBatteryNotify", *batteryReferences(b).toTypedArray())
+        }
+    }
+
+    /** OnNotifyDressupInfo の Reference: [キャラ ID, カテゴリ, パーツ, オプション, 有効 1/0, サムネイル] を 0x01 でつないだもの */
+    private fun dressupInfo(): List<String> = (0..1).flatMap { scope ->
+        val binds = _state.value.characters[scope]?.binds.orEmpty()
+        shell.bindGroups(scope).map { g ->
+            listOf(scope.toString(), g.category, g.part, "", if (g.id in binds) "1" else "0", "").joinToString("\u0001")
+        }
+    }
+
+    private fun batteryReferences(b: BatteryInfo): List<String> {
+        val flags = buildList {
+            if (b.percent >= 67) add("high")
+            if (b.percent in 0..33) add("low")
+            if (b.percent in 0..5) add("critical")
+            if (b.charging) add("charging")
+            if (b.percent < 0) add("no_battery")
+        }
+        return listOf(b.percent.toString(), "-1", if (b.plugged) "online" else "offline", flags.joinToString(","))
     }
 
     // ---- ネットワーク更新 ----
@@ -159,7 +271,7 @@ class GhostController(
         scope.launch {
             val refs = { r0: String, r1: String -> listOf(r0, r1, "", "ghost") }
             try {
-                val homeUrl = ghost.descript["homeurl"]
+                val homeUrl = homeUrlOverride ?: ghost.descript["homeurl"]
                 if (homeUrl.isNullOrBlank()) {
                     raise("OnUpdateFailure", refs("none", ""))
                     return@launch
@@ -211,12 +323,12 @@ class GhostController(
         val id = opts["async"].orEmpty()
         scope.launch {
             if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                deliverHttpResult("OnExecuteHTTPFailure", listOf("http-get", id, url, "invalid url"))
+                deliverLater("OnExecuteHTTPFailure", listOf("http-get", id, url, "invalid url"))
                 return@launch
             }
             // 毎秒頼まれても際限なく通信しないよう、同時に走る数に上限を置く
             if (httpGetsInFlight >= MAX_HTTP_GETS) {
-                deliverHttpResult("OnExecuteHTTPFailure", listOf("http-get", id, url, "busy"))
+                deliverLater("OnExecuteHTTPFailure", listOf("http-get", id, url, "busy"))
                 return@launch
             }
             httpGetsInFlight++
@@ -225,7 +337,7 @@ class GhostController(
             } finally {
                 httpGetsInFlight--
             }
-            deliverHttpResult(if (ok) "OnExecuteHTTPComplete" else "OnExecuteHTTPFailure", listOf("http-get", id, url, detail))
+            deliverLater(if (ok) "OnExecuteHTTPComplete" else "OnExecuteHTTPFailure", listOf("http-get", id, url, detail))
         }
     }
 
@@ -256,7 +368,8 @@ class GhostController(
         }
     }
 
-    private suspend fun deliverHttpResult(event: String, references: List<String>) {
+    /** 話し終わってから（割り込まずに）イベントを送る */
+    private suspend fun deliverLater(event: String, references: List<String>) {
         _state.first { !it.talking && !it.waitingChoice }
         raise(event, references, userInitiated = false)
     }
@@ -286,6 +399,8 @@ class GhostController(
 
     private suspend fun shutdown() {
         timerJob?.cancel()
+        timers.values.forEach { it.cancel() }
+        timers.clear()
         session?.unload()
         session = null
         platform.onQuit()
@@ -293,13 +408,41 @@ class GhostController(
 
     // ---- ユーザー操作 ----
 
+    private fun mouseReferences(scopeId: Int, x: Int, y: Int, collision: String?, button: Int) =
+        listOf(x.toString(), y.toString(), "0", scopeId.toString(), collision.orEmpty(), button.toString(), "touch")
+
+    /** 指が触れた。SSP の OnMouseDown（左ボタン） */
+    fun onMouseDown(scopeId: Int, x: Int, y: Int, collision: String?) {
+        lastUserActivity = System.currentTimeMillis()
+        raise("OnMouseDown", mouseReferences(scopeId, x, y, collision, 0), userInitiated = false)
+    }
+
     /**
-     * SSP と同じく、1回叩くごとに呼ぶ。[count] は続けて叩いた回数で、
+     * 指が離れた（動かさずに）。SSP と同じく OnMouseUp を送り、ゴーストが何も返さなければ OnMouseClick を送る。
+     * [count] は続けて叩いた回数で、2 なら OnMouseDoubleClick、3 以上なら OnMouseMultipleClick（Reference7 が回数）も送る。
+     */
+    fun onMouseUp(scopeId: Int, x: Int, y: Int, collision: String?, count: Int) {
+        lastUserActivity = System.currentTimeMillis()
+        scope.launch {
+            val script = request("OnMouseUp", mouseReferences(scopeId, x, y, collision, 0))
+            if (script != null) {
+                if (!_state.value.talking && !_state.value.waitingChoice) {
+                    cancelScript()
+                    runScript(script)
+                }
+                if (count == 1) return@launch
+            }
+            onMouseClick(scopeId, x, y, collision, count)
+        }
+    }
+
+    /**
+     * 1回叩くごとに呼ぶ。[count] は続けて叩いた回数で、
      * 1 なら OnMouseClick、2 なら OnMouseDoubleClick、3 以上なら OnMouseMultipleClick（Reference7 が回数）を送る。
      */
     fun onMouseClick(scopeId: Int, x: Int, y: Int, collision: String?, count: Int) {
         lastUserActivity = System.currentTimeMillis()
-        val refs = listOf(x.toString(), y.toString(), "0", scopeId.toString(), collision.orEmpty(), "0", "touch")
+        val refs = mouseReferences(scopeId, x, y, collision, 0)
         when (count) {
             1 -> raise("OnMouseClick", refs, userInitiated = false)
             2 -> raise("OnMouseDoubleClick", refs)
@@ -313,9 +456,8 @@ class GhostController(
      */
     fun onMouseLongPress(scopeId: Int, x: Int, y: Int, collision: String?) {
         lastUserActivity = System.currentTimeMillis()
-        val refs = listOf(x.toString(), y.toString(), "0", scopeId.toString(), collision.orEmpty(), "1", "touch")
         scope.launch {
-            val script = request("OnMouseClick", refs)
+            val script = request("OnMouseClick", mouseReferences(scopeId, x, y, collision, 1))
             cancelScript()
             runScript(script ?: basewareMenu(scopeId))
         }
@@ -329,7 +471,10 @@ class GhostController(
             "\\q[ゴーストを終了,pono:close]\\n" +
             "\\q[閉じる,pono:cancel]\\e"
 
-    /** バルーンをタップした。\x の待ちなら進め、話し終わっていれば閉じる。 */
+    /**
+     * バルーンをタップした。\x の待ちなら進め、話している途中なら止めて（OnBalloonBreak）、
+     * 話し終わっていれば閉じる（OnBalloonClose）。
+     */
     fun onBalloonClick(scopeId: Int) {
         lastUserActivity = System.currentTimeMillis()
         val waiter = clickWaiter
@@ -338,7 +483,45 @@ class GhostController(
             return
         }
         val s = _state.value
-        if (!s.talking && !s.waitingChoice) hideBalloons()
+        when {
+            s.waitingChoice -> {}
+            s.talking -> {
+                val script = lastScript
+                cancelScript()
+                _state.update { it.copy(talking = false, waitingClick = false) }
+                hideBalloons()
+                raise("OnBalloonBreak", listOf(script, scopeId.toString(), ""), userInitiated = false)
+            }
+            else -> {
+                hideBalloons()
+                raise("OnBalloonClose", listOf(lastScript), userInitiated = false)
+            }
+        }
+    }
+
+    // ---- 端末の変化 ----
+
+    /** 電池の状態が変わった。残量か充電の状態が変わったときだけ OnBatteryNotify を送る */
+    fun onBatteryChanged(info: BatteryInfo) {
+        val previous = lastBattery
+        lastBattery = info
+        if (previous == info) return
+        if (previous != null && previous.charging != info.charging) {
+            raise(if (info.charging) "OnBatteryChargingStart" else "OnBatteryChargingStop", batteryReferences(info), userInitiated = false)
+        }
+        if (previous != null && info.percent in 0..5 && previous.percent > 5) {
+            raise("OnBatteryCritical", batteryReferences(info), userInitiated = false)
+        } else if (previous != null && info.percent in 0..33 && previous.percent > 33) {
+            raise("OnBatteryLow", batteryReferences(info), userInitiated = false)
+        }
+        if (previous == null || previous.percent != info.percent || previous.plugged != info.plugged) {
+            raise("OnBatteryNotify", batteryReferences(info), userInitiated = false)
+        }
+    }
+
+    /** 画面の向きや大きさが変わった */
+    fun onDisplayChanged(width: Int, height: Int) {
+        raise("OnDisplayChange", listOf("32", width.toString(), height.toString()), userInitiated = false)
     }
 
     // ---- 入力の箱 ----
@@ -423,7 +606,22 @@ class GhostController(
         }
     }
 
-    private suspend fun request(event: String, references: List<String>, sensitive: Boolean = false): String? {
+    /** NOTIFY（応答を使わない） */
+    private fun notify(event: String, references: List<String>) {
+        scope.launch {
+            val s = session ?: return@launch
+            requestLock.withLock {
+                runCatching { s.notify(event, *references.toTypedArray()) }
+                    .onFailure { platform.log("$event (notify): ${it.message}") }
+            }
+        }
+    }
+
+    /**
+     * GET。返ってきたスクリプトは、SSP と同じく OnTranslate に通してから使う
+     * （[translate] が false なら通さない。OnTranslate 自身やリソースの問い合わせ）
+     */
+    private suspend fun request(event: String, references: List<String>, sensitive: Boolean = false, translate: Boolean = true): String? {
         val s = session ?: return null
         val value = requestLock.withLock {
             runCatching { s.get(event, *references.toTypedArray()) }
@@ -440,7 +638,24 @@ class GhostController(
                 platform.log("$event $references -> ${value?.take(120) ?: "(no content)"}")
             }
         }
-        return value
+        if (value == null || !translate) return value
+        return translateScript(s, value, event, references)
+    }
+
+    /** OnTranslate: Reference0 = スクリプト、Reference2 = 元のイベント、Reference3 = その Reference（0x01 区切り） */
+    private suspend fun translateScript(s: ShioriSession, script: String, event: String, references: List<String>): String {
+        val translated = requestLock.withLock {
+            runCatching {
+                s.request(
+                    ShioriRequest(
+                        ShioriMethod.GET, "OnTranslate", listOf(script),
+                        mapOf("Reference2" to event, "Reference3" to references.joinToString("\u0001")),
+                    ),
+                )
+            }.onFailure { platform.log("OnTranslate: ${it.message}") }.getOrNull()?.value
+        } ?: return script
+        if (translated != script) platform.log("OnTranslate -> ${translated.take(120)}")
+        return translated
     }
 
     /**
@@ -464,17 +679,27 @@ class GhostController(
         if (!_state.value.screenOn) return
         timerJob = scope.launch {
             var lastMinute = Calendar.getInstance().get(Calendar.MINUTE)
+            var lastHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
             while (isActive) {
                 delay(1000)
-                val talking = _state.value.talking || _state.value.waitingChoice
+                val s = _state.value
+                val talking = s.talking || s.waitingChoice
                 val uptimeHours = ((System.currentTimeMillis() - bootTime) / 3_600_000).toString()
                 val idleSec = ((System.currentTimeMillis() - lastUserActivity) / 1000).toString()
-                val refs = listOf(uptimeHours, "0", "0", if (talking) "0" else "1", idleSec)
+                // Reference3 は「話せるか」。パッシブモードでは常に 0（SSP と同じ）
+                val refs = listOf(uptimeHours, "0", "0", if (talking || s.passive) "0" else "1", idleSec)
                 raise("OnSecondChange", refs, userInitiated = false)
-                val minute = Calendar.getInstance().get(Calendar.MINUTE)
+                val now = Calendar.getInstance()
+                val minute = now.get(Calendar.MINUTE)
                 if (minute != lastMinute) {
                     lastMinute = minute
                     raise("OnMinuteChange", refs, userInitiated = false)
+                }
+                val hour = now.get(Calendar.HOUR_OF_DAY)
+                if (hour != lastHour) {
+                    lastHour = hour
+                    // 時報。話している途中なら、話し終わってから
+                    launch { deliverLater("OnHourTimeSignal", listOf(uptimeHours, "0", "0", "1", idleSec)) }
                 }
             }
         }
@@ -495,6 +720,7 @@ class GhostController(
         // 先頭が \C なら、今出ているバルーンを消さずに続ける
         if (!script.startsWith("\\C")) hideBalloons()
         _state.update { it.copy(talking = true) }
+        lastScript = script
         val job = scope.launch {
             val raised = mutableListOf<Pair<String, List<String>>>()
             val host = Host(raised)
@@ -522,11 +748,13 @@ class GhostController(
                 return@launch
             }
 
+            // パッシブモードでは選択肢もバルーンも時間では消えない（SSP と同じ）
+            val passive = _state.value.passive
             if (result.hasChoices) {
                 val waiter = CompletableDeferred<Choice?>()
                 choiceWaiter = waiter
                 _state.update { it.copy(waitingChoice = true) }
-                val choice = if (host.choiceTimeoutMs > 0) {
+                val choice = if (host.choiceTimeoutMs > 0 && !passive) {
                     withTimeoutOrNull(host.choiceTimeoutMs) { waiter.await() }
                 } else {
                     waiter.await()
@@ -539,9 +767,10 @@ class GhostController(
                 } else {
                     selectChoice(choice)
                 }
-            } else if (host.balloonTimeoutMs > 0) {
+            } else if (host.balloonTimeoutMs > 0 && !passive) {
                 delay(host.balloonTimeoutMs)
                 hideBalloons()
+                raise("OnBalloonTimeout", listOf(script, "0"), userInitiated = false)
             }
         }
         scriptJob = job
@@ -568,6 +797,18 @@ class GhostController(
                 hideBalloons()
                 platform.openUrl(id)
             }
+            // script: で始まる ID は、その続きをスクリプトとして再生する（SSP と同じ）
+            id.startsWith("script:") -> {
+                cancelScript()
+                runScript(id.removePrefix("script:"))
+            }
+            // \_a のジャンパは OnAnchorSelectEx → OnAnchorSelect
+            choice.anchor -> scope.launch {
+                val script = request("OnAnchorSelectEx", listOf(choice.title, id) + choice.references)
+                    ?: request("OnAnchorSelect", listOf(id) + choice.references)
+                cancelScript()
+                if (script != null) runScript(script) else hideBalloons()
+            }
             // "On" で始まる ID はそのままイベントとして送る（SSP と同じ）
             id.startsWith("On") -> raise(id, choice.references)
             else -> scope.launch {
@@ -591,8 +832,194 @@ class GhostController(
                     CharacterState(scope, shell.defaultSurface(scope), binds = shell.bindGroups(scope).filter { g -> g.default }.map { g -> g.id }.toSet())
                 },
                 screenOn = it.screenOn,
+                passive = it.passive,
             )
         }
+    }
+
+    // ---- プロパティシステム ----
+
+    /**
+     * SSP のプロパティシステム（%property[...] と \![get,property,...]）のうち、pono-droid で意味のあるもの。
+     * 知らない名前は null（空として扱う）
+     */
+    fun property(name: String): String? {
+        val n = name.trim()
+        val now = Calendar.getInstance()
+        return when {
+            n == "system.year" -> now.get(Calendar.YEAR).toString()
+            n == "system.month" -> (now.get(Calendar.MONTH) + 1).toString()
+            n == "system.day" -> now.get(Calendar.DAY_OF_MONTH).toString()
+            n == "system.hour" -> now.get(Calendar.HOUR_OF_DAY).toString()
+            n == "system.minute" -> now.get(Calendar.MINUTE).toString()
+            n == "system.second" -> now.get(Calendar.SECOND).toString()
+            n == "system.millisecond" -> now.get(Calendar.MILLISECOND).toString()
+            n == "system.dayofweek" -> (now.get(Calendar.DAY_OF_WEEK) - 1).toString()
+            n == "system.cursor.pos" -> "0,0"
+            n.startsWith("system.os.") -> osProperty(n.removePrefix("system.os."))
+            n.startsWith("system.cpu.") -> when (n.removePrefix("system.cpu.")) {
+                "num" -> (platform.deviceInfo()?.cpuCount ?: 0).toString()
+                "name" -> platform.deviceInfo()?.arch.orEmpty()
+                "load", "clock" -> "0"
+                else -> ""
+            }
+            n.startsWith("system.memory.") -> platform.deviceInfo()?.let { d ->
+                when (n.removePrefix("system.memory.")) {
+                    "phyt" -> d.memoryTotalMb.toString()
+                    "phya" -> d.memoryFreeMb.toString()
+                    "load" -> if (d.memoryTotalMb > 0) ((d.memoryTotalMb - d.memoryFreeMb) * 100 / d.memoryTotalMb).toString() else "0"
+                    else -> null
+                }
+            }
+            n == "system.monitor.count" -> "1"
+            n.startsWith("system.monitor.index(") -> platform.deviceInfo()?.let { d ->
+                when (n.substringAfter(").", "")) {
+                    "rect", "work" -> "0,0,${d.screenWidth},${d.screenHeight}"
+                    "bpp" -> "32"
+                    "dpi" -> d.dpi.toString()
+                    "primary" -> "1"
+                    else -> null
+                }
+            }
+            n.startsWith("system.power.") -> {
+                val b = platform.batteryInfo()
+                when (n.removePrefix("system.power.")) {
+                    "source" -> if (b == null) "unknown" else if (b.plugged) "ac" else "battery"
+                    "battery.percent" -> (b?.percent ?: -1).toString()
+                    "battery.lifetime" -> "-1"
+                    "battery.flag" -> b?.let { batteryReferences(it)[3] }.orEmpty()
+                    else -> null
+                }
+            }
+            n == "baseware.version" -> BASEWARE_VERSION
+            n == "baseware.name" -> ShioriSession.SENDER
+            n == "baseware.windowmode" -> "normal"
+            n == "ghostlist.count" -> (repository?.list()?.size ?: 1).toString()
+            n.startsWith("ghostlist") -> listProperty(n.removePrefix("ghostlist"), repository?.list() ?: listOf(ghost), ghost) { g, key, index -> ghostProperty(g, key, index) }
+            n == "balloonlist.count" -> (repository?.balloons?.list()?.size ?: 0).toString()
+            n.startsWith("balloonlist") -> listProperty(n.removePrefix("balloonlist"), repository?.balloons?.list().orEmpty(), balloon) { b, key, index -> balloonProperty(b, key, index) }
+            n.startsWith("currentghost.") -> currentGhostProperty(n.removePrefix("currentghost."))
+            else -> null
+        }
+    }
+
+    private fun osProperty(key: String): String? {
+        val d = platform.deviceInfo()
+        val locale = Locale.getDefault()
+        val tz = TimeZone.getDefault()
+        return when (key) {
+            "type" -> d?.osName ?: "Android"
+            "arch" -> d?.arch.orEmpty()
+            "name" -> d?.let { "${it.osName} ${it.osVersion}".trim() } ?: "Android"
+            "version" -> d?.osVersion.orEmpty()
+            "build" -> d?.osBuild.orEmpty()
+            "parenttype", "parentname" -> ""
+            "locale" -> "${locale.language}-${locale.country}"
+            "locale.language" -> locale.language
+            "locale.country" -> locale.country
+            "timezone.offset" -> (-(tz.getOffset(System.currentTimeMillis()) / 60_000)).toString()
+            "dst" -> if (tz.inDaylightTime(Date())) "1" else "0"
+            "uptime" -> (d?.uptimeSeconds ?: 0).toString()
+            "unixtime" -> (System.currentTimeMillis() / 1000).toString()
+            "idletime" -> ((System.currentTimeMillis() - lastUserActivity) / 1000).toString()
+            else -> null
+        }
+    }
+
+    /**
+     * "(名前).キー" / ".index(N).キー" / ".current.キー" の形で一覧の1つを選ぶ。
+     * [current] は今使っているもの（無ければ null）
+     */
+    private fun <T> listProperty(rest: String, items: List<T>, current: T?, resolve: (T, String, Int) -> String?): String? {
+        val key = rest.substringAfter(").", rest.substringAfter("current.", ""))
+        val item = when {
+            rest.startsWith("(") -> {
+                val selector = rest.substring(1, rest.indexOf(')').takeIf { it > 0 } ?: return null)
+                items.firstOrNull { resolve(it, "name", 0) == selector || resolve(it, "sakuraname", 0) == selector || resolve(it, "path", 0)?.trimEnd('/') == selector.trimEnd('/') }
+            }
+            rest.startsWith(".index(") -> rest.substring(7, rest.indexOf(')').takeIf { it > 7 } ?: return null).toIntOrNull()?.let(items::getOrNull)
+            rest.startsWith(".current.") -> current
+            else -> null
+        } ?: return null
+        return resolve(item, key, items.indexOf(item))
+    }
+
+    private fun ghostProperty(g: Ghost, key: String, index: Int): String? = when (key) {
+        "name" -> g.name
+        "sakuraname" -> g.sakuraName
+        "keroname" -> g.keroName
+        "craftmanw" -> g.descript["craftmanw"] ?: g.descript["craftman"].orEmpty()
+        "craftmanurl" -> g.descript["craftmanurl"].orEmpty()
+        "path" -> g.dir.absolutePath + "/"
+        "homeurl" -> g.descript["homeurl"].orEmpty()
+        "index" -> index.toString()
+        else -> null
+    }
+
+    private fun balloonProperty(b: Balloon, key: String, index: Int): String? = when (key) {
+        "name" -> b.name
+        "craftmanw" -> b.descript["craftmanw"] ?: b.descript["craftman"].orEmpty()
+        "path" -> b.dir.absolutePath + "/"
+        "index" -> index.toString()
+        else -> null
+    }
+
+    private fun currentGhostProperty(key: String): String? {
+        val s = _state.value
+        val scopeNumber = Regex("""^scope\((\d+)\)\.(.*)$""")
+        return when {
+            key == "status" -> buildList {
+                if (s.talking) add("talking")
+                if (s.passive) add("passive")
+                if (s.waitingChoice) add("choosing")
+                s.input?.let { add("opening(" + (if (it.kind == InputRequest.Kind.COMMUNICATE) "communicate" else "input") + ")") }
+            }.joinToString(",")
+            key == "shelllist.count" -> ghost.shellDirs.size.toString()
+            key.startsWith("shelllist") -> listProperty(key.removePrefix("shelllist"), ghost.shellDirs, shell.dir) { dir, k, index ->
+                when (k) {
+                    "name" -> runCatching { Shell(dir).name }.getOrDefault(dir.name)
+                    "path" -> dir.absolutePath + "/"
+                    "index" -> index.toString()
+                    else -> null
+                }
+            }
+            key == "scope.count" -> "2"
+            key.startsWith("balloon.scope(") -> {
+                val m = Regex("""^balloon\.scope\((\d+)\)\.(.*)$""").find(key) ?: return null
+                val scope = m.groupValues[1].toIntOrNull() ?: return null
+                when (m.groupValues[2]) {
+                    "num" -> (s.characters[scope]?.balloonId ?: 0).toString()
+                    "count" -> (balloon?.images(scope)?.size ?: 1).toString()
+                    else -> null
+                }
+            }
+            key == "balloon.count" -> (repository?.balloons?.list()?.size ?: 0).toString()
+            key.startsWith("balloon.") -> balloon?.let { balloonProperty(it, key.removePrefix("balloon."), 0) }
+            key.startsWith("scope(") -> {
+                val m = scopeNumber.find(key) ?: return null
+                val scope = m.groupValues[1].toIntOrNull() ?: return null
+                when (m.groupValues[2]) {
+                    "surface.num" -> (s.characters[scope]?.surface ?: -1).toString()
+                    "seriko.defaultsurface" -> shell.defaultSurface(scope).toString()
+                    "name" -> if (scope == 0) ghost.sakuraName else if (scope == 1) ghost.keroName else ghost.descript["char$scope.name"].orEmpty()
+                    "scaling" -> "100"
+                    "x", "y" -> "0"
+                    "rect" -> "0,0,0,0"
+                    "animation.num" -> (shell.surfaces[s.characters[scope]?.surface ?: -1]?.animations?.size ?: 0).toString()
+                    else -> null
+                }
+            }
+            key == "seriko.surfacelist.all" || key == "seriko.surfacelist.defined" -> shell.surfaceIds().joinToString(",")
+            else -> ghostProperty(ghost, key, repository?.list()?.indexOfFirst { it.dir == ghost.dir } ?: 0)
+        }
+    }
+
+    /** descript.txt の readme（無ければ readme.txt）の中身 */
+    private fun readmeText(): String {
+        val name = ghost.descript["readme"]?.takeIf { it.isNotBlank() } ?: "readme.txt"
+        val file = File(ghost.masterDir, name).takeIf { it.isFile } ?: File(ghost.dir, name).takeIf { it.isFile }
+            ?: return "$name がありません"
+        return runCatching { TextCharsets.decode(file.readBytes()) }.getOrDefault("$name を読めませんでした")
     }
 
     private inner class Host(private val raised: MutableList<Pair<String, List<String>>>) : ScriptHost {
@@ -602,6 +1029,9 @@ class GhostController(
 
         /** `\![updatebymyself]`。スクリプトが終わってから始める */
         var updateRequested = false
+
+        /** \f の飾り（キャラクターごと） */
+        private val styles = HashMap<Int, TextStyle>()
 
         override fun requestUpdate() {
             updateRequested = true
@@ -635,9 +1065,20 @@ class GhostController(
             return true
         }
 
-        override fun setSurface(scope: Int, surface: Int) = _state.update { it.update(scope) { c -> c.copy(surface = surface) } }
+        override fun setSurface(scope: Int, surface: Int) {
+            val changed = _state.value.characters[scope]?.surface != surface
+            _state.update { it.update(scope) { c -> c.copy(surface = surface) } }
+            if (changed) {
+                val chars = _state.value.characters
+                notify(
+                    "OnSurfaceChange",
+                    listOf((chars[0]?.surface ?: -1).toString(), (chars[1]?.surface ?: -1).toString(), "$scope,$surface,0,0"),
+                )
+            }
+        }
 
-        override fun appendText(scope: Int, text: String) = _state.update { it.update(scope) { c -> c.appendText(text) } }
+        override fun appendText(scope: Int, text: String) =
+            _state.update { it.update(scope) { c -> c.appendText(text, styles[scope] ?: TextStyle.Default) } }
 
         override fun newLine(scope: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.NewLine) } }
 
@@ -655,9 +1096,23 @@ class GhostController(
 
         override fun setBalloonId(scope: Int, id: Int) = _state.update { it.update(scope) { c -> c.copy(balloonId = id) } }
 
+        override fun setFont(scope: Int, style: TextStyle) {
+            styles[scope] = style
+        }
+
+        override fun setAlign(scope: Int, align: TextAlign) = _state.update { it.update(scope) { c -> c.append(BalloonItem.Align(align)) } }
+
         override fun open(kind: String, args: List<String>): Boolean {
-            val request = InputRequest.fromOpenTag(kind, args, ++inputSerial) ?: return false
-            openInput(request)
+            InputRequest.fromOpenTag(kind, args, inputSerial + 1)?.let {
+                inputSerial++
+                openInput(it)
+                return true
+            }
+            when (kind) {
+                "readme" -> platform.showText(ghost.name, readmeText())
+                "configurationdialog", "ghostexplorer", "shellexplorer", "balloonexplorer", "dressupexplorer" -> platform.openSettings()
+                else -> return false
+            }
             return true
         }
 
@@ -683,6 +1138,43 @@ class GhostController(
             raised += event to references
         }
 
+        override fun notify(event: String, references: List<String>) = this@GhostController.notify(event, references)
+
+        override suspend fun embed(event: String, references: List<String>): String? = request(event, references, translate = false)
+
+        override fun timerRaise(delayMs: Long, once: Boolean, event: String, references: List<String>) {
+            timers.remove(event)?.cancel()
+            if (delayMs <= 0 || closing) return
+            if (timers.size >= MAX_TIMERS) {
+                platform.log("\\![timerraise] が多すぎます: $event")
+                return
+            }
+            // 繰り返しは1秒より短くしない（SHIORI を叩き続けないように）
+            val interval = if (once) delayMs else delayMs.coerceAtLeast(1000)
+            timers[event] = scope.launch {
+                do {
+                    delay(interval)
+                    this@GhostController.raise(event, references)
+                } while (!once && isActive)
+                timers.remove(event)
+            }
+        }
+
+        override fun getProperty(event: String, names: List<String>) {
+            raised += event to names.map { property(it).orEmpty() }
+        }
+
+        override fun property(name: String): String? = this@GhostController.property(name)
+
+        override fun reload(what: String) {
+            when (what) {
+                "shiori", "ghost" -> scope.launch { reloadShiori() }
+                else -> platform.log("未対応の reload: $what")
+            }
+        }
+
+        override fun setPassive(on: Boolean) = _state.update { it.copy(passive = on) }
+
         /** 開くのはウェブのページだけ。tel: や他のアプリのスキームをゴーストに開かせない */
         override fun openUrl(url: String) {
             val lower = url.lowercase()
@@ -702,6 +1194,8 @@ class GhostController(
                 "hour" -> now.get(Calendar.HOUR_OF_DAY).toString()
                 "minute" -> now.get(Calendar.MINUTE).toString()
                 "second" -> now.get(Calendar.SECOND).toString()
+                "screenwidth" -> platform.deviceInfo()?.screenWidth?.toString()
+                "screenheight" -> platform.deviceInfo()?.screenHeight?.toString()
                 else -> null
             }
         }
@@ -721,5 +1215,8 @@ class GhostController(
 
         /** http-get で受け取る大きさの上限 */
         const val HTTP_GET_MAX_BYTES = 64L * 1024 * 1024
+
+        /** `\![timerraise]` で同時に予約できる数 */
+        const val MAX_TIMERS = 32
     }
 }

@@ -46,9 +46,25 @@ class RecordingPlatform : GhostPlatform {
     val urls: MutableList<String> = Collections.synchronizedList(mutableListOf())
     val logs: MutableList<String> = Collections.synchronizedList(mutableListOf())
     val errors: MutableList<String> = Collections.synchronizedList(mutableListOf())
+    val texts: MutableList<Pair<String, String>> = Collections.synchronizedList(mutableListOf())
+    var settingsOpened = 0
+    var device: DeviceInfo? = null
+    var battery: BatteryInfo? = null
 
     override fun openUrl(url: String) {
         urls += url
+    }
+
+    override fun deviceInfo(): DeviceInfo? = device
+
+    override fun batteryInfo(): BatteryInfo? = battery
+
+    override fun showText(title: String, text: String) {
+        texts += title to text
+    }
+
+    override fun openSettings() {
+        settingsOpened++
     }
 
     override fun onQuit() {}

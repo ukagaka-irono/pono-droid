@@ -40,7 +40,7 @@ class BalloonLayoutTest {
                     listOf(
                         listOf(
                             Text("『"),
-                            ChoiceRun(Choice("除夜の鐘", "https://example.test/a"), marked = false),
+                            ChoiceRun(Choice("除夜の鐘", "https://example.test/a", anchor = true), marked = false),
                             Text("』こんなのがあるんだね。"),
                         ),
                     ),

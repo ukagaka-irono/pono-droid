@@ -34,12 +34,20 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.BaselineShift
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextAlign as ComposeTextAlign
+import net.pono.baseware.sakura.TextAlign
+import net.pono.baseware.sakura.TextStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -55,12 +63,39 @@ import net.pono.baseware.ghost.BalloonItem
 import net.pono.baseware.ghost.BalloonLayout
 import net.pono.baseware.sakura.Choice
 
-/** バルーンの中の文の色と大きさ */
+/** バルーンの中の文の色と大きさ。[spPerPx] は \f[height,px] のピクセルを sp にする倍率 */
 data class BalloonTextStyle(
     val textColor: Color,
     val choiceColor: Color,
     val fontSize: TextUnit,
+    val spPerPx: Float = 1f,
 ) {
+    /** \f の飾りを Compose の文字飾りにする */
+    fun span(style: TextStyle): SpanStyle {
+        val base = fontSize.value
+        val size = when (style.heightMode) {
+            TextStyle.HeightMode.ABSOLUTE -> style.height?.let { it * spPerPx }
+            TextStyle.HeightMode.RELATIVE -> style.height?.let { base + it * spPerPx }
+            TextStyle.HeightMode.PERCENT -> style.height?.let { base * it / 100f }
+        }?.coerceIn(6f, 72f) ?: base
+        val decorations = listOfNotNull(
+            TextDecoration.Underline.takeIf { style.underline },
+            TextDecoration.LineThrough.takeIf { style.strike },
+        )
+        return SpanStyle(
+            color = style.color?.let { Color(it or 0xFF000000.toInt()) } ?: Color.Unspecified,
+            fontWeight = if (style.bold) FontWeight.Bold else null,
+            fontStyle = if (style.italic) FontStyle.Italic else null,
+            fontSize = (if (style.sub || style.sup) size * 0.75f else size).sp,
+            baselineShift = when {
+                style.sub -> BaselineShift.Subscript
+                style.sup -> BaselineShift.Superscript
+                else -> null
+            },
+            textDecoration = if (decorations.isEmpty()) null else TextDecoration.combine(decorations),
+        )
+    }
+
     companion object {
         val Simple = BalloonTextStyle(Color(0xFF3E2723), Color(0xFF1565C0), 14.sp)
     }
@@ -208,12 +243,17 @@ private fun SkinFrame(image: BalloonSkin.Image, skin: BalloonSkin, scale: Float,
 fun BalloonBody(items: List<BalloonItem>, onChoice: (Choice) -> Unit, style: BalloonTextStyle) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         for (line in BalloonLayout.lines(items)) {
+            val align = when (line.align) {
+                TextAlign.CENTER -> ComposeTextAlign.Center
+                TextAlign.RIGHT -> ComposeTextAlign.End
+                TextAlign.LEFT -> ComposeTextAlign.Start
+            }
             if (line.columns.size == 1) {
-                BalloonText(line.columns[0], onChoice, style)
+                BalloonText(line.columns[0], onChoice, style, align, Modifier.fillMaxWidth())
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for (column in line.columns) {
-                        BalloonText(column, onChoice, style, Modifier.weight(1f))
+                        BalloonText(column, onChoice, style, align, Modifier.weight(1f))
                     }
                 }
             }
@@ -221,9 +261,15 @@ fun BalloonBody(items: List<BalloonItem>, onChoice: (Choice) -> Unit, style: Bal
     }
 }
 
-/** 1列分の文。選択肢とリンクは文の中で押せるようにする（\![*] があれば印を付ける） */
+/** 1列分の文。選択肢とリンクは文の中で押せるようにする（\![*] があれば印を付ける）。\f の飾りも付ける */
 @Composable
-private fun BalloonText(runs: List<BalloonLayout.Run>, onChoice: (Choice) -> Unit, style: BalloonTextStyle, modifier: Modifier = Modifier) {
+private fun BalloonText(
+    runs: List<BalloonLayout.Run>,
+    onChoice: (Choice) -> Unit,
+    style: BalloonTextStyle,
+    align: ComposeTextAlign,
+    modifier: Modifier = Modifier,
+) {
     val links = TextLinkStyles(
         style = SpanStyle(color = style.choiceColor, fontWeight = FontWeight.Medium),
         pressedStyle = SpanStyle(color = style.choiceColor, background = style.choiceColor.copy(alpha = 0.15f)),
@@ -231,7 +277,9 @@ private fun BalloonText(runs: List<BalloonLayout.Run>, onChoice: (Choice) -> Uni
     val text = buildAnnotatedString {
         for (run in runs) {
             when (run) {
-                is BalloonLayout.Run.Text -> append(run.text)
+                is BalloonLayout.Run.Text -> {
+                    if (run.style == TextStyle.Default) append(run.text) else withStyle(style.span(run.style)) { append(run.text) }
+                }
                 is BalloonLayout.Run.ChoiceRun -> {
                     if (run.marked) append("▸ ")
                     withLink(LinkAnnotation.Clickable(tag = run.choice.id, styles = links) { onChoice(run.choice) }) {
@@ -248,6 +296,7 @@ private fun BalloonText(runs: List<BalloonLayout.Run>, onChoice: (Choice) -> Uni
         fontSize = style.fontSize,
         lineHeight = style.fontSize * (if (hasChoice) 1.7f else 1.4f),
         color = style.textColor,
+        textAlign = align,
         modifier = modifier.padding(vertical = if (hasChoice) 2.dp else 0.dp),
     )
 }
@@ -284,6 +333,7 @@ class BalloonSkin(val balloon: Balloon) {
             textColor = balloon.fontColor?.toColor() ?: simple.textColor,
             choiceColor = balloon.choiceColor?.toColor() ?: simple.choiceColor,
             fontSize = maxOf(balloon.fontHeight * dpPerPx, 12f).sp,
+            spPerPx = dpPerPx,
         )
     }
 }

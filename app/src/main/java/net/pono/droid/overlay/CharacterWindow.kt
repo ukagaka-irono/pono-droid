@@ -192,6 +192,7 @@ class CharacterWindow(
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouch(
             event: MotionEvent,
+            onDown: (x: Float, y: Float) -> Unit,
             onTap: (x: Float, y: Float, count: Int) -> Unit,
             onLongPress: (x: Float, y: Float) -> Unit,
         ): Boolean {
@@ -205,6 +206,7 @@ class CharacterWindow(
                     longPressed = false
                     val x = event.x
                     val y = event.y
+                    onDown(x, y)
                     cancelLongPress()
                     pendingLongPress = Runnable {
                         longPressed = true
@@ -270,8 +272,10 @@ private fun FitWindow(corner: Alignment, onSize: (Int, Int) -> Unit, content: @C
 }
 
 interface SurfaceTouchHandler {
+    /** [onDown] は指が触れたとき、[onTap] は動かさずに離したとき（[count] は続けて叩いた回数）、[onLongPress] は長押し */
     fun onTouch(
         event: MotionEvent,
+        onDown: (x: Float, y: Float) -> Unit,
         onTap: (x: Float, y: Float, count: Int) -> Unit,
         onLongPress: (x: Float, y: Float) -> Unit,
     ): Boolean
