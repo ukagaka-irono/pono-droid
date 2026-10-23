@@ -117,7 +117,9 @@ class GhostController(
     private val player: ScriptPlayer = ScriptPlayer(),
     private val balloonTimeoutMs: Long = 15_000,
     private val choiceTimeoutMs: Long = 30_000,
-    private val updateFetcher: HttpFetcher = UrlConnectionFetcher("${ShioriSession.SENDER}/$BASEWARE_VERSION"),
+    /** ゴーストに伝える pono-droid のバージョン（basewareversion、%property[baseware.version]、通信の User-Agent） */
+    private val basewareVersion: String = BASEWARE_VERSION,
+    private val updateFetcher: HttpFetcher = UrlConnectionFetcher("${ShioriSession.SENDER}/$basewareVersion"),
 ) {
     private val _state = MutableStateFlow(GhostState())
     val state: StateFlow<GhostState> = _state.asStateFlow()
@@ -207,7 +209,7 @@ class GhostController(
         session = s
         val notified = runCatching {
             s.get("version")?.value?.let { platform.log("SHIORI version: $it") }
-            s.notify("basewareversion", ShioriSession.SENDER, BASEWARE_VERSION)
+            s.notify("basewareversion", ShioriSession.SENDER, basewareVersion)
             s.notify(
                 "OnNotifySelfInfo", ghost.name, ghost.sakuraName, ghost.keroName, shell.name, shell.dir.absolutePath + "/",
                 balloon?.name.orEmpty(), balloon?.let { it.dir.absolutePath + "/" }.orEmpty(),
@@ -1113,7 +1115,7 @@ class GhostController(
                     else -> null
                 }
             }
-            n == "baseware.version" -> BASEWARE_VERSION
+            n == "baseware.version" -> basewareVersion
             n == "baseware.name" -> ShioriSession.SENDER
             n == "baseware.windowmode" -> "normal"
             n == "ghostlist.count" -> (repository?.list()?.size ?: 1).toString()
@@ -1437,6 +1439,7 @@ class GhostController(
     }
 
     companion object {
+        /** アプリから渡されないとき（テストなど）のバージョン */
         const val BASEWARE_VERSION = "0.1.0"
         private val timerEvents = setOf("OnSecondChange", "OnMinuteChange")
 

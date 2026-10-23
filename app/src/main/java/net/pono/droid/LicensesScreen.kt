@@ -68,6 +68,13 @@ fun LicensesScreen(onBack: () -> Unit) {
         ) {
             item {
                 Text(
+                    "pono-droid バージョン ${AppVersion.of(context)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+            item {
+                Text(
                     "pono-droid と、利用しているソフトウェアのライセンスです。名前をタップすると全文を表示します。",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(vertical = 8.dp),

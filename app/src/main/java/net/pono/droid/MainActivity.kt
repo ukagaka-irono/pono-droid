@@ -92,6 +92,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     var balloons by remember { mutableStateOf<List<Balloon>>(emptyList()) }
     var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     val running by GhostOverlayService.running.collectAsState()
+    val version = remember { AppVersion.of(context) }
 
     suspend fun reload() {
         val repo = GhostStore.repository(context)
@@ -220,6 +221,14 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                                 snackbar.showSnackbar(if (ok) "削除しました: ${balloon.name}" else "削除できませんでした: ${balloon.name}")
                             }
                         },
+                    )
+                }
+                item(key = "version") {
+                    Text(
+                        "pono-droid バージョン $version",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
                     )
                 }
             }

@@ -42,6 +42,7 @@ import net.pono.baseware.ghost.Ghost
 import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.ghost.GhostPlatform
 import net.pono.baseware.shell.Shell
+import net.pono.droid.AppVersion
 import net.pono.droid.GhostStore
 import net.pono.droid.MainActivity
 import net.pono.droid.R
@@ -94,6 +95,7 @@ class GhostOverlayService : LifecycleService() {
             shell = shell,
             balloon = balloon,
             repository = repo,
+            basewareVersion = AppVersion.of(this).name,
             shioriFactory = RemoteYayaShiori.factory(this),
             scope = lifecycleScope,
             platform = object : GhostPlatform {
