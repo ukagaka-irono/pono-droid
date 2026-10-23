@@ -1,3 +1,19 @@
 [submodule "shiori-yaya/src/main/cpp/yaya"]
 	path = shiori-yaya/src/main/cpp/yaya
 	url = https://github.com/YAYA-shiori/yaya-shiori.git
+[submodule "shiori-yaya/src/main/cpp/satori"]
+	path = shiori-yaya/src/main/cpp/satori
+	url = https://github.com/ukatech/satoriya-shiori.git
+	branch = unicode
+[submodule "shiori-yaya/src/main/cpp/kawari"]
+	path = shiori-yaya/src/main/cpp/kawari
+	url = https://github.com/kawari/kawari.git
+[submodule "shiori-yaya/src/main/cpp/kagari"]
+	path = shiori-yaya/src/main/cpp/kagari
+	url = https://github.com/Tatakinov/kagari_shiori.git
+[submodule "shiori-yaya/src/main/cpp/lua"]
+	path = shiori-yaya/src/main/cpp/lua
+	url = https://github.com/lua/lua.git
+[submodule "shiori-yaya/src/main/cpp/sol2"]
+	path = shiori-yaya/src/main/cpp/sol2
+	url = https://github.com/ThePhD/sol2.git

@@ -30,6 +30,38 @@ class SurfaceTableTest {
     """.trimIndent()
 
     @Test
+    fun bareNumbersAfterSurfaceContinueTheList() {
+        // SSP と同じく "surface.append0,6,7" は 0・6・7、"surface1,3-4" は 1・3・4
+        val table = SurfaceTable.parse(
+            """
+            surface.append0,6,7{
+            animation1.interval,never
+            }
+            surface1,3-4,!4 { element0,base,a.png,0,0 }
+            """.trimIndent(),
+        )
+        assertEquals(setOf(0, 1, 3, 6, 7), table.definitions.keys)
+        assertEquals(IntervalKind.NEVER, table[6]!!.animations[1]!!.interval.kind)
+    }
+
+    @Test
+    fun shellReadsEverySurfacesFile() {
+        val dir = kotlin.io.path.createTempDirectory("shell").toFile()
+        try {
+            java.io.File(dir, "surfaces.txt").writeText("charset,UTF-8\r\nsurface0{\r\nelement0,base,a.png,0,0\r\n}\r\n")
+            // 分けて書かれた定義（BOM 付き UTF-8 と Shift_JIS）
+            java.io.File(dir, "surfaces_clock.txt").writeBytes(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) + "charset,UTF-8\r\nsurface2000{\r\nelement0,base,add_clock/hand.png,0,0\r\n}\r\n".toByteArray())
+            java.io.File(dir, "surfaces_misc.txt").writeBytes("charset,Shift_JIS\r\n// 時計\r\nsurface.append0{\r\nanimation5.interval,never\r\nanimation5.pattern0,overlay,2000,0,10,20\r\n}\r\n".toByteArray(net.pono.baseware.text.TextCharsets.CP932))
+            val shell = Shell(dir)
+            assertEquals(setOf(0, 2000), shell.surfaces.definitions.keys)
+            assertEquals(2000, shell.surfaces[0]!!.animations[5]!!.frames.single().surface)
+            assertEquals("add_clock/hand.png", shell.surfaces[2000]!!.elements[0]!!.file)
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
     fun survivesHostileNumbersAndRanges() {
         val hostile = """
             surface99999999999 { element0,overlay,a.png,0,0 }

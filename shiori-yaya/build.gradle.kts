@@ -32,6 +32,83 @@ val convertYayaSources = tasks.register("convertYayaSources") {
     }
 }
 
+// 里々のソース（satori・_・uka_regexp の .cpp と .h）も Shift_JIS(CP932)。同じく UTF-8 にして、ディレクトリの形を保って写す
+val satoriDir = layout.projectDirectory.dir("src/main/cpp/satori/satoriya")
+val satoriGeneratedDir = layout.buildDirectory.dir("generated/satori")
+val convertSatoriSources = tasks.register("convertSatoriSources") {
+    val subdirs = listOf("satori", "_", "uka_regexp")
+    val sources = satoriDir.asFileTree.matching { subdirs.forEach { include("$it/*.cpp", "$it/*.h") } }
+    inputs.files(sources)
+    outputs.dir(satoriGeneratedDir)
+    doLast {
+        val out = satoriGeneratedDir.get().asFile
+        out.deleteRecursively()
+        val cp932 = Charset.forName("windows-31j")
+        val root = satoriDir.asFile
+        sources.forEach { src ->
+            val text = cp932.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(src.readBytes()))
+            val dest = out.resolve(src.relativeTo(root).path)
+            dest.parentFile.mkdirs()
+            val path = src.absolutePath.replace('\\', '/')
+            // ヘッダに #line を入れると #pragma once が効かなくなることがあるので、.cpp だけに付ける
+            dest.writeText(if (src.extension == "cpp") "#line 1 \"$path\"\n$text" else text.toString(), Charsets.UTF_8)
+        }
+    }
+}
+
+// 華和梨は 32bit 時代のコードで、string::find の結果を unsigned int に入れてから string::npos と比べている。
+// 64bit では npos が unsigned int に収まらず比較が常に偽になり、文字列の外を読んで落ちる。
+// サブモジュールは書き換えず、写したソースの該当する宣言だけを size_t にする（Debian の 009_kawari8-64bit-fix と同じ直し）
+val kawariDir = layout.projectDirectory.dir("src/main/cpp/kawari/build/src")
+val kawariGeneratedDir = layout.buildDirectory.dir("generated/kawari")
+val prepareKawariSources = tasks.register("prepareKawariSources") {
+    val sources = kawariDir.asFileTree.matching { include("**/*.cpp", "**/*.h", "**/*.inc"); exclude("**/old/**") }
+    inputs.files(sources)
+    outputs.dir(kawariGeneratedDir)
+    doLast {
+        val out = kawariGeneratedDir.get().asFile
+        out.deleteRecursively()
+        val root = kawariDir.asFile
+        sources.forEach { src -> src.copyTo(out.resolve(src.relativeTo(root).path)) }
+        // ファイル → 直す宣言（"unsigned int " を "size_t " にする）と、その宣言がいくつあるはずか
+        val fixes = mapOf(
+            "kis/kis_file.cpp" to listOf("unsigned int pos=ctow(dirname).rfind(FILE_SEPARATOR);" to 1),
+            "kis/kis_saori.cpp" to listOf(
+                "unsigned int pos=statusline.find(' ');" to 1,
+                "unsigned int npos=statusline.find(' ', pos+1);" to 1,
+            ),
+            "kis/kis_split.cpp" to listOf("unsigned int idx;" to 1),
+            "kis/kis_string.cpp" to listOf(
+                "unsigned int pos=(f)?" to 1,
+                "unsigned int pos=tmp;" to 1,
+                "unsigned int pos=0;" to 1,
+                "unsigned int index=search.find(target[pos]);" to 1,
+            ),
+            "libkawari/kawari_code.cpp" to listOf("unsigned int pos2=ws.find_first_of(illchs, pos);" to 1),
+            "misc/misc.cpp" to listOf(
+                "unsigned int pos=bp.rfind(SEPARATOR);" to 1,
+                "unsigned int pos=path.rfind(SEPARATOR);" to 2,
+            ),
+            "misc/phttp.cpp" to listOf("unsigned int pos=buff.find(':');" to 1),
+            "saori/saori_native.cpp" to listOf("unsigned int pos=path.find_last_of(FILE_SEPARATOR);" to 1),
+        )
+        // ソースは EUC-JP だが、直す行は ASCII だけなので ISO-8859-1 で読み書きしてバイトを変えない
+        for ((path, list) in fixes) {
+            val file = out.resolve(path)
+            var text = file.readText(Charsets.ISO_8859_1)
+            for ((needle, expected) in list) {
+                val count = text.split(needle).size - 1
+                if (count != expected) throw GradleException("kawari 64bit fix: '$needle' appears $count times in $path (expected $expected)")
+                text = text.replace(needle, "size_t " + needle.removePrefix("unsigned int "))
+            }
+            file.writeText(text, Charsets.ISO_8859_1)
+        }
+    }
+}
+
 // Android の libc の iconv は CP932 を持たないので、Java の windows-31j から変換表を作る
 val generateCp932Table = tasks.register("generateCp932Table") {
     outputs.dir(generatedDir.map { it.dir("include") })
@@ -83,6 +160,8 @@ android {
                 arguments += listOf(
                     "-DYAYA_DIR=${yayaDir.asFile.absolutePath.replace('\\', '/')}",
                     "-DYAYA_GENERATED_DIR=${generatedDir.get().asFile.absolutePath.replace('\\', '/')}",
+                    "-DSATORI_GENERATED_DIR=${satoriGeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
+                    "-DKAWARI_GENERATED_DIR=${kawariGeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
                     "-DANDROID_STL=c++_shared",
                 )
             }
@@ -106,7 +185,7 @@ android {
 }
 
 tasks.matching { it.name.startsWith("configureCMake") || it.name.startsWith("buildCMake") }.configureEach {
-    dependsOn(convertYayaSources, generateCp932Table)
+    dependsOn(convertYayaSources, convertSatoriSources, prepareKawariSources, generateCp932Table)
 }
 
 dependencies {

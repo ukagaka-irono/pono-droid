@@ -7,18 +7,19 @@ import android.os.Process
 import java.io.File
 
 /**
- * 別プロセス（:yaya）で YAYA を動かすサービス。[RemoteYayaShiori] が bind して使う。
- * YAYA はスレッドセーフではないので、Binder のスレッドから来る呼び出しを1つずつ処理する。
+ * 別プロセス（:shiori）で SHIORI を動かすサービス。[RemoteShiori] が bind して使う。
+ * SHIORI はスレッドセーフではないので、Binder のスレッドから来る呼び出しを1つずつ処理する。
  */
-class YayaService : Service() {
+class ShioriService : Service() {
     private val lock = Any()
-    private val shioris = HashMap<Long, YayaShiori>()
+    private val shioris = HashMap<Long, NativeShiori>()
     private var nextHandle = 1L
 
-    private val binder = object : IYayaService.Stub() {
-        override fun load(dir: String): Long = synchronized(lock) {
+    private val binder = object : IShioriService.Stub() {
+        override fun load(engine: String, dir: String): Long = synchronized(lock) {
+            val kind = runCatching { ShioriEngine.valueOf(engine) }.getOrNull() ?: return 0
             val masterDir = File(dir)
-            val shiori = YayaShiori(YayaShiori.Sandbox.forGhost(this@YayaService, masterDir))
+            val shiori = NativeShiori(kind, NativeShiori.Sandbox.forGhost(this@ShioriService, masterDir))
             if (!shiori.load(masterDir)) return 0
             val handle = nextHandle++
             shioris[handle] = shiori

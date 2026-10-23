@@ -186,7 +186,7 @@ class GhostController(
     private suspend fun loadShiori(): Boolean {
         val shiori = shioriFactory.create(ghost.shioriName, ghost.masterDir)
         if (shiori == null) {
-            platform.onError("${ghost.name}: ${ghost.shioriName} は未対応です（YAYA のみ対応）")
+            platform.onError("${ghost.name}: ${ghost.shioriName} は未対応です（YAYA・里々・華和梨・Kagari に対応）")
             return false
         }
         val s = ShioriSession(shiori, ghost.charset)
@@ -1322,8 +1322,21 @@ class GhostController(
         override fun addChoice(scope: Int, choice: Choice) =
             _state.update { it.update(scope) { c -> c.append(BalloonItem.ChoiceItem(choice)) } }
 
-        override fun startAnimation(scope: Int, id: Int) =
-            _state.update { it.update(scope) { c -> c.copy(animationRequest = id to ++animationCounter) } }
+        override fun startAnimation(scope: Int, id: Int) = command(scope, AnimationCommand.Start(id))
+
+        override fun animation(scope: Int, args: List<String>): Boolean {
+            fun int(i: Int) = args.getOrNull(i)?.trim()?.toIntOrNull()
+            when (args.firstOrNull()?.trim()?.lowercase()) {
+                "offset" -> command(scope, AnimationCommand.Offset(int(1) ?: return false, int(2) ?: 0, int(3) ?: 0))
+                "clear" -> command(scope, AnimationCommand.Clear(int(1) ?: return false))
+                "stop" -> command(scope, AnimationCommand.StopAll)
+                else -> {}
+            }
+            return true
+        }
+
+        private fun command(scope: Int, command: AnimationCommand) =
+            _state.update { it.update(scope) { c -> c.command(++animationCounter, command) } }
 
         override fun addMarker(scope: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.Marker) } }
 

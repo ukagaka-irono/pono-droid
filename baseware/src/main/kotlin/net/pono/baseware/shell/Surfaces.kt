@@ -94,6 +94,8 @@ class SurfaceTable(val definitions: Map<Int, SurfaceDefinition>) {
         val EMPTY = SurfaceTable(emptyMap())
 
         private val surfaceRange = Regex("""^(!?)surface(?:\.append)?(\d+)(?:-(\d+))?$""")
+        /** surface の後ろに続く番号だけの項目。グループの並びは [surfaceRange] と同じ */
+        private val bareRange = Regex("""^(!?)(\d+)(?:-(\d+))?$""")
         private val newAnimation = Regex("""^animation(\d+)\.(interval|pattern(\d+)|option|collision\d+|collisionex\d+)$""")
         private val oldInterval = Regex("""^(\d+)interval$""")
         private val oldPattern = Regex("""^(\d+)pattern(\d+)$""")
@@ -143,12 +145,23 @@ class SurfaceTable(val definitions: Map<Int, SurfaceDefinition>) {
             return SurfaceTable(defs)
         }
 
-        /** "surface0,surface2-5,!surface3" を ID の一覧にする。surface 以外のブロックなら空。 */
+        /**
+         * "surface0,surface2-5,!surface3" を ID の一覧にする。surface 以外のブロックなら空。
+         * "surface.append0,6,7" のように、surface の後ろの番号だけの項目（範囲も）は同じ surface の続きとして読む（SSP と同じ）
+         */
         private fun surfaceIds(header: String): List<Int> {
             val include = linkedSetOf<Int>()
             val exclude = mutableSetOf<Int>()
+            var afterSurface = false
             for (token in header.split(',').map { it.trim() }) {
-                val m = surfaceRange.matchEntire(token) ?: continue
+                val m = surfaceRange.matchEntire(token)
+                    ?: bareRange.matchEntire(token)?.takeIf { afterSurface }
+                    ?: run {
+                        afterSurface = false
+                        null
+                    }
+                    ?: continue
+                afterSurface = true
                 // 桁あふれの番号は飛ばす。"surface0-999999999" のような範囲でメモリを食いつぶさないよう、幅と総数に上限を置く
                 val from = m.groupValues[2].toIntOrNull() ?: continue
                 val to = m.groupValues[3].toIntOrNull() ?: from

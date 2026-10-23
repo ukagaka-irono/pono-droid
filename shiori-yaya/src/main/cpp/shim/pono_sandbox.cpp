@@ -1,7 +1,8 @@
-// ゴーストの辞書は信頼できないコードなので、YAYA（と同梱の SQLite）が呼ぶ libc の関数を
+// ゴーストの辞書は信頼できないコードなので、SHIORI（YAYA・里々・華和梨・Kagari の Lua）が呼ぶ libc の関数を
 // リンク時の -Wl,--wrap で横取りして、できることを絞る。サブモジュールは書き換えない。
-//   - dlopen / fork / chdir: いつも失敗にする。LOADLIB / REQUESTLIB / EXECUTE で
-//     ゴースト同梱のネイティブコードやシェルが動かないようにする（Android に SAORI は無いので困らない）
+//   - dlopen / fork / exec / system / popen / chdir: いつも失敗にする。LOADLIB / REQUESTLIB / EXECUTE、
+//     里々・華和梨の SAORI、Lua の C モジュールや os.execute で、ゴースト同梱のネイティブコードやシェルが
+//     動かないようにする（Android に SAORI は無いので困らない）
 //   - パスを取る関数: ゴーストのディレクトリ（allow）の外への書き込みと、
 //     アプリの領域（protect）の読み取りを EACCES にする。システムのファイルを読むのは許す
 //     （タイムゾーンやロケールのため）。fd を取る関数は、開けた時点で検査済みなので触らない
@@ -28,6 +29,11 @@ extern "C" {
 int __real_open(const char *path, int flags, ...);
 int __real___open_2(const char *path, int flags);
 FILE *__real_fopen(const char *path, const char *mode);
+FILE *__real_freopen(const char *path, const char *mode, FILE *stream);
+int __real_openat(int dirfd, const char *path, int flags, ...);
+int __real___openat_2(int dirfd, const char *path, int flags);
+int __real_truncate(const char *path, off_t length);
+int __real_mkstemp(char *path);
 DIR *__real_opendir(const char *path);
 int __real_stat(const char *path, struct stat *st);
 int __real_lstat(const char *path, struct stat *st);
@@ -176,6 +182,73 @@ pid_t __wrap_fork(void) {
     return -1;
 }
 
+pid_t __wrap_vfork(void) {
+    Denied("vfork", "");
+    errno = EPERM;
+    return -1;
+}
+
+// Lua の os.execute や華和梨の system などから。シェルは動かさない（-1 は「シェルを起動できなかった」）
+int __wrap_system(const char *command) {
+    // command が NULL なら「シェルがあるか」の問い合わせ。無いと答える
+    if (command == nullptr) return 0;
+    Denied("system", command);
+    errno = EPERM;
+    return -1;
+}
+
+FILE *__wrap_popen(const char *command, const char *) {
+    Denied("popen", command);
+    errno = EPERM;
+    return nullptr;
+}
+
+int __wrap_execv(const char *path, char *const[]) {
+    Denied("execv", path);
+    errno = EPERM;
+    return -1;
+}
+
+int __wrap_execve(const char *path, char *const[], char *const[]) {
+    Denied("execve", path);
+    errno = EPERM;
+    return -1;
+}
+
+int __wrap_execvp(const char *file, char *const[]) {
+    Denied("execvp", file);
+    errno = EPERM;
+    return -1;
+}
+
+int __wrap_execl(const char *path, const char *, ...) {
+    Denied("execl", path);
+    errno = EPERM;
+    return -1;
+}
+
+int __wrap_execlp(const char *file, const char *, ...) {
+    Denied("execlp", file);
+    errno = EPERM;
+    return -1;
+}
+
+int __wrap_execle(const char *path, const char *, ...) {
+    Denied("execle", path);
+    errno = EPERM;
+    return -1;
+}
+
+int __wrap_posix_spawn(pid_t *, const char *path, const void *, const void *, char *const[], char *const[]) {
+    Denied("posix_spawn", path);
+    return EPERM;
+}
+
+int __wrap_posix_spawnp(pid_t *, const char *file, const void *, const void *, char *const[], char *const[]) {
+    Denied("posix_spawnp", file);
+    return EPERM;
+}
+
 int __wrap_chdir(const char *path) {
     Denied("chdir", path);
     errno = EPERM;
@@ -215,6 +288,64 @@ FILE *__wrap_fopen(const char *path, const char *mode) {
         return nullptr;
     }
     return __real_fopen(path, mode);
+}
+
+FILE *__wrap_freopen(const char *path, const char *mode, FILE *stream) {
+    bool write = mode != nullptr && strpbrk(mode, "wa+") != nullptr;
+    if (path != nullptr && !Allowed(path, write, "freopen")) {
+        errno = EACCES;
+        return nullptr;
+    }
+    return __real_freopen(path, mode, stream);
+}
+
+// openat はディレクトリの fd からの相対パスを取れる。どこを指すか確かめられないので、絶対パスのときだけ通す
+int __wrap_openat(int dirfd, const char *path, int flags, ...) {
+    int mode = 0;
+    if (flags & O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = va_arg(ap, int);
+        va_end(ap);
+    }
+    if (path == nullptr || (path[0] != '/' && dirfd != AT_FDCWD) || !Allowed(path, WritesWith(flags), "openat")) {
+        if (path != nullptr && path[0] != '/' && dirfd != AT_FDCWD) Denied("openat (relative to fd)", path);
+        errno = EACCES;
+        return -1;
+    }
+    return __real_openat(dirfd, path, flags, mode);
+}
+
+int __wrap___openat_2(int dirfd, const char *path, int flags) {
+    if (path == nullptr || (path[0] != '/' && dirfd != AT_FDCWD) || !Allowed(path, WritesWith(flags), "openat")) {
+        errno = EACCES;
+        return -1;
+    }
+    return __real___openat_2(dirfd, path, flags);
+}
+
+int __wrap_truncate(const char *path, off_t length) {
+    if (!Allowed(path, true, "truncate")) {
+        errno = EACCES;
+        return -1;
+    }
+    return __real_truncate(path, length);
+}
+
+// 一時ファイルは /data/local/tmp などアプリの外に作られうるので、ゴーストのディレクトリの中でだけ許す
+int __wrap_mkstemp(char *path) {
+    if (!Allowed(path, true, "mkstemp")) {
+        errno = EACCES;
+        return -1;
+    }
+    return __real_mkstemp(path);
+}
+
+// 名前の無い一時ファイル（Lua の io.tmpfile）。場所を選べないので作らない
+FILE *__wrap_tmpfile(void) {
+    Denied("tmpfile", "");
+    errno = EACCES;
+    return nullptr;
 }
 
 DIR *__wrap_opendir(const char *path) {

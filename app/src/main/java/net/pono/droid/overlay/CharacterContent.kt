@@ -8,9 +8,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.FilterQuality
@@ -21,6 +23,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import net.pono.baseware.ghost.AnimationCommand
 import net.pono.baseware.ghost.GhostController
 
 /**
@@ -47,8 +50,19 @@ fun CharacterSurface(
     LaunchedEffect(character.surface, character.binds, state.screenOn) {
         if (state.screenOn) animator.show(controller.shell.surfaces[character.surface], character.binds) else animator.stop()
     }
-    LaunchedEffect(character.animationRequest) {
-        character.animationRequest?.let { (id, _) -> animator.start(id) }
+    // まだ実行していない番号の頼みを、出された順に実行する（1つのスクリプトの \i をすべて）
+    var handled by remember { mutableIntStateOf(character.animationCommands.lastOrNull()?.first ?: 0) }
+    LaunchedEffect(character.animationCommands) {
+        for ((serial, command) in character.animationCommands) {
+            if (serial <= handled) continue
+            when (command) {
+                is AnimationCommand.Start -> animator.start(command.id)
+                is AnimationCommand.Offset -> animator.setOffset(command.id, command.x, command.y)
+                is AnimationCommand.Clear -> animator.clear(command.id)
+                AnimationCommand.StopAll -> animator.stopRunning()
+            }
+            handled = serial
+        }
     }
 
     val bitmap by produceState<Bitmap?>(null, character.surface, layers) {

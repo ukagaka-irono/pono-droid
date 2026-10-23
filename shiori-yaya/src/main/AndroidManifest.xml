@@ -2,10 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
-        <!-- YAYA は別プロセスで動かす。YAYA の中で落ちても、アプリ本体は巻き込まれない -->
+        <!-- SHIORI（YAYA・里々・華和梨・Kagari）は別プロセスで動かす。SHIORI の中で落ちても、アプリ本体は巻き込まれない -->
         <service
-            android:name=".YayaService"
+            android:name=".ShioriService"
             android:exported="false"
-            android:process=":yaya" />
+            android:process=":shiori" />
     </application>
 </manifest>

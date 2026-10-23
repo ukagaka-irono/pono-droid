@@ -1,7 +1,7 @@
 # pono-droid
 
 伺か（ukagaka）のゴーストを Android で動かすベースウェアです。
-ゴーストを他のアプリの上に常駐させ、SHIORI（ゴーストの頭脳）には [YAYA](https://github.com/YAYA-shiori/yaya-shiori) を Android 向けにビルドして使います。
+ゴーストを他のアプリの上に常駐させ、SHIORI（ゴーストの頭脳）には [YAYA](https://github.com/YAYA-shiori/yaya-shiori)・[里々](https://github.com/ukatech/satoriya-shiori)・[華和梨](https://github.com/kawari/kawari)・[Kagari](https://github.com/Tatakinov/kagari_shiori) を Android 向けにビルドして使います。
 
 > 開発中のソフトウェアです。動作確認は moto g05（Android 15）と YAYA 製のゴースト1体で行っています。
 
@@ -48,7 +48,7 @@
 
 ### 手順
 
-YAYA とその依存ライブラリは git サブモジュールです。必ずサブモジュールごと取得してください。
+SHIORI（YAYA・里々・華和梨・Kagari）とその依存ライブラリ（Lua・sol2 など）は git サブモジュールです。必ずサブモジュールごと（`--recursive`）取得してください。
 
 ```bash
 git clone --recurse-submodules https://github.com/ukagaka-irono/pono-droid.git
@@ -74,7 +74,7 @@ APK は `app/build/outputs/apk/debug/app-debug.apk` にできます。
 ./gradlew :baseware:test
 ```
 
-端末をつないで、YAYA を端末上で動かすテスト（UTF-8 / Shift_JIS の辞書、2体同時）:
+端末をつないで、SHIORI を端末上で動かすテスト（YAYA の UTF-8 / Shift_JIS の辞書と2体同時、里々・華和梨・Kagari の辞書、サンドボックス）:
 
 ```bash
 ./gradlew :shiori-yaya:connectedDebugAndroidTest
@@ -143,17 +143,21 @@ GitHub Actions のビルドとテストは、どのブランチへのプッシ�
 app/          Android アプリ（ゴースト一覧、オーバーレイの Service とウィンドウ、Compose の UI）
 baseware/     Android に依存しない Kotlin。descript / surfaces.txt の読み込み、SHIORI/3.0、
               さくらスクリプト、ゴーストの制御（GhostController）、ネットワーク更新
-shiori-yaya/  YAYA を NDK でビルドする Android ライブラリ（JNI、別プロセスで動かすサービス）
-  src/main/cpp/yaya   YAYA 本体（サブモジュール。手を加えていません）
+shiori-yaya/  SHIORI を NDK でビルドする Android ライブラリ（JNI、別プロセスで動かすサービス）
+  src/main/cpp/yaya   YAYA 本体（サブモジュール。手を加えていません。以下のサブモジュールも同じ）
+  src/main/cpp/satori 里々
+  src/main/cpp/kawari 華和梨
+  src/main/cpp/kagari Kagari（辞書を Lua で書く SHIORI）。lua（5.4）と sol2 を一緒にビルドする
   src/main/cpp/shim   Android 向けの差し替え（CP932 対応の iconv、statx / shm_open、ゴーストにできることを絞る pono_sandbox）
 ```
 
-YAYA を Android で動かすための工夫:
+SHIORI を Android で動かすための工夫:
 
-- YAYA はアプリとは別のプロセス（`:yaya`）で動かし、Binder（AIDL）でやりとりします。YAYA の中で落ちてもアプリは落ちず、ゴーストを閉じて知らせます。辞書が無限ループして応答しなくなったときも、時間切れでそのプロセスを止めてゴーストを閉じます。
-- YAYA が呼ぶ libc の関数（`dlopen` / `fork` / `open` など）をリンク時の `--wrap` で `shim/pono_sandbox.cpp` に差し替え、辞書が触れるファイルをゴーストのディレクトリに限っています（下の「ゴーストにできること」）。
+- SHIORI はエンジンごとに別の .so（libyaya・libsatori・libkawari・libkagari）にし、アプリとは別のプロセス（`:shiori`）で動かして Binder（AIDL）でやりとりします。SHIORI の中で落ちてもアプリは落ちず、ゴーストを閉じて知らせます。辞書が無限ループして応答しなくなったときも、時間切れでそのプロセスを止めてゴーストを閉じます。
+- SHIORI が呼ぶ libc の関数（`dlopen` / `fork` / `system` / `popen` / `open` など）をリンク時の `--wrap` で `shim/pono_sandbox.cpp` に差し替え、辞書が触れるファイルをゴーストのディレクトリに限っています（下の「ゴーストにできること」）。
 
-- YAYA のソースは Shift_JIS なので、ビルド時に Gradle で UTF-8 に変換してからコンパイルします（`#line` で元のファイルを指すので、エラー位置はサブモジュール側を指します）。
+- YAYA と里々のソースは Shift_JIS なので、ビルド時に Gradle で UTF-8 に変換してからコンパイルします（`#line` で元のファイルを指すので、エラー位置はサブモジュール側を指します）。華和梨は文字列が ASCII だけなのでそのまま、C++98 でコンパイルします。
+- どの SHIORI を使うかは descript.txt の `shiori`（`yaya.dll`・`satori.dll`・`kawari.dll`・`kagari.dll` など）で決め、`shiori.dll` としか書かれていなければ ghost/master の辞書の設定ファイル（`yaya.txt`・`kawarirc.kis`・`index.lua` など）で見分けます。
 - Android の libc の iconv は CP932 を持たないため、Java の `windows-31j` から変換表を作り、自前の iconv に差し替えています。
 - サブモジュールは書き換えず、足りない関数は強制インクルードするヘッダで補っています。
 
@@ -172,7 +176,8 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 
 ## 既知の制限
 
-- SHIORI は YAYA のみ（`yaya.dll` / `aya.dll` / `aya5.dll` と書かれたゴースト）。里々などは動きません。SAORI（`LOADLIB` / `REQUESTLIB`）と `EXECUTE` は、ゴーストにネイティブコードやシェルを動かさせないために止めています。
+- SHIORI は YAYA・里々・華和梨・Kagari に対応しています。美坂・偽林檎など、ほかの SHIORI のゴーストは動きません。
+- SAORI（YAYA の `LOADLIB` / `REQUESTLIB`、里々・華和梨の SAORI）、YAYA の `EXECUTE`、Kagari（Lua）の C モジュール・`os.execute`・`io.popen` は、ゴーストにネイティブコードやシェルを動かさせないために止めています。これらに頼るゴーストは一部の機能が動きません。
 - `\_l` による選択肢の横並びは、座標どおりではなく列に分けて並べます。
 - バルーンの中の画像（`\_b`）、`\_s` の同期、`\![change,ghost]`、`\![set,scaling / alpha]`、`\![move]`、`\![anim,...]` には未対応です。サウンドは同時に鳴らせるのが1回分とループ1つまでです。
 - SERIKO の `insert`、サーフェスの別名（alias）には未対応です。楕円・多角形の当たり判定は外接矩形で近似します。
@@ -185,13 +190,13 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 
 ゴーストはインターネットから持ってくる第三者のプログラムなので、pono-droid の中でできることを絞っています。
 
-- 辞書（YAYA）が読み書きできるのは、そのゴーストのディレクトリの中だけです。アプリの他のデータ（別のゴースト、設定）は読めません。システムのファイル（タイムゾーンなど）は読むだけなら許しています。
-- `LOADLIB` / `REQUESTLIB` / `EXECUTE` は失敗します（`dlopen` と `fork` をリンク時に差し替えています）。
+- 辞書（YAYA・里々・華和梨・Kagari）が読み書きできるのは、そのゴーストのディレクトリの中だけです。アプリの他のデータ（別のゴースト、設定）は読めません。システムのファイル（タイムゾーンなど）は読むだけなら許しています。
+- SAORI（`LOADLIB` / `REQUESTLIB` など）、`EXECUTE`、Lua の C モジュール・`os.execute`・`io.popen` は失敗します（`dlopen`・`fork`・`exec`・`system`・`popen` をリンク時に差し替えています）。
 - スクリプトから開ける URL は http / https だけです。
 - 画像の大きさ（1辺 4096px、800 万画素まで）と surfaces.txt の定義の数には上限があり、超えたものは無視します。
 - ネットワーク更新と `.nar` のインストールで書けるのはゴーストのディレクトリの中だけで、ファイルの大きさと数にも上限があります。homeurl が `http://` でも、まず `https://` で試し、通らなければ書かれたとおり `http://` で更新します（この場合は経路上で書き換えられるおそれが残ります）。
 - 入力の箱に打った文字はゴーストにそのまま渡ります。他のサービスのパスワードなどは入れないでください。打った文字はログに残しません。
-- 辞書が無限ループして応答しなくなったら、60 秒で YAYA のプロセスを止めてゴーストを閉じます。`\![raise]` の連鎖と `http-get` の同時実行にも上限があります。
+- 辞書が無限ループして応答しなくなったら、60 秒で SHIORI のプロセスを止めてゴーストを閉じます。`\![raise]` の連鎖と `http-get` の同時実行にも上限があります。
 
 ## ライセンス
 
@@ -213,7 +218,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-同梱・利用しているソフトウェアは次のとおりです（[NOTICE](NOTICE) も参照）。ライセンスの全文はアプリの「ライセンス」画面で確認できます。YAYA とその依存ライブラリはサブモジュールのまま配布し、手を加えていません。
+同梱・利用しているソフトウェアは次のとおりです（[NOTICE](NOTICE) も参照）。ライセンスの全文はアプリの「ライセンス」画面で確認できます。SHIORI とその依存ライブラリはサブモジュールのまま配布し、手を加えていません。
 
 | 名前 | ライセンス |
 |------|------------|
@@ -223,5 +228,10 @@ limitations under the License.
 | [TinyXML-2](https://github.com/leethomason/tinyxml2) | zlib |
 | [Gumbo](https://github.com/google/gumbo-parser) | Apache-2.0（UTF-8 デコーダは MIT） |
 | [uka_regexp](https://github.com/ukatech/uka_regexp) | Unlicense |
+| [里々（SATORI）](https://github.com/ukatech/satoriya-shiori) | BSD 2-Clause |
+| [華和梨（KAWARI）](https://github.com/kawari/kawari) | BSD |
+| [Kagari](https://github.com/Tatakinov/kagari_shiori) | MIT |
+| [Lua](https://www.lua.org/) | MIT |
+| [sol2](https://github.com/ThePhD/sol2) | MIT |
 | [SQLite](https://www.sqlite.org/) | Public Domain |
 | Android Jetpack / Kotlin / kotlinx.coroutines | Apache-2.0 |

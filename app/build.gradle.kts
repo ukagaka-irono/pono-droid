@@ -15,7 +15,7 @@ plugins {
 abstract class GenerateLicenseAssets : DefaultTask() {
     @get:InputDirectory
     @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val yayaDir: DirectoryProperty
+    abstract val cppDir: DirectoryProperty
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.RELATIVE)
@@ -28,10 +28,11 @@ abstract class GenerateLicenseAssets : DefaultTask() {
 
     @TaskAction
     fun generate() {
-        val yaya = yayaDir.get().asFile
+        // shiori-yaya/src/main/cpp。SHIORI とその中で使っているもののサブモジュールが並ぶ
+        val cpp = cppDir.get().asFile
         fun read(path: String): String {
-            val bytes = yaya.resolve(path).readBytes()
-            // YAYA 本体のソースは CP932、サブモジュールは UTF-8 / ASCII
+            val bytes = cpp.resolve(path).readBytes()
+            // YAYA・里々のソースは CP932、ほかは UTF-8 / ASCII
             return runCatching {
                 Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                     .decode(ByteBuffer.wrap(bytes)).toString()
@@ -46,7 +47,7 @@ abstract class GenerateLicenseAssets : DefaultTask() {
             val end = lines.indexOfFirst { to in it }
             if (start < 0 || end < start) throw GradleException("license text not found in $path: '$from' .. '$to'")
             return lines.subList(start, end + 1)
-                .joinToString("\n") { it.replace(Regex("""^\s*(//|\*\*)"""), "").trimEnd() }
+                .joinToString("\n") { it.replace(Regex("""^\s*(//|\*\*|\*(?=\s|$))"""), "").trimEnd() }
                 .trimIndent()
         }
 
@@ -55,26 +56,31 @@ abstract class GenerateLicenseAssets : DefaultTask() {
                 "pono-droid", "Apache-2.0", "https://github.com/ukagaka-irono/pono-droid",
                 "Copyright 2026 ukagaka-irono\n\nLicensed under the Apache License, Version 2.0.",
             ),
-            Entry("YAYA", "BSD 3-Clause", "https://github.com/YAYA-shiori/yaya-shiori", read("LICENSE").trim()),
+            Entry("YAYA", "BSD 3-Clause", "https://github.com/YAYA-shiori/yaya-shiori", read("yaya/LICENSE").trim()),
             Entry(
                 "Mersenne Twister (MT19937)", "BSD 3-Clause", "http://www.math.sci.hiroshima-u.ac.jp/m-mat/MT/emt.html",
-                cut("mt19937ar.cpp", "Copyright (C) 1997 - 2002", "SUCH DAMAGE."),
+                cut("yaya/mt19937ar.cpp", "Copyright (C) 1997 - 2002", "SUCH DAMAGE."),
             ),
-            Entry("parson", "MIT", "https://github.com/kgabis/parson", read("parson/LICENSE").trim()),
+            Entry("parson", "MIT", "https://github.com/kgabis/parson", read("yaya/parson/LICENSE").trim()),
             Entry(
                 "TinyXML-2", "zlib", "https://github.com/leethomason/tinyxml2",
-                cut("tinyxml2/tinyxml2.cpp", "Original code by Lee Thomason", "distribution."),
+                cut("yaya/tinyxml2/tinyxml2.cpp", "Original code by Lee Thomason", "distribution."),
             ),
             Entry(
                 "Gumbo", "Apache-2.0", "https://github.com/google/gumbo-parser",
-                cut("gumbo/src/parser.c", "Copyright 2010 Google Inc.", "limitations under the License.") +
+                cut("yaya/gumbo/src/parser.c", "Copyright 2010 Google Inc.", "limitations under the License.") +
                     "\n\nGumbo contains the UTF-8 decoder below.\n\n" +
-                    cut("gumbo/src/utf8.c", "Copyright (c) 2008-2009 Bjoern Hoehrmann", "substantial portions of the Software."),
+                    cut("yaya/gumbo/src/utf8.c", "Copyright (c) 2008-2009 Bjoern Hoehrmann", "substantial portions of the Software."),
             ),
-            Entry("uka_regexp", "Unlicense", "https://github.com/ukatech/uka_regexp", read("uka_regexp/LICENSE").trim()),
+            Entry("uka_regexp", "Unlicense", "https://github.com/ukatech/uka_regexp", read("yaya/uka_regexp/LICENSE").trim()),
+            Entry("里々（SATORI）", "BSD 2-Clause", "https://github.com/ukatech/satoriya-shiori", read("satori/LICENSE").trim()),
+            Entry("華和梨（KAWARI）", "BSD", "https://github.com/kawari/kawari", read("kawari/LICENSE").trim()),
+            Entry("Kagari", "MIT", "https://github.com/Tatakinov/kagari_shiori", read("kagari/LICENSE").trim()),
+            Entry("Lua", "MIT", "https://www.lua.org/", cut("lua/lua.h", "Lua.org, PUC-Rio.", "SOFTWARE.")),
+            Entry("sol2", "MIT", "https://github.com/ThePhD/sol2", read("sol2/LICENSE.txt").trim()),
             Entry(
                 "SQLite", "Public Domain", "https://www.sqlite.org/",
-                cut("sqlite/sqlite3.c", "The author disclaims copyright", "never taking more than you give."),
+                cut("yaya/sqlite/sqlite3.c", "The author disclaims copyright", "never taking more than you give."),
             ),
             Entry(
                 "Android Jetpack (AndroidX, Jetpack Compose)", "Apache-2.0", "https://developer.android.com/jetpack",
@@ -120,7 +126,7 @@ abstract class GenerateLicenseAssets : DefaultTask() {
 }
 
 val generateLicenseAssets = tasks.register<GenerateLicenseAssets>("generateLicenseAssets") {
-    yayaDir.set(rootProject.layout.projectDirectory.dir("shiori-yaya/src/main/cpp/yaya"))
+    cppDir.set(rootProject.layout.projectDirectory.dir("shiori-yaya/src/main/cpp"))
     // pono-droid 自体のライセンスファイル（Apache License 2.0 の全文）をそのまま使う
     apacheLicense.set(rootProject.layout.projectDirectory.file("LICENSE"))
     outputDir.set(layout.buildDirectory.dir("generated/licenses"))

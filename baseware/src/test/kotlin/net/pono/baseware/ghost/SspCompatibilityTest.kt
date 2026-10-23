@@ -249,6 +249,30 @@ class SspCompatibilityTest {
     }
 
     @Test
+    fun everyAnimationRequestInAScriptIsKept() = runBlocking {
+        // 1つのスクリプトの \i をすべて、\![anim,...] と一緒に出された順に残す
+        val shiori = ScriptedShiori(mapOf("OnFirstBoot" to """\0\i[1]\i[2]\![anim,offset,2,5,6]\i[3]\![anim,clear,1]\![anim,stop]\![anim,pause,3]ok"""))
+        val scope = testScope()
+        try {
+            val controller = testController(tmp.newTestGhost(), shiori, scope)
+            controller.start()
+            controller.awaitText()
+            val commands = controller.state.value.characters[0]!!.animationCommands
+            assertEquals(
+                listOf(
+                    AnimationCommand.Start(1), AnimationCommand.Start(2), AnimationCommand.Offset(2, 5, 6),
+                    AnimationCommand.Start(3), AnimationCommand.Clear(1), AnimationCommand.StopAll,
+                ),
+                commands.map { it.second },
+            )
+            // 通し番号は増え続ける（表示する側はまだ実行していないものだけを実行する）
+            assertEquals(commands.map { it.first }.sorted(), commands.map { it.first })
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
     fun timerRaisePassiveModeAndProperties() = runBlocking {
         val shiori = ScriptedShiori(mapOf("OnFirstBoot" to """\0\![timerraise,100,1,OnTimerTest,a]\![enter,passivemode]\f[bold,1]太い\![open,readme]"""))
         val platform = RecordingPlatform()

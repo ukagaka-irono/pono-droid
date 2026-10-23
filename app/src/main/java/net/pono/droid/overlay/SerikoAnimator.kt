@@ -6,7 +6,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import net.pono.baseware.shell.Animation
@@ -17,9 +16,15 @@ import kotlin.random.Random
 
 /** 1人分の SERIKO アニメーション。サーフェスか着せ替えが変わるたびに [show] を呼ぶ。 */
 class SerikoAnimator(private val scope: CoroutineScope) {
-    /** レイヤーの番号 → いま表示しているコマ。番号の小さい順に重ねる */
+    /** レイヤーの番号 → いま表示しているコマ（\![anim,offset] のずれを足したもの）。番号の小さい順に重ねる */
     private val _layers = MutableStateFlow<Map<Int, PatternFrame>>(emptyMap())
     val layers: StateFlow<Map<Int, PatternFrame>> = _layers.asStateFlow()
+
+    /** ずらす前のコマ */
+    private var raw: Map<Int, PatternFrame> = emptyMap()
+
+    /** \![anim,offset,ID,x,y] のずれ（アニメーション番号ごと） */
+    private val offsets = HashMap<Int, Pair<Int, Int>>()
 
     private var current: SurfaceDefinition? = null
     private var currentBinds: Set<Int> = emptySet()
@@ -34,10 +39,12 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         currentBinds = binds
         def ?: return
         // 着せ替えは動かさず、パターンのコマを全部重ねて出しておく
-        _layers.value = def.animations.values
-            .filter { it.interval.kind == IntervalKind.BIND && it.id in binds }
-            .flatMap { anim -> anim.frames.filterNot { it.isControl }.mapIndexed { i, f -> bindLayer(anim.id, i) to f } }
-            .toMap()
+        setRaw(
+            def.animations.values
+                .filter { it.interval.kind == IntervalKind.BIND && it.id in binds }
+                .flatMap { anim -> anim.frames.filterNot { it.isControl }.mapIndexed { i, f -> bindLayer(anim.id, i) to f } }
+                .toMap(),
+        )
         for (anim in def.animations.values) {
             if (anim.frames.all { it.isControl && it.method != "start" && it.method != "alternativestart" }) continue
             jobs += when (anim.interval.kind) {
@@ -64,10 +71,22 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         running[id] = scope.launch { playOnce(anim) }
     }
 
-    /** パターンの stop。そのアニメーションを止めて、出していたコマを消す */
-    private fun stopAnimation(id: Int) {
+    /** `\![anim,offset,ID,x,y]`。表示中のコマも、これから出すコマもずらす */
+    fun setOffset(id: Int, x: Int, y: Int) {
+        if (x == 0 && y == 0) offsets.remove(id) else offsets[id] = x to y
+        publish()
+    }
+
+    /** `\![anim,clear,ID]` とパターンの stop。そのアニメーションを止めて、出していたコマを消す */
+    fun clear(id: Int) {
         running.remove(id)?.cancel()
-        _layers.update { it - id }
+        setRaw(raw - id)
+    }
+
+    /** `\![anim,stop]`。\i などで動かしているアニメーションを止める（出ているコマはそのまま） */
+    fun stopRunning() {
+        running.values.forEach { it.cancel() }
+        running.clear()
     }
 
     fun stop() {
@@ -77,7 +96,21 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         jobs.clear()
         running.values.forEach { it.cancel() }
         running.clear()
-        _layers.value = emptyMap()
+        offsets.clear()
+        setRaw(emptyMap())
+    }
+
+    private fun setRaw(layers: Map<Int, PatternFrame>) {
+        raw = layers
+        publish()
+    }
+
+    private fun publish() {
+        _layers.value = if (offsets.isEmpty()) {
+            raw
+        } else {
+            raw.mapValues { (id, frame) -> offsets[id]?.let { (x, y) -> frame.copy(x = frame.x + x, y = frame.y + y) } ?: frame }
+        }
     }
 
     private fun everySecond(anim: Animation, chance: Double) = scope.launch {
@@ -94,10 +127,10 @@ class SerikoAnimator(private val scope: CoroutineScope) {
             when (frame.method) {
                 "start" -> frame.targets.firstOrNull()?.let(::start)
                 "alternativestart" -> frame.targets.randomOrNull()?.let(::start)
-                "stop", "alternativestop" -> frame.targets.forEach(::stopAnimation)
+                "stop", "alternativestop" -> frame.targets.forEach(::clear)
                 "insert" -> {} // 他のアニメーションのコマを差し込む。まだ扱わない
                 else -> {
-                    _layers.update { it + (anim.id to frame) }
+                    setRaw(raw + (anim.id to frame))
                     val wait = if (frame.waitMaxMs > frame.waitMinMs) Random.nextInt(frame.waitMinMs, frame.waitMaxMs + 1) else frame.waitMinMs
                     delay(maxOf(wait, 16).toLong())
                     drew = true

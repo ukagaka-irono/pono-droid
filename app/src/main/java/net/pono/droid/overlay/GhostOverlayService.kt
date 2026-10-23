@@ -48,7 +48,7 @@ import net.pono.droid.MainActivity
 import net.pono.droid.R
 import net.pono.droid.TextViewerActivity
 import java.io.File
-import net.pono.shiori.yaya.RemoteYayaShiori
+import net.pono.shiori.yaya.RemoteShiori
 
 /** ゴーストを常駐させる。キャラクターごとのオーバーレイウィンドウを持つ。 */
 class GhostOverlayService : LifecycleService() {
@@ -96,7 +96,7 @@ class GhostOverlayService : LifecycleService() {
             balloon = balloon,
             repository = repo,
             basewareVersion = AppVersion.of(this).name,
-            shioriFactory = RemoteYayaShiori.factory(this),
+            shioriFactory = RemoteShiori.factory(this),
             scope = lifecycleScope,
             platform = object : GhostPlatform {
                 override fun deviceInfo(): DeviceInfo {

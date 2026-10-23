@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit
  * 辞書にできること（ファイル・ネイティブコード・プロセス）が絞られていることを確かめる。
  */
 @RunWith(AndroidJUnit4::class)
-class YayaShioriTest {
+class NativeShioriTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val root = File(context.cacheDir, "yaya-test")
 
@@ -32,7 +32,7 @@ class YayaShioriTest {
         root.deleteRecursively()
     }
 
-    private fun sandbox(dir: File) = YayaShiori.Sandbox(dir, context.dataDir)
+    private fun sandbox(dir: File) = NativeShiori.Sandbox(dir, context.dataDir)
 
     /**
      * request は Reference0 を取り出して「<Reference0>さん、こんにちは」を返す。
@@ -114,7 +114,7 @@ class YayaShioriTest {
     }
 
     private fun roundTrip(dir: File, charset: Charset, name: String): String? = runBlocking {
-        val session = ShioriSession(YayaShiori(sandbox(dir)), charset)
+        val session = ShioriSession(NativeShiori(ShioriEngine.YAYA, sandbox(dir)), charset)
         try {
             assertTrue("load", session.load(dir))
             session.get("OnBoot", name)?.value
@@ -138,7 +138,7 @@ class YayaShioriTest {
 
     @Test
     fun remoteProcessAndCrashDetection() = runBlocking {
-        val shiori = RemoteYayaShiori(context)
+        val shiori = RemoteShiori(context, ShioriEngine.YAYA)
         val crashed = CountDownLatch(1)
         shiori.setOnCrash { crashed.countDown() }
         val session = ShioriSession(shiori, Charsets.UTF_8)
@@ -146,9 +146,9 @@ class YayaShioriTest {
             assertTrue(session.load(writeGhost("remote", "UTF-8", Charsets.UTF_8)))
             assertEquals("\\0別プロセスさん、こんにちは", session.get("OnBoot", "別プロセス")?.value)
 
-            // YAYA が落ちたことにする（:yaya のプロセスだけを止める）。テストのプロセスは生き残り、知らせが届く
+            // YAYA が落ちたことにする（:shiori のプロセスだけを止める）。テストのプロセスは生き残り、知らせが届く
             val am = context.getSystemService(android.app.ActivityManager::class.java)
-            val yaya = am.runningAppProcesses.first { it.processName.endsWith(":yaya") }
+            val yaya = am.runningAppProcesses.first { it.processName.endsWith(":shiori") }
             assertTrue(yaya.pid != android.os.Process.myPid())
             android.os.Process.killProcess(yaya.pid)
             assertTrue("crash notified", crashed.await(10, TimeUnit.SECONDS))
@@ -161,7 +161,7 @@ class YayaShioriTest {
 
     @Test
     fun hungDictionaryIsKilledAfterTheTimeLimit() = runBlocking {
-        val shiori = RemoteYayaShiori(context)
+        val shiori = RemoteShiori(context, ShioriEngine.YAYA)
         val crashed = CountDownLatch(1)
         shiori.setOnCrash { crashed.countDown() }
         val session = ShioriSession(shiori, Charsets.UTF_8, requestTimeoutMs = 3000)
@@ -180,7 +180,7 @@ class YayaShioriTest {
     fun sandboxConfinesFilesAndBlocksNativeCode() = runBlocking {
         val dir = writeHostileGhost("sandbox")
         val secret = File(context.filesDir, "yaya-test-secret.txt").apply { writeText("secret") }
-        val session = ShioriSession(YayaShiori(sandbox(dir)), Charsets.UTF_8)
+        val session = ShioriSession(NativeShiori(ShioriEngine.YAYA, sandbox(dir)), Charsets.UTF_8)
         suspend fun ask(cmd: String, path: String) = session.get("OnTest", cmd, path)?.value
         try {
             assertTrue(session.load(dir))
@@ -210,13 +210,126 @@ class YayaShioriTest {
         }
     }
 
+    private fun request(engine: ShioriEngine, dir: File, charset: Charset, vararg refs: String): String? = runBlocking {
+        val session = ShioriSession(NativeShiori(engine, sandbox(dir)), charset)
+        try {
+            assertTrue("load $engine", session.load(dir))
+            session.get("OnBoot", *refs)?.value
+        } finally {
+            session.unload()
+        }
+    }
+
+    @Test
+    fun satoriDictionary() {
+        // 里々の辞書は Shift_JIS。＊の行がイベント名、：の行が話す文
+        val dir = File(root, "satori").apply { mkdirs() }
+        File(dir, "dic_test.txt").writeBytes("＊OnBoot\r\n：里々です①\r\n".toByteArray(TextCharsets.CP932))
+        val value = request(ShioriEngine.SATORI, dir, TextCharsets.CP932)
+        assertTrue("$value", value?.contains("里々です①") == true)
+    }
+
+    @Test
+    fun kawariDictionary() {
+        // 華和梨は kawarirc.kis を読み、GET のたびに System.Callback.OnGET を返す
+        val dir = File(root, "kawari").apply { mkdirs() }
+        File(dir, "kawarirc.kis").writeBytes(
+            "System.Callback.OnGET : \\0\${System.Request.Reference0}さん、華和梨です\r\n".toByteArray(TextCharsets.CP932),
+        )
+        val value = request(ShioriEngine.KAWARI, dir, TextCharsets.CP932, "ぽの")
+        assertEquals("\\0ぽのさん、華和梨です", value)
+    }
+
+    @Test
+    fun kawariSurvivesErrorsInLoadedDictionaries() {
+        // 読み込んだ辞書の中で知らないコマンドを使うと、華和梨はエラーを記録するために文を文字列に戻す。
+        // 64bit では string::npos の扱いの不具合でここで落ちていた（ビルド時に直している）
+        val dir = File(root, "kawari-errors").apply { mkdirs() }
+        File(dir, "kawarirc.kis").writeBytes(
+            ("=kis\r\n\tload sub.kis;\r\n=end\r\nSystem.Callback.OnGET : \\0ok\r\n").toByteArray(TextCharsets.CP932),
+        )
+        File(dir, "sub.kis").writeBytes(
+            ("=kis\r\n\tnosuchcommand \"a\\\"b\" \"c\";\r\n\tset x \"y\";\r\n=end\r\n").toByteArray(TextCharsets.CP932),
+        )
+        assertEquals("\\0ok", request(ShioriEngine.KAWARI, dir, TextCharsets.CP932))
+    }
+
+    private fun writeLuaGhost(name: String, body: String): File {
+        val dir = File(root, name).apply { mkdirs() }
+        File(dir, "index.lua").writeText(
+            """
+            local M = {}
+            function M.load(path) return true end
+            function M.unload() return true end
+            function M.request(req)
+              local ref = req:match("Reference0: ([^\r\n]*)") or ""
+              local value = (function() $body end)()
+              return "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: " .. value .. "\r\n\r\n"
+            end
+            return M
+            """.trimIndent(),
+            Charsets.UTF_8,
+        )
+        return dir
+    }
+
+    @Test
+    fun kagariDictionary() {
+        val dir = writeLuaGhost("kagari", """return "\\0" .. ref .. "さん、Kagari です"""")
+        assertEquals("\\0ぽのさん、Kagari です", request(ShioriEngine.KAGARI, dir, Charsets.UTF_8, "ぽの"))
+    }
+
+    @Test
+    fun kagariSandboxBlocksFilesShellAndNativeModules() {
+        val secret = File(context.filesDir, "kagari-secret.txt").apply { writeText("secret") }
+        val marker = File(root, "kagari-sandbox/marker.txt")
+        // アプリの領域を読む・シェルを動かす・C モジュールを読む、を順に試し、結果を返す
+        val dir = writeLuaGhost(
+            "kagari-sandbox",
+            """
+            local r = {}
+            r[#r+1] = io.open("${secret.path}", "r") and "read" or "noread"
+            local w = io.open("inside.txt", "w")
+            r[#r+1] = w and "write" or "nowrite"
+            if w then w:close() end
+            os.execute("touch ${marker.path}")
+            local f = io.popen("id")
+            r[#r+1] = f and "popen" or "nopopen"
+            r[#r+1] = package.loadlib("${File(context.applicationInfo.nativeLibraryDir, "libyaya.so").path}", "luaopen_x") and "loadlib" or "noloadlib"
+            return table.concat(r, ",")
+            """.trimIndent(),
+        )
+        try {
+            // 相対パスは ghost/master 基準ではなく作業ディレクトリ基準なので、書き込み先は書かずに結果だけ見る
+            val value = request(ShioriEngine.KAGARI, dir, Charsets.UTF_8)
+            assertTrue("$value", value?.startsWith("noread,") == true)
+            assertTrue("$value", value?.endsWith(",nopopen,noloadlib") == true)
+            Thread.sleep(300)
+            assertFalse(marker.exists())
+        } finally {
+            secret.delete()
+        }
+    }
+
+    @Test
+    fun enginesAreChosenFromDescriptAndFiles() {
+        val dir = File(root, "detect").apply { mkdirs() }
+        assertEquals(ShioriEngine.YAYA, ShioriEngine.forGhost("yaya.dll", dir))
+        assertEquals(ShioriEngine.SATORI, ShioriEngine.forGhost("Satori.dll", dir))
+        assertEquals(ShioriEngine.KAGARI, ShioriEngine.forGhost("kagari.dll", dir))
+        assertEquals(null, ShioriEngine.forGhost("shiori.dll", dir))
+        // shiori.dll とだけ書いてあるゴーストは、辞書のファイルで見分ける
+        File(dir, "kawarirc.kis").writeText("")
+        assertEquals(ShioriEngine.KAWARI, ShioriEngine.forGhost("shiori.dll", dir))
+    }
+
     @Test
     fun twoGhostsAtOnce() = runBlocking {
         // multi_load で別々の VM になること（片方を閉じてももう片方は動く）
         val dirA = writeGhost("a", "UTF-8", Charsets.UTF_8)
         val dirB = writeGhost("b", "UTF-8", Charsets.UTF_8)
-        val a = ShioriSession(YayaShiori(sandbox(dirA)), Charsets.UTF_8)
-        val b = ShioriSession(YayaShiori(sandbox(dirB)), Charsets.UTF_8)
+        val a = ShioriSession(NativeShiori(ShioriEngine.YAYA, sandbox(dirA)), Charsets.UTF_8)
+        val b = ShioriSession(NativeShiori(ShioriEngine.YAYA, sandbox(dirB)), Charsets.UTF_8)
         try {
             assertTrue(a.load(dirA))
             assertTrue(b.load(dirB))

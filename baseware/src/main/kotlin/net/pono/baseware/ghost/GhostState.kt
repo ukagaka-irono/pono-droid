@@ -22,13 +22,30 @@ sealed interface BalloonItem {
     data class Align(val align: TextAlign) : BalloonItem
 }
 
+/** SERIKO への頼み（\i[n]、\![anim,...]）。表示する側が順番に実行する */
+sealed interface AnimationCommand {
+    data class Start(val id: Int) : AnimationCommand
+
+    /** \![anim,offset,ID,x,y]。そのアニメーションのコマを x, y だけずらして出す */
+    data class Offset(val id: Int, val x: Int, val y: Int) : AnimationCommand
+
+    /** \![anim,clear,ID]。止めて、出していたコマを消す */
+    data class Clear(val id: Int) : AnimationCommand
+
+    /** \![anim,stop]。動いているアニメーションを全部止める */
+    data object StopAll : AnimationCommand
+}
+
 /** キャラクター（\0, \1 ...）1人分の表示状態。[surface] が -1 なら非表示。 */
 data class CharacterState(
     val scope: Int,
     val surface: Int,
     val balloon: List<BalloonItem>? = null,
-    /** \i[n] で再生を頼まれたアニメーションと、その回数（同じ ID を続けて頼まれても区別するため） */
-    val animationRequest: Pair<Int, Int>? = null,
+    /**
+     * SERIKO への頼みと通し番号。1つのスクリプトで何十個も \i を出すゴーストもあるので、最近のものを並べておき、
+     * 表示する側はまだ実行していない番号のものを順に実行する
+     */
+    val animationCommands: List<Pair<Int, AnimationCommand>> = emptyList(),
     /** 着せ替えで身に着けているもの（bindgroup の番号。SERIKO の interval が bind のアニメーション番号と同じ） */
     val binds: Set<Int> = emptySet(),
     /** \b[n] で選ばれたバルーンの番号。null なら文字の量に合わせて選ぶ、-1 ならバルーンを出さない */
@@ -47,6 +64,13 @@ data class CharacterState(
     }
 
     fun append(item: BalloonItem) = copy(balloon = balloon.orEmpty() + item)
+
+    fun command(serial: Int, command: AnimationCommand) =
+        copy(animationCommands = (animationCommands + (serial to command)).takeLast(MAX_ANIMATION_COMMANDS))
+
+    companion object {
+        const val MAX_ANIMATION_COMMANDS = 256
+    }
 }
 
 data class GhostState(

@@ -38,6 +38,9 @@ interface ScriptHost {
     fun addChoice(scope: Int, choice: Choice)
     fun startAnimation(scope: Int, id: Int) {}
 
+    /** `\![anim,offset|clear|stop,...]`。扱えたら true */
+    fun animation(scope: Int, args: List<String>): Boolean = false
+
     /** `\![*]`。選択肢の前の印 */
     fun addMarker(scope: Int) {}
 
@@ -256,6 +259,8 @@ class ScriptPlayer(
                 "quicksection", "quicksession" -> quick = a.getOrNull(1)?.lowercase() in setOf("1", "true")
                 "*" -> host.addMarker(scope)
                 "updatebymyself" -> host.requestUpdate()
+                // \![anim,offset,ID,x,y] など。pause / resume / add などは見た目の細かい制御なので扱えなくても飛ばす
+                "anim" -> host.animation(scope, a.drop(1))
                 "reload" -> host.reload(a.getOrNull(1)?.lowercase().orEmpty())
                 "sound" -> when (a.getOrNull(1)?.lowercase()) {
                     "play", "loop" -> a.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { file ->
@@ -345,7 +350,7 @@ class ScriptPlayer(
 
     /** `\![コマンド,...]` のうち、pono-droid に無い仕組み（ウィンドウの重なり・効果・他のゴースト・プラグイン）向けのもの */
     private val silentCommands = setOf(
-        "lock", "unlock", "reset", "effect", "effect2", "filter", "anim", "updateother",
+        "lock", "unlock", "reset", "effect", "effect2", "filter", "updateother",
         "timernotify", "raiseother", "timerraiseother", "notifyother", "timernotifyother",
         "raiseplugin", "timerraiseplugin", "notifyplugin", "timernotifyplugin", "executesntp",
     )
