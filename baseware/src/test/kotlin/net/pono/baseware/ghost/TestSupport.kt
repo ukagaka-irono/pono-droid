@@ -50,6 +50,25 @@ class RecordingPlatform : GhostPlatform {
     var settingsOpened = 0
     var device: DeviceInfo? = null
     var battery: BatteryInfo? = null
+    val sounds: MutableList<String> = Collections.synchronizedList(mutableListOf())
+    val shellChanges: MutableList<String> = Collections.synchronizedList(mutableListOf())
+    val balloonChanges: MutableList<String?> = Collections.synchronizedList(mutableListOf())
+
+    override fun playSound(file: File, loop: Boolean, volume: Int?) {
+        sounds += "${file.name}/$loop/$volume"
+    }
+
+    override fun stopSound() {
+        sounds += "stop"
+    }
+
+    override fun onShellChanged(shell: net.pono.baseware.shell.Shell) {
+        shellChanges += shell.dir.name
+    }
+
+    override fun onBalloonChanged(balloon: net.pono.baseware.balloon.Balloon?) {
+        balloonChanges += balloon?.dir?.name
+    }
 
     override fun openUrl(url: String) {
         urls += url

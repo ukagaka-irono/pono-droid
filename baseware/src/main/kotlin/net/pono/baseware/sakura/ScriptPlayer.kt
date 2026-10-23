@@ -98,6 +98,18 @@ interface ScriptHost {
     /** `\![enter,passivemode]` / `\![leave,passivemode]` */
     fun setPassive(on: Boolean) {}
 
+    /** `\8[file]` `\_v[file]` `\![sound,play|loop,file,--volume=n]`。[file] は ghost/master からの相対パス */
+    fun playSound(file: String, loop: Boolean, volume: Int?) {}
+
+    /** `\![sound,stop(,file)]`。file が null なら全部 */
+    fun stopSound(file: String?) {}
+
+    /** `\_V` `\![sound,wait]`。再生が終わるまで戻らない（鳴っていなければすぐ戻る） */
+    suspend fun waitSound() {}
+
+    /** `\![change,shell|balloon,名前]`。扱えたら true */
+    fun change(kind: String, name: String): Boolean = false
+
     fun openUrl(url: String)
 
     /** `%username` などの環境変数。知らない名前なら null。 */
@@ -205,6 +217,8 @@ class ScriptPlayer(
                 "_u", "_m" -> a.firstOrNull()?.let(::parseCode)?.let { text(String(Character.toChars(it))) }
                 // \&[amp] のような実体参照
                 "&" -> a.firstOrNull()?.let(::entity)?.let { text(it) }
+                "8", "_v" -> a.firstOrNull()?.takeIf { it.isNotBlank() }?.let { host.playSound(it, loop = false, volume = null) }
+                "_V" -> host.waitSound()
                 "f" -> font(a)
                 "!" -> bang(token, depth)
                 "j" -> a.firstOrNull()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }?.let(host::openUrl)
@@ -243,6 +257,21 @@ class ScriptPlayer(
                 "*" -> host.addMarker(scope)
                 "updatebymyself" -> host.requestUpdate()
                 "reload" -> host.reload(a.getOrNull(1)?.lowercase().orEmpty())
+                "sound" -> when (a.getOrNull(1)?.lowercase()) {
+                    "play", "loop" -> a.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { file ->
+                        val volume = a.drop(3).firstOrNull { it.startsWith("--volume=") }?.removePrefix("--volume=")?.trim()?.toIntOrNull()
+                        host.playSound(file, loop = a[1].lowercase() == "loop", volume = volume)
+                    }
+                    "wait" -> host.waitSound()
+                    "stop" -> host.stopSound(a.getOrNull(2)?.takeIf { it.isNotBlank() })
+                    // load / pause / resume / option / cdplay は、音を先に読む・止めるといった細かい制御なので飛ばす
+                    "load", "pause", "resume", "option", "cdplay" -> {}
+                    else -> host.unknownTag(token)
+                }
+                "change" -> when {
+                    a.size >= 3 && a[1].lowercase() in setOf("shell", "balloon") && host.change(a[1].lowercase(), a[2]) -> {}
+                    else -> host.unknownTag(token)
+                }
                 "enter", "leave" -> when (a.getOrNull(1)?.lowercase()) {
                     "passivemode" -> host.setPassive(command == "enter")
                     // onlinemode / nouserbreakmode / inducemode / calmmode などは pono-droid では意味が無い

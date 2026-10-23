@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+import net.pono.baseware.balloon.Balloon
 import net.pono.baseware.ghost.BatteryInfo
 import net.pono.baseware.ghost.DeviceInfo
 import net.pono.baseware.ghost.Ghost
@@ -45,6 +46,7 @@ import net.pono.droid.GhostStore
 import net.pono.droid.MainActivity
 import net.pono.droid.R
 import net.pono.droid.TextViewerActivity
+import java.io.File
 import net.pono.shiori.yaya.RemoteYayaShiori
 
 /** ゴーストを常駐させる。キャラクターごとのオーバーレイウィンドウを持つ。 */
@@ -53,6 +55,8 @@ class GhostOverlayService : LifecycleService() {
     private val debuggable by lazy { (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0 }
     private var touchJob: Job? = null
     private var inputJob: Job? = null
+    private var passThrough = false
+    private val sound = SoundPlayer()
     private val windows = mutableListOf<CharacterWindow>()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -120,6 +124,20 @@ class GhostOverlayService : LifecycleService() {
                     startActivity(Intent(this@GhostOverlayService, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 }
 
+                override fun playSound(file: File, loop: Boolean, volume: Int?) = sound.play(file, loop, volume)
+
+                override fun stopSound() = sound.stop()
+
+                override suspend fun waitSound() = sound.await()
+
+                override fun onShellChanged(shell: Shell) {
+                    controller?.let { rebuildWindows(it) }
+                }
+
+                override fun onBalloonChanged(balloon: Balloon?) {
+                    controller?.let { rebuildWindows(it) }
+                }
+
                 /** ウェブのページだけ開く。ゴーストのスクリプトに他のアプリ（電話や決済など）を起動させない */
                 override fun openUrl(url: String) {
                     val uri = Uri.parse(url)
@@ -154,17 +172,15 @@ class GhostOverlayService : LifecycleService() {
         _controller.value = c
         _running.value = ghost.dir.name
         c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
-        val renderer = SurfaceRenderer(shell)
-        val balloonSkin = balloon?.let(::BalloonSkin)
-        val prefs = OverlaySettings.prefs(this)
-        for (scope in listOf(1, 0)) {
-            windows += CharacterWindow(this, scope, c, renderer, balloonSkin, prefs).also { it.show() }
-        }
+        createWindows(c)
         // pono-droid の画面が前にある間と入力の箱を出している間は、キャラクターがボタンやキーボードに重なっても押せるようにタッチを通す
         touchJob = lifecycleScope.launch {
             combine(appInFront, c.state.map { it.input != null }) { inFront, typing -> inFront || typing }
                 .distinctUntilChanged()
-                .collect { passThrough -> windows.forEach { it.setTouchable(!passThrough) } }
+                .collect { pass ->
+                    passThrough = pass
+                    windows.forEach { it.setTouchable(!pass) }
+                }
         }
         // 入力の箱が開いたら、キーボードを使える画面を出す（開き直されたときも）
         inputJob = lifecycleScope.launch {
@@ -175,7 +191,28 @@ class GhostOverlayService : LifecycleService() {
         c.start()
     }
 
+    /** キャラクターのウィンドウを、いまのシェルとバルーンで作る */
+    private fun createWindows(c: GhostController) {
+        val renderer = SurfaceRenderer(c.shell)
+        val balloonSkin = c.balloon?.let(::BalloonSkin)
+        val prefs = OverlaySettings.prefs(this)
+        for (scope in listOf(1, 0)) {
+            windows += CharacterWindow(this, scope, c, renderer, balloonSkin, prefs).also {
+                it.show()
+                it.setTouchable(!passThrough)
+            }
+        }
+    }
+
+    /** シェルやバルーンが切り替わったら、ウィンドウを作り直す */
+    private fun rebuildWindows(c: GhostController) {
+        windows.forEach { it.dismiss() }
+        windows.clear()
+        createWindows(c)
+    }
+
     private fun teardown() {
+        sound.stop()
         touchJob?.cancel()
         touchJob = null
         inputJob?.cancel()

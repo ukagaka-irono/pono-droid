@@ -161,6 +161,86 @@ class SspCompatibilityTest {
     }
 
     @Test
+    fun menuShowsShioriSitesAndShellsCanBeSwitched() = runBlocking {
+        val ghost = tmp.newTestGhost()
+        // 2つ目のシェル
+        val second = File(ghost.dir, "shell/second").apply { mkdirs() }
+        File(second, "descript.txt").writeText("charset,UTF-8\r\nname,二つ目\r\n")
+        File(ghost.masterDir, "se.wav").writeBytes(ByteArray(4))
+        val sites = "公式\u0001https://a.test/\u0001\u0001\u0002-\u0002掲示板\u0001script:\\0板\u0001\u0001\\0開いた"
+        val shiori = ScriptedShiori(
+            mapOf(
+                "sakura.recommendsites" to sites, "sakura.recommendbuttoncaption" to "おすすめ！", "readmebuttoncaption" to "説明書",
+                "OnRecommendsiteChoice" to """\0サイトだ""",
+                "OnShellChanging" to """\0着替える""",
+                "OnFirstBoot" to """\8[se.wav]\![change,balloon,random]""",
+            ),
+        )
+        val platform = RecordingPlatform()
+        val scope = testScope()
+        try {
+            val controller = testController(ghost, shiori, scope, platform)
+            controller.start()
+            shiori.awaitEvent("OnFirstBoot")
+            delay(200)
+            assertEquals(listOf("se.wav/false/null"), platform.sounds)
+
+            // 長押しのメニュー: SHIORI のおすすめとボタン名、シェルの切り替えが並ぶ
+            controller.onMouseLongPress(0, 0, 0, null)
+            withTimeout(5000) { controller.state.first { it.waitingChoice } }
+            val menu = controller.state.value.characters[0]!!.balloon!!.filterIsInstance<BalloonItem.ChoiceItem>().map { it.choice.title to it.choice.id }
+            assertTrue(menu.toString(), ("おすすめ！" to "pono:sites") in menu)
+            assertTrue(menu.toString(), ("シェル" to "pono:shells") in menu)
+            assertFalse(menu.toString(), menu.any { it.second == "pono:readme" })
+
+            // おすすめ → 2つ目（区切りの次）を選ぶと OnRecommendsiteChoice が送られ、script: の URL は再生される
+            controller.onChoice(Choice("おすすめ！", "pono:sites", listOf("recommend", "0")))
+            withTimeout(5000) { controller.state.first { s -> s.characters[0]?.balloon?.any { it is BalloonItem.ChoiceItem && it.choice.id == "pono:site" } == true } }
+            controller.onChoice(Choice("掲示板", "pono:site", listOf("recommend", "0", "2")))
+            assertEquals(listOf("掲示板", "script:\\0板", "", "recommend", "0", "2"), shiori.awaitEvent("OnRecommendsiteChoice"))
+            // 答えのトーク（サイトだ）のあとに script: の URL が再生される
+            withTimeout(5000) {
+                controller.state.first { s -> s.characters[0]?.balloon?.filterIsInstance<BalloonItem.Text>()?.joinToString("") { it.text } == "板" }
+            }
+
+            // シェルの切り替え（メニューから）: OnShellChanging → 切り替え → OnShellChanged
+            controller.onMouseLongPress(0, 0, 0, null)
+            withTimeout(5000) { controller.state.first { it.waitingChoice } }
+            controller.onChoice(Choice("シェル", "pono:shells", listOf("0")))
+            withTimeout(5000) { controller.state.first { s -> s.characters[0]?.balloon?.any { it is BalloonItem.ChoiceItem && it.choice.id == "pono:shell" } == true } }
+            controller.onChoice(Choice("二つ目", "pono:shell", listOf("second")))
+            assertEquals(listOf("二つ目", "master", second.absolutePath + "/"), shiori.awaitEvent("OnShellChanging"))
+            assertEquals(listOf("二つ目", "テスト", second.absolutePath + "/"), shiori.awaitEvent("OnShellChanged"))
+            assertEquals(listOf("second"), platform.shellChanges)
+            assertEquals("second", controller.shell.dir.name)
+            assertEquals("second", ghost.shellDir()?.name)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun dateAndSliderInputsAnswerLikeSsp() = runBlocking {
+        val shiori = ScriptedShiori(mapOf("OnFirstBoot" to """\![open,dateinput,誕生日,0,2000,1,2]""", "OnUserInput" to """\![open,sliderinput,OnSlider,0,5,0,10]"""))
+        val scope = testScope()
+        try {
+            val controller = testController(tmp.newTestGhost(), shiori, scope)
+            controller.start()
+            val date = withTimeout(5000) { controller.state.first { it.input != null } }.input!!
+            assertEquals(InputRequest.Kind.DATE, date.kind)
+            assertEquals(listOf(2000, 1, 2), date.values)
+            controller.onInputSubmit(date.serial, "2001,3,4")
+            assertEquals(listOf("誕生日", "2001,3,4"), shiori.awaitEvent("OnUserInput"))
+            val slider = withTimeout(5000) { controller.state.first { it.input?.kind == InputRequest.Kind.SLIDER } }.input!!
+            controller.onInputSubmit(slider.serial, "7")
+            // ID が On で始まるので、そのイベントに 値 と「最小,最大」
+            assertEquals(listOf("7", "0,10"), shiori.awaitEvent("OnSlider"))
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
     fun timerRaisePassiveModeAndProperties() = runBlocking {
         val shiori = ScriptedShiori(mapOf("OnFirstBoot" to """\0\![timerraise,100,1,OnTimerTest,a]\![enter,passivemode]\f[bold,1]太い\![open,readme]"""))
         val platform = RecordingPlatform()

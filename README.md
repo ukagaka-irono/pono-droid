@@ -148,13 +148,17 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 - イベント: OnFirstBoot / OnBoot / OnClose、OnSecondChange / OnMinuteChange / OnHourTimeSignal、OnMouseDown / OnMouseUp / OnMouseClick / OnMouseDoubleClick / OnMouseMultipleClick（長押しは右クリック扱い）、OnChoiceSelectEx / OnChoiceSelect / OnChoiceTimeout、OnAnchorSelectEx / OnAnchorSelect、OnBalloonClose / OnBalloonTimeout / OnBalloonBreak、OnSurfaceChange、OnTranslate、OnUserInput / OnCommunicate / OnTeach とその取り消し、OnUpdate*、OnExecuteHTTPComplete / Failure、OnBatteryNotify（と Low / Critical / ChargingStart / ChargingStop）、OnDisplayChange、起動時の OnNotifySelfInfo / BalloonInfo / ShellInfo / DressupInfo / UserInfo / OSInfo / InternationalInfo
 - SHIORI リソース: `homeurl`（descript.txt より優先）、`username`
 - タグ: 文字と待ち（`\0 \1 \p \s \i \n \c \w \_w \_q \x \e \-`）、選択肢とリンク（`\q \__q \_a`、`script:` の ID）、`\f` の文字装飾（bold / italic / underline / strike / color / height / align / sub / sup / default）、`\_u \_m \&`、`\b[n]`、`\_l`、`\![raise] \![notify] \![embed] \![timerraise] \![get,property]` と `%property[...]`（system.* / baseware.* / ghostlist / balloonlist / currentghost の一部）、`\![open,inputbox / passwordinput / communicatebox / teachbox / readme / configurationdialog]`、`\![set,balloontimeout / choicetimeout]`、`\![bind]`、`\![execute,http-get]`、`\![updatebymyself]`、`\![reload,shiori]`、`\![enter,passivemode]`
+- サウンド: `\8` `\_v` `\_V` `\![sound,play / loop / stop / wait]`（`--volume`）。ゴーストのディレクトリの中のファイルだけ鳴らします。
+- 切り替え: `\![change,shell]` / `\![change,balloon]`（random も可）と OnShellChanging / OnShellChanged / OnBalloonChange、着せ替えの OnDressupChanged。
+- 入力: `\![open,dateinput / timeinput / sliderinput / textareabox]`（OnUserInput と OnTextAreaInput）。
+- 長押しのメニューは SSP のオーナードローメニューに合わせて、SHIORI の `sakura.recommendsites` / `portalsites`（と `*buttoncaption`）、きせかえ、シェル、バルーン、Read Me、ネットワーク更新を出します。おすすめを選ぶと OnRecommendsiteChoice を送ります。
 - Windows のウィンドウやトレイ向けのタグ（`\![set,trayicon]`、`\![lock,repaint]`、`\4`〜`\7` など）は黙って読み飛ばします。
 
 ## 既知の制限
 
 - SHIORI は YAYA のみ（`yaya.dll` / `aya.dll` / `aya5.dll` と書かれたゴースト）。里々などは動きません。SAORI（`LOADLIB` / `REQUESTLIB`）と `EXECUTE` は、ゴーストにネイティブコードやシェルを動かさせないために止めています。
 - `\_l` による選択肢の横並びは、座標どおりではなく列に分けて並べます。
-- サウンド（`\8` `\_v` `\![sound]`）、バルーンの中の画像（`\_b`）、`\_s` の同期、日付・時刻・スライダーの入力、`\![change,shell / balloon / ghost]`、`\![set,scaling / alpha]`、`\![move]`、`\![anim,...]` には未対応です。
+- バルーンの中の画像（`\_b`）、`\_s` の同期、`\![change,ghost]`、`\![set,scaling / alpha]`、`\![move]`、`\![anim,...]` には未対応です。サウンドは同時に鳴らせるのが1回分とループ1つまでです。
 - SERIKO の `insert`、サーフェスの別名（alias）には未対応です。楕円・多角形の当たり判定は外接矩形で近似します。
 - オーバーレイの透明な部分もタッチを受け取ります。Android の制約で画素単位では透過できないため、キャラクターと吹き出しを別々のウィンドウにして、塞ぐ範囲をそれぞれの矩形に絞っています。
 - ネットワーク更新: シェル画像の更新は次の起動から反映されます。

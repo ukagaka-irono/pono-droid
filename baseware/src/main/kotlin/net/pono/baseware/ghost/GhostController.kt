@@ -82,6 +82,21 @@ interface GhostPlatform {
 
     /** pono-droid の設定画面（SSP の本体設定やゴーストエクスプローラの代わり） */
     fun openSettings() {}
+
+    /** 音を鳴らす（\8 \_v \![sound]）。[volume] は 0〜100（null なら既定） */
+    fun playSound(file: File, loop: Boolean, volume: Int?) {}
+
+    /** 鳴っている音を全部止める */
+    fun stopSound() {}
+
+    /** 鳴り終わるまで待つ（鳴っていなければすぐ戻る） */
+    suspend fun waitSound() {}
+
+    /** シェルが切り替わった。ウィンドウを作り直す */
+    fun onShellChanged(shell: Shell) {}
+
+    /** バルーンが切り替わった（null なら簡易バルーン） */
+    fun onBalloonChanged(balloon: Balloon?) {}
 }
 
 /**
@@ -90,12 +105,12 @@ interface GhostPlatform {
  */
 class GhostController(
     val ghost: Ghost,
-    val shell: Shell,
+    shell: Shell,
     private val shioriFactory: ShioriFactory,
     private val scope: CoroutineScope,
     private val platform: GhostPlatform,
     /** 使っているバルーン（null なら pono-droid の簡易バルーン） */
-    private val balloon: Balloon? = null,
+    balloon: Balloon? = null,
     /** 入っているゴーストとバルーンの一覧（プロパティシステムの ghostlist などに使う） */
     private val repository: GhostRepository? = null,
     userName: String = "ユーザ",
@@ -106,6 +121,14 @@ class GhostController(
 ) {
     private val _state = MutableStateFlow(GhostState())
     val state: StateFlow<GhostState> = _state.asStateFlow()
+
+    /** 使っているシェル。\![change,shell] やメニューで変わる */
+    var shell: Shell = shell
+        private set
+
+    /** 使っているバルーン（null なら簡易バルーン）。\![change,balloon] やメニューで変わる */
+    var balloon: Balloon? = balloon
+        private set
 
     /** %username。SHIORI が username リソースを返せばそれに変わる */
     private var userName = userName
@@ -401,9 +424,82 @@ class GhostController(
         timerJob?.cancel()
         timers.values.forEach { it.cancel() }
         timers.clear()
+        platform.stopSound()
         session?.unload()
         session = null
         platform.onQuit()
+    }
+
+    // ---- シェルとバルーンの切り替え ----
+
+    /**
+     * シェルを切り替える（\![change,shell,名前] とメニュー）。[name] はシェルの名前かディレクトリ名、random。
+     * メニューからのとき（[byUser]）は SSP と同じく先に OnShellChanging で話してもらう。
+     */
+    fun changeShell(name: String, byUser: Boolean = false) {
+        scope.launch {
+            val dirs = ghost.shellDirs
+            val dir = when (name) {
+                "random" -> dirs.randomOrNull()
+                else -> dirs.firstOrNull { it.name == name } ?: dirs.firstOrNull { runCatching { Shell(it).name }.getOrNull() == name }
+            } ?: return@launch platform.log("シェルがありません: $name")
+            val next = Shell(dir)
+            if (byUser) talkAndWait("OnShellChanging", listOf(next.name, shell.name, dir.absolutePath + "/"))
+            cancelScript()
+            hideBalloons()
+            ghost.selectShell(dir.name)
+            shell = next
+            resetSurfaces()
+            platform.onShellChanged(next)
+            notify("OnNotifyShellInfo", listOf(next.name, dir.absolutePath + "/", next.surfaceIds().joinToString(",")))
+            dressupInfo().takeIf { it.isNotEmpty() }?.let { notify("OnNotifyDressupInfo", it) }
+            raise("OnShellChanged", listOf(next.name, ghost.name, dir.absolutePath + "/"))
+        }
+    }
+
+    /** バルーンを切り替える（\![change,balloon,名前] とメニュー）。[name] は名前かディレクトリ名、random、"/simple"（簡易バルーン） */
+    fun changeBalloon(name: String) {
+        val balloons = repository?.balloons ?: return
+        val next: Balloon? = when (name) {
+            SIMPLE_BALLOON -> null
+            "random" -> balloons.list().randomOrNull()
+            else -> balloons.findByName(name) ?: balloons.find(name) ?: return platform.log("バルーンがありません: $name")
+        }
+        ghost.selectBalloon(next?.dir?.name)
+        balloon = next
+        platform.onBalloonChanged(next)
+        val path = next?.let { it.dir.absolutePath + "/" }.orEmpty()
+        notify(
+            "OnNotifyBalloonInfo", listOf(next?.name.orEmpty(), path,
+                next?.let { b -> (0..1).joinToString(" ") { s -> "$s:" + b.images(s).joinToString(",") { it.index.toString() } } }.orEmpty()),
+        )
+        raise("OnBalloonChange", listOf(next?.name.orEmpty(), path))
+    }
+
+    /** 着せ替えを付け外しする。[on] が null なら切り替え。[byUser] はメニューから */
+    private fun applyBind(scopeId: Int, group: net.pono.baseware.shell.BindGroup, on: Boolean?, byUser: Boolean) {
+        var enabled = false
+        _state.update {
+            it.update(scopeId) { c ->
+                enabled = on ?: (group.id !in c.binds)
+                // 同じカテゴリのパーツは1つだけ（服を着替えるように差し替える）
+                val others = shell.bindGroups(scopeId).filter { g -> g.category == group.category }.map { g -> g.id }.toSet()
+                c.copy(binds = if (enabled) c.binds - others + group.id else c.binds - group.id)
+            }
+        }
+        raise("OnDressupChanged", listOf(scopeId.toString(), group.part, if (enabled) "1" else "0", group.category, if (byUser) "user" else "script"), userInitiated = false)
+        dressupInfo().takeIf { it.isNotEmpty() }?.let { notify("OnNotifyDressupInfo", it) }
+    }
+
+    // ---- 音 ----
+
+    /** ghost/master からの相対パス（か絶対パス）。ゴーストのディレクトリの外は鳴らさない */
+    private fun soundFile(name: String): File? {
+        val raw = name.trim().replace('\\', '/')
+        val file = if (raw.startsWith("/")) File(raw) else File(ghost.masterDir, raw)
+        val canonical = runCatching { file.canonicalFile }.getOrNull() ?: return null
+        val root = ghost.dir.canonicalFile
+        return canonical.takeIf { it.path.startsWith(root.path + File.separator) && it.isFile }
     }
 
     // ---- ユーザー操作 ----
@@ -463,13 +559,112 @@ class GhostController(
         }
     }
 
-    /** 右クリックのメニューの代わり。選択肢の ID は [selectChoice] が pono: で見分ける */
-    private fun basewareMenu(scopeId: Int): String =
-        "\\p[$scopeId]\\_q【${ShioriSession.SENDER}】\\n" +
-            "\\q[ゴーストのメニュー（中クリック）,pono:middle,$scopeId]\\n" +
-            "\\q[ネットワーク更新,pono:update]\\n" +
-            "\\q[ゴーストを終了,pono:close]\\n" +
-            "\\q[閉じる,pono:cancel]\\e"
+    // ---- メニュー（SSP のオーナードローメニューの代わり） ----
+
+    /** おすすめ・ポータルの1つ。SHIORI のリソースは 名前[1]URL[1]バナー[1]スクリプト を [2] でつないだもの */
+    private data class Site(val name: String, val url: String, val banner: String, val script: String)
+
+    private fun parseSites(value: String?): List<Site> = value.orEmpty().split('\u0002').mapNotNull { entry ->
+        val f = entry.split('\u0001')
+        val name = f.getOrNull(0)?.trim().orEmpty()
+        if (name.isEmpty()) null else Site(name, f.getOrNull(1)?.trim().orEmpty(), f.getOrNull(2).orEmpty(), f.getOrNull(3).orEmpty())
+    }
+
+    /** SHIORI のリソース（おすすめサイトやボタンの名前）。無ければ null */
+    private suspend fun resource(id: String): String? = request(id, emptyList(), translate = false)?.takeIf { it.isNotBlank() }
+
+    /** \q の題名に使えるようにする（カンマや " を含むときは "..." で囲む） */
+    private fun quote(s: String): String = if (s.any { it == ',' || it == '"' || it == ']' }) "\"" + s.replace("\"", "\"\"") + "\"" else s
+
+    /**
+     * 長押しのメニュー。SSP のオーナードローメニューと同じく、おすすめ・ポータル・きせかえ・シェル・バルーン・Read Me・
+     * ネットワーク更新・終了を出す。選択肢の ID は [selectChoice] が pono: で見分ける
+     */
+    private suspend fun basewareMenu(scopeId: Int): String {
+        val scopeName = Shell.scopeName(scopeId)
+        val sb = StringBuilder("\\p[$scopeId]\\_q【${ShioriSession.SENDER}】\\n")
+        if (parseSites(resource("$scopeName.recommendsites")).isNotEmpty()) {
+            sb.append("\\q[${quote(resource("$scopeName.recommendbuttoncaption") ?: "おすすめ")},pono:sites,recommend,$scopeId]\\n")
+        }
+        if (parseSites(resource("$scopeName.portalsites")).isNotEmpty()) {
+            sb.append("\\q[${quote(resource("$scopeName.portalbuttoncaption") ?: "ポータル")},pono:sites,portal,$scopeId]\\n")
+        }
+        sb.append("\\q[ゴーストのメニュー（中クリック）,pono:middle,$scopeId]\\n")
+        if (shell.bindGroups(scopeId).isNotEmpty()) sb.append("\\q[きせかえ,pono:dressup,$scopeId]\\n")
+        if (ghost.shellDirs.size > 1) sb.append("\\q[シェル,pono:shells,$scopeId]\\n")
+        if (repository != null) sb.append("\\q[バルーン,pono:balloons,$scopeId]\\n")
+        if (readmeFile() != null) sb.append("\\q[${quote(resource("readmebuttoncaption") ?: "Read Me")},pono:readme]\\n")
+        sb.append("\\q[${quote(resource("updatebuttoncaption") ?: "ネットワーク更新")},pono:update]\\n")
+        sb.append("\\q[ゴーストを終了,pono:close]\\n\\q[閉じる,pono:cancel]\\e")
+        return sb.toString()
+    }
+
+    /** おすすめ（recommend）かポータル（portal）の一覧 */
+    private suspend fun sitesMenu(kind: String, scopeId: Int): String {
+        val sites = parseSites(resource("${Shell.scopeName(scopeId)}.${kind}sites"))
+        val sb = StringBuilder("\\p[$scopeId]\\_q")
+        sites.forEachIndexed { i, site ->
+            // "-" は区切り線
+            if (site.name == "-") sb.append("\\n") else sb.append("\\q[${quote(site.name)},pono:site,$kind,$scopeId,$i]\\n")
+        }
+        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        return sb.toString()
+    }
+
+    private fun dressupMenu(scopeId: Int): String {
+        val binds = _state.value.characters[scopeId]?.binds.orEmpty()
+        val sb = StringBuilder("\\p[$scopeId]\\_q")
+        for (g in shell.bindGroups(scopeId)) {
+            sb.append("\\q[${quote((if (g.id in binds) "● " else "○ ") + g.category + ": " + g.part)},pono:bind,$scopeId,${g.id}]\\n")
+        }
+        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        return sb.toString()
+    }
+
+    private fun shellsMenu(scopeId: Int): String {
+        val sb = StringBuilder("\\p[$scopeId]\\_q")
+        for (dir in ghost.shellDirs) {
+            val name = runCatching { Shell(dir).name }.getOrDefault(dir.name)
+            sb.append("\\q[${quote((if (dir == shell.dir) "● " else "○ ") + name)},pono:shell,${dir.name}]\\n")
+        }
+        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        return sb.toString()
+    }
+
+    private fun balloonsMenu(scopeId: Int): String {
+        val sb = StringBuilder("\\p[$scopeId]\\_q")
+        sb.append("\\q[${if (balloon == null) "● " else "○ "}簡易バルーン,pono:balloon,$SIMPLE_BALLOON]\\n")
+        for (b in repository?.balloons?.list().orEmpty()) {
+            sb.append("\\q[${quote((if (b.dir == balloon?.dir) "● " else "○ ") + b.name)},pono:balloon,${b.dir.name}]\\n")
+        }
+        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        return sb.toString()
+    }
+
+    /** メニューで選ばれたおすすめ・ポータル。SSP と同じく OnRecommendsiteChoice を送り、サイトを開く */
+    private suspend fun openSite(kind: String, scopeId: Int, index: Int) {
+        val site = parseSites(resource("${Shell.scopeName(scopeId)}.${kind}sites")).getOrNull(index) ?: return
+        val reply = request("OnRecommendsiteChoice", listOf(site.name, site.url, site.banner, kind, scopeId.toString(), index.toString()))
+        val script = reply ?: site.script.takeIf { it.isNotBlank() }
+        if (script != null) {
+            cancelScript()
+            runScript(script)
+            _state.first { !it.talking }
+        }
+        when {
+            site.url.startsWith("script:") -> {
+                cancelScript()
+                runScript(site.url.removePrefix("script:"))
+            }
+            site.url.startsWith("http://") || site.url.startsWith("https://") -> platform.openUrl(site.url)
+        }
+    }
+
+    /** descript.txt の readme（無ければ readme.txt） */
+    private fun readmeFile(): File? {
+        val name = ghost.descript["readme"]?.takeIf { it.isNotBlank() } ?: "readme.txt"
+        return File(ghost.masterDir, name).takeIf { it.isFile } ?: File(ghost.dir, name).takeIf { it.isFile }
+    }
 
     /**
      * バルーンをタップした。\x の待ちなら進め、話している途中なら止めて（OnBalloonBreak）、
@@ -559,13 +754,23 @@ class GhostController(
         inputTimeout?.cancel()
         _state.update { it.copy(input = null) }
         // ユーザーが打った文字（パスワードのこともある）はログに残さない
+        // ID が On で始まればそのイベント（Reference0 = 答え）、そうでなければ OnUserInput（ID, 答え）
+        fun answer(event: String, extra: List<String> = emptyList(), sensitive: Boolean = true) {
+            if (request.id.startsWith("On")) {
+                raise(request.id, listOf(text) + extra, sensitive = sensitive)
+            } else {
+                raise(event, listOf(request.id, text) + extra, sensitive = sensitive)
+            }
+        }
         when (request.kind) {
-            InputRequest.Kind.INPUT, InputRequest.Kind.PASSWORD ->
-                if (request.id.startsWith("On")) {
-                    raise(request.id, listOf(text), sensitive = true)
-                } else {
-                    raise("OnUserInput", listOf(request.id, text), sensitive = true)
-                }
+            InputRequest.Kind.INPUT, InputRequest.Kind.PASSWORD -> answer("OnUserInput")
+            InputRequest.Kind.DATE, InputRequest.Kind.TIME -> answer("OnUserInput", sensitive = false)
+            // スライダーは Reference2 に「最小,最大」
+            InputRequest.Kind.SLIDER -> answer("OnUserInput", listOf("${request.values.getOrNull(1) ?: 0},${request.values.getOrNull(2) ?: 0}"), sensitive = false)
+            InputRequest.Kind.TEXTAREA -> {
+                val joined = text.replace("\r\n", "\n").replace('\n', '\u0001')
+                if (request.id.startsWith("On")) raise(request.id, listOf(joined), sensitive = true) else raise("OnTextAreaInput", listOf(request.id, joined), sensitive = true)
+            }
             InputRequest.Kind.COMMUNICATE -> raise("OnCommunicate", listOf("user", text), sensitive = true)
             InputRequest.Kind.TEACH -> raise("OnTeach", listOf(text), sensitive = true)
         }
@@ -578,7 +783,9 @@ class GhostController(
         _state.update { it.copy(input = null) }
         val reason = if (timeout) "timeout" else "cancel"
         when (request.kind) {
-            InputRequest.Kind.INPUT, InputRequest.Kind.PASSWORD -> raise("OnUserInputCancel", listOf(request.id, reason))
+            InputRequest.Kind.INPUT, InputRequest.Kind.PASSWORD, InputRequest.Kind.DATE, InputRequest.Kind.TIME, InputRequest.Kind.SLIDER ->
+                raise("OnUserInputCancel", listOf(request.id, reason))
+            InputRequest.Kind.TEXTAREA -> raise("OnTextAreaInputCancel", listOf(request.id, reason))
             InputRequest.Kind.COMMUNICATE -> raise("OnCommunicateInputCancel", listOf("", reason))
             InputRequest.Kind.TEACH -> {}
         }
@@ -783,14 +990,29 @@ class GhostController(
             // pono-droid 自身のメニュー（長押し）
             id.startsWith("pono:") -> {
                 hideBalloons()
+                val refs = choice.references
+                val scopeId = refs.firstOrNull()?.toIntOrNull() ?: 0
                 when (id) {
                     "pono:middle" -> {
                         // 中クリック（Reference5 = 2）。ゴーストによってはこれでメニューを開く
-                        val target = choice.references.firstOrNull() ?: "0"
-                        raise("OnMouseClick", listOf("0", "0", "0", target, "", "2", "touch"))
+                        raise("OnMouseClick", listOf("0", "0", "0", scopeId.toString(), "", "2", "touch"))
                     }
                     "pono:update" -> networkUpdate()
                     "pono:close" -> close()
+                    "pono:menu" -> scope.launch { runScript(basewareMenu(scopeId)) }
+                    "pono:sites" -> scope.launch { runScript(sitesMenu(refs.getOrNull(0) ?: "recommend", refs.getOrNull(1)?.toIntOrNull() ?: 0)) }
+                    "pono:site" -> scope.launch { openSite(refs.getOrNull(0) ?: "recommend", refs.getOrNull(1)?.toIntOrNull() ?: 0, refs.getOrNull(2)?.toIntOrNull() ?: 0) }
+                    "pono:dressup" -> runScript(dressupMenu(scopeId))
+                    "pono:bind" -> {
+                        val group = shell.bindGroups(scopeId).firstOrNull { it.id == refs.getOrNull(1)?.toIntOrNull() }
+                        if (group != null) applyBind(scopeId, group, null, byUser = true)
+                        runScript(dressupMenu(scopeId))
+                    }
+                    "pono:shells" -> runScript(shellsMenu(scopeId))
+                    "pono:shell" -> refs.firstOrNull()?.let { changeShell(it, byUser = true) }
+                    "pono:balloons" -> runScript(balloonsMenu(scopeId))
+                    "pono:balloon" -> refs.firstOrNull()?.let { changeBalloon(it) }
+                    "pono:readme" -> readmeFile()?.let { platform.showText(ghost.name, readmeText()) }
                 }
             }
             id.startsWith("http://") || id.startsWith("https://") -> {
@@ -1045,14 +1267,25 @@ class GhostController(
 
         override fun bind(scope: Int, category: String, part: String, on: Boolean?) {
             val group = shell.bindGroups(scope).firstOrNull { it.category == category && it.part == part } ?: return
-            _state.update {
-                it.update(scope) { c ->
-                    val enable = on ?: (group.id !in c.binds)
-                    // 同じカテゴリのパーツは1つだけ（服を着替えるように差し替える）
-                    val others = shell.bindGroups(scope).filter { g -> g.category == category }.map { g -> g.id }.toSet()
-                    c.copy(binds = if (enable) c.binds - others + group.id else c.binds - group.id)
-                }
+            applyBind(scope, group, on, byUser = false)
+        }
+
+        override fun playSound(file: String, loop: Boolean, volume: Int?) {
+            val f = soundFile(file) ?: return platform.log("音が見つかりません: $file")
+            platform.playSound(f, loop, volume)
+        }
+
+        override fun stopSound(file: String?) = platform.stopSound()
+
+        override suspend fun waitSound() = platform.waitSound()
+
+        override fun change(kind: String, name: String): Boolean {
+            when (kind) {
+                "shell" -> changeShell(name)
+                "balloon" -> changeBalloon(name)
+                else -> return false
             }
+            return true
         }
 
         override fun setOption(name: String, args: List<String>): Boolean {
@@ -1117,7 +1350,7 @@ class GhostController(
         }
 
         override fun close(kind: String, args: List<String>): Boolean {
-            if (kind !in setOf("inputbox", "passwordinput", "communicatebox", "teachbox")) return false
+            if (kind !in setOf("inputbox", "passwordinput", "communicatebox", "teachbox", "dateinput", "timeinput", "sliderinput", "textareabox")) return false
             closeInput(args.firstOrNull())
             return true
         }
@@ -1218,5 +1451,8 @@ class GhostController(
 
         /** `\![timerraise]` で同時に予約できる数 */
         const val MAX_TIMERS = 32
+
+        /** メニューと [changeBalloon] で簡易バルーンを表す名前（ディレクトリ名と重ならないよう / を含める） */
+        const val SIMPLE_BALLOON = "/simple"
     }
 }

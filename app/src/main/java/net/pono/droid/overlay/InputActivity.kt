@@ -7,6 +7,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -50,6 +52,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.ghost.InputRequest
+import kotlin.math.roundToInt
 
 /**
  * ゴーストの入力の箱（\![open,inputbox,...] など）。
@@ -111,8 +114,18 @@ private fun InputDialog(ghostName: String, request: InputRequest, controller: Gh
     val textState: MutableState<TextFieldValue> =
         if (password) remember(request.serial, initial) else rememberSaveable(request.serial, stateSaver = TextFieldValue.Saver, init = initial)
     var text by textState
+    // 年月日・時分秒・スライダーの値
+    val numbers = remember(request.serial) { request.values.map { mutableStateOf(it.toString()) } }
+    var slider by remember(request.serial) { mutableStateOf(request.values.firstOrNull()?.toFloat() ?: 0f) }
     val focus = remember(request.serial) { FocusRequester() }
-    val submit = { controller.onInputSubmit(request.serial, text.text) }
+    val submit = {
+        val answer = when (request.kind) {
+            InputRequest.Kind.DATE, InputRequest.Kind.TIME -> numbers.joinToString(",") { it.value.trim().toIntOrNull()?.toString() ?: "0" }
+            InputRequest.Kind.SLIDER -> slider.roundToInt().toString()
+            else -> text.text
+        }
+        controller.onInputSubmit(request.serial, answer)
+    }
     // 別のウィンドウ（Dialog）にするとキーボードが自動で出ないので、この Activity の窓の中にダイアログ風に描く
     Box(
         Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)).imePadding().padding(24.dp),
@@ -136,19 +149,49 @@ private fun InputDialog(ghostName: String, request: InputRequest, controller: Gh
                     )
                 }
                 Spacer(Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    label = { Text(request.label()) },
-                    singleLine = request.kind != InputRequest.Kind.COMMUNICATE,
-                    visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = if (password) KeyboardType.Password else KeyboardType.Text,
-                        imeAction = ImeAction.Done,
-                    ),
-                    keyboardActions = KeyboardActions(onDone = { submit() }),
-                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
-                )
+                when (request.kind) {
+                    InputRequest.Kind.DATE, InputRequest.Kind.TIME -> {
+                        val labels = if (request.kind == InputRequest.Kind.DATE) listOf("年", "月", "日") else listOf("時", "分", "秒")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            numbers.forEachIndexed { i, state ->
+                                OutlinedTextField(
+                                    value = state.value,
+                                    onValueChange = { v -> state.value = v.filter { it.isDigit() }.take(6) },
+                                    label = { Text(labels.getOrElse(i) { "" }) },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = if (i == numbers.lastIndex) ImeAction.Done else ImeAction.Next),
+                                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                                    modifier = Modifier.weight(1f).then(if (i == 0) Modifier.focusRequester(focus) else Modifier),
+                                )
+                            }
+                        }
+                    }
+                    InputRequest.Kind.SLIDER -> {
+                        val min = request.values.getOrNull(1) ?: 0
+                        val max = request.values.getOrNull(2) ?: 100
+                        Text("${slider.roundToInt()}（$min〜$max）", style = MaterialTheme.typography.bodyLarge)
+                        Slider(
+                            value = slider,
+                            onValueChange = { slider = it },
+                            valueRange = min.toFloat()..max.toFloat(),
+                            modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                        )
+                    }
+                    else -> OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        label = { Text(request.label()) },
+                        singleLine = request.kind != InputRequest.Kind.COMMUNICATE && request.kind != InputRequest.Kind.TEXTAREA,
+                        minLines = if (request.kind == InputRequest.Kind.TEXTAREA) 4 else 1,
+                        visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = if (password) KeyboardType.Password else KeyboardType.Text,
+                            imeAction = if (request.kind == InputRequest.Kind.TEXTAREA) ImeAction.Default else ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { submit() }),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 Row(Modifier.align(Alignment.End)) {
                     TextButton(onClick = { controller.onInputCancel(request.serial) }) { Text("キャンセル") }
@@ -169,4 +212,8 @@ private fun InputRequest.label() = when (kind) {
     InputRequest.Kind.PASSWORD -> "パスワード"
     InputRequest.Kind.COMMUNICATE -> "話しかける"
     InputRequest.Kind.TEACH -> "教える"
+    InputRequest.Kind.DATE -> "日付"
+    InputRequest.Kind.TIME -> "時刻"
+    InputRequest.Kind.SLIDER -> "値"
+    InputRequest.Kind.TEXTAREA -> "入力（複数行）"
 }

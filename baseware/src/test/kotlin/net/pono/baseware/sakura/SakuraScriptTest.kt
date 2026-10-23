@@ -137,6 +137,10 @@ class SakuraScriptTest {
             override fun setAlign(scope: Int, align: TextAlign) { log += "align:$align" }
             override fun setPassive(on: Boolean) { log += "passive:$on" }
             override fun reload(what: String) { log += "reload:$what" }
+            override fun playSound(file: String, loop: Boolean, volume: Int?) { log += "sound:$file/$loop/$volume" }
+            override fun stopSound(file: String?) { log += "soundstop:$file" }
+            override suspend fun waitSound() { log += "soundwait" }
+            override fun change(kind: String, name: String): Boolean { log += "change:$kind/$name"; return true }
             override fun openUrl(url: String) {}
             override fun envVariable(name: String): String? = null
             override fun unknownTag(tag: Token.Tag) { log += "unknown:${tag.name}" }
@@ -145,7 +149,8 @@ class SakuraScriptTest {
             """\_u[0x3042]\_m[0x41]\&[amp]\&[#x42]%property[baseware.name]\![notify,OnN,1]\![embed,OnEmbed]""" +
                 """\![timerraise,500,0,OnT,a]\![timerraise,0,1,OnT]\![get,property,OnP,system.year]""" +
                 """\f[bold,1]太\f[color,255,0,0]赤\f[height,+2]\f[align,center]\f[default]\_a[ID]link\_a\q[x,script:\0hi]""" +
-                """\![enter,passivemode]\![leave,passivemode]\![reload,shiori]\![lock,repaint]\![set,trayicon,x]\4\![open,foo]""",
+                """\![enter,passivemode]\![leave,passivemode]\![reload,shiori]\![lock,repaint]\![set,trayicon,x]\4\![open,foo]""" +
+                """\8[a.wav]\_v[se/b.mp3]\_V\![sound,play,c.wav,--volume=50]\![sound,loop,d.wav]\![sound,wait]\![sound,stop]\![sound,pause]\![change,shell,master]\![change,balloon,x]""",
             host,
         )
         assertEquals(
@@ -159,6 +164,8 @@ class SakuraScriptTest {
                 "font:${TextStyle.Default}",
                 "q:ID/true", "q:script:\\0hi/false",
                 "passive:true", "passive:false", "reload:shiori", "unknown:!",
+                "sound:a.wav/false/null", "sound:se/b.mp3/false/null", "soundwait", "sound:c.wav/false/50", "sound:d.wav/true/null",
+                "soundwait", "soundstop:null", "change:shell/master", "change:balloon/x",
             ),
             log,
         )
