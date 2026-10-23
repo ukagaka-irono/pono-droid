@@ -336,6 +336,11 @@ class CharacterWindow(
         private var startY = 0
         private var dragging = false
         private var longPressed = false
+
+        /** 当たり判定の上で触れたか。そこから指を動かすと、ウィンドウを動かさずになでる */
+        private var strokeArea = false
+        private var stroking = false
+        private var lastStrokeTime = 0L
         private var pendingLongPress: Runnable? = null
         private var tapCount = 0
         private var lastTapTime = 0L
@@ -353,6 +358,8 @@ class CharacterWindow(
             onDown: (x: Float, y: Float) -> Unit,
             onTap: (x: Float, y: Float, count: Int) -> Unit,
             onLongPress: (x: Float, y: Float) -> Unit,
+            canStroke: (x: Float, y: Float) -> Boolean,
+            onStroke: (x: Float, y: Float) -> Unit,
         ): Boolean {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -362,6 +369,8 @@ class CharacterWindow(
                     startY = params.y
                     dragging = false
                     longPressed = false
+                    stroking = false
+                    strokeArea = canStroke(event.x, event.y)
                     val x = event.x
                     val y = event.y
                     onDown(x, y)
@@ -376,11 +385,22 @@ class CharacterWindow(
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downRawX
                     val dy = event.rawY - downRawY
-                    if (!dragging && !longPressed && !pinned && (abs(dx) > slop || abs(dy) > slop)) {
-                        dragging = true
-                        cancelLongPress()
+                    if (!dragging && !stroking && !longPressed && (abs(dx) > slop || abs(dy) > slop)) {
+                        if (strokeArea) {
+                            stroking = true
+                            cancelLongPress()
+                        } else if (!pinned) {
+                            dragging = true
+                            cancelLongPress()
+                        }
                     }
-                    if (dragging) {
+                    if (stroking) {
+                        // 指の動きは細かく届くので、なでるのは 30ms に1回まで
+                        if (event.eventTime - lastStrokeTime >= STROKE_INTERVAL_MS) {
+                            lastStrokeTime = event.eventTime
+                            onStroke(event.x, event.y)
+                        }
+                    } else if (dragging) {
                         // END / BOTTOM 基準なので、x と y は右下からの距離
                         params.x = startX + (if (alignEnd) -dx else dx).toInt()
                         params.y = startY - dy.toInt()
@@ -390,6 +410,9 @@ class CharacterWindow(
                 }
                 MotionEvent.ACTION_UP -> if (longPressed) {
                     // 長押しはもう知らせてある
+                } else if (stroking) {
+                    // なでた後はタップにしない
+                    tapCount = 0
                 } else if (dragging) {
                     cancelLongPress()
                     prefs.edit().putInt(key("x"), params.x).putInt(key("y"), params.y).apply()
@@ -429,13 +452,21 @@ private fun FitWindow(corner: Alignment, onSize: (Int, Int) -> Unit, content: @C
     }
 }
 
+/** なでる（OnMouseMove）を送る間隔の下限。指の動きのたびに送ると SHIORI を叩きすぎる */
+private const val STROKE_INTERVAL_MS = 30L
+
 interface SurfaceTouchHandler {
-    /** [onDown] は指が触れたとき、[onTap] は動かさずに離したとき（[count] は続けて叩いた回数）、[onLongPress] は長押し */
+    /**
+     * [onDown] は指が触れたとき、[onTap] は動かさずに離したとき（[count] は続けて叩いた回数）、[onLongPress] は長押し。
+     * 触れた場所が [canStroke]（当たり判定の上）なら、指を動かすとウィンドウは動かさずに [onStroke]（なでる）を呼ぶ
+     */
     fun onTouch(
         event: MotionEvent,
         onDown: (x: Float, y: Float) -> Unit,
         onTap: (x: Float, y: Float, count: Int) -> Unit,
         onLongPress: (x: Float, y: Float) -> Unit,
+        canStroke: (x: Float, y: Float) -> Boolean,
+        onStroke: (x: Float, y: Float) -> Unit,
     ): Boolean
 }
 

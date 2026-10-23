@@ -130,6 +130,12 @@ fun CharacterSurface(
                     val p = imagePoint(x, y)
                     controller.onMouseLongPress(scopeId, p.first, p.second, hit(p))
                 },
+                // 当たり判定（頭など）の上で触れて動かすと、なでる。当たり判定の外からならウィンドウを動かす
+                canStroke = { x, y -> hit(imagePoint(x, y)) != null },
+                onStroke = { x, y ->
+                    val p = imagePoint(x, y)
+                    controller.onMouseMove(scopeId, p.first, p.second, hit(p))
+                },
             ),
     )
 }
@@ -173,5 +179,7 @@ private fun Modifier.surfaceTouch(
     onDown: (Float, Float) -> Unit,
     onTap: (Float, Float, Int) -> Unit,
     onLongPress: (Float, Float) -> Unit,
-) = pointerInteropFilter { handler.onTouch(it, onDown, onTap, onLongPress) }
+    canStroke: (Float, Float) -> Boolean,
+    onStroke: (Float, Float) -> Unit,
+) = pointerInteropFilter { handler.onTouch(it, onDown, onTap, onLongPress, canStroke, onStroke) }
 

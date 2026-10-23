@@ -10,7 +10,7 @@
 - `.nar` ファイルからゴーストをインストール
 - 他のアプリやホーム画面の上にキャラクター（`\0` / `\1`）と吹き出しを表示
   - シェルの透過（PNG のアルファ / `.pna` / 左上の色）、`surfaces.txt` の element と SERIKO アニメーション（新旧両形式）
-  - ドラッグで移動、大きさはアプリの画面で変更
+  - ドラッグで移動（当たり判定の上からならなでる）、大きさはアプリの画面で変更
 - さくらスクリプトの再生（文字送り、ウェイト、`\s` `\n` `\c` `\x` `\e` `\-`、選択肢 `\q` `\__q`、`\![raise,...]`、`\![set,balloontimeout,...]` など）
 - SHIORI/3.0 のイベント
   - 起動・終了: `OnFirstBoot` / `OnBoot` / `OnClose`
@@ -30,7 +30,7 @@
 | 操作 | 動き |
 |------|------|
 | キャラクターをタップ | `OnMouseClick`。続けて叩くと `OnMouseDoubleClick`、3回目以降は `OnMouseMultipleClick` |
-| キャラクターをドラッグ | 移動（位置は覚えておきます） |
+| キャラクターをドラッグ | 移動（位置は覚えておきます）。当たり判定（頭など）の上から指を動かしたときは移動せず、なでる（`OnMouseMove`） |
 | 吹き出しをタップ | `\x` の待ちを進める / 話し終わっていれば閉じる |
 | 通知の「ネットワーク更新」、アプリの「更新」 | 起動中のゴーストをネットワーク更新 |
 | 通知の「終了」、アプリの「終了」 | `OnClose` を送ってゴーストを終了 |
@@ -165,7 +165,7 @@ SHIORI を Android で動かすための工夫:
 
 SSP（Windows の伺かベースウェア）と同じイベント・タグをできるだけ送り、同じように振る舞うようにしています。
 
-- イベント: OnFirstBoot / OnBoot / OnClose、OnSecondChange / OnMinuteChange / OnHourTimeSignal、OnMouseDown / OnMouseUp / OnMouseClick / OnMouseDoubleClick / OnMouseMultipleClick（長押しは右クリック扱い）、OnChoiceSelectEx / OnChoiceSelect / OnChoiceTimeout、OnAnchorSelectEx / OnAnchorSelect、OnBalloonClose / OnBalloonTimeout / OnBalloonBreak、OnSurfaceChange、OnTranslate、OnUserInput / OnCommunicate / OnTeach とその取り消し、OnUpdate*、OnExecuteHTTPComplete / Failure、OnBatteryNotify（と Low / Critical / ChargingStart / ChargingStop）、OnDisplayChange、起動時の OnNotifySelfInfo / BalloonInfo / ShellInfo / DressupInfo / UserInfo / OSInfo / InternationalInfo
+- イベント: OnFirstBoot / OnBoot / OnClose、OnSecondChange / OnMinuteChange / OnHourTimeSignal、OnMouseDown / OnMouseUp / OnMouseClick / OnMouseDoubleClick / OnMouseMultipleClick（長押しは右クリック扱い）、OnMouseMove（当たり判定の上で指を動かす＝なでる）、OnSurfaceRestore（バルーンが閉じて 15 秒後に1回）、OnChoiceSelectEx / OnChoiceSelect / OnChoiceTimeout、OnAnchorSelectEx / OnAnchorSelect、OnBalloonClose / OnBalloonTimeout / OnBalloonBreak、OnSurfaceChange、OnTranslate、OnUserInput / OnCommunicate / OnTeach とその取り消し、OnUpdate*、OnExecuteHTTPComplete / Failure、OnBatteryNotify（と Low / Critical / ChargingStart / ChargingStop）、OnDisplayChange、起動時の OnNotifySelfInfo / BalloonInfo / ShellInfo / DressupInfo / UserInfo / OSInfo / InternationalInfo
 - SHIORI リソース: `homeurl`（descript.txt より優先）、`username`
 - タグ: 文字と待ち（`\0 \1 \p \s \i \n \c \w \_w \_q \x \e \-`）、選択肢とリンク（`\q \__q \_a`、`script:` の ID）、`\f` の文字装飾（bold / italic / underline / strike / color / height / align / sub / sup / default）、`\_u \_m \&`、`\b[n]`、`\_l`、`\![raise] \![notify] \![embed] \![timerraise] \![get,property]` と `%property[...]`（system.* / baseware.* / ghostlist / balloonlist / currentghost の一部）、`\![open,inputbox / passwordinput / communicatebox / teachbox / readme / configurationdialog]`、`\![set,balloontimeout / choicetimeout]`、`\![bind]`、`\![execute,http-get]`、`\![updatebymyself]`、`\![reload,shiori]`、`\![enter,passivemode]`
 - サウンド: `\8` `\_v` `\_V` `\![sound,play / loop / stop / wait]`（`--volume`）。ゴーストのディレクトリの中のファイルだけ鳴らします。

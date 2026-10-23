@@ -127,6 +127,8 @@ class GhostController(
     private val player: ScriptPlayer = ScriptPlayer(),
     private val balloonTimeoutMs: Long = 15_000,
     private val choiceTimeoutMs: Long = 30_000,
+    /** バルーンが閉じてから OnSurfaceRestore を送るまで（SSP と同じ 15 秒） */
+    private val surfaceRestoreMs: Long = 15_000,
     /** ゴーストに伝える pono-droid のバージョン（basewareversion、%property[baseware.version]、通信の User-Agent） */
     private val basewareVersion: String = BASEWARE_VERSION,
     private val updateFetcher: HttpFetcher = UrlConnectionFetcher("${ShioriSession.SENDER}/$basewareVersion"),
@@ -621,6 +623,29 @@ class GhostController(
         raise("OnMouseDown", mouseReferences(scopeId, x, y, collision, 0), userInitiated = false)
     }
 
+    /** OnMouseMove を SHIORI に聞いている最中か。指の動きは細かく届くので、答えを待つ間の分は送らずに捨てる */
+    private var mouseMoveInFlight = false
+
+    /**
+     * 当たり判定の上で指を動かしている（なでている）。SSP の OnMouseMove（マウスを動かしたとき）の代わりに送る。
+     * なでるトークは OnMouseMove を数えて返すゴーストが多いので、動くたびに送る。話している間は返事を出さない
+     */
+    fun onMouseMove(scopeId: Int, x: Int, y: Int, collision: String?) {
+        lastUserActivity = System.currentTimeMillis()
+        if (mouseMoveInFlight) return
+        mouseMoveInFlight = true
+        scope.launch {
+            try {
+                val script = request("OnMouseMove", mouseReferences(scopeId, x, y, collision, 0)) ?: return@launch
+                if (_state.value.talking || _state.value.waitingChoice) return@launch
+                cancelScript()
+                runScript(script)
+            } finally {
+                mouseMoveInFlight = false
+            }
+        }
+    }
+
     /**
      * 指が離れた（動かさずに）。SSP と同じく OnMouseUp を送り、ゴーストが何も返さなければ OnMouseClick を送る。
      * [count] は続けて叩いた回数で、2 なら OnMouseDoubleClick、3 以上なら OnMouseMultipleClick（Reference7 が回数）も送る。
@@ -958,7 +983,7 @@ class GhostController(
                 }
                 .getOrNull()?.value
         }
-        // 毎秒・毎分のイベントは多すぎるので、話すときだけ記録する
+        // 毎秒・毎分のイベントとなでる（OnMouseMove）は多すぎるので、話すときだけ記録する
         if (value != null || event !in timerEvents) {
             if (sensitive) {
                 platform.log("$event [入力] -> ${if (value != null) "(script)" else "(no content)"}")
@@ -1173,7 +1198,34 @@ class GhostController(
 
     /** バルーンを閉じる。\b[n] で選んだ番号もここで戻す（次のスクリプトはまた文字の量で選ぶ） */
     private fun hideBalloons() {
+        val shown = _state.value.characters.values.any { it.balloon != null }
         _state.update { s -> s.copy(characters = s.characters.mapValues { it.value.copy(balloon = null, balloonId = null) }) }
+        if (shown) scheduleSurfaceRestore()
+    }
+
+    private var surfaceRestoreJob: Job? = null
+
+    /**
+     * 話したバルーンが閉じた。[surfaceRestoreMs] たっても次の話が始まらなければ、OnSurfaceRestore で表情を戻す機会を渡す
+     * （SSP と同じく1回だけ。Reference0 / 1 は本体と相方の今のサーフェス）。
+     * 次に文字や選択肢が出たら取り消す（\C\0\0\1\e のような、何も見せないスクリプトでは取り消さない）
+     */
+    private fun scheduleSurfaceRestore() {
+        surfaceRestoreJob?.cancel()
+        surfaceRestoreJob = scope.launch {
+            delay(surfaceRestoreMs)
+            // 何も見せないスクリプトがちょうど動いていたら、終わるのを待つ
+            val s = _state.first { !it.talking && !it.waitingChoice }
+            if (closing) return@launch
+            val surfaces = listOf(0, 1).map { (s.characters[it]?.surface ?: -1).toString() }
+            raise("OnSurfaceRestore", surfaces, userInitiated = false)
+        }
+    }
+
+    /** 文字か選択肢が出た（話した）。閉じた前のバルーンのための OnSurfaceRestore は要らない */
+    private fun talked() {
+        surfaceRestoreJob?.cancel()
+        surfaceRestoreJob = null
     }
 
     private fun resetSurfaces() {
@@ -1483,15 +1535,19 @@ class GhostController(
             }
         }
 
-        override fun appendText(scope: Int, text: String) =
+        override fun appendText(scope: Int, text: String) {
+            talked()
             _state.update { it.update(scope) { c -> c.appendText(text, styles[scope] ?: TextStyle.Default) } }
+        }
 
         override fun newLine(scope: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.NewLine) } }
 
         override fun clearBalloon(scope: Int) = _state.update { it.update(scope) { c -> c.copy(balloon = emptyList()) } }
 
-        override fun addChoice(scope: Int, choice: Choice) =
+        override fun addChoice(scope: Int, choice: Choice) {
+            talked()
             _state.update { it.update(scope) { c -> c.append(BalloonItem.ChoiceItem(choice)) } }
+        }
 
         override fun startAnimation(scope: Int, id: Int) = command(scope, AnimationCommand.Start(id))
 
@@ -1625,7 +1681,7 @@ class GhostController(
     companion object {
         /** アプリから渡されないとき（テストなど）のバージョン */
         const val BASEWARE_VERSION = "0.1.0"
-        private val timerEvents = setOf("OnSecondChange", "OnMinuteChange")
+        private val timerEvents = setOf("OnSecondChange", "OnMinuteChange", "OnMouseMove")
 
         /** `\![raise]` から起きたスクリプトがさらに `\![raise]` できる回数 */
         const val MAX_RAISE_CHAIN = 16
