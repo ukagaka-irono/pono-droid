@@ -929,6 +929,22 @@ class GhostController(
         raise("OnSysResume", listOf("normal"), userInitiated = false)
     }
 
+    /**
+     * ファイルを渡された（Android の「共有」。SSP でキャラクターにファイルを落とすのと同じ）。
+     * OnFileDrop2（Reference0 はパス、Reference2 は MIME タイプ。どちらも 0x01 区切り）を送り、
+     * 答えが無ければ古いゴースト向けに OnFileDropEx も送る。[scopeId] は渡した先のキャラクター
+     */
+    fun onFileDrop(paths: List<String>, mimeTypes: List<String>, scopeId: Int = 0) {
+        if (paths.isEmpty()) return
+        lastUserActivity = System.currentTimeMillis()
+        val refs = listOf(paths.joinToString("\u0001"), scopeId.toString(), mimeTypes.joinToString("\u0001"))
+        scope.launch {
+            val script = request("OnFileDrop2", refs) ?: request("OnFileDropEx", refs) ?: return@launch platform.log("ファイルを渡したが、ゴーストは答えなかった")
+            cancelScript()
+            runScript(script)
+        }
+    }
+
     /** 画面の向きや大きさが変わった */
     fun onDisplayChanged(width: Int, height: Int) {
         raise("OnDisplayChange", listOf("32", width.toString(), height.toString()), userInitiated = false)

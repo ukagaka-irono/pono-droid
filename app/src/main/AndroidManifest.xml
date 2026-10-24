@@ -27,6 +27,28 @@
             </intent-filter>
         </activity>
 
+        <!-- 「共有」の受け口。.nar はインストールし、それ以外のファイルは起動中のゴーストに渡す（OnFileDrop2）。
+             アプリの画面とは別のタスクにして、閉じたときに pono-droid の一覧が前に出てこないようにする -->
+        <activity
+            android:name=".ShareActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:label="@string/share_label"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
         <!-- readme などを読む画面（\![open,readme]） -->
         <activity
             android:name=".TextViewerActivity"
