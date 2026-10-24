@@ -37,6 +37,7 @@ import kotlin.math.abs
  * @param dpPerImagePx シェル画像の 1px を何 dp で表示するか
  * @param onHeightChanged 表示しているサーフェスの高さ（px）。バルーンのウィンドウをその上に置くのに使う
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun CharacterSurface(
     scopeId: Int,
@@ -116,27 +117,65 @@ fun CharacterSurface(
                 alpha = character.alpha
             }
             .onSizeChanged { onHeightChanged(it.height) }
-            .surfaceTouch(
-                touchHandler,
-                onDown = { x, y ->
-                    val p = imagePoint(x, y)
-                    controller.onMouseDown(scopeId, p.first, p.second, hit(p))
-                },
-                onTap = { x, y, count ->
-                    val p = imagePoint(x, y)
-                    controller.onMouseUp(scopeId, p.first, p.second, hit(p), count)
-                },
-                onLongPress = { x, y ->
-                    val p = imagePoint(x, y)
-                    controller.onMouseLongPress(scopeId, p.first, p.second, hit(p))
-                },
-                // 当たり判定（頭など）の上で触れて動かすと、なでる。当たり判定の外からならウィンドウを動かす
-                canStroke = { x, y -> hit(imagePoint(x, y)) != null },
-                onStroke = { x, y ->
-                    val p = imagePoint(x, y)
-                    controller.onMouseMove(scopeId, p.first, p.second, hit(p))
-                },
-            ),
+            .pointerInteropFilter { event ->
+                touchHandler.onTouch(event, object : SurfaceTouchCallbacks {
+                    override fun onDown(x: Float, y: Float) {
+                        val p = imagePoint(x, y)
+                        controller.onTouchEnter(scopeId, p.first, p.second, hit(p))
+                        controller.onMouseDown(scopeId, p.first, p.second, hit(p))
+                    }
+
+                    override fun onTap(x: Float, y: Float, count: Int) {
+                        val p = imagePoint(x, y)
+                        controller.onMouseUp(scopeId, p.first, p.second, hit(p), count)
+                    }
+
+                    override fun onLongPress(x: Float, y: Float) {
+                        val p = imagePoint(x, y)
+                        controller.onMouseLongPress(scopeId, p.first, p.second, hit(p))
+                    }
+
+                    // 当たり判定（頭など）の上で触れて動かすと、なでる。当たり判定の外からならウィンドウを動かす
+                    override fun canStroke(x: Float, y: Float) = hit(imagePoint(x, y)) != null
+
+                    override fun onStroke(x: Float, y: Float) {
+                        val p = imagePoint(x, y)
+                        controller.onTouchCollision(scopeId, p.first, p.second, hit(p))
+                        controller.onMouseMove(scopeId, p.first, p.second, hit(p))
+                    }
+
+                    override fun onDragStart(x: Float, y: Float) {
+                        val p = imagePoint(x, y)
+                        controller.onMouseDragStart(scopeId, p.first, p.second, hit(p))
+                    }
+
+                    override fun onDragEnd(x: Float, y: Float) {
+                        val p = imagePoint(x, y)
+                        controller.onMouseDragEnd(scopeId, p.first, p.second, hit(p))
+                    }
+
+                    override fun onGesture(x: Float, y: Float, startX: Float, startY: Float, direction: String, angle: Int) {
+                        val p = imagePoint(x, y)
+                        val s = imagePoint(startX, startY)
+                        controller.onMouseGesture(scopeId, p.first, p.second, hit(p), s.first, s.second, hit(s), direction, angle)
+                    }
+
+                    override fun onWheel(x: Float, y: Float, amount: Int) {
+                        val p = imagePoint(x, y)
+                        controller.onMouseWheel(scopeId, p.first, p.second, hit(p), amount)
+                    }
+
+                    override fun onMiddleClick(x: Float, y: Float) {
+                        val p = imagePoint(x, y)
+                        controller.onMiddleClick(scopeId, p.first, p.second, hit(p))
+                    }
+
+                    override fun onRelease(x: Float, y: Float) {
+                        val p = imagePoint(x, y)
+                        controller.onTouchLeave(scopeId, p.first, p.second)
+                    }
+                })
+            },
     )
 }
 
@@ -172,14 +211,4 @@ private fun TalkBalloon(scopeId: Int, character: CharacterState, loading: String
         SimpleBalloon(items, onClick, controller::onChoice)
     }
 }
-
-@OptIn(ExperimentalComposeUiApi::class)
-private fun Modifier.surfaceTouch(
-    handler: SurfaceTouchHandler,
-    onDown: (Float, Float) -> Unit,
-    onTap: (Float, Float, Int) -> Unit,
-    onLongPress: (Float, Float) -> Unit,
-    canStroke: (Float, Float) -> Boolean,
-    onStroke: (Float, Float) -> Unit,
-) = pointerInteropFilter { handler.onTouch(it, onDown, onTap, onLongPress, canStroke, onStroke) }
 

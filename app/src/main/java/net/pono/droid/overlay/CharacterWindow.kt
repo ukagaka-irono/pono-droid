@@ -10,6 +10,7 @@ import android.graphics.Rect
 import android.os.Build
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import androidx.compose.foundation.layout.wrapContentSize
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.Constraints
 import androidx.core.animation.doOnEnd
 import androidx.core.view.doOnLayout
@@ -29,9 +31,13 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import net.pono.baseware.ghost.DefaultPosition
 import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.sakura.MoveCommand
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.hypot
+import kotlin.math.roundToInt
 
 /**
  * キャラクター1人分のオーバーレイ。サーフェスとバルーンを別々のウィンドウにし、バルーンをサーフェスの真上に置く。
@@ -84,10 +90,18 @@ class CharacterWindow(
         if (key == OverlaySettings.KEY_CHARACTER_SCALE) scale.floatValue = OverlaySettings.characterScale(p)
     }
 
+    /** ウィンドウが動いた（画面の px、右と下が正）。sticky-window の組の相手を一緒に動かすのに使う */
+    var onShift: ((dx: Int, dy: Int) -> Unit)? = null
+
+    /** ドラッグや \![move] などで動き終えた。重なりと見切れ（OnOverlap / OnOffscreen）を調べ直すのに使う */
+    var onSettled: (() -> Unit)? = null
+
     fun show() {
         for (v in listOf(surfaceView, balloonView)) {
             v.setViewTreeLifecycleOwner(owner)
             v.setViewTreeSavedStateRegistryOwner(owner)
+            // 重なり順を変えるときにウィンドウを外して付け直すので、外しただけでは中身（アニメーションなど）を捨てない
+            v.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnLifecycleDestroyed(owner))
         }
         val corner = if (alignEnd) Alignment.BottomEnd else Alignment.BottomStart
         surfaceView.setContent {
@@ -102,6 +116,8 @@ class CharacterWindow(
                         if (h != surfaceHeight) {
                             surfaceHeight = h
                             placeBalloon()
+                            // 上の端に付けているときは、高さが変わっても上の端に合わせ直す（ウィンドウは下を基準に置くため）
+                            if (alignment == "top") snapToEdge()
                         }
                     },
                 )
@@ -134,8 +150,25 @@ class CharacterWindow(
         }
     }
 
+    private var touchable = true
+    private var hidden = false
+
     /** false にすると、表示したままタッチを下（pono-droid の画面など）に通す */
     fun setTouchable(touchable: Boolean) {
+        this.touchable = touchable
+        applyTouchable()
+    }
+
+    /** 最小化（\![set,windowstate,minimize]・メニューの「隠す」）。隠している間は描かず、タッチも下に通す */
+    fun setHidden(hidden: Boolean) {
+        if (this.hidden == hidden) return
+        this.hidden = hidden
+        for (v in listOf(surfaceView, balloonView)) v.visibility = if (hidden) View.INVISIBLE else View.VISIBLE
+        applyTouchable()
+    }
+
+    private fun applyTouchable() {
+        val touchable = touchable && !hidden
         for ((view, p) in listOf(surfaceView to params, balloonView to balloonParams)) {
             val flags = if (touchable) {
                 p.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
@@ -152,8 +185,21 @@ class CharacterWindow(
         moveAnimator?.cancel()
         prefs.unregisterOnSharedPreferenceChangeListener(prefsListener)
         owner.destroy()
+        detach()
+    }
+
+    // ---- 重なり順（\v・\![set,zorder]） ----
+
+    /** 重なり順を変えるために、ウィンドウを外す。後から [attach] で付け直すと、付け直した順に上に重なる */
+    fun detach() {
         runCatching { windowManager.removeView(surfaceView) }
         runCatching { windowManager.removeView(balloonView) }
+    }
+
+    /** [balloon] ならバルーンの、そうでなければサーフェスのウィンドウを付け直す */
+    fun attach(balloon: Boolean) {
+        val (view, p) = if (balloon) balloonView to balloonParams else surfaceView to params
+        if (!view.isAttachedToWindow) runCatching { windowManager.addView(view, p) }
     }
 
     /** バルーンのウィンドウをサーフェスの真上に合わせる */
@@ -195,7 +241,7 @@ class CharacterWindow(
     private var moveAnimator: ValueAnimator? = null
 
     /** 画面全体（ナビゲーションバーなども含む）。SSP の screen と同じく左上が原点 */
-    private fun screenBounds(): Rect =
+    fun screenBounds(): Rect =
         if (Build.VERSION.SDK_INT >= 30) {
             windowManager.currentWindowMetrics.bounds
         } else {
@@ -246,15 +292,116 @@ class CharacterWindow(
             }
             val left = command.x?.let { base.left + anchorX(base, command.baseOffset.h) + it - anchorX(own, command.moveOffset.h) }
             val top = command.y?.let { base.top + anchorY(base, command.baseOffset.v) + it - anchorY(own, command.moveOffset.v) }
-            animateTo(left ?: own.left, top ?: own.top, command.timeMs, save = true)
+            animateTo(left ?: own.left, top ?: own.top, command.timeMs, save = true, sticky = !command.ignoreSticky)
         }
+    }
+
+    /** \4（[away]）/ \5。[partner] は相手のキャラクターの矩形。\5 は相手の横に並べ、\4 は自分の幅の半分だけ離す */
+    fun nudge(away: Boolean, partner: Rect) {
+        whenSized {
+            val own = screenRect()
+            val onLeft = own.centerX() < partner.centerX()
+            val left = when {
+                away && onLeft -> own.left - own.width() / 2
+                away -> own.left + own.width() / 2
+                onLeft -> partner.left - own.width()
+                else -> partner.right
+            }
+            animateTo(left, own.top, NUDGE_TIME_MS, save = true, sticky = false)
+        }
+    }
+
+    // ---- 画面の端に付ける（\![set,alignmenttodesktop]） ----
+
+    /** top / bottom / left / right ならその端に付け、その向きにはドラッグで動かさない。null なら自由 */
+    private var alignment: String? = null
+
+    fun setAlignment(edge: String?) {
+        if (alignment == edge) return
+        alignment = edge
+        if (edge != null) whenSized { snapToEdge() }
+    }
+
+    private fun snapToEdge() {
+        val edge = alignment ?: return
+        if (surfaceView.width == 0) return
+        val own = screenRect()
+        // 端の先を頼み、animateTo が画面の中に収める
+        when (edge) {
+            "top" -> animateTo(own.left, Int.MIN_VALUE / 2, 0, save = true, sticky = false)
+            "bottom" -> animateTo(own.left, Int.MAX_VALUE / 2, 0, save = true, sticky = false)
+            "left" -> animateTo(Int.MIN_VALUE / 2, own.top, 0, save = true, sticky = false)
+            "right" -> animateTo(Int.MAX_VALUE / 2, own.top, 0, save = true, sticky = false)
+        }
+    }
+
+    // ---- 最初の位置（sakura.defaultx など）と、位置の初期化 ----
+
+    /** 位置を覚えていなければ、ゴーストの決めた最初の位置に置く */
+    fun applyDefault(position: DefaultPosition?) {
+        if (position == null || position.isEmpty || prefs.contains(key("x"))) return
+        whenSized {
+            val own = screenRect()
+            val bounds = screenBounds()
+            val left = position.windowLeft(own.width(), bounds.width()) ?: own.left
+            val top = position.windowTop(own.height(), bounds.height()) ?: own.top
+            animateTo(left, top, 0, save = false, sticky = false)
+        }
+    }
+
+    /** \![execute,resetwindowpos]。覚えていた位置を忘れて、最初の位置に戻す */
+    fun resetPosition(position: DefaultPosition?) {
+        moveAnimator?.cancel()
+        prefs.edit().remove(key("x")).remove(key("y")).apply()
+        val density = context.resources.displayMetrics.density
+        setWindowPosition(defaultX(density), defaultY(density), propagate = false)
+        applyDefault(position)
+        snapToEdge()
+        onSettled?.invoke()
+    }
+
+    /** sticky-window の組の相手が動いた分だけ、一緒に動く（画面の px、右と下が正） */
+    fun shiftBy(dx: Int, dy: Int) {
+        moveAnimator?.cancel()
+        setWindowPosition(params.x + if (alignEnd) -dx else dx, params.y - dy, propagate = false)
+    }
+
+    /** 今の位置を覚える（一緒に動いた相手の分は、動き終えてから） */
+    fun savePosition() {
+        prefs.edit().putInt(key("x"), params.x).putInt(key("y"), params.y).apply()
+    }
+
+    /** サーフェスの大きさが決まってから [block] を実行する（まだ画像を描いていなければ、描いてから） */
+    private fun whenSized(block: () -> Unit) {
+        if (surfaceView.isLaidOut && surfaceView.width > 0) return block()
+        surfaceView.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
+                if (v.width == 0) return
+                v.removeOnLayoutChangeListener(this)
+                block()
+            }
+        })
+    }
+
+    /**
+     * ウィンドウの x / y（右か左の端と下の端からの距離）を変え、バルーンも合わせる。
+     * [propagate] なら動いた分を [onShift] で知らせる
+     */
+    private fun setWindowPosition(x: Int, y: Int, propagate: Boolean) {
+        val dx = if (alignEnd) params.x - x else x - params.x
+        val dy = params.y - y
+        params.x = x
+        params.y = y
+        if (surfaceView.isAttachedToWindow) windowManager.updateViewLayout(surfaceView, params)
+        placeBalloon()
+        if (propagate && (dx != 0 || dy != 0)) onShift?.invoke(dx, dy)
     }
 
     /** \![set,position,x,y]（null なら固定をやめる） */
     fun setPinned(position: Pair<Int, Int>?) {
         pinned = position != null
         position ?: return
-        surfaceView.doOnLayout { animateTo(position.first, position.second, 0, save = false) }
+        surfaceView.doOnLayout { animateTo(position.first, position.second, 0, save = false, sticky = true) }
     }
 
     /** 矩形の中の、横の基準の位置（矩形の左からの距離）。base は真ん中とする */
@@ -271,8 +418,11 @@ class CharacterWindow(
         MoveCommand.Edge.END, MoveCommand.Edge.BASE -> r.height()
     }
 
-    /** 左上を ([left], [top]) にする。画面の外には出さない。[timeMs] が 0 ならすぐに */
-    private fun animateTo(left: Int, top: Int, timeMs: Long, save: Boolean) {
+    /**
+     * 左上を ([left], [top]) にする。画面の外には出さない。[timeMs] が 0 ならすぐに。
+     * [sticky] なら sticky-window の組の相手も同じだけ動かす
+     */
+    private fun animateTo(left: Int, top: Int, timeMs: Long, save: Boolean, sticky: Boolean) {
         moveAnimator?.cancel()
         val w = surfaceView.width
         val h = surfaceView.height
@@ -284,15 +434,11 @@ class CharacterWindow(
         val toTop = clamp(top, h, bounds.top, minOf(bounds.bottom, o.y))
         val toX = if (alignEnd) o.x - toLeft - w else toLeft - o.x
         val toY = o.y - toTop - h
-        fun apply(x: Int, y: Int) {
-            params.x = x
-            params.y = y
-            if (surfaceView.isAttachedToWindow) windowManager.updateViewLayout(surfaceView, params)
-            placeBalloon()
-        }
+        fun apply(x: Int, y: Int) = setWindowPosition(x, y, propagate = sticky)
         fun finish() {
             apply(toX, toY)
-            if (save) prefs.edit().putInt(key("x"), params.x).putInt(key("y"), params.y).apply()
+            if (save) savePosition()
+            onSettled?.invoke()
         }
         if (timeMs <= 0) return finish()
         val fromX = params.x
@@ -323,6 +469,7 @@ class CharacterWindow(
      * サーフェスに触れたときの処理。指の動きに合わせてウィンドウ自体を動かすので、画面座標（raw）で扱う。
      * タップは SSP と同じく1回ごとに知らせ、続けて叩いた回数を数える（1: クリック、2: ダブル、3以上: 多重）。
      * 動かさずに押し続けると長押し（右クリックの代わり）で、そのときはタップとして数えない。
+     * 当たり判定の上をさっと払うと、なでたのに加えてジェスチャー（SSP のタッチパネルの OnMouseGesture）として知らせる
      */
     val touchHandler = object : SurfaceTouchHandler {
         private val config = ViewConfiguration.get(context)
@@ -330,8 +477,11 @@ class CharacterWindow(
         private val multiTapSlop = config.scaledDoubleTapSlop
         private val multiTapTimeout = ViewConfiguration.getDoubleTapTimeout().toLong()
         private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
+        private val gestureDistance = GESTURE_MIN_DP * context.resources.displayMetrics.density
         private var downRawX = 0f
         private var downRawY = 0f
+        private var downX = 0f
+        private var downY = 0f
         private var startX = 0
         private var startY = 0
         private var dragging = false
@@ -347,42 +497,72 @@ class CharacterWindow(
         private var lastTapRawX = 0f
         private var lastTapRawY = 0f
 
+        /** 2本指で触れている。上下になぞるとホイール、動かさずに離すと中クリック */
+        private var twoFingers = false
+        private var twoFingerTime = 0L
+        private var twoFingerY = 0f
+        private var wheeled = false
+        private val wheelStep = WHEEL_STEP_DP * context.resources.displayMetrics.density
+
+        private fun midY(event: MotionEvent) = (event.getY(0) + event.getY(1)) / 2
+
         private fun cancelLongPress() {
             pendingLongPress?.let(surfaceView::removeCallbacks)
             pendingLongPress = null
         }
 
         @SuppressLint("ClickableViewAccessibility")
-        override fun onTouch(
-            event: MotionEvent,
-            onDown: (x: Float, y: Float) -> Unit,
-            onTap: (x: Float, y: Float, count: Int) -> Unit,
-            onLongPress: (x: Float, y: Float) -> Unit,
-            canStroke: (x: Float, y: Float) -> Boolean,
-            onStroke: (x: Float, y: Float) -> Unit,
-        ): Boolean {
+        override fun onTouch(event: MotionEvent, callbacks: SurfaceTouchCallbacks): Boolean {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downRawX = event.rawX
                     downRawY = event.rawY
+                    downX = event.x
+                    downY = event.y
                     startX = params.x
                     startY = params.y
                     dragging = false
                     longPressed = false
                     stroking = false
-                    strokeArea = canStroke(event.x, event.y)
+                    twoFingers = false
+                    strokeArea = callbacks.canStroke(event.x, event.y)
                     val x = event.x
                     val y = event.y
-                    onDown(x, y)
+                    callbacks.onDown(x, y)
                     cancelLongPress()
                     pendingLongPress = Runnable {
                         longPressed = true
                         tapCount = 0
                         surfaceView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                        onLongPress(x, y)
+                        callbacks.onLongPress(x, y)
                     }.also { surfaceView.postDelayed(it, longPressTimeout) }
                 }
-                MotionEvent.ACTION_MOVE -> {
+                MotionEvent.ACTION_POINTER_DOWN -> if (event.pointerCount == 2 && !dragging && !longPressed) {
+                    // 2本目の指が来たら、1本指の操作（なでる・長押し）はやめる
+                    cancelLongPress()
+                    twoFingers = true
+                    wheeled = false
+                    stroking = false
+                    twoFingerTime = event.eventTime
+                    twoFingerY = midY(event)
+                }
+                MotionEvent.ACTION_POINTER_UP -> if (twoFingers) {
+                    twoFingers = false
+                    // 動かさずにすぐ離したら中クリック。残った指ではもう何もしない
+                    if (!wheeled && event.eventTime - twoFingerTime <= ViewConfiguration.getTapTimeout() * 2L) {
+                        callbacks.onMiddleClick(event.getX(0), event.getY(0))
+                    }
+                    longPressed = true
+                }
+                MotionEvent.ACTION_MOVE -> if (twoFingers && event.pointerCount >= 2) {
+                    // 2本指で上下になぞった分だけホイールを回す（上へなら正）
+                    val moved = twoFingerY - midY(event)
+                    if (abs(moved) >= wheelStep) {
+                        wheeled = true
+                        twoFingerY = midY(event)
+                        callbacks.onWheel(event.getX(0), event.getY(0), (moved / wheelStep).toInt() * WHEEL_DELTA)
+                    }
+                } else {
                     val dx = event.rawX - downRawX
                     val dy = event.rawY - downRawY
                     if (!dragging && !stroking && !longPressed && (abs(dx) > slop || abs(dy) > slop)) {
@@ -392,49 +572,73 @@ class CharacterWindow(
                         } else if (!pinned) {
                             dragging = true
                             cancelLongPress()
+                            callbacks.onDragStart(downX, downY)
                         }
                     }
                     if (stroking) {
                         // 指の動きは細かく届くので、なでるのは 30ms に1回まで
                         if (event.eventTime - lastStrokeTime >= STROKE_INTERVAL_MS) {
                             lastStrokeTime = event.eventTime
-                            onStroke(event.x, event.y)
+                            callbacks.onStroke(event.x, event.y)
                         }
                     } else if (dragging) {
-                        // END / BOTTOM 基準なので、x と y は右下からの距離
-                        params.x = startX + (if (alignEnd) -dx else dx).toInt()
-                        params.y = startY - dy.toInt()
-                        windowManager.updateViewLayout(surfaceView, params)
-                        placeBalloon()
+                        // END / BOTTOM 基準なので、x と y は右下からの距離。端に付けているときは、その向きには動かさない
+                        val x = if (alignment == "left" || alignment == "right") params.x else startX + (if (alignEnd) -dx else dx).toInt()
+                        val y = if (alignment == "top" || alignment == "bottom") params.y else startY - dy.toInt()
+                        setWindowPosition(x, y, propagate = true)
                     }
                 }
-                MotionEvent.ACTION_UP -> if (longPressed) {
-                    // 長押しはもう知らせてある
-                } else if (stroking) {
-                    // なでた後はタップにしない
-                    tapCount = 0
-                } else if (dragging) {
-                    cancelLongPress()
-                    prefs.edit().putInt(key("x"), params.x).putInt(key("y"), params.y).apply()
-                    tapCount = 0
-                } else {
-                    cancelLongPress()
-                    val continued = event.eventTime - lastTapTime <= multiTapTimeout &&
-                        abs(event.rawX - lastTapRawX) <= multiTapSlop && abs(event.rawY - lastTapRawY) <= multiTapSlop
-                    tapCount = if (continued) tapCount + 1 else 1
-                    lastTapTime = event.eventTime
-                    lastTapRawX = event.rawX
-                    lastTapRawY = event.rawY
-                    onTap(event.x, event.y, tapCount)
+                MotionEvent.ACTION_UP -> {
+                    if (longPressed) {
+                        // 長押しはもう知らせてある
+                    } else if (stroking) {
+                        // なでた後はタップにしない。さっと払ったならジェスチャーも知らせる
+                        tapCount = 0
+                        val dx = event.rawX - downRawX
+                        val dy = event.rawY - downRawY
+                        if (event.eventTime - event.downTime <= GESTURE_MAX_MS && hypot(dx, dy) >= gestureDistance) {
+                            // 画面は下が正なので、上に払ったら正の角度にする
+                            val angle = Math.toDegrees(atan2(-dy, dx).toDouble()).let { if (it < 0) it + 360 else it }
+                            callbacks.onGesture(event.x, event.y, downX, downY, gestureDirection(angle), angle.roundToInt() % 360)
+                        }
+                    } else if (dragging) {
+                        cancelLongPress()
+                        savePosition()
+                        tapCount = 0
+                        callbacks.onDragEnd(event.x, event.y)
+                        onSettled?.invoke()
+                    } else {
+                        cancelLongPress()
+                        val continued = event.eventTime - lastTapTime <= multiTapTimeout &&
+                            abs(event.rawX - lastTapRawX) <= multiTapSlop && abs(event.rawY - lastTapRawY) <= multiTapSlop
+                        tapCount = if (continued) tapCount + 1 else 1
+                        lastTapTime = event.eventTime
+                        lastTapRawX = event.rawX
+                        lastTapRawY = event.rawY
+                        callbacks.onTap(event.x, event.y, tapCount)
+                    }
+                    callbacks.onRelease(event.x, event.y)
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     cancelLongPress()
                     tapCount = 0
+                    if (dragging) {
+                        savePosition()
+                        callbacks.onDragEnd(event.x, event.y)
+                        onSettled?.invoke()
+                    }
+                    callbacks.onRelease(event.x, event.y)
                 }
             }
             return true
         }
     }
+}
+
+/** 払った角度（右が 0 度で反時計回り）を、SSP の8方向の名前にする */
+internal fun gestureDirection(angle: Double): String {
+    val names = listOf("right", "right_up", "up", "left_up", "left", "left_down", "down", "right_down")
+    return names[(((angle + 22.5) % 360) / 45).toInt().coerceIn(0, 7)]
 }
 
 /**
@@ -455,19 +659,52 @@ private fun FitWindow(corner: Alignment, onSize: (Int, Int) -> Unit, content: @C
 /** なでる（OnMouseMove）を送る間隔の下限。指の動きのたびに送ると SHIORI を叩きすぎる */
 private const val STROKE_INTERVAL_MS = 30L
 
+/** ジェスチャーにする払い方。これより速く（短い時間で）、これより長く動かしたとき */
+private const val GESTURE_MAX_MS = 400L
+private const val GESTURE_MIN_DP = 48f
+
+/** 2本指でこれだけなぞるごとに、ホイールを1目盛り（[WHEEL_DELTA]）回したことにする */
+private const val WHEEL_STEP_DP = 24f
+private const val WHEEL_DELTA = 120
+
+/** \4 / \5 で動くのにかける時間 */
+private const val NUDGE_TIME_MS = 200L
+
 interface SurfaceTouchHandler {
-    /**
-     * [onDown] は指が触れたとき、[onTap] は動かさずに離したとき（[count] は続けて叩いた回数）、[onLongPress] は長押し。
-     * 触れた場所が [canStroke]（当たり判定の上）なら、指を動かすとウィンドウは動かさずに [onStroke]（なでる）を呼ぶ
-     */
-    fun onTouch(
-        event: MotionEvent,
-        onDown: (x: Float, y: Float) -> Unit,
-        onTap: (x: Float, y: Float, count: Int) -> Unit,
-        onLongPress: (x: Float, y: Float) -> Unit,
-        canStroke: (x: Float, y: Float) -> Boolean,
-        onStroke: (x: Float, y: Float) -> Unit,
-    ): Boolean
+    fun onTouch(event: MotionEvent, callbacks: SurfaceTouchCallbacks): Boolean
+}
+
+/** サーフェスへの指の操作。座標はウィンドウの中の px */
+interface SurfaceTouchCallbacks {
+    /** 指が触れた */
+    fun onDown(x: Float, y: Float)
+
+    /** 動かさずに離した。[count] は続けて叩いた回数 */
+    fun onTap(x: Float, y: Float, count: Int)
+
+    fun onLongPress(x: Float, y: Float)
+
+    /** 触れた場所が当たり判定の上か。そうなら指を動かすとウィンドウは動かさずに [onStroke]（なでる）を呼ぶ */
+    fun canStroke(x: Float, y: Float): Boolean
+
+    fun onStroke(x: Float, y: Float)
+
+    /** ウィンドウをドラッグで動かし始めた（[x] / [y] は触れた場所）・動かし終えた */
+    fun onDragStart(x: Float, y: Float)
+
+    fun onDragEnd(x: Float, y: Float)
+
+    /** なでる途中でさっと払った。[direction] は SSP の8方向の名前、[angle] は右が 0 度の反時計回り */
+    fun onGesture(x: Float, y: Float, startX: Float, startY: Float, direction: String, angle: Int)
+
+    /** 2本指で上下になぞった。[amount] は上へなら正（1目盛り 120） */
+    fun onWheel(x: Float, y: Float, amount: Int)
+
+    /** 2本指で叩いた（中クリック） */
+    fun onMiddleClick(x: Float, y: Float)
+
+    /** 指が離れた（どの操作の後でも最後に呼ぶ） */
+    fun onRelease(x: Float, y: Float)
 }
 
 /** Service の中で Compose を動かすための LifecycleOwner / SavedStateRegistryOwner。 */

@@ -3,6 +3,7 @@
     <string name="app_name">pono-droid</string>
     <string name="notification_update">更新</string>
     <string name="notification_stop">終了</string>
+    <string name="notification_show">表示</string>
     <!-- 「共有」の一覧に出る名前 -->
     <string name="share_label">ゴーストに渡す</string>
 </resources>

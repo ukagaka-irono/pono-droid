@@ -30,13 +30,17 @@
 | 操作 | 動き |
 |------|------|
 | キャラクターをタップ | `OnMouseClick`。続けて叩くと `OnMouseDoubleClick`、3回目以降は `OnMouseMultipleClick` |
-| キャラクターをドラッグ | 移動（位置は覚えておきます）。当たり判定（頭など）の上から指を動かしたときは移動せず、なでる（`OnMouseMove`） |
+| キャラクターをドラッグ | 移動（位置は覚えておきます。`OnMouseDragStart` / `OnMouseDragEnd`）。当たり判定（頭など）の上から指を動かしたときは移動せず、なでる（`OnMouseMove`） |
+| 当たり判定の上をさっと払う | `OnMouseGesture`（8方向）。上下に払ったのにゴーストが答えなければ `OnMouseWheel` |
+| 2本指で上下になぞる・2本指で叩く | `OnMouseWheel`（ホイールの代わり）・中クリック（`OnMouseDownEx` / `OnMouseUpEx` / `OnMouseClickEx`） |
+| 長押しメニューの「隠す」・通知の「表示」 | キャラクターを隠す・出し直す（`OnWindowStateMinimize` / `OnWindowStateRestore`） |
+| 長押しメニューの「位置を戻す」 | `OnResetWindowPos`。ゴーストが答えなければ最初の位置に戻す |
 | 吹き出しをタップ | `\x` の待ちを進める / 話し終わっていれば閉じる |
 | 他のアプリでファイルを「共有」→「ゴーストに渡す」 | 起動中のゴーストにファイルを渡す（`OnFileDrop2`）。`.nar` ならインストール |
 | 通知の「ネットワーク更新」、アプリの「更新」 | 起動中のゴーストをネットワーク更新 |
 | 通知の「終了」、アプリの「終了」 | `OnClose` を送ってゴーストを終了 |
 
-メニューの開き方はゴーストによって違います（ダブルタップ、3回タップなど）。右クリック・中クリック・キー入力で開くゴーストは、今のところスマートフォンでは操作できません。
+メニューの開き方はゴーストによって違います（ダブルタップ、3回タップなど）。右クリックは長押し、中クリックは2本指で叩くか長押しメニューの「ゴーストのメニュー（中クリック）」で代わりにします。キー入力で開くゴーストは、スマートフォンでは操作できません。
 
 ## ビルド
 
@@ -166,17 +170,17 @@ SHIORI を Android で動かすための工夫:
 
 SSP（Windows の伺かベースウェア）と同じイベント・タグをできるだけ送り、同じように振る舞うようにしています。
 
-- イベント: OnFirstBoot / OnBoot / OnClose、OnSecondChange / OnMinuteChange / OnHourTimeSignal、OnMouseDown / OnMouseUp / OnMouseClick / OnMouseDoubleClick / OnMouseMultipleClick（長押しは右クリック扱い）、OnMouseMove（当たり判定の上で指を動かす＝なでる）、OnSurfaceRestore（バルーンが閉じて 15 秒後に1回）、OnSysSuspend / OnSysResume（画面が消えたら休止、ロックを解いたら復帰）、OnNetworkStatusChange（起動時は NOTIFY、以後はつながる・切れる・種類やアドレスが変わったとき）、OnFileDrop2（Android の「共有」で渡したファイル。ゴーストのフォルダの `pono/drop/` に写して渡す。答えが無ければ OnFileDropEx）、OnChoiceSelectEx / OnChoiceSelect / OnChoiceTimeout、OnAnchorSelectEx / OnAnchorSelect、OnBalloonClose / OnBalloonTimeout / OnBalloonBreak、OnSurfaceChange、OnTranslate、OnUserInput / OnCommunicate / OnTeach とその取り消し、OnUpdate*、OnExecuteHTTPComplete / Failure、OnBatteryNotify（と Low / Critical / ChargingStart / ChargingStop）、OnDisplayChange、起動時の OnNotifySelfInfo / BalloonInfo / ShellInfo / DressupInfo / UserInfo / OSInfo / InternationalInfo
+- イベント: OnFirstBoot / OnBoot / OnClose、OnSecondChange / OnMinuteChange / OnHourTimeSignal、OnMouseDown / OnMouseUp / OnMouseClick / OnMouseDoubleClick / OnMouseMultipleClick（長押しは右クリック扱い）、OnMouseMove（当たり判定の上で指を動かす＝なでる）、OnMouseEnter / OnMouseLeave / OnMouseEnterAll / OnMouseLeaveAll（指が触れた・離れた・なでる指が別の当たり判定に移った）、OnMouseDragStart / End、OnMouseGesture、OnMouseWheel、OnMouseDownEx / UpEx / ClickEx、OnOverlap / OnOffscreen、OnResetWindowPos、OnShellScaling、OnWindowStateMinimize / Restore、OnSurfaceRestore（バルーンが閉じて 15 秒後に1回）、OnSysSuspend / OnSysResume（画面が消えたら休止、ロックを解いたら復帰）、OnNetworkStatusChange（起動時は NOTIFY、以後はつながる・切れる・種類やアドレスが変わったとき）、OnFileDrop2（Android の「共有」で渡したファイル。ゴーストのフォルダの `pono/drop/` に写して渡す。答えが無ければ OnFileDropEx）、OnChoiceSelectEx / OnChoiceSelect / OnChoiceTimeout、OnAnchorSelectEx / OnAnchorSelect、OnBalloonClose / OnBalloonTimeout / OnBalloonBreak、OnSurfaceChange、OnTranslate、OnUserInput / OnCommunicate / OnTeach とその取り消し、OnUpdate*、OnExecuteHTTPComplete / Failure、OnBatteryNotify（と Low / Critical / ChargingStart / ChargingStop）、OnDisplayChange、起動時の OnNotifySelfInfo / BalloonInfo / ShellInfo / DressupInfo / UserInfo / OSInfo / InternationalInfo
 - SHIORI リソース: `homeurl`（descript.txt より優先）、`username`
 - タグ: 文字と待ち（`\0 \1 \p \s \i \n \c \w \_w \_q \x \e \-`）、選択肢とリンク（`\q \__q \_a`、`script:` の ID）、`\f` の文字装飾（bold / italic / underline / strike / color / height / align / sub / sup / default）、`\_u \_m \&`、`\b[n]`、`\_l`、`\![raise] \![notify] \![embed] \![timerraise] \![get,property]` と `%property[...]`（system.* / baseware.* / ghostlist / balloonlist / currentghost の一部）、`\![open,inputbox / passwordinput / communicatebox / teachbox / readme / configurationdialog]`、`\![set,balloontimeout / choicetimeout]`、`\![bind]`、`\![execute,http-get]`、`\![updatebymyself]`、`\![reload,shiori]`、`\![enter,passivemode]`
 - サウンド: `\8` `\_v` `\_V` `\![sound,play / loop / stop / wait]`（`--volume`）。ゴーストのディレクトリの中のファイルだけ鳴らします。
 - 切り替え: `\![change,shell]` / `\![change,balloon]`（random も可）と OnShellChanging / OnShellChanged / OnBalloonChange、着せ替えの OnDressupChanged。
 - ゴーストの切り替え: `\![change,ghost,名前]`（random / sequential / lastinstalled、`--option=raise-event`）と長押しメニューの「ゴースト切り替え」。メニューからなら OnGhostChanging（答えが無ければ OnClose）で別れを話してから切り替え、切り替わった先には OnGhostChanged（答えが無ければ OnBoot）を送ります。
 - 見た目: `\_s`（`\_s[ID,...]`）の同期、バルーンの中の画像 `\_b[ファイル,x,y]` / `\_b[ファイル,inline]`（`opaque`）、`\![set,scaling]`（反転も可）、`\![set,alpha]`、`\![anim,offset / clear / stop]`、SERIKO の `insert`（着せ替えの重なり順）と `parallelstart` / `parallelstop`、`talk,N`（話している間 N 文字ごとに動く口パクなど）と `yen-e`（話し終わりに動く）、サーフェスの別名（`sakura.surface.alias` / `kero.surface.alias` / `charN.surface.alias`、`alias.txt`、surfaces.txt の `name`。候補が複数ならランダム）。
-- ウィンドウ: `\![move]` / `\![moveasync]`（新旧どちらの書式も。基準は screen・me・スコープ番号、`--base-offset` / `--move-offset`）、`\![set,position]` / `\![reset,position]`。座標は画面のピクセルで、画面の外には出しません。
+- ウィンドウ: `\![move]` / `\![moveasync]`（新旧どちらの書式も。基準は screen・me・スコープ番号、`--base-offset` / `--move-offset`）、`\![set,position]` / `\![reset,position]`。座標は画面のピクセルで、画面の外には出しません。`\![set,zorder]`（重なり順）、`\![set,sticky-window]`（一緒に動く組。`\![move]` の `--option=ignore-sticky-window` で外せます）、`\![set,alignmenttodesktop]`（画面の端に付ける）、`\![set,windowstate,minimize]`、`\![execute,resetwindowpos]`、`\4` / `\5`（相方から離れる・寄る）、`\v`（手前に出す）、`sakura.defaultx` などの最初の位置。動かした後の重なりと画面からのはみ出しは OnOverlap / OnOffscreen、アプリでキャラクターの大きさを変えたら OnShellScaling で知らせます。
 - 入力: `\![open,dateinput / timeinput / sliderinput / textareabox]`（OnUserInput と OnTextAreaInput）。入力の箱は SSP と同じく \0 のバルーンの位置に出します。バルーンに `balloonc0.png`（複数行は `balloonc5.png`）があればそれを敷いて `communicatebox.x / y / width / height` の範囲に入力欄を置き、無ければ簡易バルーンと同じ見た目の箱にします。戻るボタンで取り消せます。
 - 長押しのメニューは SSP のオーナードローメニューに合わせて、SHIORI の `sakura.recommendsites` / `portalsites`（と `*buttoncaption`）、きせかえ、シェル、バルーン、Read Me、ネットワーク更新を出します。おすすめを選ぶと OnRecommendsiteChoice を送ります。
-- Windows のウィンドウやトレイ向けのタグ（`\![set,trayicon]`、`\![lock,repaint]`、`\4`〜`\7` など）は黙って読み飛ばします。
+- Windows のウィンドウやトレイ向けのタグ（`\![set,trayicon]`、`\![lock,repaint]`、`\6` / `\7` など）は黙って読み飛ばします。
 
 ## 既知の制限
 
@@ -184,7 +188,7 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 - SAORI（YAYA の `LOADLIB` / `REQUESTLIB`、里々・華和梨の SAORI）、YAYA の `EXECUTE`、Kagari（Lua）の C モジュール・`os.execute`・`io.popen` は、ゴーストにネイティブコードやシェルを動かさせないために止めています。これらに頼るゴーストは一部の機能が動きません。
 - `\_l` による選択肢の横並びは、座標どおりではなく列に分けて並べます。
 - サウンドは同時に鳴らせるのが1回分とループ1つまでです。
-- `\![move]` で他のゴーストを基準にすることはできません（複数ゴーストの同時起動が無いため）。`point.basepos` は見ず、`base` はウィンドウの中央・下端として扱います。`\![set,zorder]` / `\![set,sticky-window]` は読み飛ばします。
+- `\![move]` で他のゴーストを基準にすることはできません（複数ゴーストの同時起動が無いため）。`point.basepos` は見ず、`base` はウィンドウの中央・下端として扱います。
 - 楕円・多角形の当たり判定は外接矩形で近似します。
 - オーバーレイの透明な部分もタッチを受け取ります。Android の制約で画素単位では透過できないため、キャラクターと吹き出しを別々のウィンドウにして、塞ぐ範囲をそれぞれの矩形に絞っています。
 - ネットワーク更新: シェル画像の更新は次の起動から反映されます。

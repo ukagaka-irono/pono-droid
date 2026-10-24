@@ -14,6 +14,7 @@ import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
+import android.graphics.Rect
 import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
@@ -52,6 +53,7 @@ import net.pono.baseware.ghost.GhostRepository
 import net.pono.baseware.ghost.InputRequest
 import net.pono.baseware.ghost.NetworkStatus
 import net.pono.baseware.ghost.PreviousGhost
+import net.pono.baseware.ghost.WindowState
 import net.pono.baseware.shell.Shell
 import net.pono.droid.AppVersion
 import net.pono.droid.GhostStore
@@ -59,6 +61,7 @@ import net.pono.droid.MainActivity
 import net.pono.droid.R
 import net.pono.droid.TextViewerActivity
 import java.io.File
+import kotlin.math.roundToInt
 import net.pono.shiori.yaya.RemoteShiori
 
 /** ゴーストを常駐させる。キャラクターごとのオーバーレイウィンドウを持つ。 */
@@ -71,9 +74,11 @@ class GhostOverlayService : LifecycleService() {
     private var loadingJob: Job? = null
     private var scopesJob: Job? = null
     private var positionsJob: Job? = null
+    private var windowJob: Job? = null
 
-    /** 動かし終えた \![move] の通し番号（キャラクターごと） */
+    /** 動かし終えた \![move] と \4 / \5 の通し番号（キャラクターごと） */
     private val handledMoves = HashMap<Int, Int>()
+    private val handledNudges = HashMap<Int, Int>()
     private var passThrough = false
     private val sound = SoundPlayer()
     private val windows = mutableListOf<CharacterWindow>()
@@ -83,6 +88,7 @@ class GhostOverlayService : LifecycleService() {
         when (intent?.action) {
             ACTION_STOP -> controller?.close() ?: stopSelf()
             ACTION_UPDATE -> controller?.networkUpdate() ?: toast("ゴーストが起動していません")
+            ACTION_SHOW -> controller?.restoreWindows("user")
             ACTION_START -> {
                 startInForeground()
                 val dirName = intent.getStringExtra(EXTRA_GHOST)
@@ -225,6 +231,7 @@ class GhostOverlayService : LifecycleService() {
         c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
         createWindows(c)
         watchPositions(c)
+        watchWindowState(c)
         // pono-droid の画面が前にある間は、キャラクターがボタンに重なっても押せるようにタッチを通す。
         // ただし入力の箱を出している間は、箱に触れられるように通さない
         touchJob = lifecycleScope.launch {
@@ -264,12 +271,13 @@ class GhostOverlayService : LifecycleService() {
         }
     }
 
-    /** \![move] と \![set,position] を、キャラクターのウィンドウに伝える */
+    /** \![move]・\![set,position]・\4 / \5・\![set,alignmenttodesktop] を、キャラクターのウィンドウに伝える */
     private fun watchPositions(c: GhostController) {
         handledMoves.clear()
+        handledNudges.clear()
         positionsJob?.cancel()
         positionsJob = lifecycleScope.launch {
-            c.state.map { s -> s.characters.mapValues { (_, ch) -> ch.move?.first to ch.pinned } }
+            c.state.map { s -> s.characters.mapValues { (_, ch) -> listOf(ch.move?.first, ch.pinned, ch.nudge?.first, ch.alignment) } }
                 .distinctUntilChanged()
                 .collect { applyPositions(c) }
         }
@@ -279,11 +287,83 @@ class GhostOverlayService : LifecycleService() {
         for ((scope, ch) in c.state.value.characters) {
             val window = windows.firstOrNull { it.scopeId == scope } ?: continue
             window.setPinned(ch.pinned)
+            window.setAlignment(ch.alignment)
+            ch.nudge?.let { (serial, away) ->
+                if (handledNudges[scope] == serial) return@let
+                handledNudges[scope] = serial
+                // 相手は、\0 なら \1、ほかのキャラクターなら \0
+                val partner = windows.firstOrNull { it.scopeId == if (scope == 0) 1 else 0 } ?: return@let
+                window.nudge(away, partner.screenRect())
+            }
             val (serial, move) = ch.move ?: continue
             if (handledMoves[scope] == serial) continue
             handledMoves[scope] = serial
             window.move(move) { id -> windows.firstOrNull { it.scopeId == id }?.screenRect() }
         }
+    }
+
+    /** 最小化・重なり順・位置の初期化・最初の位置を、キャラクターのウィンドウに伝える */
+    private fun watchWindowState(c: GhostController) {
+        windowJob?.cancel()
+        windowJob = lifecycleScope.launch {
+            var previous: WindowState? = null
+            c.state.map { it.window }.distinctUntilChanged().collect { w ->
+                val before = previous
+                previous = w
+                if (w.minimized != before?.minimized) {
+                    windows.forEach { it.setHidden(w.minimized) }
+                    // 隠している間は、通知から出し直せるようにする
+                    if (before != null) startInForeground(minimized = w.minimized)
+                }
+                if (before != null && (w.zorder != before.zorder || w.frontRequests != before.frontRequests)) restack(w)
+                if (before != null && w.resetRequests != before.resetRequests) {
+                    windows.forEach { it.resetPosition(w.defaultPositions[it.scopeId]) }
+                }
+                if (w.defaultPositions != before?.defaultPositions) {
+                    windows.forEach { it.applyDefault(w.defaultPositions[it.scopeId]) }
+                }
+            }
+        }
+    }
+
+    /**
+     * ウィンドウを付け直して重なり順を決める（後から付けたものほど上）。いつもの順は \1 → 3人目以降 → \0 で、
+     * それぞれサーフェスの上にバルーン。\![set,zorder] の組があれば、組の中だけその順に並べ替える
+     */
+    private fun restack(w: WindowState) {
+        val order = windows.map { it.scopeId }.sortedBy { if (it == 0) Int.MAX_VALUE else it }
+            .flatMap { listOf("s$it", "b$it") }.toMutableList()
+        for (group in w.zorder) {
+            val slots = order.indices.filter { order[it] in group }
+            // 組は手前から並べてあるので、下（先に付ける方）から埋める
+            val members = group.filter { it in order }.reversed()
+            slots.zip(members).forEach { (i, token) -> order[i] = token }
+        }
+        windows.forEach { it.detach() }
+        for (token in order) {
+            windows.firstOrNull { it.scopeId == token.drop(1).toInt() }?.attach(balloon = token[0] == 'b')
+        }
+        applyInput(controller ?: return)
+    }
+
+    /** sticky-window の組で、[scope] と一緒に動くキャラクターのウィンドウ */
+    private fun stickyPartners(scope: Int): List<CharacterWindow> {
+        val group = controller?.state?.value?.window?.stickyGroups?.firstOrNull { scope in it } ?: return emptyList()
+        return windows.filter { it.scopeId != scope && it.scopeId in group }
+    }
+
+    /** キャラクターの重なりと見切れを調べて、変わっていればゴーストに伝える（OnOverlap / OnOffscreen） */
+    private fun reportLayout() {
+        val c = controller ?: return
+        val shown = windows.filter { (c.state.value.characters[it.scopeId]?.surface ?: -1) >= 0 }
+            .map { it.scopeId to it.screenRect() }
+            .filter { (_, r) -> !r.isEmpty }
+        val screen = windows.firstOrNull()?.screenBounds() ?: return
+        val overlaps = shown.flatMapIndexed { i, (a, ra) ->
+            shown.drop(i + 1).filter { (_, rb) -> Rect.intersects(ra, rb) }.map { (b, _) -> a to b }
+        }
+        val offscreen = shown.filter { (_, r) -> !screen.contains(r) }.map { it.first }
+        c.onWindowLayout(overlaps, offscreen)
     }
 
     /** 入力の箱を開いているかを \0 のウィンドウに伝える（作り直したウィンドウにも） */
@@ -297,14 +377,24 @@ class GhostOverlayService : LifecycleService() {
         // 後から足したウィンドウほど上に重なるので、\1 → 3人目以降 → \0 の順に作る（\0 がいちばん上）
         val order = scopes.filter { it !in shown }.sortedBy { if (it == 0) Int.MAX_VALUE else it }
         val prefs = OverlaySettings.prefs(this)
+        val w = c.state.value.window
         for (scope in order) {
             windows += CharacterWindow(this, scope, c, renderer ?: return, balloonSkin, prefs).also {
+                it.onShift = { dx, dy -> stickyPartners(scope).forEach { p -> p.shiftBy(dx, dy) } }
+                it.onSettled = {
+                    stickyPartners(scope).forEach(CharacterWindow::savePosition)
+                    reportLayout()
+                }
                 it.show()
                 it.setTouchable(!passThrough)
+                it.setHidden(w.minimized)
+                it.applyDefault(w.defaultPositions[scope])
             }
         }
+        if (order.isEmpty()) return
+        if (w.zorder.isNotEmpty()) restack(w)
         // 後から出てきたキャラクターへの \![move] も、ウィンドウができてから動かす
-        if (order.isNotEmpty()) applyPositions(c)
+        applyPositions(c)
     }
 
     /** シェルやバルーンが切り替わったら、ウィンドウを作り直す */
@@ -329,6 +419,8 @@ class GhostOverlayService : LifecycleService() {
         scopesJob = null
         positionsJob?.cancel()
         positionsJob = null
+        windowJob?.cancel()
+        windowJob = null
         windows.forEach { it.dismiss() }
         windows.clear()
         controller = null
@@ -426,8 +518,21 @@ class GhostOverlayService : LifecycleService() {
         )
     }
 
+    /** アプリの画面で変えたキャラクターの大きさ。変わったらゴーストに伝える（OnShellScaling） */
+    private var characterScale = 1f
+    private val scaleListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+        if (key != OverlaySettings.KEY_CHARACTER_SCALE) return@OnSharedPreferenceChangeListener
+        val old = characterScale
+        characterScale = OverlaySettings.characterScale(p)
+        controller?.onShellScaling((characterScale * 100).roundToInt(), (old * 100).roundToInt())
+    }
+
     override fun onCreate() {
         super.onCreate()
+        OverlaySettings.prefs(this).let {
+            characterScale = OverlaySettings.characterScale(it)
+            it.registerOnSharedPreferenceChangeListener(scaleListener)
+        }
         registerReceiver(
             screenReceiver,
             IntentFilter().apply {
@@ -448,6 +553,7 @@ class GhostOverlayService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        OverlaySettings.prefs(this).unregisterOnSharedPreferenceChangeListener(scaleListener)
         unregisterReceiver(screenReceiver)
         unregisterReceiver(batteryReceiver)
         runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback) }
@@ -455,7 +561,8 @@ class GhostOverlayService : LifecycleService() {
         super.onDestroy()
     }
 
-    private fun startInForeground() {
+    /** 常駐の通知を出す（出し直す）。[minimized] ならキャラクターを隠しているので、「表示」で出し直せるようにする */
+    private fun startInForeground(minimized: Boolean = false) {
         val nm = getSystemService(NotificationManager::class.java)
         // 重要度が「低」だと「サイレント」欄に折りたたまれて、終了などのボタンが見えない。
         // 「標準」にして、音とバイブレーションだけ切る（チャンネルの重要度は後から変えられないので作り直す）
@@ -473,20 +580,29 @@ class GhostOverlayService : LifecycleService() {
         val update = PendingIntent.getService(
             this, 1, Intent(this, GhostOverlayService::class.java).setAction(ACTION_UPDATE), PendingIntent.FLAG_IMMUTABLE,
         )
+        val show = PendingIntent.getService(
+            this, 2, Intent(this, GhostOverlayService::class.java).setAction(ACTION_SHOW), PendingIntent.FLAG_IMMUTABLE,
+        )
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val title = if (minimized) "ゴーストを隠しています" else "ゴーストが起動しています"
         // 通知は先頭のもの以外は折りたたまれ、標準のボタン（addAction）は隠れてしまう。
         // 折りたたまれた1行の中にもボタンを置いておく
         val collapsed = RemoteViews(packageName, R.layout.notification_ghost).apply {
-            setTextViewText(R.id.notification_title, "ゴーストが起動しています")
+            setTextViewText(R.id.notification_title, title)
+            setViewVisibility(R.id.notification_show, if (minimized) android.view.View.VISIBLE else android.view.View.GONE)
+            setOnClickPendingIntent(R.id.notification_show, show)
             setOnClickPendingIntent(R.id.notification_update, update)
             setOnClickPendingIntent(R.id.notification_stop, stop)
         }
-        val notification: Notification = NotificationCompat.Builder(this, CHANNEL)
+        val builder = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("ゴーストが起動しています")
+            .setContentTitle(title)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(collapsed)
-            .setContentIntent(open)
+            // 隠している間は、通知に触れたら出し直す
+            .setContentIntent(if (minimized) show else open)
+        if (minimized) builder.addAction(0, "表示", show)
+        val notification: Notification = builder
             .addAction(0, "ネットワーク更新", update)
             .addAction(0, "終了", stop)
             .setOngoing(true)
@@ -505,6 +621,7 @@ class GhostOverlayService : LifecycleService() {
         private const val ACTION_START = "net.pono.droid.START"
         private const val ACTION_STOP = "net.pono.droid.STOP"
         private const val ACTION_UPDATE = "net.pono.droid.UPDATE"
+        private const val ACTION_SHOW = "net.pono.droid.SHOW"
         private const val EXTRA_GHOST = "ghost"
 
         private val _appInFront = MutableStateFlow(false)

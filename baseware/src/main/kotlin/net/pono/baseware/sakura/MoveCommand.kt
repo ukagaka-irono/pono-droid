@@ -11,6 +11,8 @@ data class MoveCommand(
     val base: Base = Base.Screen,
     val baseOffset: Anchor = Anchor.LEFT_TOP,
     val moveOffset: Anchor = Anchor.LEFT_TOP,
+    /** --option=ignore-sticky-window。sticky-window の組の相手を一緒に動かさない */
+    val ignoreSticky: Boolean = false,
 ) {
     /** 座標の原点 */
     sealed interface Base {
@@ -79,6 +81,7 @@ data class MoveCommand(
                 base = base,
                 baseOffset = values["base-offset"]?.let(Anchor::parse) ?: Anchor.LEFT_TOP,
                 moveOffset = values["move-offset"]?.let(Anchor::parse) ?: Anchor.LEFT_TOP,
+                ignoreSticky = args.any { it.trim().lowercase() == "--option=ignore-sticky-window" },
             )
         }
     }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 常駐中の通知。折りたたまれていても「更新」「終了」を押せるよう、1行目にボタンを置く -->
+<!-- 常駐中の通知。折りたたまれていても「更新」「終了」（隠しているときは「表示」も）を押せるよう、1行目にボタンを置く -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -14,6 +14,15 @@
         android:layout_weight="1"
         android:ellipsize="end"
         android:maxLines="1" />
+
+    <Button
+        android:id="@+id/notification_show"
+        style="@android:style/Widget.Material.Button.Borderless.Colored"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:minWidth="0dp"
+        android:text="@string/notification_show"
+        android:visibility="gone" />
 
     <Button
         android:id="@+id/notification_update"

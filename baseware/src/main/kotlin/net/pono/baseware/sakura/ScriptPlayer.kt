@@ -136,6 +136,12 @@ interface ScriptHost {
     /** `\![set,position,x,y,スコープ]`。[x] / [y] に固定してドラッグさせない。null なら固定をやめる（`\![reset,position]`） */
     fun setPosition(scope: Int, x: Int?, y: Int?) {}
 
+    /** `\4`（[away]）/ `\5`。相手のキャラクターから離れる・そばへ寄る */
+    fun nudge(scope: Int, away: Boolean) {}
+
+    /** `\v`。キャラクターとバルーンを、ほかのウィンドウより手前に出す */
+    fun bringToFront() {}
+
     fun openUrl(url: String)
 
     /** `%username` などの環境変数。知らない名前なら null。 */
@@ -274,6 +280,8 @@ class ScriptPlayer(
                 // 横の位置が数で書かれているときだけ（@ 付きの相対指定や縦だけの指定は無視する）
                 "_l" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { host.moveCursor(scope, it) }
                 "b" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { host.setBalloonId(scope, it) }
+                "4", "5" -> host.nudge(scope, away = token.name == "4")
+                "v" -> host.bringToFront()
                 in layoutOnlyTags -> {}
                 else -> host.unknownTag(token)
             }
@@ -335,7 +343,7 @@ class ScriptPlayer(
                 "reset" -> when (a.getOrNull(1)?.lowercase()) {
                     // \![reset,position] は、\![set,position] で固定したキャラクター全員を放す
                     "position" -> for (s in 0..MAX_SCOPE) host.setPosition(s, null, null)
-                    // zorder / sticky-window など、ほかのものは pono-droid に無い
+                    "zorder", "sticky-window" -> host.setOption(scope, a[1].lowercase(), emptyList())
                     else -> {}
                 }
                 "enter", "leave" -> when (a.getOrNull(1)?.lowercase()) {
@@ -412,9 +420,9 @@ class ScriptPlayer(
      * 見た目の細かい調整だけのタグ。バルーンを自前で描いているので、無視しても会話の流れは変わらない。
      * \_n: 自動改行の切り替え、\t: 割り込み禁止、\* : 選択肢タイムアウト禁止、
      * \C: 前のバルーンを消さない（先頭にあるかどうかは GhostController が見る）、
-     * \4〜\7 / \v / \z: ウィンドウの移動や表示、\_s: 両方のバルーンに出す（片方だけに出す）、\__t: 時刻、\_e: 終わり
+     * \6 / \7 / \z: 時刻合わせや表示、\_s: 両方のバルーンに出す（片方だけに出す）、\__t: 時刻、\_e: 終わり
      */
-    private val layoutOnlyTags = setOf("_n", "t", "*", "C", "4", "5", "6", "7", "v", "z", "__t", "_e")
+    private val layoutOnlyTags = setOf("_n", "t", "*", "C", "6", "7", "z", "__t", "_e")
 
     /** `\![コマンド,...]` のうち、pono-droid に無い仕組み（ウィンドウの重なり・効果・他のゴースト・プラグイン）向けのもの */
     private val silentCommands = setOf(
@@ -425,13 +433,13 @@ class ScriptPlayer(
 
     /** `\![set,名前,...]` のうち、Windows のウィンドウやトレイ向けで、pono-droid では意味が無いもの */
     private val silentSetOptions = setOf(
-        "trayicon", "tasktrayicon", "trayballoon", "tasktrayballoon", "windowstate", "wallpaper",
-        "otherghosttalk", "othersurfacechange", "sticky-window", "zorder", "alignmentondesktop", "alignmenttodesktop",
+        "trayicon", "tasktrayicon", "trayballoon", "tasktrayballoon", "wallpaper",
+        "otherghosttalk", "othersurfacechange", "alignmentondesktop",
         "autoscroll", "balloonwait", "balloonmarker", "balloonalign", "balloonoffset", "balloonnum",
         "serikotalk", "syncobject", "shioridebugmode", "property",
     )
 
-    private val silentExecutes = setOf("resetwindowpos", "resetballoonpos")
+    private val silentExecutes = setOf("resetballoonpos")
 
     private val envPattern = Regex("""%([a-zA-Z][a-zA-Z0-9]*)""")
     private val propertyPattern = Regex("""%property\[([^\]]*)\]""")

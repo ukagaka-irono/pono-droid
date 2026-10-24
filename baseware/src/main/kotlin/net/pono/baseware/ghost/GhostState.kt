@@ -68,6 +68,10 @@ data class CharacterState(
     val pinned: Pair<Int, Int>? = null,
     /** このキャラクターがこれまでに話した文字の数。SERIKO の talk,N（N 文字ごとに動く口パクなど）に使う */
     val talkCount: Int = 0,
+    /** いちばん新しい \4（true、相手から離れる）・\5（false、相手のそばへ寄る）と通し番号 */
+    val nudge: Pair<Int, Boolean>? = null,
+    /** \![set,alignmenttodesktop]。top / bottom / left / right なら画面のその端に付け、その向きにはドラッグで動かさない。null なら自由 */
+    val alignment: String? = null,
 ) {
     fun appendText(text: String, style: TextStyle = TextStyle.Default): CharacterState {
         val items = balloon.orEmpty()
@@ -107,6 +111,8 @@ data class GhostState(
     val loading: String? = null,
     /** 最後まで話し終えた（\e まで来た）スクリプトの数。SERIKO の yen-e（話し終わりに動く）に使う */
     val scriptEnds: Int = 0,
+    /** キャラクターのウィンドウ全体にかかること（重なり順・一緒に動く組・最小化など） */
+    val window: WindowState = WindowState(),
 ) {
     fun update(scope: Int, f: (CharacterState) -> CharacterState): GhostState {
         val current = characters[scope] ?: CharacterState(scope, -1)

@@ -44,6 +44,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import kotlin.math.abs
 
 /** 端末の情報。OnNotifyOSInfo・OnDisplayChange・プロパティで伝える。分からないところは空や 0 でよい */
 data class DeviceInfo(
@@ -212,6 +213,9 @@ class GhostController(
                 platform.onQuit()
                 return@launch
             }
+            // 位置を覚えていないキャラクターは、ゴーストの決めた位置に出す
+            val defaults = loadDefaultPositions()
+            if (defaults.isNotEmpty()) _state.update { it.copy(window = it.window.copy(defaultPositions = defaults)) }
 
             val profile = ghost.loadProfile()
             val firstBoot = profile.getProperty("booted") == null
@@ -730,6 +734,221 @@ class GhostController(
         }
     }
 
+    // ---- 指の出入り・ドラッグ・ジェスチャー ----
+
+    /** キャラクターごとの、いま指が乗っている当たり判定（OnMouseEnter / OnMouseLeave を出し分ける） */
+    private val touchedCollision = HashMap<Int, String?>()
+
+    /**
+     * 指がキャラクターに触れた。マウスがウィンドウに入ったのと同じに扱い、OnMouseEnterAll と
+     * （当たり判定の上なら）OnMouseEnter を送る
+     */
+    fun onTouchEnter(scopeId: Int, x: Int, y: Int, collision: String?) {
+        touchedCollision[scopeId] = collision
+        raise("OnMouseEnterAll", hoverReferences(scopeId, x, y, collision), userInitiated = false)
+        if (collision != null) raise("OnMouseEnter", hoverReferences(scopeId, x, y, collision), userInitiated = false)
+    }
+
+    /** なでている指が別の当たり判定に移った。前の判定の OnMouseLeave と、新しい判定の OnMouseEnter を送る */
+    fun onTouchCollision(scopeId: Int, x: Int, y: Int, collision: String?) {
+        val previous = touchedCollision[scopeId]
+        if (previous == collision) return
+        touchedCollision[scopeId] = collision
+        if (previous != null) raise("OnMouseLeave", hoverReferences(scopeId, x, y, previous), userInitiated = false)
+        if (collision != null) raise("OnMouseEnter", hoverReferences(scopeId, x, y, collision), userInitiated = false)
+    }
+
+    /** 指が離れた。乗っていた当たり判定の OnMouseLeave と、OnMouseLeaveAll を送る */
+    fun onTouchLeave(scopeId: Int, x: Int, y: Int) {
+        val previous = touchedCollision.remove(scopeId)
+        if (previous != null) raise("OnMouseLeave", hoverReferences(scopeId, x, y, previous), userInitiated = false)
+        raise("OnMouseLeaveAll", hoverReferences(scopeId, x, y, previous), userInitiated = false)
+    }
+
+    private fun hoverReferences(scopeId: Int, x: Int, y: Int, collision: String?) =
+        listOf(x.toString(), y.toString(), "0", scopeId.toString(), collision.orEmpty(), "0", "touch")
+
+    /** ウィンドウをドラッグで動かし始めた・動かし終えた（OnMouseDragStart / End）。パッシブモードでは送らない（SSP と同じ） */
+    fun onMouseDragStart(scopeId: Int, x: Int, y: Int, collision: String?) {
+        lastUserActivity = System.currentTimeMillis()
+        if (!_state.value.passive) raise("OnMouseDragStart", mouseReferences(scopeId, x, y, collision, 0), userInitiated = false)
+    }
+
+    fun onMouseDragEnd(scopeId: Int, x: Int, y: Int, collision: String?) {
+        if (!_state.value.passive) raise("OnMouseDragEnd", mouseReferences(scopeId, x, y, collision, 0), userInitiated = false)
+    }
+
+    /**
+     * キャラクターの上をさっと払った（SSP のタッチパネルでのジェスチャー）。OnMouseGesture を送り、
+     * 上下に払ったのに答えが無ければ OnMouseWheel を代わりに送る（SSP 2.3.53 以降と同じ。回した量は縦に動いた距離）。
+     * 最後に方向 end を送る。[direction] は up / down / left / right / left_up などの SSP の名前、
+     * [angle] は払った向き（右が 0 度で反時計回り）。座標はシェル画像の座標
+     */
+    fun onMouseGesture(
+        scopeId: Int, x: Int, y: Int, collision: String?, startX: Int, startY: Int, startCollision: String?, direction: String, angle: Int,
+    ) {
+        lastUserActivity = System.currentTimeMillis()
+        fun refs(dir: String) = listOf(
+            scopeId.toString(), "$x\u0001$y", collision.orEmpty(), "$startX\u0001$startY", startCollision.orEmpty(), dir, angle.toString(),
+        )
+        scope.launch {
+            val script = request("OnMouseGesture", refs(direction))
+                ?: if (direction == "up" || direction == "down") {
+                    // 上に払ったら奥へ回したのと同じ（正の値）
+                    val amount = maxOf(1, abs(y - startY)) * (if (direction == "up") 1 else -1)
+                    request("OnMouseWheel", listOf(x.toString(), y.toString(), amount.toString(), scopeId.toString(), collision.orEmpty(), "0", "touch"))
+                } else {
+                    null
+                }
+            if (script != null && !_state.value.waitingChoice) {
+                cancelScript()
+                runScript(script)
+            }
+            raise("OnMouseGesture", refs("end"), userInitiated = false)
+        }
+    }
+
+    /** 2本指で上下になぞった（ホイールの代わり）。[amount] は上へなら正。座標はシェル画像の座標 */
+    fun onMouseWheel(scopeId: Int, x: Int, y: Int, collision: String?, amount: Int) {
+        lastUserActivity = System.currentTimeMillis()
+        scope.launch {
+            val script = request("OnMouseWheel", listOf(x.toString(), y.toString(), amount.toString(), scopeId.toString(), collision.orEmpty(), "0", "touch"))
+                ?: return@launch
+            if (_state.value.waitingChoice) return@launch
+            cancelScript()
+            runScript(script)
+        }
+    }
+
+    /**
+     * 中クリック（2本指で叩く・長押しメニューの「ゴーストのメニュー（中クリック）」）。SSP と同じく OnMouseDownEx / OnMouseUpEx を送り、
+     * 答えが無ければ OnMouseClickEx（middle）、それにも答えが無ければ古いゴースト向けに OnMouseClick（Reference5 = 2）を送る
+     */
+    fun onMiddleClick(scopeId: Int, x: Int = 0, y: Int = 0, collision: String? = null) {
+        lastUserActivity = System.currentTimeMillis()
+        val refs = listOf(x.toString(), y.toString(), "0", scopeId.toString(), collision.orEmpty(), "middle", "touch")
+        raise("OnMouseDownEx", refs, userInitiated = false)
+        scope.launch {
+            val script = request("OnMouseUpEx", refs)
+                ?: request("OnMouseClickEx", refs)
+                ?: request("OnMouseClick", mouseReferences(scopeId, x, y, collision, 2))
+                ?: return@launch
+            cancelScript()
+            runScript(script)
+        }
+    }
+
+    // ---- ウィンドウ（最小化・位置の初期化・重なり・見切れ・大きさ） ----
+
+    /** キャラクターを隠す（\![set,windowstate,minimize] は script、メニューの「隠す」は user） */
+    fun minimize(reason: String) {
+        if (_state.value.window.minimized) return
+        _state.update { it.copy(window = it.window.copy(minimized = true)) }
+        raise("OnWindowStateMinimize", listOf(reason), userInitiated = false)
+    }
+
+    /** 隠したキャラクターを出す（通知の「表示」） */
+    fun restoreWindows(reason: String = "user") {
+        if (!_state.value.window.minimized) return
+        _state.update { it.copy(window = it.window.copy(minimized = false)) }
+        raise("OnWindowStateRestore", listOf(reason), userInitiated = false)
+    }
+
+    /** ウィンドウの位置を初期位置に戻す（\![execute,resetwindowpos]） */
+    fun resetWindowPositions() {
+        _state.update { it.copy(window = it.window.copy(resetRequests = it.window.resetRequests + 1)) }
+    }
+
+    /** メニューの「位置を戻す」。OnResetWindowPos に答えが無ければ戻す（SSP と同じ） */
+    private fun requestResetWindowPos() {
+        scope.launch {
+            val script = request("OnResetWindowPos", emptyList())
+            if (script != null) {
+                cancelScript()
+                runScript(script)
+            } else {
+                resetWindowPositions()
+            }
+        }
+    }
+
+    private var lastOverlaps = ""
+    private var lastOffscreen = ""
+
+    /**
+     * キャラクターのウィンドウが動いた後の重なりと見切れ。変わったときだけ OnOverlap / OnOffscreen を送る。
+     * [overlaps] は重なっているキャラクターの組（小さい番号が先）、[offscreen] は画面からはみ出しているキャラクター
+     */
+    fun onWindowLayout(overlaps: Collection<Pair<Int, Int>>, offscreen: Collection<Int>) {
+        val o = overlaps.map { (a, b) -> minOf(a, b) to maxOf(a, b) }.distinct().sortedWith(compareBy({ it.first }, { it.second }))
+            .joinToString("\u0001") { "${it.first}-${it.second}" }
+        val f = offscreen.distinct().sorted().joinToString("\u0001")
+        if (o != lastOverlaps) {
+            raise("OnOverlap", listOf(o, lastOverlaps), userInitiated = false)
+            lastOverlaps = o
+        }
+        if (f != lastOffscreen) {
+            raise("OnOffscreen", listOf(f, lastOffscreen), userInitiated = false)
+            lastOffscreen = f
+        }
+    }
+
+    /** アプリの画面で「キャラクターの大きさ」を変えた（パーセント）。OnShellScaling（横・縦とも同じ倍率） */
+    fun onShellScaling(newPercent: Int, oldPercent: Int) {
+        if (newPercent == oldPercent) return
+        raise("OnShellScaling", listOf(newPercent.toString(), oldPercent.toString(), newPercent.toString(), oldPercent.toString()), userInitiated = false)
+    }
+
+    /**
+     * \![set,zorder,1,0]。左ほど手前。数だけならそのキャラクターのバルーンとサーフェス（バルーンが手前）、
+     * "s1" / "b1"（surface1 / balloon1）なら片方だけ。新しい組と重なる古い組は消す。引数が無ければ全部やめる
+     */
+    private fun setZorder(args: List<String>) {
+        val group = args.flatMap { arg ->
+            val t = arg.trim().lowercase()
+            val n = t.toIntOrNull()
+            when {
+                n != null -> listOf("b$n", "s$n")
+                t.startsWith("balloon") -> listOfNotNull(t.removePrefix("balloon").toIntOrNull()?.let { "b$it" })
+                t.startsWith("surface") -> listOfNotNull(t.removePrefix("surface").toIntOrNull()?.let { "s$it" })
+                t.startsWith("b") || t.startsWith("s") -> listOfNotNull(t.drop(1).toIntOrNull()?.let { "${t[0]}$it" })
+                else -> emptyList()
+            }
+        }.distinct()
+        _state.update {
+            val groups = if (group.size < 2) emptyList() else it.window.zorder.filter { g -> g.none(group::contains) } + listOf(group)
+            it.copy(window = it.window.copy(zorder = groups))
+        }
+    }
+
+    /** \![set,sticky-window,1,0]。一緒に動くキャラクターの組。新しい組に入ったキャラクターは古い組から抜ける。引数が無ければ全部やめる */
+    private fun setSticky(args: List<String>) {
+        val group = args.mapNotNull { it.trim().toIntOrNull()?.takeIf { n -> n in 0..ScriptPlayer.MAX_SCOPE } }.toSet()
+        _state.update {
+            val groups = if (group.size < 2) {
+                emptyList()
+            } else {
+                it.window.stickyGroups.map { g -> g - group }.filter { g -> g.size >= 2 } + listOf(group)
+            }
+            it.copy(window = it.window.copy(stickyGroups = groups))
+        }
+    }
+
+    /**
+     * 最初の位置。SHIORI リソースの sakura.defaultx / defaulty / defaultleft / defaulttop（無ければゴーストの descript.txt）。
+     * キャラクターごとに、決まっているものだけ持つ
+     */
+    private suspend fun loadDefaultPositions(): Map<Int, DefaultPosition> {
+        val out = HashMap<Int, DefaultPosition>()
+        for (scopeId in characterScopes) {
+            val name = Shell.scopeName(scopeId)
+            suspend fun value(key: String) = ScreenCoordinate.parse(resource("$name.$key") ?: ghost.descript["$name.$key"])
+            val pos = DefaultPosition(value("defaultx"), value("defaulty"), value("defaultleft"), value("defaulttop"))
+            if (!pos.isEmpty) out[scopeId] = pos
+        }
+        return out
+    }
+
     // ---- メニュー（SSP のオーナードローメニューの代わり） ----
 
     /** おすすめ・ポータルの1つ。SHIORI のリソースは 名前[1]URL[1]バナー[1]スクリプト を [2] でつないだもの */
@@ -767,6 +986,8 @@ class GhostController(
         if (repository != null) sb.append("\\q[バルーン,pono:balloons,$scopeId]\\n")
         if (readmeFile() != null) sb.append("\\q[${quote(resource("readmebuttoncaption") ?: "Read Me")},pono:readme]\\n")
         sb.append("\\q[${quote(resource("updatebuttoncaption") ?: "ネットワーク更新")},pono:update]\\n")
+        sb.append("\\q[位置を戻す,pono:resetpos]\\n")
+        sb.append("\\q[隠す,pono:hide]\\n")
         sb.append("\\q[ゴーストを終了,pono:close]\\n\\q[閉じる,pono:cancel]\\e")
         return sb.toString()
     }
@@ -1230,10 +1451,10 @@ class GhostController(
                 val refs = choice.references
                 val scopeId = refs.firstOrNull()?.toIntOrNull() ?: 0
                 when (id) {
-                    "pono:middle" -> {
-                        // 中クリック（Reference5 = 2）。ゴーストによってはこれでメニューを開く
-                        raise("OnMouseClick", listOf("0", "0", "0", scopeId.toString(), "", "2", "touch"))
-                    }
+                    // 中クリック。ゴーストによってはこれでメニューを開く
+                    "pono:middle" -> onMiddleClick(scopeId)
+                    "pono:hide" -> minimize("user")
+                    "pono:resetpos" -> requestResetWindowPos()
                     "pono:update" -> networkUpdate()
                     "pono:close" -> close()
                     "pono:menu" -> scope.launch { runScript(basewareMenu(scopeId)) }
@@ -1317,12 +1538,19 @@ class GhostController(
         _state.update {
             GhostState(
                 characters = characterScopes.associateWith { scope ->
-                    CharacterState(scope, defaultSurface(scope), binds = shell.bindGroups(scope).filter { g -> g.default }.map { g -> g.id }.toSet())
+                    CharacterState(
+                        scope, defaultSurface(scope),
+                        binds = shell.bindGroups(scope).filter { g -> g.default }.map { g -> g.id }.toSet(),
+                        // 画面の端への吸着もゴーストが終わるまで続く
+                        alignment = it.characters[scope]?.alignment,
+                    )
                 },
                 screenOn = it.screenOn,
                 passive = it.passive,
                 loading = it.loading,
                 scriptEnds = it.scriptEnds,
+                // 重なり順や一緒に動く組はゴーストが終わるまで続く（SSP と同じ）
+                window = it.window,
             )
         }
     }
@@ -1528,9 +1756,20 @@ class GhostController(
         }
 
         override fun execute(name: String, args: List<String>): Boolean {
-            if (name != "http-get" || args.isEmpty()) return false
-            httpGet(args[0], args.drop(1))
+            when (name) {
+                "http-get" -> if (args.isEmpty()) return false else httpGet(args[0], args.drop(1))
+                "resetwindowpos" -> resetWindowPositions()
+                else -> return false
+            }
             return true
+        }
+
+        override fun nudge(scope: Int, away: Boolean) {
+            _state.update { it.update(scope) { c -> c.copy(nudge = ++animationCounter to away) } }
+        }
+
+        override fun bringToFront() {
+            _state.update { it.copy(window = it.window.copy(frontRequests = it.window.frontRequests + 1)) }
         }
 
         override fun bind(scope: Int, category: String, part: String, on: Boolean?) {
@@ -1573,6 +1812,25 @@ class GhostController(
                 "alpha" -> {
                     val a = numbers.getOrNull(0) ?: return false
                     if (a >= 0) _state.update { it.update(scope) { c -> c.copy(alpha = (a / 100f).coerceIn(0f, 1f)) } }
+                }
+                // \![set,windowstate,minimize]。stayontop はオーバーレイがいつもいちばん上なので何もしない
+                "windowstate" -> when (args.firstOrNull()?.trim()?.lowercase()) {
+                    "minimize" -> minimize("script")
+                    "stayontop", "!stayontop" -> {}
+                    else -> return false
+                }
+                // \![set,zorder,1,0]（左ほど手前）。\![reset,zorder] は引数なしで来る
+                "zorder" -> setZorder(args)
+                // \![set,sticky-window,1,0]。\![reset,sticky-window] は引数なしで来る
+                "sticky-window" -> setSticky(args)
+                // \![set,alignmenttodesktop,top|bottom|left|right|free|default]
+                "alignmenttodesktop" -> {
+                    val edge = when (val a = args.firstOrNull()?.trim()?.lowercase()) {
+                        "top", "bottom", "left", "right" -> a
+                        "free", "default" -> null
+                        else -> return false
+                    }
+                    _state.update { it.update(scope) { c -> c.copy(alignment = edge) } }
                 }
                 else -> return setOption(name, args)
             }
