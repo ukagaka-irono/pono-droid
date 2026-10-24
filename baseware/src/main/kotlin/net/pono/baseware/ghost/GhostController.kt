@@ -125,6 +125,9 @@ data class WindowGeometry(
  */
 data class WallpaperRequest(val file: File?, val position: String, val color: Int?)
 
+/** 端末のカレンダーの予定1件（ユーザーの予定。アプリの設定で許したときだけ読む）。終日なら [start] はその日の 0 時 */
+data class DeviceEvent(val title: String, val description: String, val start: java.time.LocalDateTime, val end: java.time.LocalDateTime, val allDay: Boolean)
+
 /** 端末の記憶領域の1つ（system.disk.index(ID).*）。[type] は fixed / removable など */
 data class DiskInfo(val mountpoint: String, val type: String, val totalMb: Long, val freeMb: Long)
 
@@ -222,6 +225,9 @@ interface GhostPlatform {
 
     /** \![set,tasktrayicon,ファイル,文字]。常駐の通知に [text] を出す（アイコンの画像は Android の通知では替えられない） */
     fun setTrayText(text: String) {}
+
+    /** [day] のユーザーの予定（端末のカレンダー）。読む許可が無ければ空 */
+    fun deviceSchedule(day: java.time.LocalDate): List<DeviceEvent> = emptyList()
 
     /** \![set,wallpaper]。アプリの設定で許したときだけ壁紙を変える。変えたら true */
     fun setWallpaper(request: WallpaperRequest): Boolean = false
@@ -495,6 +501,10 @@ class GhostController(
         s.notify("OnNotifyUserInfo", userName, "", "", "undef")
         // Owned SSTP の ID（起動ごとに替わる）
         s.notify("uniqueid", uniqueId)
+        // 今日の予定（ゴースト用の予定表と、許していれば端末のカレンダー）
+        val today = todaySchedule()
+        lastTodaySchedule = today
+        s.notify("OnScheduleTodayNotify", *today.toTypedArray())
         s.notify("OnSpeechSynthesisStatus", if (platform.speechEnabled()) "1" else "0")
         // 今日が祝日なら、OnNotifyUserInfo のすぐ後に（SSP と同じ。祝日表の代わりに日本の祝日を求める）
         platform.systemInfo()?.takeIf { it.country.equals("JP", ignoreCase = true) }?.let {
@@ -771,6 +781,95 @@ class GhostController(
         } finally {
             watch.cancel()
         }
+    }
+
+    // ---- 予定（\![execute,schedule-add / delete / get]、OnScheduleTodayNotify、OnSchedule5MinutesToGo） ----
+
+    /** ゴースト用の予定表。ユーザーの予定とは別 */
+    private val schedule = GhostSchedule(File(ghost.dir, GhostPackager.PONO_DIR + "/schedule.ics"), ghost.name)
+
+    /** 最後に知らせた「今日の予定」（変わったときだけ知らせ直す） */
+    private var lastTodaySchedule: List<String>? = null
+
+    private fun todaySchedule(day: java.time.LocalDate = java.time.LocalDate.now()): List<String> {
+        val user = runCatching { platform.deviceSchedule(day) }.getOrDefault(emptyList()).sortedBy { it.start }.map { d ->
+            val e = net.pono.baseware.net.ICalEvent(
+                uid = "", start = d.start, end = d.end, allDay = d.allDay, summary = d.title, description = d.description,
+                location = "", url = "", status = "", categories = "", rrule = "", exdates = emptySet(),
+            )
+            GhostSchedule.todayReference("user", d.title, d.description, "", e, day)
+        }
+        return schedule.today(day) + user
+    }
+
+    /** 毎分: 日付が変わったら今日の予定を知らせ直し、知らせる時刻になった予定は OnSchedule5MinutesToGo */
+    private fun checkSchedule() {
+        notifyTodayIfChanged()
+        val now = java.time.LocalDateTime.now().withSecond(0).withNano(0)
+        for ((e, _) in schedule.dueNotifications(now)) {
+            raise("OnSchedule5MinutesToGo", listOf("ghost", e.summary, e.description, ""), userInitiated = false)
+        }
+        for (d in runCatching { platform.deviceSchedule(now.toLocalDate()) }.getOrDefault(emptyList())) {
+            if (d.allDay) continue
+            val at = d.start.minusMinutes(GhostSchedule.DEFAULT_NOTIFY_MINUTES.toLong())
+            if (!at.isBefore(now) && at.isBefore(now.plusMinutes(1))) raise("OnSchedule5MinutesToGo", listOf("user", d.title, d.description, ""), userInitiated = false)
+        }
+    }
+
+    private fun notifyTodayIfChanged() {
+        val today = todaySchedule()
+        if (today == lastTodaySchedule) return
+        lastTodaySchedule = today
+        notify("OnScheduleTodayNotify", today)
+    }
+
+    /** --event が On で始まればそれ（失敗は後ろに Failure）、無ければ OnExecuteSchedule* */
+    private fun scheduleEvents(event: String, base: String) =
+        if (event.startsWith("On")) event to event + "Failure" else base to "OnExecuteScheduleFailure"
+
+    /** \![execute,schedule-add,--uid,--summary,--start,--end,--rrule,--notify,--description,--location,--event] */
+    private fun scheduleAdd(args: List<String>) {
+        val (_, opts) = splitArgs(args)
+        val (ok, failed) = scheduleEvents(opts["event"].orEmpty(), "OnExecuteScheduleComplete")
+        val uid = opts["uid"]?.trim().orEmpty().ifEmpty { "pono-" + java.util.UUID.randomUUID().toString() }
+        val start = opts["start"]?.let(GhostSchedule::normalizeDate)
+        val end = opts["end"]?.let { GhostSchedule.normalizeDate(it) ?: "" }.orEmpty()
+        val summary = opts["summary"]?.trim().orEmpty()
+        if (summary.isEmpty() || start == null || (opts["end"] != null && end.isEmpty()) || !GhostSchedule.validUid(uid)) {
+            raise(failed, listOf("add", "invalid", opts["uid"].orEmpty()), userInitiated = false)
+            return
+        }
+        val entry = GhostSchedule.Entry(
+            uid, summary, start, end, opts["rrule"]?.trim()?.replace("\r", "")?.replace("\n", "").orEmpty(),
+            opts["description"].orEmpty(), opts["location"].orEmpty(), opts["notify"]?.trim()?.toIntOrNull()?.coerceIn(0, 7 * 24 * 60),
+        )
+        val saved = runCatching { schedule.add(entry) }.isSuccess
+        if (saved) raise(ok, listOf("add", uid), userInitiated = false) else raise(failed, listOf("add", "save", uid), userInitiated = false)
+        notifyTodayIfChanged()
+    }
+
+    /** \![execute,schedule-delete,UID,--event] */
+    private fun scheduleDelete(args: List<String>) {
+        val (positional, opts) = splitArgs(args)
+        val (ok, failed) = scheduleEvents(opts["event"].orEmpty(), "OnExecuteScheduleComplete")
+        val uid = positional.firstOrNull()?.trim().orEmpty()
+        when {
+            uid.isEmpty() -> raise(failed, listOf("delete", "invalid", ""), userInitiated = false)
+            runCatching { schedule.delete(uid) }.getOrDefault(false) -> raise(ok, listOf("delete", uid), userInitiated = false)
+            else -> raise(failed, listOf("delete", "notfound", uid), userInitiated = false)
+        }
+        notifyTodayIfChanged()
+    }
+
+    /** \![execute,schedule-get,--from,--to,--expand,--limit,--event]。答えは OnExecuteICalComplete と同じ形 */
+    private fun scheduleGet(args: List<String>) {
+        val (_, opts) = splitArgs(args)
+        val event = opts["event"].orEmpty().takeIf { it.startsWith("On") } ?: "OnExecuteScheduleGetComplete"
+        fun day(k: String) = opts[k]?.let { runCatching { java.time.LocalDate.parse(it.trim(), java.time.format.DateTimeFormatter.BASIC_ISO_DATE) }.getOrNull() }
+        val range = net.pono.baseware.net.ICal.range(
+            day("from"), day("to"), opts["expand"]?.toIntOrNull()?.coerceIn(1, 1830), opts.containsKey("expand"), opts["limit"]?.toIntOrNull()?.coerceAtLeast(0),
+        )
+        raise(event, net.pono.baseware.net.ICal.references(schedule.calendar(), range), userInitiated = false)
     }
 
     // ---- SSTP（この端末のほかのアプリから） ----
@@ -3153,6 +3252,7 @@ class GhostController(
                     lastMinute = minute
                     raise("OnMinuteChange", refs, userInitiated = false)
                     history?.ghostMinute(ghost.dir.name)
+                    checkSchedule()
                 }
                 val hour = now.get(Calendar.HOUR_OF_DAY)
                 if (hour != lastHour) {
@@ -3975,6 +4075,9 @@ class GhostController(
                 "createupdatedata" -> createUpdateData(args)
                 "dumpsurface" -> return dumpSurface(args) != false
                 "dumpballoon" -> return dumpBalloon(args) != false
+                "schedule-add" -> scheduleAdd(args)
+                "schedule-delete" -> scheduleDelete(args)
+                "schedule-get" -> scheduleGet(args)
                 else -> return false
             }
             return true

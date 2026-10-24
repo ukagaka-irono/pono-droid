@@ -59,6 +59,7 @@ import net.pono.baseware.ghost.GhostRepository
 import net.pono.baseware.ghost.InputRequest
 import net.pono.baseware.ghost.NetworkStatus
 import net.pono.baseware.ghost.PreviousGhost
+import net.pono.baseware.ghost.DeviceEvent
 import net.pono.baseware.ghost.DiskInfo
 import net.pono.baseware.ghost.SoundStatus
 import net.pono.baseware.ghost.SurfaceDump
@@ -288,6 +289,38 @@ class GhostOverlayService : LifecycleService() {
                 override fun stopSound(file: File?) = sound.stop(file)
 
                 override fun showTrayBalloon(title: String, text: String, icon: String) = showGhostMessage(title, text)
+
+                /** 端末のカレンダーの [day] の予定。設定で許し、読む許可もあるときだけ */
+                override fun deviceSchedule(day: java.time.LocalDate): List<DeviceEvent> {
+                    val context = this@GhostOverlayService
+                    if (!OverlaySettings.calendar(OverlaySettings.prefs(context))) return emptyList()
+                    if (checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != android.content.pm.PackageManager.PERMISSION_GRANTED) return emptyList()
+                    val zone = java.time.ZoneId.systemDefault()
+                    val from = day.atStartOfDay(zone).toInstant().toEpochMilli()
+                    val to = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                    val uri = android.provider.CalendarContract.Instances.CONTENT_URI.buildUpon().also {
+                        android.content.ContentUris.appendId(it, from)
+                        android.content.ContentUris.appendId(it, to)
+                    }.build()
+                    val columns = arrayOf(
+                        android.provider.CalendarContract.Instances.TITLE, android.provider.CalendarContract.Instances.DESCRIPTION,
+                        android.provider.CalendarContract.Instances.BEGIN, android.provider.CalendarContract.Instances.END,
+                        android.provider.CalendarContract.Instances.ALL_DAY,
+                    )
+                    return runCatching {
+                        contentResolver.query(uri, columns, null, null, android.provider.CalendarContract.Instances.BEGIN + " ASC")?.use { c ->
+                            buildList {
+                                while (c.moveToNext() && size < MAX_DEVICE_EVENTS) {
+                                    val allDay = c.getInt(4) == 1
+                                    // 終日の予定は UTC の 0 時で入っている
+                                    val tz = if (allDay) java.time.ZoneOffset.UTC else zone
+                                    fun time(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(tz).toLocalDateTime()
+                                    add(DeviceEvent(c.getString(0).orEmpty(), c.getString(1).orEmpty(), time(c.getLong(2)), time(c.getLong(3)), allDay))
+                                }
+                            }
+                        }.orEmpty()
+                    }.getOrDefault(emptyList())
+                }
 
                 override fun setWallpaper(request: WallpaperRequest): Boolean {
                     if (!OverlaySettings.wallpaper(OverlaySettings.prefs(this@GhostOverlayService))) {
@@ -977,6 +1010,9 @@ class GhostOverlayService : LifecycleService() {
         private const val OLD_CHANNEL = "ghost"
         private const val NOTIFICATION_ID = 1
         private const val MESSAGE_CHANNEL = "ghost_message"
+
+        /** 1日に読む端末の予定の数 */
+        private const val MAX_DEVICE_EVENTS = 100
         private const val MESSAGE_NOTIFICATION_ID = 2
         private const val ACTION_TRAY_CLICK = "net.pono.droid.TRAY_CLICK"
         private const val ACTION_TRAY_DISMISS = "net.pono.droid.TRAY_DISMISS"

@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- \![set,wallpaper]（アプリの設定で許したときだけ使う） -->
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <!-- 今日の予定をゴーストに伝える（アプリの設定で選び、許可したときだけ） -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- ネットワークの切り替わりをゴーストに伝える（OnNetworkStatusChange） -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />

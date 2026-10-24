@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 173）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 178）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -60,14 +60,16 @@ OnNarCreating / Created・OnUpdatedataCreating / Created（\![execute,createnar 
 OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（起動時の NOTIFY と、読み上げの設定を変えたとき）、
 OnUpdate.OnDownloadBegin / OnMD5CompareBegin / OnMD5CompareComplete / OnMD5CompareFailure（と OnUpdateOther. のもの）、
 OnTrayBalloonClick / Timeout（\![set,trayballoon] の Android の通知に触れた・消した。何行かある文は 0x01 でつなぐ）、
-OnSSTPBreak（SSTP で届いたスクリプトをバルーンのタップで止めた）・OnSSTPBlacklisting（メニューの「SSTP を受けない」）
+OnSSTPBreak（SSTP で届いたスクリプトをバルーンのタップで止めた）・OnSSTPBlacklisting（メニューの「SSTP を受けない」）、
+OnScheduleTodayNotify（起動時と、日付が変わったとき・予定を足したり消したりして今日の予定が変わったとき）・OnSchedule5MinutesToGo（--notify の分か 5 分前）、
+OnExecuteScheduleComplete / Failure / GetComplete（ゴースト用の予定表。端末のカレンダーの予定は、設定で選んで許可したときだけ「今日の予定」に入る）
 
 ### 🔨 Android で作れる
 - 入力: OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
 
 ### 🔒 決めてから
 - OnVoiceRecognitionStatus / Word（マイクで声を聞く。マイクの権限が要る）
-- OnScheduleTodayNotify / 5MinutesToGo / Read、OnExecuteSchedule*（予定。端末のカレンダーを読む権限が要る）
+- ⛔ OnScheduleRead（カレンダーのアイコンの上にカーソルを置いたとき。pono-droid にはカレンダーの画面もカーソルも無い）
 - OnBIFFBegin / Complete / Failure、OnBIFF2Complete（メールの確認。メールのパスワードをアプリに預けることになる）
 - OnDeviceArrival / Remove（USB 機器）
 - ⛔ OnRecycleBin*（Android にはごみ箱が無い。写真などのアプリのごみ箱を空にするのは、ユーザーのデータを消すことになるので作らない）
@@ -138,7 +140,9 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 - ⛔ \![save,wallpaper] / \![restore,wallpaper]（Android 13 からは、アプリが今の壁紙を読めないので、元に戻せない）
 - ✅ \![open,editor]（ゴーストのファイルを書き換えられるようにほかのアプリで開く。設定の「開発者向けの機能」を選んだときだけ）、
   \![open,explorer]（ファイラーは無いので、そのファイルをほかのアプリで開く）
-- \![execute,schedule-add / delete / get]（端末のカレンダーに予定を書く）
+- ✅ \![execute,schedule-add / delete / get]（ゴースト用の予定表。ゴーストのフォルダの pono/schedule.ics。--uid / --summary / --start / --end / --rrule /
+  --notify / --description / --location / --event、get は --from / --to / --expand / --limit）。端末のカレンダーの読み取りは、設定の切り替えと
+  許可を求める画面を 6c-2 の画面と一緒に作る
 - \![biff]（メールの確認）、\![open,messenger]
 - ⛔ \![execute,emptyrecyclebin]（上の OnRecycleBin* と同じ理由）
 - ✅ \![set,shioridebugmode(,true/false)]（NOTIFY enable_debug）

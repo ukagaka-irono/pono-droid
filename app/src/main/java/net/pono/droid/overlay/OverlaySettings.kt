@@ -46,4 +46,9 @@ object OverlaySettings {
     const val KEY_DEVELOPER = "developer"
 
     fun developer(prefs: SharedPreferences) = prefs.getBoolean(KEY_DEVELOPER, false)
+
+    /** 端末のカレンダーの今日の予定をゴーストに伝えるか（OnScheduleTodayNotify。読む許可も要る。最初は伝えない） */
+    const val KEY_CALENDAR = "calendar"
+
+    fun calendar(prefs: SharedPreferences) = prefs.getBoolean(KEY_CALENDAR, false)
 }
