@@ -43,7 +43,9 @@ OnNetworkStatusChange、OnDisplayChange、OnBattery*（Notify / Low / Critical /
 OnSessionLock / OnSessionUnlock（画面が消えた・ロックを解いた）、OnDarkTheme、OnLanguageChange、OnDisplayPowerStatus、
 OnCPULoadHigh / Low（/proc/stat か /proc/loadavg を読める端末だけ）・OnMemoryLoadHigh / Low、OnNetworkHeavy（10 秒答えない）、
 OnOSUpdateInfo（Android の最後の更新だけ）、OnNotifyFontInfo、OnNotifyHolidayInfo（日本の祝日を決まりから求める。日本以外は送らない）、
-OnScreenSaverStart / End（Android のスクリーンセーバー）
+OnScreenSaverStart / End（Android のスクリーンセーバー）、
+OnExecuteHTTPComplete / Failure / Progress / Streaming / SSLInfo、OnExecuteRSSComplete / Failure / _SSLInfo、
+OnExecuteICalComplete / Failure / Progress / _SSLInfo
 
 ### 🔨 Android で作れる
 - 共有・インストール: OnTextDrop・OnURLDropped / OnURLDropping / OnURLDropFailure（文字や URL の「共有」）、OnDirectoryDrop（使わない）、
@@ -51,8 +53,7 @@ OnScreenSaverStart / End（Android のスクリーンセーバー）
   OnMediaPlayerOpen / OnPictureViewerOpen（渡したファイルを Android のアプリで開いたとき）
 - 入力: OnTeachStart / OnTeachInputCancel、OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
 - 音: OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（読み上げ）
-- 通信: OnExecuteHTTPProgress / Streaming / SSLInfo、OnExecuteRSSComplete / Failure、OnExecuteICalComplete / Failure / Progress、
-  OnExecuteWebSocket*（Open / Receive / Reconnect / Close / Failure）、OnPingComplete / Progress、OnNSLookupComplete / Failure、
+- 通信: OnExecuteWebSocket*（Open / Receive / Reconnect / Close / Failure）、OnPingComplete / Progress、OnNSLookupComplete / Failure、
   OnExecuteFileWatchChange / Failure、OnExtractArchive* / OnCompressArchive*
 - 時刻合わせ: OnSNTPBegin / Compare(Ex) / Correct(Ex) / Failure（ずれを測って知らせる。端末の時計は直さない）
 - 更新: OnUpdateCheckComplete / Failure、OnUpdateResult(Ex) / OnUpdateCheckResult(Ex)、OnUpdateOther*（他のゴーストの更新）
@@ -103,6 +104,10 @@ underline / strike / outline / disable.font.color と、オンラインの印（
 method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,balloonoffset / balloonalign / balloonmarker / balloonnum]（sstpmessage.* / number.*）
 \![anim,pause / resume / add,overlay / add,overlayfast / add,base / add,move / add,text] \__w[animation,ID] \i[ID,wait] \i[名前]（animation*.name）
 \![wait,syncobject] \![set,syncobject] \![reset,syncobject]（アプリの中の名前つきの合図） \![enter / leave,collisionmode(,rect)] \![enter / leave,selectmode,rect,...]
+\![execute,http-get / post / head / put / delete / patch / options]（--async / --sync / --file / --nofile / --param / --param-charset / --param-input-file /
+--content-type / --accept / --accept-language / --authorization / --cookie / --header / --no-cache / --timeout / --progress-notify / --streaming /
+--nodescript、古い書き方のパラメータ。--insecure は使わず、証明書はいつも確かめる） \![cancel,http] \![execute,rss-get / rss-post] \![execute,ical-get / ical-post]
+（--from / --to / --expand / --limit、RRULE の FREQ・INTERVAL・COUNT・UNTIL・BYDAY・BYMONTHDAY・BYMONTH と EXDATE）
 \![anim,offset / clear / stop] \![bind] \![bind-noevent] \![sound,play / loop / stop / wait] \![change,ghost / shell / balloon]
 \![execute,http-get] \![updatebymyself] \![reload,shiori] \![enter / leave,passivemode] \![quicksection]
 
@@ -111,8 +116,7 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
   \![reloadsurface] \![reload,shell / balloon / ghost / descript] \![load / unload,shiori]
 - 開く: \![open,file]（Android のアプリで開く）、\![open,mailer]、\![open,dialog,open / save / folder / color]（ファイル選択など）、\![open,ipinput]、
   \![open,terms]、\![open,help]、\![open,ghostexplorer など]（アプリの一覧画面）、\![open,surfacetest / developer / shiorirequest / errorlog / backlogviewer]（開発用の画面）
-- 実行: \![execute,http-post / head / put / delete / patch / options]、http-get のオプション（--param / --header など）、\![cancel,http]、
-  \![execute,rss-get / rss-post]、\![execute,ical-get / ical-post]、\![execute,websocket] \![send,websocket(-binary)] \![close / cancel,websocket]、
+- 実行: \![execute,websocket] \![send,websocket(-binary)] \![close / cancel,websocket]、
   \![execute,ping / nslookup]、\![execute,filewatch] \![cancel,filewatch]（ゴーストのフォルダの中だけ）、
   \![execute,extractarchive / compressarchive]（ゴーストのフォルダの中だけ）、\![execute,dumpsurface / dumpballoon]、
   \![execute,install,path / url]、\![execute,createnar / createupdatedata]、\![execute,dropdefault]、\![executesntp] \6 \7（ずれを測るだけ）、

@@ -168,6 +168,12 @@ interface ScriptHost {
     /** `\![execute,name,args...]`（SSP の http-get など）。扱えたら true。 */
     fun execute(name: String, args: List<String>): Boolean = false
 
+    /** スクリプトから呼ぶ `\![execute,...]`。待つもの（--async でない http など）は終わるまで戻らない。既定では [execute] */
+    suspend fun runExecute(name: String, args: List<String>): Boolean = execute(name, args)
+
+    /** `\![cancel,http|websocket|filewatch,...]`。扱えたら true */
+    fun cancel(kind: String, args: List<String>): Boolean = false
+
     /** `\![bind,カテゴリ,パーツ,1/0]`（着せ替え）。 */
     fun bind(scope: Int, category: String, part: String, on: Boolean?) {}
 
@@ -497,8 +503,9 @@ class ScriptPlayer(
                 "execute" -> when {
                     a.size < 2 -> host.unknownTag(token)
                     a[1].lowercase() in silentExecutes -> {}
-                    !host.execute(a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
+                    !host.runExecute(a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
                 }
+                "cancel" -> if (a.size < 2 || !host.cancel(a[1].trim().lowercase(), a.drop(2))) host.unknownTag(token)
                 // \![bind,カテゴリ,パーツ,1|0]（3つ目が無ければ切り替え）
                 "bind", "bind-noevent" -> if (a.size >= 3) host.bind(scope, a[1], a[2], a.getOrNull(3)?.let { it == "1" || it.lowercase() == "true" })
                 "set" -> when {

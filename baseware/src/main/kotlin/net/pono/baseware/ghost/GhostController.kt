@@ -18,6 +18,14 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import net.pono.baseware.balloon.Balloon
+import net.pono.baseware.net.FeedParser
+import net.pono.baseware.net.HttpClient
+import net.pono.baseware.net.HttpCommand
+import net.pono.baseware.net.HttpOutcome
+import net.pono.baseware.net.HttpRequest
+import net.pono.baseware.net.HttpStreamer
+import net.pono.baseware.net.ICal
+import net.pono.baseware.net.UrlConnectionHttpClient
 import net.pono.baseware.sakura.Choice
 import net.pono.baseware.sakura.ChoiceLooks
 import net.pono.baseware.sakura.MoveCommand
@@ -172,6 +180,8 @@ class GhostController(
     /** ゴーストに伝える pono-droid のバージョン（basewareversion、%property[baseware.version]、通信の User-Agent） */
     private val basewareVersion: String = BASEWARE_VERSION,
     private val updateFetcher: HttpFetcher = UrlConnectionFetcher("${ShioriSession.SENDER}/$basewareVersion"),
+    /** \![execute,http-*] などの通信 */
+    private val httpClient: HttpClient = UrlConnectionHttpClient("${ShioriSession.SENDER}/$basewareVersion"),
     /** 別のゴーストから切り替わって起動したとき、その前のゴースト（OnGhostChanged を送る） */
     private val previous: PreviousGhost? = null,
 ) {
@@ -430,7 +440,7 @@ class GhostController(
         }
 
     /** バルーンのオンラインの印は、\![enter,onlinemode] の間とネットワーク更新の間に出す */
-    private fun refreshOnline() = _state.update { it.copy(online = onlineMode || updating) }
+    private fun refreshOnline() = _state.update { it.copy(online = onlineMode || updating || httpShowing > 0) }
 
     /**
      * SSP と同じ流れでネットワーク更新する: OnUpdateBegin → OnUpdateReady → OnUpdateComplete / OnUpdateFailure。
@@ -501,63 +511,186 @@ class GhostController(
         loadShiori()
     }
 
+    // ---- \![execute,http-*] / rss-* / ical-* ----
+
+    /** 通信中のもの（URL ごと）。同じ URL は重ねて取りに行かない。\![cancel,http,URL] で止める */
+    private val httpJobs = HashMap<String, Job>()
+
+    /** 通信している数。オンラインの印を出す（--nodescript のものは数えない） */
+    private var httpShowing = 0
+        set(value) {
+            field = value
+            refreshOnline()
+        }
+
     /**
-     * SSP の `\![execute,http-get,URL,--async=ID,--file=名前,...]`。
-     * 取ってきた中身を ghost/master/var/名前 に保存し、OnExecuteHTTPComplete / OnExecuteHTTPFailure を送る
-     * （Reference0 = "http-get"、Reference1 = --async の ID、Reference2 = URL、Reference3 = 保存先か失敗の理由）。
-     * 結果のトークは、話している途中なら話し終わるのを待ってから出す。
+     * SSP の \![execute,http-get,URL,--async=ID,--file=名前,...] など。取ってきた中身は ghost/master/var/名前 に保存するか
+     * （--file が無ければ URL の最後の名前）、--nofile なら Reference3 にそのまま入れる。rss / ical は読んで項目を渡す。
+     * 結果のイベントは、話している途中なら話し終わるのを待ってから送る。返す Job は通信が終わるまで（--async でなければスクリプトが待つ）
      */
-    private fun httpGet(url: String, options: List<String>) {
-        val opts = options.mapNotNull { o ->
-            o.removePrefix("--").split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0].lowercase() to it[1] }
-        }.toMap()
-        val id = opts["async"].orEmpty()
-        scope.launch {
-            if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                deliverLater("OnExecuteHTTPFailure", listOf("http-get", id, url, "invalid url"))
-                return@launch
-            }
-            // 毎秒頼まれても際限なく通信しないよう、同時に走る数に上限を置く
-            if (httpGetsInFlight >= MAX_HTTP_GETS) {
-                deliverLater("OnExecuteHTTPFailure", listOf("http-get", id, url, "busy"))
-                return@launch
-            }
-            httpGetsInFlight++
-            val (ok, detail) = try {
-                watchNetwork { withContext(Dispatchers.IO) { download(url, opts["file"]?.let(NetworkUpdater::safeFileName)) } }
+    private fun executeHttp(cmd: HttpCommand): Job {
+        val method = cmd.method.lowercase()
+        val url = cmd.url
+        fun failureRefs(reason: String) = listOf(method, cmd.id, url, "", reason, "", "")
+        if (url in httpJobs) {
+            return scope.launch { deliverLater(cmd.event("Failure"), failureRefs("downloading")) }
+        }
+        // 毎秒頼まれても際限なく通信しないよう、同時に走る数に上限を置く
+        if (httpGetsInFlight >= MAX_HTTP_GETS) {
+            return scope.launch { deliverLater(cmd.event("Failure"), failureRefs("busy")) }
+        }
+        if (cmd.insecure) platform.log("--insecure は使えません（証明書は確かめます）: $url")
+        httpGetsInFlight++
+        if (!cmd.nodescript) httpShowing++
+        // 結果のイベントは、通信が終わってから話し終わるのを待って送る（--sync で待っているスクリプトとは別に）
+        val job = scope.launch {
+            val result = try {
+                runHttp(cmd, ::failureRefs)
             } finally {
                 httpGetsInFlight--
+                if (!cmd.nodescript) httpShowing--
+                if (httpJobs[url] === coroutineContext[Job]) httpJobs.remove(url)
             }
-            deliverLater(if (ok) "OnExecuteHTTPComplete" else "OnExecuteHTTPFailure", listOf("http-get", id, url, detail))
+            scope.launch { deliverLater(result.first, result.second) }
+        }
+        httpJobs[url] = job
+        httpCommands[url] = cmd
+        job.invokeOnCompletion { if (httpJobs[url] == null) httpCommands.remove(url) }
+        return job
+    }
+
+    /** 通信して、送るイベントとその Reference を返す */
+    private suspend fun runHttp(cmd: HttpCommand, failureRefs: (String) -> List<String>): Pair<String, List<String>> {
+        val method = cmd.method.lowercase()
+        val input = cmd.paramInputFile?.let { name ->
+            ghostFile(name)?.takeIf { it.length() <= HTTP_BODY_MAX_BYTES }?.readBytes()
+                ?: return cmd.event("Failure") to failureRefs("fileio")
+        }
+        val body = cmd.body(input)
+        val headers = cmd.headers + listOfNotNull(body?.let { "Content-Type" to it.second })
+            .filter { (k, _) -> cmd.headers.none { it.first.equals(k, true) } }
+        val request = HttpRequest(cmd.method, cmd.requestUrl(), headers, body?.first, cmd.timeoutSec * 1000)
+        // 保存先。--nofile と rss / ical はメモリに受け取る（rss / ical は --file があればファイルにも）
+        val memory = if (cmd.nofile != null || cmd.kind != "http") java.io.ByteArrayOutputStream() else null
+        val name = cmd.file?.let(NetworkUpdater::safeFileName) ?: if (memory == null) NetworkUpdater.safeFileName(urlFileName(cmd.url)) else null
+        if (memory == null && name == null) return cmd.event("Failure") to failureRefs("fileio")
+        val file = name?.let { File(ghost.masterDir, "var/$it") }
+        val part = file?.let { File(it.path + ".part") }
+        var lastProgress = 0L
+        var cookies = ""
+        var headerText = ""
+        var code = 0
+        val streamer = cmd.streaming?.let { HttpStreamer(it) { data -> raise(cmd.event("Streaming"), listOf(method, cmd.id, cmd.url, "", data, cookies, headerText), userInitiated = false) } }
+        val limit = when {
+            cmd.nofile != null -> NOFILE_MAX_BYTES
+            memory != null -> FEED_MAX_BYTES
+            else -> HTTP_GET_MAX_BYTES
+        }
+        val outcome = try {
+            file?.parentFile?.mkdirs()
+            val fileOut = part?.outputStream()
+            try {
+                val sink = object : java.io.OutputStream() {
+                    override fun write(b: Int) = write(byteArrayOf(b.toByte()), 0, 1)
+                    override fun write(b: ByteArray, off: Int, len: Int) {
+                        memory?.write(b, off, len)
+                        fileOut?.write(b, off, len)
+                        streamer?.feed(b, off, len)
+                    }
+                }
+                watchNetwork {
+                    withContext(Dispatchers.IO) {
+                        httpClient.execute(
+                            request, sink, limit,
+                            onResponse = { c, h ->
+                                code = c
+                                cookies = h.filter { it.first.equals("Set-Cookie", true) }.joinToString("; ") { it.second.substringBefore(';').trim() }
+                                headerText = h.joinToString("\u0001") { "${it.first}: ${it.second}" }
+                                streamer?.contentType(h.firstOrNull { it.first.equals("Content-Type", true) }?.second.orEmpty())
+                            },
+                            onProgress = { bytes, total ->
+                                val now = System.currentTimeMillis()
+                                if (cmd.progress && now - lastProgress >= PROGRESS_INTERVAL_MS) {
+                                    lastProgress = now
+                                    val progressEvent = if (cmd.kind == "ical" && !cmd.id.startsWith("On")) "OnExecuteICalProgress" else cmd.event("Progress")
+                                    raise(progressEvent, listOf(method, cmd.id, cmd.url, file?.absolutePath.orEmpty(), code.toString(), "$bytes/$total", ""), userInitiated = false)
+                                }
+                            },
+                        )
+                    }
+                }
+            } finally {
+                fileOut?.close()
+            }
+        } catch (e: IOException) {
+            HttpOutcome.Failed("fileio")
+        }
+        streamer?.finish()
+        val tls = when (outcome) {
+            is HttpOutcome.Response -> outcome.tls
+            is HttpOutcome.Failed -> outcome.tls
+        }
+        // SSL の様子は、取ってこられなくてもつながっていれば送る（イベント名は ID で変わらない）
+        tls?.let { t ->
+            val sslEvent = when (cmd.kind) {
+                "rss" -> "OnExecuteRSS_SSLInfo"
+                "ical" -> "OnExecuteICal_SSLInfo"
+                else -> "OnExecuteHTTPSSLInfo"
+            }
+            notify(sslEvent, listOf(cmd.id, cmd.url, code.toString(), t.protocol, t.cipher, t.subject, t.notBefore, t.notAfter, t.issuer))
+        }
+        if (outcome is HttpOutcome.Failed) {
+            part?.delete()
+            return cmd.event("Failure") to failureRefs(outcome.reason)
+        }
+        outcome as HttpOutcome.Response
+        if (outcome.code !in 200..299) {
+            part?.delete()
+            return cmd.event("Failure") to listOf(method, cmd.id, cmd.url, "", outcome.code.toString(), cookies, headerText)
+        }
+        if (file != null && part != null) {
+            if (!part.renameTo(file)) runCatching { part.copyTo(file, overwrite = true) }
+            part.delete()
+        }
+        val bytes = memory?.toByteArray()
+        return when (cmd.kind) {
+            "rss" -> {
+                val items = bytes?.let(FeedParser::parse) ?: return cmd.event("Failure") to failureRefs("parse")
+                cmd.event("") to FeedParser.filter(items, cmd.from, cmd.to, cmd.limit).map { it.reference() }
+            }
+            "ical" -> {
+                val cal = bytes?.let { ICal.parse(TextCharsets.decode(it)) } ?: return cmd.event("Failure") to failureRefs("parse")
+                cmd.event("") to ICal.references(cal, ICal.range(cmd.from, cmd.to, cmd.expandDays, cmd.expand, cmd.limit))
+            }
+            else -> {
+                // --nofile なら中身（改行はバイト値1）、そうでなければ保存したファイルのフルパス
+                val content = cmd.nofile?.let { cs -> String(bytes ?: ByteArray(0), cs).replace("\r\n", "\u0001").replace('\n', '\u0001').replace('\r', '\u0001') }
+                    ?: file?.absolutePath.orEmpty()
+                cmd.event("") to listOf(method, cmd.id, cmd.url, content, outcome.code.toString(), cookies, headerText)
+            }
         }
     }
 
+    /** URL の最後の部分（クエリは落とす）。無ければ index.html */
+    private fun urlFileName(url: String): String =
+        url.substringBefore('?').substringBefore('#').trimEnd('/').substringAfterLast('/').substringAfter("//").ifEmpty { "index.html" }
+
     /**
-     * [url] の中身を ghost/master/var/[name] に保存する（[name] が無ければ中身は捨てて、届いたかだけ見る）。
-     * 大きな応答をメモリに溜めないよう、ファイルに流しながら受け取る。
-     * @return 成功なら true と保存先（var/名前）、失敗なら false と理由
+     * \![cancel,http,URL] など。止めたら true。通信は止まるまで少しかかることがあるので、
+     * Failure（userbreak）はすぐに送り、後から来た結果は捨てる
      */
-    private fun download(url: String, name: String?): Pair<Boolean, String> {
-        if (name == null) {
-            return when (val r = updateFetcher.fetch(url, NullOutputStream, HTTP_GET_MAX_BYTES)) {
-                FetchResult.Ok -> true to ""
-                else -> false to NetworkUpdater.describe(r)
-            }
+    private fun cancelHttp(url: String, cmdId: String = ""): Boolean {
+        val job = httpJobs.remove(url.trim()) ?: return false
+        job.cancel()
+        val cmd = httpCommands.remove(url.trim())
+        scope.launch {
+            deliverLater(cmd?.event("Failure") ?: "OnExecuteHTTPFailure", listOf(cmd?.method?.lowercase().orEmpty(), cmd?.id ?: cmdId, url.trim(), "", "userbreak", "", ""))
         }
-        val file = File(ghost.masterDir, "var/$name")
-        val part = File(file.path + ".part")
-        return try {
-            file.parentFile?.mkdirs()
-            val r = part.outputStream().use { updateFetcher.fetch(url, it, HTTP_GET_MAX_BYTES) }
-            if (r != FetchResult.Ok) return false to NetworkUpdater.describe(r)
-            if (!part.renameTo(file)) part.copyTo(file, overwrite = true)
-            true to "var/$name"
-        } catch (e: IOException) {
-            false to "fileio"
-        } finally {
-            part.delete()
-        }
+        return true
     }
+
+    /** 通信中のものの頼み方（URL ごと。取り消したときのイベント名に使う） */
+    private val httpCommands = HashMap<String, HttpCommand>()
 
     /** 話し終わってから（割り込まずに）イベントを送る */
     private suspend fun deliverLater(event: String, references: List<String>) {
@@ -2151,12 +2284,28 @@ class GhostController(
         }
 
         override fun execute(name: String, args: List<String>): Boolean {
+            HttpCommand.parse(name, args)?.let {
+                executeHttp(it)
+                return true
+            }
             when (name) {
-                "http-get" -> if (args.isEmpty()) return false else httpGet(args[0], args.drop(1))
                 "resetwindowpos" -> resetWindowPositions()
                 else -> return false
             }
             return true
+        }
+
+        /** http などは、--async でなければ通信が終わるまで待つ（SSP と同じ） */
+        override suspend fun runExecute(name: String, args: List<String>): Boolean {
+            val cmd = HttpCommand.parse(name, args) ?: return execute(name, args)
+            val job = executeHttp(cmd)
+            if (!cmd.async) job.join()
+            return true
+        }
+
+        override fun cancel(kind: String, args: List<String>): Boolean = when (kind) {
+            "http", "ical", "rss" -> args.firstOrNull()?.let(::cancelHttp) ?: false
+            else -> false
         }
 
         override fun nudge(scope: Int, away: Boolean) {
@@ -2568,6 +2717,14 @@ class GhostController(
 
         /** http-get で受け取る大きさの上限 */
         const val HTTP_GET_MAX_BYTES = 64L * 1024 * 1024
+
+        /** --nofile で Reference に入れる中身の上限（SSP と同じ 128KB）、rss / ical を読むときの上限、送るファイルの上限 */
+        const val NOFILE_MAX_BYTES = 128L * 1024
+        const val FEED_MAX_BYTES = 8L * 1024 * 1024
+        const val HTTP_BODY_MAX_BYTES = 16L * 1024 * 1024
+
+        /** --progress-notify を送る間隔 */
+        const val PROGRESS_INTERVAL_MS = 500L
 
         /** `\![timerraise]` で同時に予約できる数 */
         const val MAX_TIMERS = 32

@@ -5,6 +5,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
+import net.pono.baseware.net.FetcherHttpClient
+import net.pono.baseware.net.HttpClient
 import net.pono.baseware.sakura.ScriptPlayer
 import net.pono.baseware.shell.Shell
 import net.pono.baseware.shiori.Shiori
@@ -122,6 +124,7 @@ fun testController(
     scope: CoroutineScope,
     platform: GhostPlatform = RecordingPlatform(),
     fetcher: HttpFetcher = HttpFetcher { _, _, _ -> FetchResult.HttpError(404) },
+    httpClient: HttpClient? = null,
 ) = GhostController(
     ghost = ghost,
     shell = Shell(ghost.shellDir()!!),
@@ -130,4 +133,5 @@ fun testController(
     platform = platform,
     player = ScriptPlayer(charWaitMs = 0),
     updateFetcher = fetcher,
+    httpClient = httpClient ?: FetcherHttpClient(fetcher),
 )

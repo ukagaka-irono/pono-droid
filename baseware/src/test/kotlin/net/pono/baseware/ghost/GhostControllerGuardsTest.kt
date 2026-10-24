@@ -58,7 +58,7 @@ class GhostControllerGuardsTest {
             // 上限を超えた分はすぐに busy で断られ、通信は上限の数しか始まらない
             val refused = requests - GhostController.MAX_HTTP_GETS
             withTimeout(5000) { while (shiori.count("OnExecuteHTTPFailure") < refused) delay(10) }
-            assertTrue(shiori.events.filter { it.first == "OnExecuteHTTPFailure" }.all { it.second[3] == "busy" })
+            assertTrue(shiori.events.filter { it.first == "OnExecuteHTTPFailure" }.all { it.second[4] == "busy" })
             assertEquals(GhostController.MAX_HTTP_GETS, started.get())
             gate.countDown()
             withTimeout(5000) { while (shiori.count("OnExecuteHTTPComplete") < GhostController.MAX_HTTP_GETS) delay(10) }
