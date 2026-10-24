@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 178）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 180）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -62,13 +62,14 @@ OnUpdate.OnDownloadBegin / OnMD5CompareBegin / OnMD5CompareComplete / OnMD5Compa
 OnTrayBalloonClick / Timeout（\![set,trayballoon] の Android の通知に触れた・消した。何行かある文は 0x01 でつなぐ）、
 OnSSTPBreak（SSTP で届いたスクリプトをバルーンのタップで止めた）・OnSSTPBlacklisting（メニューの「SSTP を受けない」）、
 OnScheduleTodayNotify（起動時と、日付が変わったとき・予定を足したり消したりして今日の予定が変わったとき）・OnSchedule5MinutesToGo（--notify の分か 5 分前）、
-OnExecuteScheduleComplete / Failure / GetComplete（ゴースト用の予定表。端末のカレンダーの予定は、設定で選んで許可したときだけ「今日の予定」に入る）
+OnExecuteScheduleComplete / Failure / GetComplete（ゴースト用の予定表。端末のカレンダーの予定は、設定で選んで許可したときだけ「今日の予定」に入る）、
+OnVoiceRecognitionStatus / OnVoiceRecognitionWord（設定で選び、マイクを許可したときだけ聞く。名前を呼ぶとそのキャラクターに伝わり、
+呼んでから 30 秒のうちに言ったこともそのキャラクターへ。誰も呼んでいない話し声は送らない。画面が消えている間は聞かない）
 
 ### 🔨 Android で作れる
 - 入力: OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
 
 ### 🔒 決めてから
-- OnVoiceRecognitionStatus / Word（マイクで声を聞く。マイクの権限が要る）
 - ⛔ OnScheduleRead（カレンダーのアイコンの上にカーソルを置いたとき。pono-droid にはカレンダーの画面もカーソルも無い）
 - OnBIFFBegin / Complete / Failure、OnBIFF2Complete（メールの確認。メールのパスワードをアプリに預けることになる）
 - OnDeviceArrival / Remove（USB 機器）

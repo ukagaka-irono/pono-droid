@@ -382,6 +382,8 @@ class GhostOverlayService : LifecycleService() {
 
                 override fun soundStatus(): List<SoundStatus> = sound.statuses()
 
+                override fun voiceRecognitionEnabled(): Boolean = voiceAllowed()
+
                 override fun speechEnabled(): Boolean = OverlaySettings.speech(OverlaySettings.prefs(this@GhostOverlayService))
 
                 override fun speak(scope: Int, text: String) = speech.speak(scope, text)
@@ -440,6 +442,7 @@ class GhostOverlayService : LifecycleService() {
         controller = c
         _controller.value = c
         updateSstp()
+        updateVoice()
         _running.value = ghost.dir.name
         c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
         createWindows(c)
@@ -621,6 +624,29 @@ class GhostOverlayService : LifecycleService() {
         createWindows(c)
     }
 
+    /** 声を聞く（設定で選び、マイクを許可したときだけ。画面が消えている間は聞かない） */
+    private var voice: VoiceListener? = null
+
+    private fun voiceAllowed(): Boolean = OverlaySettings.voice(OverlaySettings.prefs(this)) &&
+        checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private fun updateVoice() {
+        val c = controller
+        val screenOn = getSystemService(PowerManager::class.java)?.isInteractive != false
+        if (c == null || !voiceAllowed() || !screenOn) {
+            val wasListening = voice != null
+            voice?.stop()
+            voice = null
+            // 聞くのをやめたら、通知の種類からマイクを外す
+            if (wasListening && c != null && !voiceAllowed()) startInForeground(minimized = c.state.value.window.minimized)
+            return
+        }
+        if (voice != null) return
+        // マイクを使う常駐の通知にし直してから聞く（Android 14 からは、通知の種類にマイクが要る）
+        startInForeground(minimized = c.state.value.window.minimized)
+        voice = VoiceListener(this) { text -> controller?.onVoiceRecognized(text) }.also { it.start() }
+    }
+
     /** SSTP サーバー（設定で選んだときだけ。この端末の中のアプリからだけ受ける） */
     private var sstp: SstpServer? = null
 
@@ -641,6 +667,8 @@ class GhostOverlayService : LifecycleService() {
     private fun teardown() {
         sstp?.stop()
         sstp = null
+        voice?.stop()
+        voice = null
         startJob?.cancel()
         startJob = null
         loadingJob?.cancel()
@@ -680,10 +708,12 @@ class GhostOverlayService : LifecycleService() {
                     // 画面が消えたら、次につけたときはロック画面から（OnSessionLock）
                     c.onSessionLock()
                     c.onSystemSuspend()
+                    updateVoice()
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     c.setScreenOn(true)
                     c.onDisplayPower(true)
+                    updateVoice()
                     // ロック画面の上にはキャラクターが出ないので、ロックがあれば解いてから OnSysResume
                     if (!getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
                         c.onSessionUnlock()
@@ -788,6 +818,10 @@ class GhostOverlayService : LifecycleService() {
                 controller?.onBalloonScaling((balloonScale * 100).roundToInt(), (old * 100).roundToInt())
             }
             OverlaySettings.KEY_SSTP -> updateSstp()
+            OverlaySettings.KEY_VOICE -> {
+                updateVoice()
+                controller?.onVoiceRecognitionChanged(voiceAllowed())
+            }
             OverlaySettings.KEY_SPEECH -> {
                 val on = OverlaySettings.speech(p)
                 if (!on) speech.stop()
@@ -994,7 +1028,10 @@ class GhostOverlayService : LifecycleService() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        // 声を聞いている（聞く設定でマイクの許可もある）ときだけ、通知の種類にマイクを足す
+        val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or
+            if (Build.VERSION.SDK_INT >= 30 && voiceAllowed()) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, type)
     }
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()

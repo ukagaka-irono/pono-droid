@@ -247,6 +247,9 @@ interface GhostPlatform {
     /** 鳴らしている音（先に読んだだけのものも） */
     fun soundStatus(): List<SoundStatus> = emptyList()
 
+    /** マイクで声を聞くか（アプリの設定とマイクの許可。OnVoiceRecognitionStatus で伝える） */
+    fun voiceRecognitionEnabled(): Boolean = false
+
     /** 話した文字を読み上げるか（アプリの設定。OnSpeechSynthesisStatus で伝える） */
     fun speechEnabled(): Boolean = false
 
@@ -506,6 +509,7 @@ class GhostController(
         lastTodaySchedule = today
         s.notify("OnScheduleTodayNotify", *today.toTypedArray())
         s.notify("OnSpeechSynthesisStatus", if (platform.speechEnabled()) "1" else "0")
+        s.notify("OnVoiceRecognitionStatus", if (platform.voiceRecognitionEnabled()) "1" else "0")
         // 今日が祝日なら、OnNotifyUserInfo のすぐ後に（SSP と同じ。祝日表の代わりに日本の祝日を求める）
         platform.systemInfo()?.takeIf { it.country.equals("JP", ignoreCase = true) }?.let {
             val today = java.time.LocalDate.now()
@@ -1061,6 +1065,49 @@ class GhostController(
     /** 音を鳴らせなかった（OnSoundError）。[code] は Android の再生のエラーの番号 */
     fun onSoundError(file: File, code: Int, message: String) =
         raise("OnSoundError", listOf("play", code.toString(), soundName(file), message), userInitiated = false)
+
+    // ---- 声を聞く（OnVoiceRecognitionWord） ----
+
+    /** 名前を呼ばれたキャラクターと、その時刻。呼ばれてからしばらくの言葉は、そのキャラクターへのもの */
+    private var voiceCalled: Pair<Int, Long>? = null
+
+    /** キャラクターの名前（呼びかけを見分けるため）。長い名前から順に */
+    private fun characterNames(): List<Pair<Int, String>> = characterScopes.mapNotNull { s ->
+        val name = when (s) {
+            0 -> ghost.sakuraName
+            1 -> ghost.keroName
+            else -> ghost.descript["char$s.name"].orEmpty()
+        }.trim()
+        name.takeIf { it.isNotEmpty() }?.let { s to it }
+    }.sortedByDescending { it.second.length }
+
+    /**
+     * 声を聞き取った（[text]）。キャラクターの名前で呼びかけたら OnVoiceRecognitionWord（Reference1 は名前そのもの）、
+     * 名前に続けて言ったことや、呼んでから [VOICE_FOLLOW_MS] のうちに言ったことは、そのキャラクターへの言葉として送る。
+     * 誰にも呼びかけていない話し声は送らない（まわりの会話にいちいち答えないように）
+     */
+    fun onVoiceRecognized(text: String) {
+        val heard = text.trim().take(MAX_VOICE_TEXT)
+        if (heard.isEmpty() || closing) return
+        val now = System.currentTimeMillis()
+        val called = characterNames().firstOrNull { (_, name) -> heard.startsWith(name) }
+        if (called != null) {
+            val (scope, name) = called
+            voiceCalled = scope to now
+            val rest = heard.removePrefix(name).trimStart(' ', '　', '、', ',', '!', '！')
+            raise("OnVoiceRecognitionWord", listOf(scope.toString(), name))
+            if (rest.isNotEmpty()) raise("OnVoiceRecognitionWord", listOf(scope.toString(), rest))
+            return
+        }
+        val (scope, at) = voiceCalled ?: return
+        if (now - at > VOICE_FOLLOW_MS) return
+        voiceCalled = scope to now
+        raise("OnVoiceRecognitionWord", listOf(scope.toString(), heard))
+    }
+
+    /** 声を聞く設定が変わった（OnVoiceRecognitionStatus） */
+    fun onVoiceRecognitionChanged(enabled: Boolean) =
+        raise("OnVoiceRecognitionStatus", listOf(if (enabled) "1" else "0"), userInitiated = false)
 
     /** 読み上げの設定が変わった（OnSpeechSynthesisStatus） */
     fun onSpeechSettingChanged(enabled: Boolean) = raise("OnSpeechSynthesisStatus", listOf(if (enabled) "1" else "0"), userInitiated = false)
@@ -4650,6 +4697,10 @@ class GhostController(
 
         /** 発言履歴に残す数 */
         private const val MAX_BACKLOG = 200
+
+        /** 名前を呼んでから、続けて言ったことをそのキャラクターへの言葉とみなす時間 */
+        private const val VOICE_FOLLOW_MS = 30_000L
+        private const val MAX_VOICE_TEXT = 500
 
         private val WALLPAPER_POSITIONS = setOf("center", "tile", "stretch", "fit", "fill")
 

@@ -51,4 +51,9 @@ object OverlaySettings {
     const val KEY_CALENDAR = "calendar"
 
     fun calendar(prefs: SharedPreferences) = prefs.getBoolean(KEY_CALENDAR, false)
+
+    /** マイクで声を聞き、名前を呼ばれたらゴーストに伝えるか（OnVoiceRecognitionWord。マイクの許可も要る。最初は聞かない） */
+    const val KEY_VOICE = "voice"
+
+    fun voice(prefs: SharedPreferences) = prefs.getBoolean(KEY_VOICE, false)
 }
