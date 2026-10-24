@@ -384,6 +384,10 @@ class GhostOverlayService : LifecycleService() {
 
                 override fun voiceRecognitionEnabled(): Boolean = voiceAllowed()
 
+                override fun mailAccounts(): List<net.pono.baseware.net.MailAccount> = runCatching { MailAccounts.load(this@GhostOverlayService) }.getOrDefault(emptyList())
+
+                override fun mailCheckMinutes(): Int = MailAccounts.intervalMinutes(this@GhostOverlayService)
+
                 override fun speechEnabled(): Boolean = OverlaySettings.speech(OverlaySettings.prefs(this@GhostOverlayService))
 
                 override fun speak(scope: Int, text: String) = speech.speak(scope, text)

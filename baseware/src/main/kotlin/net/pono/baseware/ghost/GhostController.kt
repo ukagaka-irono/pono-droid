@@ -25,6 +25,10 @@ import net.pono.baseware.net.SocketWebSocketConnector
 import net.pono.baseware.net.WebSocketConnector
 import net.pono.baseware.net.WebSocketSession
 import net.pono.baseware.net.HttpClient
+import net.pono.baseware.net.MailAccount
+import net.pono.baseware.net.MailChecker
+import net.pono.baseware.net.MailResult
+import net.pono.baseware.net.TlsMailChecker
 import net.pono.baseware.net.SstpRequest
 import net.pono.baseware.net.SstpResponse
 import net.pono.baseware.net.HttpCommand
@@ -247,6 +251,12 @@ interface GhostPlatform {
     /** 鳴らしている音（先に読んだだけのものも） */
     fun soundStatus(): List<SoundStatus> = emptyList()
 
+    /** メールを確かめるアカウント（アプリの設定で入れたもの。最初は無い） */
+    fun mailAccounts(): List<MailAccount> = emptyList()
+
+    /** 何分ごとにメールを確かめるか。0 なら \![biff] とメニューのときだけ */
+    fun mailCheckMinutes(): Int = 0
+
     /** マイクで声を聞くか（アプリの設定とマイクの許可。OnVoiceRecognitionStatus で伝える） */
     fun voiceRecognitionEnabled(): Boolean = false
 
@@ -331,6 +341,8 @@ class GhostController(
     private val httpClient: HttpClient = UrlConnectionHttpClient("${ShioriSession.SENDER}/$basewareVersion"),
     /** WebSocket の通信 */
     private val webSocketConnector: WebSocketConnector = SocketWebSocketConnector("${ShioriSession.SENDER}/$basewareVersion"),
+    /** メールの確認（\![biff]）。いつも TLS でつなぐ */
+    private val mailChecker: MailChecker = TlsMailChecker(),
     /** 別のゴーストから切り替わって起動したとき、その前のゴースト（OnGhostChanged を送る） */
     private val previous: PreviousGhost? = null,
 ) {
@@ -1065,6 +1077,63 @@ class GhostController(
     /** 音を鳴らせなかった（OnSoundError）。[code] は Android の再生のエラーの番号 */
     fun onSoundError(file: File, code: Int, message: String) =
         raise("OnSoundError", listOf("play", code.toString(), soundName(file), message), userInitiated = false)
+
+    // ---- メールの確認（\![biff]、OnBIFFBegin / Complete / Failure、OnBIFF2Complete） ----
+
+    /** アカウントごとの、前に確かめたときの数（増えたら OnBIFF2Complete） */
+    private val mailCounts = HashMap<String, Int>()
+    private var mailChecking = false
+    private var lastMailCheck = 0L
+
+    private fun checkMailPeriodically() {
+        val minutes = platform.mailCheckMinutes()
+        if (minutes <= 0 || _state.value.passive) return
+        if (System.currentTimeMillis() - lastMailCheck < minutes * 60_000L) return
+        checkMail(null)
+    }
+
+    /**
+     * メールを確かめる（[account] が null なら全部）。受信箱の数と大きさ、新しいものの差出人と件名を OnBIFFComplete で伝え、
+     * 答えが無くて前より増えていれば OnBIFF2Complete。メールの中身は読まない・消さない
+     */
+    fun checkMail(account: String?) {
+        val accounts = platform.mailAccounts().filter { account == null || it.name == account }
+        if (accounts.isEmpty() || mailChecking || closing) return platform.log("確かめるメールのアカウントがありません")
+        mailChecking = true
+        lastMailCheck = System.currentTimeMillis()
+        scope.launch {
+            try {
+                for (a in accounts) checkOne(a)
+            } finally {
+                mailChecking = false
+            }
+        }
+    }
+
+    private suspend fun checkOne(a: MailAccount) {
+        raise("OnBIFFBegin", listOf("", "", a.name), userInitiated = false)
+        when (val r = withContext(Dispatchers.IO) { runCatching { mailChecker.check(a) }.getOrElse { MailResult.Failure("defect") } }) {
+            is MailResult.Failure -> deliverLater("OnBIFFFailure", listOf(r.reason, "", a.name))
+            is MailResult.Ok -> {
+                val before = mailCounts[a.name]
+                mailCounts[a.name] = r.count
+                fun clean(s: String) = s.replace('\u0001', ' ').replace('\u0002', ' ').replace('\r', ' ').replace('\n', ' ')
+                val top = r.items.joinToString("\u0002") { m -> m.headers.joinToString("\u0001") { clean(it) } }
+                val list = r.items.joinToString("\u0001") { "${it.id} ${it.size}" }
+                val uidl = r.items.joinToString("\u0001") { "${it.id} ${it.uid}" }
+                val senders = r.items.joinToString("\u0001") { "${clean(it.from)}\u0001${clean(it.subject)}" }
+                val diff = (r.count - (before ?: r.count)).toString()
+                val refs = listOf(r.count.toString(), r.bytes.toString(), a.name, diff, top, list, uidl, senders)
+                _state.first { !it.talking && !it.waitingChoice }
+                val script = request("OnBIFFComplete", refs)
+                when {
+                    script != null -> runScript(script)
+                    before != null && r.count > before ->
+                        request("OnBIFF2Complete", listOf(r.count.toString(), r.bytes.toString(), a.name, top))?.let { runScript(it) }
+                }
+            }
+        }
+    }
 
     // ---- 声を聞く（OnVoiceRecognitionWord） ----
 
@@ -2727,6 +2796,7 @@ class GhostController(
             sb.append("\\q[${caption("ネットワーク更新", "updatebutton.caption", "updatebuttoncaption")},pono:update]\\n")
             sb.append("\\q[位置を戻す,pono:resetpos]\\n")
         }
+        if (!short && platform.mailAccounts().isNotEmpty()) sb.append("\\q[${caption("メールを確認", "biffbutton.caption")},pono:biff]\\n")
         sb.append("\\q[${caption("隠す", "hidebutton.caption")},pono:hide]\\n")
         lastSstpSender?.let { sb.append("\\q[${quote(literalScript("「$it」の SSTP を受けない"))},pono:sstp-block]\\n") }
         if (!short && vanishVisible()) sb.append("\\q[${caption("消去", "vanishbutton.caption", "vanishbuttoncaption")},pono:vanish,$scopeId]\\n")
@@ -3307,6 +3377,7 @@ class GhostController(
                     raise("OnMinuteChange", refs, userInitiated = false)
                     history?.ghostMinute(ghost.dir.name)
                     checkSchedule()
+                    checkMailPeriodically()
                 }
                 val hour = now.get(Calendar.HOUR_OF_DAY)
                 if (hour != lastHour) {
@@ -3447,6 +3518,7 @@ class GhostController(
                     "pono:vanish-no" -> raise("OnVanishCancel", emptyList())
                     "pono:terms-open" -> showTerms()
                     "pono:sstp-block" -> blockLastSstpSender()
+                    "pono:biff" -> checkMail(null)
                     "pono:aistate" -> scope.launch { aiStateScript(scopeId)?.let { runScript(it) } }
                     "pono:rateofuse" -> rateOfUseScript(scopeId)?.let { runScript(it) }
                     "pono:terms" -> raise(if (refs.firstOrNull() == "accept") "OnGhostTermsAccept" else "OnGhostTermsDecline", emptyList())
@@ -4636,6 +4708,8 @@ class GhostController(
         }
 
         override fun vanish(args: List<String>) = vanishByMyself(args)
+
+        override fun checkMail(account: String?) = this@GhostController.checkMail(account)
 
         override fun setProperty(name: String, value: String): Boolean = this@GhostController.setProperty(name, value)
 

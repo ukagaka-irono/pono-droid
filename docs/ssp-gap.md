@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 180）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 184）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -64,14 +64,15 @@ OnSSTPBreak（SSTP で届いたスクリプトをバルーンのタップで止�
 OnScheduleTodayNotify（起動時と、日付が変わったとき・予定を足したり消したりして今日の予定が変わったとき）・OnSchedule5MinutesToGo（--notify の分か 5 分前）、
 OnExecuteScheduleComplete / Failure / GetComplete（ゴースト用の予定表。端末のカレンダーの予定は、設定で選んで許可したときだけ「今日の予定」に入る）、
 OnVoiceRecognitionStatus / OnVoiceRecognitionWord（設定で選び、マイクを許可したときだけ聞く。名前を呼ぶとそのキャラクターに伝わり、
-呼んでから 30 秒のうちに言ったこともそのキャラクターへ。誰も呼んでいない話し声は送らない。画面が消えている間は聞かない）
+呼んでから 30 秒のうちに言ったこともそのキャラクターへ。誰も呼んでいない話し声は送らない。画面が消えている間は聞かない）、
+OnBIFFBegin / Complete / Failure・OnBIFF2Complete（\![biff] とメニュー・設定した間隔。POP3 と IMAP をいつも TLS で。パスワードは
+Android Keystore の鍵で暗号にして保存する。中身は読まず、差出人と件名だけ）
 
 ### 🔨 Android で作れる
 - 入力: OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
 
 ### 🔒 決めてから
 - ⛔ OnScheduleRead（カレンダーのアイコンの上にカーソルを置いたとき。pono-droid にはカレンダーの画面もカーソルも無い）
-- OnBIFFBegin / Complete / Failure、OnBIFF2Complete（メールの確認。メールのパスワードをアプリに預けることになる）
 - OnDeviceArrival / Remove（USB 機器）
 - ⛔ OnRecycleBin*（Android にはごみ箱が無い。写真などのアプリのごみ箱を空にするのは、ユーザーのデータを消すことになるので作らない）
 
@@ -144,7 +145,8 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 - ✅ \![execute,schedule-add / delete / get]（ゴースト用の予定表。ゴーストのフォルダの pono/schedule.ics。--uid / --summary / --start / --end / --rrule /
   --notify / --description / --location / --event、get は --from / --to / --expand / --limit）。端末のカレンダーの読み取りは、設定の切り替えと
   許可を求める画面を 6c-2 の画面と一緒に作る
-- \![biff]（メールの確認）、\![open,messenger]
+- ✅ \![biff(,アカウント名)]（アカウントを入れる画面は 6c-2 の画面と一緒に作る）
+- ⛔ \![open,messenger]（SSP のメッセンジャーは pono-droid に無い）
 - ⛔ \![execute,emptyrecyclebin]（上の OnRecycleBin* と同じ理由）
 - ✅ \![set,shioridebugmode(,true/false)]（NOTIFY enable_debug）
 

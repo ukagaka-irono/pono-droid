@@ -225,6 +225,9 @@ interface ScriptHost {
     /** `\![vanishbymyself(,ゴースト名)(,--option=query)]` */
     fun vanish(args: List<String>) {}
 
+    /** `\![biff(,アカウント名)]`。メールを確かめる */
+    fun checkMail(account: String?) {}
+
     /** `\![set,property,名前,値]`。扱えたら true */
     fun setProperty(name: String, value: String): Boolean = false
 
@@ -543,6 +546,7 @@ class ScriptPlayer(
                     else -> host.unknownTag(token)
                 }
                 "vanishbymyself" -> host.vanish(a.drop(1))
+                "biff" -> host.checkMail(a.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() })
                 "create" -> if (a.getOrNull(1)?.trim()?.lowercase() != "shortcut" || !host.createShortcut(a.drop(2))) host.unknownTag(token)
                 "sound" -> when (a.getOrNull(1)?.lowercase()) {
                     "play", "loop" -> a.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { file ->
