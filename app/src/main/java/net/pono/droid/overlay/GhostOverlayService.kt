@@ -1,6 +1,7 @@
 package net.pono.droid.overlay
 
 import android.app.ActivityManager
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -13,6 +14,10 @@ import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
+import android.net.ConnectivityManager
+import android.net.LinkProperties
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
@@ -45,6 +50,7 @@ import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.ghost.GhostPlatform
 import net.pono.baseware.ghost.GhostRepository
 import net.pono.baseware.ghost.InputRequest
+import net.pono.baseware.ghost.NetworkStatus
 import net.pono.baseware.ghost.PreviousGhost
 import net.pono.baseware.shell.Shell
 import net.pono.droid.AppVersion
@@ -145,6 +151,12 @@ class GhostOverlayService : LifecycleService() {
 
                 override fun batteryInfo(): BatteryInfo? =
                     registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let(::batteryInfo)
+
+                override fun networkStatus(): NetworkStatus {
+                    val cm = getSystemService(ConnectivityManager::class.java)
+                    val network = cm.activeNetwork
+                    return networkStatus(network?.let(cm::getNetworkCapabilities), network?.let(cm::getLinkProperties))
+                }
 
                 override fun showText(title: String, text: String) = TextViewerActivity.start(this@GhostOverlayService, title, text)
 
@@ -327,8 +339,73 @@ class GhostOverlayService : LifecycleService() {
     /** 画面が消えている間は、ゴーストのタイマーとアニメーションを止める */
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            controller?.setScreenOn(intent.action == Intent.ACTION_SCREEN_ON)
+            val c = controller ?: return
+            when (intent.action) {
+                // Android にはパソコンのような「休止」が無いので、画面が消えたら休んだことにする（OnSysSuspend）
+                Intent.ACTION_SCREEN_OFF -> {
+                    c.setScreenOn(false)
+                    c.onSystemSuspend()
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    c.setScreenOn(true)
+                    // ロック画面の上にはキャラクターが出ないので、ロックがあれば解いてから OnSysResume
+                    if (!getSystemService(KeyguardManager::class.java).isKeyguardLocked) c.onSystemResume()
+                }
+                Intent.ACTION_USER_PRESENT -> c.onSystemResume()
+            }
         }
+    }
+
+    /** 既定のネットワークの今の様子。コールバックで届いたものを覚えておく */
+    private var networkCaps: NetworkCapabilities? = null
+    private var networkLink: LinkProperties? = null
+
+    /** ネットワークが変わったらゴーストに伝える（OnNetworkStatusChange。送るかどうかは controller が見る） */
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+            networkCaps = caps
+            pushNetwork()
+        }
+
+        override fun onLinkPropertiesChanged(network: Network, link: LinkProperties) {
+            networkLink = link
+            pushNetwork()
+        }
+
+        override fun onLost(network: Network) {
+            networkCaps = null
+            networkLink = null
+            pushNetwork()
+        }
+
+        // コールバックは別のスレッドで来るので、ゴーストには画面のスレッドから伝える
+        private fun pushNetwork() {
+            val status = networkStatus(networkCaps, networkLink)
+            lifecycleScope.launch { controller?.onNetworkChanged(status) }
+        }
+    }
+
+    /** SSP の OnNetworkStatusChange の形にする。従量制かどうかしか分からないので、従量制なら fixed（上限のある定額）とする */
+    private fun networkStatus(caps: NetworkCapabilities?, link: LinkProperties?): NetworkStatus {
+        if (caps == null) return NetworkStatus(online = false, type = "none", metering = "unknown")
+        val type = when {
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
+            else -> "other"
+        }
+        // IPv6 の「%wlan0」のようなインターフェース名は落とす
+        val addresses = link?.linkAddresses.orEmpty()
+            .mapNotNull { it.address?.takeIf { a -> !a.isLoopbackAddress }?.hostAddress?.substringBefore('%') }
+        val mbps = caps.linkDownstreamBandwidthKbps / 8000.0
+        return NetworkStatus(
+            online = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
+            addresses = addresses,
+            type = type,
+            maxMbps = mbps,
+            effectiveMbps = mbps,
+            metering = if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)) "unrestricted" else "fixed",
+        )
     }
 
     /** 電池の状態はゴーストに伝える（OnBatteryNotify。変わったときだけ送るかは controller が見る） */
@@ -356,9 +433,11 @@ class GhostOverlayService : LifecycleService() {
             IntentFilter().apply {
                 addAction(Intent.ACTION_SCREEN_ON)
                 addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_USER_PRESENT)
             },
         )
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(networkCallback)
     }
 
     /** 画面の向きが変わった（OnDisplayChange） */
@@ -371,6 +450,7 @@ class GhostOverlayService : LifecycleService() {
     override fun onDestroy() {
         unregisterReceiver(screenReceiver)
         unregisterReceiver(batteryReceiver)
+        runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback) }
         teardown()
         super.onDestroy()
     }

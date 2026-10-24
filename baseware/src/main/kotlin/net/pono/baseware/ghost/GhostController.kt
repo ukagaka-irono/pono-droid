@@ -63,6 +63,19 @@ data class DeviceInfo(
 /** 電池の状態。[percent] は -1 なら不明 */
 data class BatteryInfo(val percent: Int, val charging: Boolean, val plugged: Boolean)
 
+/**
+ * ネットワークの状態（OnNetworkStatusChange）。[type] は SSP と同じ wifi / cellular / ethernet / none / other / unknown、
+ * 速さは MBps（分からなければ 0）、[metering] は unknown / unrestricted / fixed / variable
+ */
+data class NetworkStatus(
+    val online: Boolean,
+    val addresses: List<String> = emptyList(),
+    val type: String = "unknown",
+    val maxMbps: Double = 0.0,
+    val effectiveMbps: Double = 0.0,
+    val metering: String = "unknown",
+)
+
 /** プラットフォーム側に頼むこと。 */
 interface GhostPlatform {
     fun openUrl(url: String)
@@ -77,6 +90,9 @@ interface GhostPlatform {
     /** 端末の情報。null なら OnNotifyOSInfo などを送らない */
     fun deviceInfo(): DeviceInfo? = null
     fun batteryInfo(): BatteryInfo? = null
+
+    /** 今のネットワークの状態。null なら起動時の OnNetworkStatusChange を送らない */
+    fun networkStatus(): NetworkStatus? = null
 
     /** readme のような長い文を見せる（\![open,readme]） */
     fun showText(title: String, text: String) {}
@@ -174,6 +190,10 @@ class GhostController(
     /** SHIORI の homeurl リソース。descript.txt より優先する */
     private var homeUrlOverride: String? = null
     private var lastBattery: BatteryInfo? = null
+    private var lastNetwork: NetworkStatus? = null
+
+    /** OnSysSuspend を送って、まだ OnSysResume を送っていない */
+    private var suspended = false
 
     fun start() {
         // 辞書の大きいゴーストは読み込みに数秒かかるので、その間は読み込み中と出しておく。
@@ -295,6 +315,11 @@ class GhostController(
             lastBattery = b
             s.notify("OnBatteryNotify", *batteryReferences(b).toTypedArray())
         }
+        // SSP と同じく、起動直後だけ NOTIFY で（以後は変わったときにイベントで）
+        platform.networkStatus()?.let { n ->
+            lastNetwork = n
+            s.notify("OnNetworkStatusChange", *networkReferences(n).toTypedArray())
+        }
     }
 
     /** OnNotifyDressupInfo の Reference: [キャラ ID, カテゴリ, パーツ, オプション, 有効 1/0, サムネイル] を 0x01 でつないだもの */
@@ -303,6 +328,19 @@ class GhostController(
         shell.bindGroups(scope).map { g ->
             listOf(scope.toString(), g.category, g.part, "", if (g.id in binds) "1" else "0", "").joinToString("\u0001")
         }
+    }
+
+    /** OnNetworkStatusChange の Reference: online/offline、アドレス（0x01 区切り）、種類、最大と実効の速さ（MBps）、課金 */
+    private fun networkReferences(n: NetworkStatus): List<String> {
+        fun mbps(v: Double) = if (v > 0) String.format(Locale.US, "%.1f", v) else "0"
+        return listOf(
+            if (n.online) "online" else "offline",
+            n.addresses.joinToString("\u0001"),
+            n.type,
+            mbps(n.maxMbps),
+            mbps(n.effectiveMbps),
+            n.metering,
+        )
     }
 
     private fun batteryReferences(b: BatteryInfo): List<String> {
@@ -858,6 +896,37 @@ class GhostController(
         if (previous == null || previous.percent != info.percent || previous.plugged != info.plugged) {
             raise("OnBatteryNotify", batteryReferences(info), userInitiated = false)
         }
+    }
+
+    /**
+     * ネットワークが変わった。つながる・切れる、種類（Wi-Fi・モバイルなど）、アドレスが変わったときだけ OnNetworkStatusChange を送る
+     * （速さはしょっちゅう揺れるので、それだけでは送らない）
+     */
+    fun onNetworkChanged(status: NetworkStatus) {
+        val previous = lastNetwork
+        lastNetwork = status
+        if (previous != null && previous.online == status.online && previous.type == status.type && previous.addresses == status.addresses) return
+        raise("OnNetworkStatusChange", networkReferences(status), userInitiated = false)
+    }
+
+    /**
+     * 端末が休んだ（Android では画面が消えた）。SSP の OnSysSuspend（NOTIFY）。休むたびに1回だけ送る
+     */
+    fun onSystemSuspend() {
+        if (suspended) return
+        suspended = true
+        notify("OnSysSuspend", emptyList())
+    }
+
+    /**
+     * 端末が戻ってきて、ユーザーがキャラクターを見られるようになった（ロックを解いた）。SSP の OnSysResume（Reference0 は normal）。
+     * 休んだ後に1回だけ送る
+     */
+    fun onSystemResume() {
+        if (!suspended) return
+        suspended = false
+        lastUserActivity = System.currentTimeMillis()
+        raise("OnSysResume", listOf("normal"), userInitiated = false)
     }
 
     /** 画面の向きや大きさが変わった */

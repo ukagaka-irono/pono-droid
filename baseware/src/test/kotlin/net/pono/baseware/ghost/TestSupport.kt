@@ -50,6 +50,7 @@ class RecordingPlatform : GhostPlatform {
     var settingsOpened = 0
     var device: DeviceInfo? = null
     var battery: BatteryInfo? = null
+    var network: NetworkStatus? = null
     val sounds: MutableList<String> = Collections.synchronizedList(mutableListOf())
     val shellChanges: MutableList<String> = Collections.synchronizedList(mutableListOf())
     val balloonChanges: MutableList<String?> = Collections.synchronizedList(mutableListOf())
@@ -77,6 +78,8 @@ class RecordingPlatform : GhostPlatform {
     override fun deviceInfo(): DeviceInfo? = device
 
     override fun batteryInfo(): BatteryInfo? = battery
+
+    override fun networkStatus(): NetworkStatus? = network
 
     override fun showText(title: String, text: String) {
         texts += title to text
