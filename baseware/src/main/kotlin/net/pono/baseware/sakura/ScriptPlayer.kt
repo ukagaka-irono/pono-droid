@@ -103,11 +103,28 @@ interface ScriptHost {
 
     /** `\![enter,onlinemode|nouserbreakmode|inductionmode]` / `\![leave,...]`。扱えたら true */
     fun setMode(name: String, on: Boolean): Boolean = false
+
+    /** `\![enter,selectmode,rect,...]` など、引数と今のキャラクターも要るモード。既定では [setMode] に回す */
+    fun setMode(scope: Int, name: String, on: Boolean, args: List<String>): Boolean = setMode(name, on)
     fun addChoice(scope: Int, choice: Choice)
 
     /** [looks] は \f[cursor*] などで決めた見た目（既定なら [ChoiceLooks.Default]） */
     fun addChoice(scope: Int, choice: Choice, looks: ChoiceLooks) = addChoice(scope, choice)
     fun startAnimation(scope: Int, id: Int) {}
+
+    /** `\i[ID]` の ID（番号か、surfaces.txt の animation*.name の名前）。既定では番号だけ扱う */
+    fun startAnimation(scope: Int, key: String) {
+        key.trim().toIntOrNull()?.let { startAnimation(scope, it) }
+    }
+
+    /** `\i[ID,wait]` / `\__w[animation,ID]`。そのアニメーションが終わるまで戻らない（動いていなければすぐ戻る） */
+    suspend fun waitAnimation(scope: Int, key: String) {}
+
+    /** `\![set,syncobject,名前]` / `\![reset,syncobject,名前]`。名前つきの合図を立てる・下ろす */
+    fun setSyncObject(name: String, signaled: Boolean) {}
+
+    /** `\![wait,syncobject,名前,時間]`。合図が立つまで戻らない。[timeoutMs] が 0 なら止められるまで待つ */
+    suspend fun waitSyncObject(name: String, timeoutMs: Long) {}
 
     /** `\![anim,offset|clear|stop,...]`。扱えたら true */
     fun animation(scope: Int, args: List<String>): Boolean = false
@@ -298,7 +315,11 @@ class ScriptPlayer(
                 // 番号には上限を置く（細工したスクリプトにキャラクターのウィンドウを無数に作らせない）
                 "p" -> scope = a.firstOrNull()?.trim()?.toIntOrNull()?.takeIf { it in 0..MAX_SCOPE } ?: scope
                 "s" -> a.firstOrNull()?.takeIf { it.isNotBlank() }?.let { host.setSurface(scope, it) }
-                "i" -> a.firstOrNull()?.toIntOrNull()?.let { host.startAnimation(scope, it) }
+                // \i[ID,wait] はアニメーションが終わるまで待つ
+                "i" -> a.firstOrNull()?.takeIf { it.isNotBlank() }?.let { id ->
+                    host.startAnimation(scope, id)
+                    if (a.getOrNull(1)?.trim()?.lowercase() == "wait" && !quick) host.waitAnimation(scope, id)
+                }
                 // \n[half] は半分、\n[150] は1行半の改行。負の値なら上へ戻る
                 "n" -> {
                     val percent = when (val p = a.firstOrNull()?.trim()?.lowercase()) {
@@ -338,7 +359,13 @@ class ScriptPlayer(
                     else -> host.clearBalloon(scope)
                 }
                 "w" -> if (!quick) delay((a.firstOrNull()?.toLongOrNull() ?: 1) * unitWaitMs)
-                "_w", "__w" -> if (!quick) delay(a.firstOrNull()?.toLongOrNull() ?: 0)
+                // \__w[animation,ID] はそのアニメーションが終わるまで待つ
+                "__w" -> if (a.firstOrNull()?.trim()?.lowercase() == "animation") {
+                    if (!quick) a.getOrNull(1)?.let { host.waitAnimation(scope, it) }
+                } else if (!quick) {
+                    delay(a.firstOrNull()?.toLongOrNull() ?: 0)
+                }
+                "_w" -> if (!quick) delay(a.firstOrNull()?.toLongOrNull() ?: 0)
                 "_q" -> quick = !quick
                 "x" -> {
                     host.waitClick()
@@ -442,7 +469,15 @@ class ScriptPlayer(
                     host.move(scope, move)
                     if (command == "move" && !quick && move.timeMs > 0) delay(move.timeMs)
                 }
+                // \![wait,syncobject,名前,時間|--timeout=時間]
+                "wait" -> if (a.getOrNull(1)?.lowercase() == "syncobject" && a.size >= 3) {
+                    val timeout = a.drop(3).map { it.trim().removePrefix("--timeout=") }.firstNotNullOfOrNull { it.toLongOrNull() } ?: 0
+                    host.waitSyncObject(a[2].trim(), timeout)
+                } else {
+                    host.unknownTag(token)
+                }
                 "reset" -> when (a.getOrNull(1)?.lowercase()) {
+                    "syncobject" -> a.getOrNull(2)?.let { host.setSyncObject(it.trim(), false) }
                     // \![reset,position] は、\![set,position] で固定したキャラクター全員を放す
                     "position" -> for (s in 0..MAX_SCOPE) host.setPosition(s, null, null)
                     "zorder", "sticky-window" -> host.setOption(scope, a[1].lowercase(), emptyList())
@@ -451,7 +486,7 @@ class ScriptPlayer(
                 "enter", "leave" -> when (val mode = a.getOrNull(1)?.lowercase()) {
                     "passivemode" -> host.setPassive(command == "enter")
                     // selectmode / collisionmode などで、まだ扱えないものは飛ばす
-                    else -> host.setMode(mode.orEmpty(), command == "enter")
+                    else -> host.setMode(scope, mode.orEmpty(), command == "enter", a.drop(2))
                 }
                 // \![lock,balloonrepaint] など。manual が無ければスクリプトの終わりで外れる
                 "lock", "unlock" -> host.lock(
@@ -477,6 +512,7 @@ class ScriptPlayer(
                     }
                     // 文字の流れる速さ（このスクリプトの間だけ）
                     a[1].lowercase() == "balloonwait" -> charWaitOverride = balloonWait(a.getOrNull(2)?.trim()?.lowercase().orEmpty())
+                    a[1].lowercase() == "syncobject" -> a.getOrNull(2)?.let { host.setSyncObject(it.trim(), true) }
                     a[1].lowercase() in silentSetOptions -> {}
                     !host.setOption(scope, a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
                 }
@@ -638,7 +674,7 @@ class ScriptPlayer(
     private val silentSetOptions = setOf(
         "trayicon", "tasktrayicon", "trayballoon", "tasktrayballoon", "wallpaper",
         "otherghosttalk", "othersurfacechange", "alignmentondesktop",
-        "syncobject", "shioridebugmode", "property",
+        "shioridebugmode", "property",
     )
 
     private val silentExecutes = setOf("resetballoonpos")

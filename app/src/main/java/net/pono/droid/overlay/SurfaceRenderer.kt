@@ -142,7 +142,7 @@ class SurfaceRenderer(private val shell: Shell) {
     }
 
     private companion object {
-        /** 絵は重ねないメソッド（move はずらすだけ、scaling はウィンドウの大きさを変えるだけ） */
-        val NOT_DRAWN = setOf("move", "scaling", "base", "start", "stop", "alternativestart", "alternativestop", "parallelstart", "parallelstop", "insert")
+        /** 絵は重ねないメソッド（move はずらすだけ、scaling はウィンドウの大きさを変えるだけ、import は別に流す） */
+        val NOT_DRAWN = setOf("move", "scaling", "base", "import", "start", "stop", "alternativestart", "alternativestop", "parallelstart", "parallelstop", "insert")
     }
 }

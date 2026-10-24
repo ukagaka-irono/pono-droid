@@ -1,6 +1,29 @@
 package net.pono.droid.overlay
 
 import android.graphics.Bitmap
+import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.delay
+import net.pono.baseware.ghost.SelectRect
+import net.pono.baseware.shell.Collision
+import net.pono.baseware.shell.CollisionShape
+import net.pono.baseware.shell.PatternFrame
+import kotlin.math.roundToInt
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
@@ -66,6 +89,9 @@ fun CharacterSurface(
     LaunchedEffect(character.surface, character.binds, state.screenOn) {
         if (state.screenOn) animator.show(controller.shell.surfaces[character.surface], character.binds) else animator.stop()
     }
+    // \![anim,add,text] の文字。表示時間が過ぎるか、サーフェスを替えたら消す
+    val texts = remember { mutableStateListOf<AnimationCommand.AddText>() }
+    LaunchedEffect(character.surface) { texts.clear() }
     // まだ実行していない番号の頼みを、出された順に実行する（1つのスクリプトの \i をすべて）
     var handled by remember { mutableIntStateOf(character.animationCommands.lastOrNull()?.first ?: 0) }
     LaunchedEffect(character.animationCommands) {
@@ -76,10 +102,17 @@ fun CharacterSurface(
                 is AnimationCommand.Offset -> animator.setOffset(command.id, command.x, command.y)
                 is AnimationCommand.Clear -> animator.clear(command.id)
                 AnimationCommand.StopAll -> animator.stopRunning()
+                is AnimationCommand.Pause -> animator.pause(command.id)
+                is AnimationCommand.Resume -> animator.resume(command.id)
+                is AnimationCommand.Add -> animator.add(command.frames)
+                is AnimationCommand.AddText -> texts += command
             }
             handled = serial
         }
     }
+
+    // \i[ID,wait] などで待てるよう、いま動いているアニメーションを知らせる
+    LaunchedEffect(animator) { animator.playing.collect { controller.onAnimationsPlaying(scopeId, it) } }
 
     // 話した文字の数が増えたら talk,N の、話し終えたら yen-e のアニメーションを動かす（シェルを替えると数え直すので、減ったら合わせるだけ）
     var talked by remember { mutableIntStateOf(character.talkCount) }
@@ -135,6 +168,30 @@ fun CharacterSurface(
     fun showTooltip(collision: String?) {
         tooltip = collision?.let { tooltips?.get(it) }?.takeIf { it.isNotBlank() }
     }
+    val selecting = state.selectMode?.takeIf { it.scope == scopeId }
+    var selectStart by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    /** \![enter,selectmode] の間は、指でなぞった矩形を選ぶ（ほかのタッチのイベントは送らない） */
+    fun selectTouch(event: android.view.MotionEvent): Boolean {
+        val p = imagePoint(event.x, event.y)
+        fun rect(from: Pair<Int, Int>) =
+            SelectRect(minOf(from.first, p.first), minOf(from.second, p.second), maxOf(from.first, p.first), maxOf(from.second, p.second))
+        when (event.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                selectStart = p
+                controller.onSelectDown(scopeId, p.first, p.second)
+            }
+            android.view.MotionEvent.ACTION_MOVE -> selectStart?.let { controller.onSelecting(scopeId, rect(it)) }
+            android.view.MotionEvent.ACTION_UP -> selectStart?.let { controller.onSelectUp(scopeId, p.first, p.second, rect(it)) }
+            android.view.MotionEvent.ACTION_CANCEL -> selectStart = null
+        }
+        return true
+    }
+    // \![enter,collisionmode] の間は、当たり判定をキャラクターの上に描く
+    val collisions = state.collisionMode?.let {
+        val def = controller.shell.surfaces[baseSurface]
+        activeAnimations.mapNotNull { id -> def?.animations?.get(id) }.flatMap { a -> a.collisions.values } + def?.orderedCollisions().orEmpty()
+    }
+    val labelPaint = remember { android.graphics.Paint().apply { color = android.graphics.Color.RED; isAntiAlias = true } }
     Box(contentAlignment = Alignment.TopCenter) {
         Image(
             bitmap = bmp.asImageBitmap(),
@@ -150,7 +207,22 @@ fun CharacterSurface(
                     alpha = character.alpha
                 }
                 .onSizeChanged { onHeightChanged(it.height) }
+                // 選んでいる間は透明な所も見せる（SSP と同じ）
+                .then(if (selecting != null) Modifier.background(Color(0x33000000)) else Modifier)
+                .drawWithContent {
+                    drawContent()
+                    collisions?.let { drawCollisions(it, pxPerImagePxX, pxPerImagePxY, state.collisionMode == "names", labelPaint) }
+                    selecting?.selection?.let { r ->
+                        drawRect(
+                            Color(0xFF1565C0),
+                            topLeft = Offset(r.left * pxPerImagePxX, r.top * pxPerImagePxY),
+                            size = Size((r.right - r.left) * pxPerImagePxX, (r.bottom - r.top) * pxPerImagePxY),
+                            style = Stroke(2.dp.toPx()),
+                        )
+                    }
+                }
                 .pointerInteropFilter { event ->
+                    if (selecting != null) return@pointerInteropFilter selectTouch(event)
                     touchHandler.onTouch(event, object : SurfaceTouchCallbacks {
                         override fun onDown(x: Float, y: Float) {
                             val p = imagePoint(x, y)
@@ -214,7 +286,22 @@ fun CharacterSurface(
                     })
                 },
         )
-        tooltip?.let { SurfaceTooltip(it) }
+        // \![anim,add,text] の文字と、surfaces.txt の import のアニメーション画像を、シェル画像の座標に重ねる
+    for (t in texts) {
+        key(t) {
+            SurfaceText(t, pxPerImagePxX, pxPerImagePxY)
+            if (t.timeMs > 0) LaunchedEffect(t) {
+                delay(t.timeMs)
+                texts.remove(t)
+            }
+        }
+    }
+    for ((layer, frame) in layers) {
+        if (frame.method != "import") continue
+        val file = frame.file?.let(controller.shell::file) ?: continue
+        key(layer, frame) { ImportedAnimation(file, frame, pxPerImagePxX, pxPerImagePxY) }
+    }
+    tooltip?.let { SurfaceTooltip(it) }
     }
 }
 
@@ -275,3 +362,92 @@ private fun TalkBalloon(
     }
 }
 
+
+/** \![anim,add,text] の文字。座標と大きさはシェル画像のピクセル */
+@Composable
+private fun BoxScope.SurfaceText(t: AnimationCommand.AddText, pxPerX: Float, pxPerY: Float) {
+    val density = LocalDensity.current
+    val size = with(density) { ((t.size ?: 12) * pxPerY).toSp() }
+    var modifier = Modifier
+        .align(Alignment.TopStart)
+        .offset { IntOffset((t.x * pxPerX).roundToInt(), (t.y * pxPerY).roundToInt()) }
+    if (t.width > 0) modifier = modifier.width(with(density) { (t.width * pxPerX).toDp() })
+    if (t.height > 0) modifier = modifier.height(with(density) { (t.height * pxPerY).toDp() })
+    Text(
+        t.text,
+        color = t.color?.let { Color(it or 0xFF000000.toInt()) } ?: Color.Black,
+        fontSize = size,
+        fontFamily = t.font?.let { BalloonFonts.family(listOf(it)) },
+        modifier = modifier,
+    )
+}
+
+/**
+ * surfaces.txt の import,ファイル名,待ち時間,x,y。APNG / GIF / WebP のアニメーション画像を、待ってから流し続ける
+ * （元の画像の繰り返し回数は見ない。SSP と同じ）。Android 9 より前では最初のコマだけ出す
+ */
+@Composable
+private fun BoxScope.ImportedAnimation(file: java.io.File, frame: PatternFrame, pxPerX: Float, pxPerY: Float) {
+    val drawable by produceState<android.graphics.drawable.Drawable?>(null, file) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                if (Build.VERSION.SDK_INT >= 28) {
+                    android.graphics.ImageDecoder.decodeDrawable(android.graphics.ImageDecoder.createSource(file)) { decoder, info, _ ->
+                        // 細工された巨大な画像でメモリを使い切らせない
+                        val w = info.size.width
+                        val h = info.size.height
+                        if (w > ImageTransparency.MAX_SIDE || h > ImageTransparency.MAX_SIDE) {
+                            decoder.setTargetSize(minOf(w, ImageTransparency.MAX_SIDE), minOf(h, ImageTransparency.MAX_SIDE))
+                        }
+                    }
+                } else {
+                    ImageTransparency.load(file, null, selfAlpha = true)?.let { android.graphics.drawable.BitmapDrawable(null, it) }
+                }
+            }.getOrNull()
+        }
+    }
+    val d = drawable ?: return
+    LaunchedEffect(d) {
+        delay(frame.waitMinMs.toLong())
+        if (Build.VERSION.SDK_INT >= 28 && d is android.graphics.drawable.AnimatedImageDrawable) {
+            d.repeatCount = android.graphics.drawable.AnimatedImageDrawable.REPEAT_INFINITE
+            d.start()
+        }
+    }
+    DisposableEffect(d) {
+        onDispose { if (Build.VERSION.SDK_INT >= 28 && d is android.graphics.drawable.AnimatedImageDrawable) d.stop() }
+    }
+    val density = LocalDensity.current
+    AndroidView(
+        factory = { context -> android.widget.ImageView(context).apply { scaleType = android.widget.ImageView.ScaleType.FIT_XY } },
+        update = { it.setImageDrawable(d) },
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .offset { IntOffset((frame.x * pxPerX).roundToInt(), (frame.y * pxPerY).roundToInt()) }
+            .size(with(density) { (d.intrinsicWidth * pxPerX).toDp() }, with(density) { (d.intrinsicHeight * pxPerY).toDp() }),
+    )
+}
+
+/** \![enter,collisionmode] の当たり判定の枠（と名前）。座標はシェル画像のピクセル */
+private fun DrawScope.drawCollisions(collisions: List<Collision>, pxPerX: Float, pxPerY: Float, names: Boolean, labelPaint: android.graphics.Paint) {
+    val color = Color(0xFFE53935)
+    val stroke = Stroke(1.5.dp.toPx())
+    labelPaint.textSize = 11.dp.toPx()
+    for (c in collisions) {
+        val topLeft = Offset(c.left * pxPerX, c.top * pxPerY)
+        val size = Size((c.right - c.left) * pxPerX, (c.bottom - c.top) * pxPerY)
+        when (c.shape) {
+            CollisionShape.RECT -> drawRect(color, topLeft, size, style = stroke)
+            CollisionShape.ELLIPSE, CollisionShape.CIRCLE -> drawOval(color, topLeft, size, style = stroke)
+            CollisionShape.POLYGON -> {
+                val path = Path()
+                c.points.chunked(2).forEachIndexed { i, (x, y) ->
+                    if (i == 0) path.moveTo(x * pxPerX, y * pxPerY) else path.lineTo(x * pxPerX, y * pxPerY)
+                }
+                path.close()
+                drawPath(path, color, style = stroke)
+            }
+        }
+        if (names) drawContext.canvas.nativeCanvas.drawText(c.id, topLeft.x + 2, topLeft.y + labelPaint.textSize, labelPaint)
+    }
+}

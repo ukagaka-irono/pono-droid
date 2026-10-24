@@ -284,7 +284,7 @@ class SspCompatibilityTest {
             assertEquals(
                 listOf(
                     AnimationCommand.Start(1), AnimationCommand.Start(2), AnimationCommand.Offset(2, 5, 6),
-                    AnimationCommand.Start(3), AnimationCommand.Clear(1), AnimationCommand.StopAll,
+                    AnimationCommand.Start(3), AnimationCommand.Clear(1), AnimationCommand.StopAll, AnimationCommand.Pause(3),
                 ),
                 commands.map { it.second },
             )

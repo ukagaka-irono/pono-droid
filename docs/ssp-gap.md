@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 83）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 88）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -34,6 +34,7 @@ OnMouseDragStart / End、OnMouseGesture（当たり判定の上をさっと払�
 OnMouseDownEx / UpEx / ClickEx（2本指で叩く・メニューの「中クリック」）、OnChoiceSelect(Ex) / OnChoiceTimeout、OnAnchorSelect(Ex)、
 OnOverlap / OnOffscreen、OnResetWindowPos、OnShellScaling / OnBalloonScaling、OnWindowStateMinimize / Restore、
 OnChoiceEnter / OnChoiceHover / OnAnchorEnter / OnAnchorHover（選択肢を長押し）、
+OnSelectModeBegin / Cancel / Complete / MouseDown / MouseUp（\![enter,selectmode] の間に指でなぞる）、
 OnSurfaceChange / OnSurfaceRestore、OnBalloonBreak / Close / Timeout、OnTranslate、
 OnUserInput(Cancel) / OnTextAreaInput(Cancel) / OnCommunicate(InputCancel) / OnTeach、
 OnFileDrop2 / OnFileDropEx、OnUpdateBegin / Ready / Complete / Failure、OnExecuteHTTPComplete / Failure、
@@ -56,8 +57,7 @@ OnNetworkStatusChange、OnDisplayChange、OnBattery*（Notify / Low / Critical /
 - 更新: OnUpdateCheckComplete / Failure、OnUpdateResult(Ex) / OnUpdateCheckResult(Ex)、OnUpdateOther*（他のゴーストの更新）
 - 消去: OnVanishSelecting / Selected / Cancel / ButtonHold / Vanished、OnGhostTermsAccept / Decline（利用規約）
 - 開発: OnUpdatedataCreating / Created、OnNarCreating / Created（ゴーストのフォルダから .nar・更新データを作る）
-- その他: OnCloseAll（アプリごと終わるとき）、OnAITalk（\a）、OnURLQuery、OnXUkagakaLinkOpen（x-ukagaka-link: のリンク）、
-  OnSelectModeBegin / Cancel / Complete / MouseDown / Up（範囲選択モード）
+- その他: OnCloseAll（アプリごと終わるとき）、OnAITalk（\a）、OnURLQuery、OnXUkagakaLinkOpen（x-ukagaka-link: のリンク）
 
 ### 🔒 決めてから
 - OnVoiceRecognitionStatus / Word（マイクで声を聞く。マイクの権限が要る）
@@ -100,11 +100,12 @@ OnOtherOverlap / Offscreen、OnRaiseOtherFailure / OnNotifyOtherFailure、OnOthe
 underline / strike / outline / disable.font.color と、オンラインの印（online*.png、onlinemarker.x / y / interval）
 \f[anchor.font.color] \f[cursor* / cursornotselect* / anchor* / anchornotselect* / anchorvisited*]（style / color / brushcolor / pencolor / fontcolor。
 method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,balloonoffset / balloonalign / balloonmarker / balloonnum]（sstpmessage.* / number.*）
+\![anim,pause / resume / add,overlay / add,overlayfast / add,base / add,move / add,text] \__w[animation,ID] \i[ID,wait] \i[名前]（animation*.name）
+\![wait,syncobject] \![set,syncobject] \![reset,syncobject]（アプリの中の名前つきの合図） \![enter / leave,collisionmode(,rect)] \![enter / leave,selectmode,rect,...]
 \![anim,offset / clear / stop] \![bind] \![bind-noevent] \![sound,play / loop / stop / wait] \![change,ghost / shell / balloon]
 \![execute,http-get] \![updatebymyself] \![reload,shiori] \![enter / leave,passivemode] \![quicksection]
 
 ### 🔨 Android で作れる
-- アニメーション: \![anim,pause / resume / add,overlay / add,text]、\__w[animation,ID]、\i[ID,wait]、\![wait,syncobject] / \![set,syncobject] / \![reset,syncobject]
 - ゴースト: \![vanishbymyself]（確認してから消す）、\+ \_+（ランダム・順番にゴーストを替える）、\![change,calendarskin]（無視）、\a（OnAITalk）、
   \![reloadsurface] \![reload,shell / balloon / ghost / descript] \![load / unload,shiori]
 - 開く: \![open,file]（Android のアプリで開く）、\![open,mailer]、\![open,dialog,open / save / folder / color]（ファイル選択など）、\![open,ipinput]、
@@ -117,7 +118,6 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
   \![update,platform]（無視）、\![update,対象]、\![set,property]（書き換えてよいものだけ）、\![create,shortcut]（ホーム画面にゴーストのショートカット）
 - 環境変数: %lastghostname %lastobjectname %exh %et %wronghour %selfname2 %ms %mz %ml %mc %mh %mt %me %mp %m? %dms %*2
   （%ms などは SSP 同梱の単語表から選ぶもの。小さな単語表を持つ）
-- 入力モード: \![enter / leave,selectmode]、\![enter / leave,collisionmode]（当たり判定を見せる）
 - 通知: \![set,trayballoon] / \![set,tasktrayicon]（Android の通知で代用）
 
 ### 🔒 決めてから
@@ -191,6 +191,7 @@ SSP 専用のメニュー項目の名前（ヘッドライン・プラグイン�
   animation*.option（exclusive・background・shared-index）、animation*.name、interval の + の組み合わせと starttalk / endtalk、
   surface.append（あるサーフェスにだけ足す）、element0 による surfaceN.png の置き換え、描画メソッドの overlay-fast / interpolate / replace /
   asis / reduce / move / scaling / add / bind と blend-*（-fast も）、point.basepos / centerx / kinoko、sakura.tooltips など（触れている間に出す）
-- 🔨 シェル単体の .nar のインストール、サウンドを同時にいくつも鳴らす、surfaces.txt の import（APNG / GIF）、icon.rect（発言履歴の顔）
+- ✅ surfaces.txt の import（APNG / GIF / WebP。Android 9 より前は最初のコマだけ）
+- 🔨 シェル単体の .nar のインストール、サウンドを同時にいくつも鳴らす、icon.rect（発言履歴の顔）
 - ⛔ surfaces.txt の cursor ブレス（マウスカーソルが無い）、sakura.balloon.offsetx / offsety（pono-droid のバルーンはいつもキャラクターの上）、
   オーバーレイの透明な部分のタッチを下に通す（Android では画素単位にはできない）

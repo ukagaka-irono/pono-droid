@@ -133,6 +133,28 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         _playing.value = emptySet()
     }
 
+    /**
+     * `\![anim,add,...]`。サーフェスを替えるまで、ふつうのアニメーションより上に重ねる。
+     * コマが2つ以上なら、それぞれの待ち時間ごとに順に出す（最後のコマは残す）
+     */
+    fun add(frames: List<PatternFrame>) {
+        if (frames.isEmpty()) return
+        // 重ねすぎたら古いものから上書きする（スクリプトに無数のレイヤーを作らせない）
+        val layer = ADD_LAYER_BASE + addSerial++ % MAX_ADD_LAYERS
+        if (frames.size == 1) {
+            setRaw(raw + (layer to frames[0]))
+            return
+        }
+        jobs += scope.launch {
+            for (f in frames) {
+                setRaw(raw + (layer to f))
+                delay(maxOf(f.waitMinMs, 16).toLong())
+            }
+        }
+    }
+
+    private var addSerial = 0
+
     /** `\![anim,pause,ID]` / `\![anim,resume,ID]`。止めている間はコマを進めない（サーフェスを替えると解ける） */
     fun pause(id: Int) {
         paused += id
@@ -242,6 +264,10 @@ class SerikoAnimator(private val scope: CoroutineScope) {
     private companion object {
         /** 着せ替えのコマは、普通のアニメーション（番号 = アニメーション番号）より下に重ねる */
         const val BIND_LAYER_BASE = -1_000_000
+
+        /** \![anim,add] のコマは、普通のアニメーションより上に重ねる */
+        const val ADD_LAYER_BASE = 1_000_000
+        const val MAX_ADD_LAYERS = 64
 
         private val STARTERS = setOf("start", "alternativestart", "parallelstart")
     }

@@ -59,11 +59,13 @@ class Shell(val dir: File) {
         dir.listFiles()?.associateBy { it.name.lowercase() }.orEmpty()
     }
 
-    /** ファイル名の大文字小文字は区別しない（Windows 由来のため）。 */
+    /** ファイル名の大文字小文字は区別しない（Windows 由来のため）。シェルのフォルダの外を指していれば null */
     fun file(name: String): File? {
         val path = name.replace('\\', '/')
         return if ('/' in path) {
-            File(dir, path).takeIf { it.isFile }
+            val root = runCatching { dir.canonicalFile }.getOrNull() ?: return null
+            val file = runCatching { File(dir, path).canonicalFile }.getOrNull() ?: return null
+            file.takeIf { it.path.startsWith(root.path + File.separator) && it.isFile }
         } else {
             files[path.lowercase()]
         }

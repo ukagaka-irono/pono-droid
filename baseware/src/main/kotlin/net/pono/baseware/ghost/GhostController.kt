@@ -27,7 +27,9 @@ import net.pono.baseware.sakura.TextAlign
 import net.pono.baseware.sakura.TextStyle
 import net.pono.baseware.sakura.Token
 import net.pono.baseware.sakura.VerticalAlign
+import net.pono.baseware.shell.PatternFrame
 import net.pono.baseware.shell.Shell
+import net.pono.baseware.shell.SurfaceDefinition
 import net.pono.baseware.shiori.ShioriFactory
 import net.pono.baseware.shiori.ShioriMethod
 import net.pono.baseware.shiori.ShioriRequest
@@ -944,6 +946,75 @@ class GhostController(
         raise("OnShellScaling", listOf(newPercent.toString(), oldPercent.toString(), newPercent.toString(), oldPercent.toString()), userInitiated = false)
     }
 
+    // ---- アニメーションを待つ（\i[ID,wait]・\__w[animation,ID]） ----
+
+    /** キャラクターごとの、いまコマを進めているアニメーションの番号。表示する側が知らせる */
+    private val playingAnimations = MutableStateFlow<Map<Int, Set<Int>>>(emptyMap())
+
+    /** 表示する側から: [scope] のキャラクターで、いまコマを進めているアニメーション */
+    fun onAnimationsPlaying(scope: Int, ids: Set<Int>) = playingAnimations.update { it + (scope to ids) }
+
+    /**
+     * [id] のアニメーションが終わるまで待つ。頼んだばかりでまだ動いていなければ、少しの間だけ動き出すのを待つ
+     * （画面が消えているなどで動かなければ、すぐに戻る）。いつまでも止まらないよう、待つのは長くても1分
+     */
+    private suspend fun waitAnimation(scope: Int, id: Int) {
+        withTimeoutOrNull(ANIMATION_START_WAIT_MS) { playingAnimations.first { id in it[scope].orEmpty() } } ?: return
+        withTimeoutOrNull(MAX_ANIMATION_WAIT_MS) { playingAnimations.first { id !in it[scope].orEmpty() } }
+    }
+
+    // ---- 選択モード（\![enter,selectmode]） ----
+
+    /**
+     * \![enter,selectmode,rect,左,上,右,下] / \![enter,selectmode,rect,当たり判定名]。[scope] のキャラクターの上で矩形を選ばせる。
+     * 選んでいる間はサーフェスを描き直さない（SSP と同じ）
+     */
+    private fun enterSelectMode(scope: Int, args: List<String>) {
+        val rest = args.drop(1).map { it.trim() }
+        val numbers = rest.mapNotNull { it.toIntOrNull() }
+        val initial = when {
+            numbers.size >= 4 -> SelectRect(numbers[0], numbers[1], numbers[2], numbers[3])
+            rest.isNotEmpty() -> {
+                val surface = _state.value.characters[scope]?.surface ?: -1
+                shell.surfaces[surface]?.collisions?.values?.firstOrNull { it.id == rest[0] }?.let { SelectRect(it.left, it.top, it.right, it.bottom) }
+            }
+            else -> null
+        }
+        selecting = true
+        _state.update { it.copy(selectMode = SelectMode(scope, initial)).withLocks() }
+        raise("OnSelectModeBegin", listOf(scope.toString(), "rect"), userInitiated = false)
+    }
+
+    /** \![leave,selectmode]。選んだ範囲があれば OnSelectModeComplete、無ければ OnSelectModeCancel */
+    private fun leaveSelectMode() {
+        val mode = _state.value.selectMode ?: return
+        selecting = false
+        _state.update { it.copy(selectMode = null).withLocks() }
+        val rect = mode.selection
+        if (rect == null || rect.isEmpty) {
+            raise("OnSelectModeCancel", listOf(mode.scope.toString(), "rect"), userInitiated = false)
+        } else {
+            raise("OnSelectModeComplete", listOf(mode.scope.toString(), "rect", rect.toString()), userInitiated = false)
+        }
+    }
+
+    /** 選択モードで指が触れた・離れた（シェル画像の座標）。[selection] はそのときまでに選んだ範囲 */
+    fun onSelectDown(scope: Int, x: Int, y: Int) {
+        if (_state.value.selectMode?.scope != scope) return
+        raise("OnSelectModeMouseDown", listOf(scope.toString(), "rect", "$x,$y"), userInitiated = false)
+    }
+
+    fun onSelectUp(scope: Int, x: Int, y: Int, selection: SelectRect) {
+        if (_state.value.selectMode?.scope != scope) return
+        onSelecting(scope, selection)
+        raise("OnSelectModeMouseUp", listOf(scope.toString(), "rect", "$x,$y"), userInitiated = false)
+    }
+
+    /** 指を動かして、選んでいる範囲が変わった */
+    fun onSelecting(scope: Int, selection: SelectRect) {
+        _state.update { s -> s.selectMode?.takeIf { it.scope == scope }?.let { s.copy(selectMode = it.copy(selection = selection)) } ?: s }
+    }
+
     /** アプリの画面で「バルーンの大きさ」を変えた（パーセント）。OnBalloonScaling（横・縦とも同じ倍率） */
     fun onBalloonScaling(newPercent: Int, oldPercent: Int) {
         if (newPercent == oldPercent) return
@@ -1533,13 +1604,16 @@ class GhostController(
     private var manualBalloonLock = false
     private var manualRepaintLock = false
 
+    /** \![enter,selectmode] の間。サーフェスを描き直さない */
+    private var selecting = false
+
     /**
      * 止めているものに合わせて、止めたときの見た目を持つ（止め始めたときに取り、外したら捨てる）。
      * \![lock,repaint] はバルーンも止める
      */
     private fun GhostState.withLocks() = copy(
         balloonSnapshot = if (balloonLocked || repaintLocked) balloonSnapshot ?: characters else null,
-        surfaceSnapshot = if (repaintLocked) surfaceSnapshot ?: characters else null,
+        surfaceSnapshot = if (repaintLocked || selecting) surfaceSnapshot ?: characters else null,
     )
 
     /** スクリプトが終わった（止められた）ときに外れるもの: \t と、manual でない \![lock] */
@@ -1667,6 +1741,7 @@ class GhostController(
                 noUserBreak = it.noUserBreak,
                 induction = it.induction,
                 visitedAnchors = it.visitedAnchors,
+                collisionMode = it.collisionMode,
             )
         }
     }
@@ -1902,6 +1977,18 @@ class GhostController(
                 // バルーンは指で動かせない（いつもキャラクターに付いている）ので、止めるまでもない
                 "balloonmove" -> {}
                 else -> return false
+            }
+            return true
+        }
+
+        override fun setMode(scope: Int, name: String, on: Boolean, args: List<String>): Boolean {
+            when (name) {
+                // \![enter,collisionmode(,rect)]。rect なら名前を出さず枠だけ
+                "collisionmode" -> _state.update {
+                    it.copy(collisionMode = if (!on) null else if (args.firstOrNull()?.trim()?.lowercase() == "rect") "rect" else "names")
+                }
+                "selectmode" -> if (on) enterSelectMode(scope, args) else leaveSelectMode()
+                else -> return setMode(name, on)
             }
             return true
         }
@@ -2143,15 +2230,73 @@ class GhostController(
 
         override fun startAnimation(scope: Int, id: Int) = command(scope, AnimationCommand.Start(id))
 
+        override fun startAnimation(scope: Int, key: String) {
+            animationId(scope, key)?.let { startAnimation(scope, it) } ?: platform.log("知らないアニメーションです: \\i[$key]")
+        }
+
+        override suspend fun waitAnimation(scope: Int, key: String) {
+            val id = animationId(scope, key) ?: return
+            this@GhostController.waitAnimation(scope, id)
+        }
+
+        override fun setSyncObject(name: String, signaled: Boolean) = SyncObjects.set(name, signaled)
+
+        override suspend fun waitSyncObject(name: String, timeoutMs: Long) {
+            SyncObjects.await(name, timeoutMs)
+        }
+
+        /** アニメーションの番号か、今のサーフェスの animation*.name の名前を番号にする */
+        private fun animationId(scope: Int, key: String): Int? {
+            val surface = _state.value.characters[scope]?.surface ?: -1
+            return shell.surfaces[surface]?.animationId(key) ?: key.trim().toIntOrNull()
+        }
+
         override fun animation(scope: Int, args: List<String>): Boolean {
             fun int(i: Int) = args.getOrNull(i)?.trim()?.toIntOrNull()
+            fun id(i: Int) = args.getOrNull(i)?.let { animationId(scope, it) }
             when (args.firstOrNull()?.trim()?.lowercase()) {
-                "offset" -> command(scope, AnimationCommand.Offset(int(1) ?: return false, int(2) ?: 0, int(3) ?: 0))
-                "clear" -> command(scope, AnimationCommand.Clear(int(1) ?: return false))
+                "offset" -> command(scope, AnimationCommand.Offset(id(1) ?: return false, int(2) ?: 0, int(3) ?: 0))
+                "clear" -> command(scope, AnimationCommand.Clear(id(1) ?: return false))
                 "stop" -> command(scope, AnimationCommand.StopAll)
-                else -> {}
+                // SSP の例には \![anim,pouse,ID] という書き間違いもあるので、それも読む
+                "pause", "pouse" -> command(scope, AnimationCommand.Pause(id(1) ?: return false))
+                "resume" -> command(scope, AnimationCommand.Resume(id(1) ?: return false))
+                "add" -> command(scope, addCommand(args.drop(1)) ?: return false)
+                else -> return false
             }
             return true
+        }
+
+        /**
+         * \![anim,add,overlay,ID,x,y,時間,ID,x,y,時間...] / overlayfast / base / move,x,y /
+         * text,x,y,幅,高さ,文字,表示時間,r,g,b,大きさ,フォント
+         */
+        private fun addCommand(args: List<String>): AnimationCommand? {
+            fun int(i: Int) = args.getOrNull(i)?.trim()?.toIntOrNull()
+            return when (val method = args.firstOrNull()?.trim()?.lowercase()) {
+                "overlay", "overlayfast", "base" -> {
+                    val frames = args.drop(1).chunked(4).mapNotNull { g ->
+                        val id = g.getOrNull(0)?.trim()?.toIntOrNull() ?: return@mapNotNull null
+                        val wait = g.getOrNull(3)?.trim()?.toIntOrNull()?.coerceIn(0, MAX_ADD_WAIT_MS) ?: 0
+                        PatternFrame(
+                            if (method == "overlayfast") "overlay-fast" else method, id, wait, wait,
+                            g.getOrNull(1)?.trim()?.toIntOrNull() ?: 0, g.getOrNull(2)?.trim()?.toIntOrNull() ?: 0,
+                        )
+                    }.take(SurfaceDefinition.MAX_PATTERNS)
+                    if (frames.isEmpty()) null else AnimationCommand.Add(frames)
+                }
+                "move" -> AnimationCommand.Add(listOf(PatternFrame("move", -1, 0, 0, int(1) ?: 0, int(2) ?: 0)))
+                "text" -> {
+                    val text = args.getOrNull(5) ?: return null
+                    val color = if (args.size >= 10) ScriptPlayer.parseColor(args.subList(7, 10)) else null
+                    AnimationCommand.AddText(
+                        int(1) ?: 0, int(2) ?: 0, int(3) ?: 0, int(4) ?: 0, text.take(MAX_BALLOON_LABEL * 10),
+                        (args.getOrNull(6)?.trim()?.toLongOrNull() ?: 0L).coerceIn(0, MAX_ADD_TEXT_MS),
+                        color, int(10)?.coerceIn(1, 200), args.getOrNull(11)?.trim()?.takeIf { it.isNotEmpty() },
+                    )
+                }
+                else -> null
+            }
         }
 
         private fun command(scope: Int, command: AnimationCommand) =
@@ -2298,6 +2443,14 @@ class GhostController(
 
         /** \![set,balloonmarker] / \![set,balloonnum] の文字の長さの上限 */
         const val MAX_BALLOON_LABEL = 100
+
+        /** \![anim,add,...] の1コマの時間と、\![anim,add,text] を出しておく時間の上限 */
+        const val MAX_ADD_WAIT_MS = 60_000
+        const val MAX_ADD_TEXT_MS = 600_000L
+
+        /** \i[ID,wait] で、アニメーションが動き出すのを待つ時間と、終わるのを待つ時間の上限 */
+        const val ANIMATION_START_WAIT_MS = 1_000L
+        const val MAX_ANIMATION_WAIT_MS = 60_000L
 
         /** \f[name,...] でファイルとして扱う拡張子 */
         val FONT_EXTENSIONS = setOf("ttf", "otf", "ttc")

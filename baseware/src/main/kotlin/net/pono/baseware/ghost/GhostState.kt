@@ -6,6 +6,7 @@ import net.pono.baseware.sakura.MoveCommand
 import net.pono.baseware.sakura.TextAlign
 import net.pono.baseware.sakura.TextStyle
 import net.pono.baseware.sakura.VerticalAlign
+import net.pono.baseware.shell.PatternFrame
 
 sealed interface BalloonItem {
     /** [style] は \f で決めた飾り */
@@ -49,6 +50,38 @@ sealed interface AnimationCommand {
 
     /** \![anim,stop]。動いているアニメーションを全部止める */
     data object StopAll : AnimationCommand
+
+    /** \![anim,pause,ID] / \![anim,resume,ID]。コマを進めるのを止める・続ける */
+    data class Pause(val id: Int) : AnimationCommand
+    data class Resume(val id: Int) : AnimationCommand
+
+    /**
+     * \![anim,add,overlay|overlayfast|base|move,...]。サーフェスを替えるまで重ねるコマ。
+     * [frames] が2つ以上なら、それぞれの待ち時間ごとに順に出す（最後のコマは残す）
+     */
+    data class Add(val frames: List<PatternFrame>) : AnimationCommand
+
+    /** \![anim,add,text,x,y,幅,高さ,文字,表示時間,r,g,b,大きさ,フォント]。サーフェスの上に文字を出す（座標はシェル画像のピクセル） */
+    data class AddText(
+        val x: Int,
+        val y: Int,
+        val width: Int,
+        val height: Int,
+        val text: String,
+        val timeMs: Long,
+        val color: Int?,
+        val size: Int?,
+        val font: String?,
+    ) : AnimationCommand
+}
+
+/** \![enter,selectmode]。[scope] のキャラクターの上で矩形を選ばせる。[selection] はいま選んでいる範囲（シェル画像のピクセル） */
+data class SelectMode(val scope: Int, val selection: SelectRect? = null)
+
+data class SelectRect(val left: Int, val top: Int, val right: Int, val bottom: Int) {
+    val isEmpty: Boolean get() = right <= left || bottom <= top
+
+    override fun toString() = "$left,$top,$right,$bottom"
 }
 
 /** キャラクター（\0, \1 ...）1人分の表示状態。[surface] が -1 なら非表示。 */
@@ -149,6 +182,10 @@ data class GhostState(
     val induction: Boolean = false,
     /** 選んだことのある \_a のリンクの ID（訪問済みの見た目にする） */
     val visitedAnchors: Set<String> = emptySet(),
+    /** \![enter,collisionmode] の間は "names"（名前も出す）か "rect"（枠だけ）。当たり判定をキャラクターの上に描く */
+    val collisionMode: String? = null,
+    /** \![enter,selectmode] の間 */
+    val selectMode: SelectMode? = null,
 ) {
     fun update(scope: Int, f: (CharacterState) -> CharacterState): GhostState {
         val current = characters[scope] ?: CharacterState(scope, -1)

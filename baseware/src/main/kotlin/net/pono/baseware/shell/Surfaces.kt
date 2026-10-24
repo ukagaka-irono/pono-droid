@@ -97,7 +97,7 @@ data class AnimationInterval(val kinds: Set<IntervalKind>, val arg: Int = 0) {
 /**
  * パターンの1コマ。[surface] が -1 ならそのレイヤーを消す。
  * start / stop / alternativestart / alternativestop のコマは、操作するアニメーションの番号を [targets] に持つ。
- * [scaleX] / [scaleY] は scaling のコマの倍率（パーセント。小数も書ける）
+ * [scaleX] / [scaleY] は scaling のコマの倍率（パーセント。小数も書ける）、[file] は import のコマの APNG / GIF / WebP
  */
 data class PatternFrame(
     val method: String,
@@ -109,6 +109,7 @@ data class PatternFrame(
     val targets: List<Int> = emptyList(),
     val scaleX: Float = 100f,
     val scaleY: Float = 100f,
+    val file: String? = null,
 ) {
     val isControl: Boolean get() = method in CONTROL_METHODS
 
@@ -585,6 +586,12 @@ class SurfaceTable(
                 // start,3 / alternativestart,[3.5.7] / alternativestart,(3,5) など。数字をすべて拾う
                 val targets = Regex("""\d+""").findAll(args.drop(1).joinToString(",")).mapNotNull { it.value.toIntOrNull() }.toList()
                 return PatternFrame(method, -1, 0, 0, 0, 0, targets)
+            }
+            // import,ファイル名,待ち時間,x,y（APNG などのアニメーション画像を、待ってから流す）
+            if (method == "import") {
+                val file = args.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
+                val (min, max) = parseWait(args.getOrNull(2), 1)
+                return PatternFrame(method, -1, min, max, args.getOrNull(3)?.toIntOrNull() ?: 0, args.getOrNull(4)?.toIntOrNull() ?: 0, file = file)
             }
             val surface = args.getOrNull(1)?.toIntOrNull() ?: -1
             val (min, max) = parseWait(args.getOrNull(2), 1)
