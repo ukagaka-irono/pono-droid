@@ -19,6 +19,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import net.pono.baseware.balloon.Balloon
 import net.pono.baseware.net.FeedParser
+import net.pono.baseware.net.FileWatch
+import net.pono.baseware.net.NetTools
+import net.pono.baseware.net.SocketWebSocketConnector
+import net.pono.baseware.net.WebSocketConnector
+import net.pono.baseware.net.WebSocketSession
 import net.pono.baseware.net.HttpClient
 import net.pono.baseware.net.HttpCommand
 import net.pono.baseware.net.HttpOutcome
@@ -52,6 +57,7 @@ import net.pono.baseware.update.UpdateResult
 import net.pono.baseware.update.UrlConnectionFetcher
 import java.io.File
 import java.io.IOException
+import java.net.InetAddress
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -182,6 +188,8 @@ class GhostController(
     private val updateFetcher: HttpFetcher = UrlConnectionFetcher("${ShioriSession.SENDER}/$basewareVersion"),
     /** \![execute,http-*] などの通信 */
     private val httpClient: HttpClient = UrlConnectionHttpClient("${ShioriSession.SENDER}/$basewareVersion"),
+    /** WebSocket の通信 */
+    private val webSocketConnector: WebSocketConnector = SocketWebSocketConnector("${ShioriSession.SENDER}/$basewareVersion"),
     /** 別のゴーストから切り替わって起動したとき、その前のゴースト（OnGhostChanged を送る） */
     private val previous: PreviousGhost? = null,
 ) {
@@ -442,46 +450,125 @@ class GhostController(
     /** バルーンのオンラインの印は、\![enter,onlinemode] の間とネットワーク更新の間に出す */
     private fun refreshOnline() = _state.update { it.copy(online = onlineMode || updating || httpShowing > 0) }
 
+    /** ネットワーク更新するもの。[type] は ghost / shell / balloon、[name] は名前（OnUpdateResultEx） */
+    private class UpdateTarget(val type: String, val name: String, val dir: File, val homeUrl: String?)
+
     /**
-     * SSP と同じ流れでネットワーク更新する: OnUpdateBegin → OnUpdateReady → OnUpdateComplete / OnUpdateFailure。
-     * 辞書が変わったら SHIORI を読み込み直してから OnUpdateComplete を送る。シェルの変更は次の起動から反映される。
+     * SSP と同じ流れでネットワーク更新する（\![updatebymyself]・メニュー・通知）。ゴーストは OnUpdateBegin → OnUpdateReady →
+     * OnUpdateComplete / OnUpdateFailure、シェルとバルーンは OnUpdateOther*。辞書が変わったら SHIORI を読み込み直してから Complete を送る。
+     * 最後に結果をまとめて OnUpdateResult（checkonly なら OnUpdateCheckResult）を送る。[options] は checkonly / testonly / recovery、
+     * [reason] は SSP の更新実行理由（script / user）。シェルの変更は次の起動から反映される
      */
-    fun networkUpdate() {
-        if (updating || closing) return
+    fun networkUpdate(types: List<String> = listOf("ghost"), options: Set<String> = emptySet(), reason: String = "user") {
+        val targets = types.mapNotNull { type ->
+            when (type) {
+                "ghost" -> UpdateTarget("ghost", ghost.name, ghost.dir, homeUrlOverride ?: ghost.descript["homeurl"])
+                "shell" -> UpdateTarget("shell", shell.name, shell.dir, shell.descript["homeurl"])
+                "balloon" -> balloon?.let { UpdateTarget("balloon", it.name, it.dir, it.descript["homeurl"]) }
+                else -> null
+            }
+        }
+        runUpdates(targets, options, reason, extended = false)
+    }
+
+    /** \![updateother,--shell=名前,--balloon=名前]。入っているシェルとバルーンを名前で更新し、OnUpdateResultEx でまとめる */
+    fun updateOther(args: List<String>) {
+        val opts = args.map { it.trim() }.filter { it.startsWith("--") }
+        val options = opts.filter { it.startsWith("--option=") }.flatMap { it.removePrefix("--option=").split('+', ',') }.map { it.trim().lowercase() }.toSet()
+        val targets = opts.mapNotNull { o ->
+            val name = o.substringAfter('=', "").trim()
+            when {
+                o.startsWith("--shell=") -> ghost.shellDirs.map(::Shell).firstOrNull { it.name == name || it.dir.name == name }
+                    ?.let { UpdateTarget("shell", it.name, it.dir, it.descript["homeurl"]) }
+                o.startsWith("--balloon=") -> repository?.balloons?.list()?.firstOrNull { it.name == name || it.dir.name == name }
+                    ?.let { UpdateTarget("balloon", it.name, it.dir, it.descript["homeurl"]) }
+                // プラグイン・ヘッドライン・言語は pono-droid に無い
+                else -> null
+            }
+        }
+        if (targets.isNotEmpty()) runUpdates(targets, options, "script", extended = true)
+    }
+
+    private fun runUpdates(targets: List<UpdateTarget>, options: Set<String>, reason: String, extended: Boolean) {
+        if (updating || closing || targets.isEmpty()) return
         updating = true
+        val check = "checkonly" in options
+        val mode = when {
+            check -> NetworkUpdater.Mode.CHECK
+            "testonly" in options -> NetworkUpdater.Mode.TEST
+            else -> NetworkUpdater.Mode.NORMAL
+        }
         scope.launch {
-            val refs = { r0: String, r1: String -> listOf(r0, r1, "", "ghost") }
+            val results = mutableListOf<String>()
             try {
-                val homeUrl = homeUrlOverride ?: ghost.descript["homeurl"]
-                if (homeUrl.isNullOrBlank()) {
-                    raise("OnUpdateFailure", refs("none", ""))
-                    return@launch
-                }
-                talkAndWait("OnUpdateBegin", listOf(ghost.name, ghost.dir.absolutePath + "/", "", "ghost"))
-                val result = watchNetwork {
-                    NetworkUpdater(ghost.dir, updateFetcher).update(homeUrl) { count ->
-                        // Reference0 は「ファイル数 - 1」（SSP の仕様）
-                        talkAndWait("OnUpdateReady", refs((count - 1).toString(), ""))
-                    }
-                }
-                platform.log("network update: $result")
-                when (result) {
-                    UpdateResult.NoChange -> raise("OnUpdateComplete", refs("none", ""))
-                    is UpdateResult.Changed -> {
-                        reloadShiori()
-                        raise("OnUpdateComplete", refs("changed", result.files.joinToString(",")))
-                    }
-                    is UpdateResult.Failure -> raise("OnUpdateFailure", refs(result.reason, ""))
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // 更新サーバーが返した変な一覧などで落ちないように。ゴーストには失敗として伝える
-                platform.log("network update failed: $e")
-                raise("OnUpdateFailure", refs(if (e is IOException) "fileio" else "unknown", ""))
+                for (t in targets) results += updateOne(t, mode, reason, extended)
             } finally {
                 updating = false
             }
+            val summary = when {
+                check && extended -> "OnUpdateCheckResultEx"
+                check -> "OnUpdateCheckResult"
+                extended -> "OnUpdateResultEx"
+                else -> "OnUpdateResult"
+            }
+            raise(summary, results, userInitiated = false)
+        }
+    }
+
+    /** 1つ更新して、OnUpdateResult の1つ分（種類[1]OK|NG[1]ファイル数か理由。Ex は名前を先に付ける）を返す */
+    private suspend fun updateOne(t: UpdateTarget, mode: NetworkUpdater.Mode, reason: String, extended: Boolean): String {
+        val ghostSide = t.type == "ghost"
+        // ゴースト以外は OnUpdateOther*。Reference3 は種類、Reference4 は実行理由
+        val prefix = if (ghostSide) "OnUpdate" else "OnUpdateOther"
+        fun refs(r0: String, r1: String) = listOf(r0, r1, "", t.type, reason)
+        fun row(ok: Boolean, detail: String) = (if (extended) listOf(t.name, t.type) else listOf(t.type)).plus(listOf(if (ok) "OK" else "NG", detail)).joinToString("\u0001")
+        val check = mode == NetworkUpdater.Mode.CHECK
+        try {
+            val homeUrl = t.homeUrl
+            if (homeUrl.isNullOrBlank()) {
+                raise(if (check) "OnUpdateCheckFailure" else "${prefix}Failure", refs("none", ""), userInitiated = !check)
+                return row(false, "none")
+            }
+            if (!check) talkAndWait("${prefix}Begin", listOf(t.name, t.dir.absolutePath + "/", "", t.type, reason))
+            val result = watchNetwork {
+                NetworkUpdater(t.dir, updateFetcher).update(homeUrl, mode) { count ->
+                    // Reference0 は「ファイル数 - 1」（SSP の仕様）
+                    talkAndWait("${prefix}Ready", refs((count - 1).toString(), ""))
+                }
+            }
+            platform.log("network update ${t.type}: $result")
+            return when (result) {
+                UpdateResult.NoChange -> {
+                    raise("${prefix}Complete", refs("none", ""))
+                    row(true, "0")
+                }
+                is UpdateResult.Changed -> {
+                    if (ghostSide) reloadShiori()
+                    raise("${prefix}Complete", refs("changed", result.files.joinToString(",")))
+                    row(true, result.files.size.toString())
+                }
+                // checkonly は更新の有無だけ（ファイル数は1を引かない）。testonly は置き換えずに終わる
+                is UpdateResult.Checked -> {
+                    if (check) {
+                        raise("OnUpdateCheckComplete", refs(if (result.files.isEmpty()) "none" else result.files.size.toString(), result.files.joinToString(",")), userInitiated = false)
+                    } else {
+                        raise("${prefix}Complete", refs(if (result.files.isEmpty()) "none" else "changed", result.files.joinToString(",")))
+                    }
+                    row(true, result.files.size.toString())
+                }
+                is UpdateResult.Failure -> {
+                    raise(if (check) "OnUpdateCheckFailure" else "${prefix}Failure", refs(result.reason, ""), userInitiated = !check)
+                    row(false, result.reason)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 更新サーバーが返した変な一覧などで落ちないように。ゴーストには失敗として伝える
+            platform.log("network update failed: $e")
+            val why = if (e is IOException) "fileio" else "unknown"
+            raise(if (check) "OnUpdateCheckFailure" else "${prefix}Failure", refs(why, ""))
+            return row(false, why)
         }
     }
 
@@ -671,6 +758,299 @@ class GhostController(
         }
     }
 
+    // ---- WebSocket（\![execute,websocket] / \![send,websocket] / \![close,websocket] / \![cancel,websocket]） ----
+
+    private class Socket(val url: String, val id: String, val job: Job) {
+        @Volatile var session: WebSocketSession? = null
+        @Volatile var closing = false
+    }
+
+    private val sockets = HashMap<String, Socket>()
+
+    /** SSP のイベント名。ID が On で始まれば、受信は ID、そのほかは ID の後ろに Open などを付けた名前 */
+    private fun socketEvent(id: String, kind: String): String =
+        if (id.startsWith("On")) id + (if (kind == "Receive") "" else kind) else "OnExecuteWebSocket$kind"
+
+    /**
+     * WebSocket でつなぎ、受け取るたびに OnExecuteWebSocketReceive を送る。エラーで切れたら5回までつなぎ直す
+     * （成功すれば Reconnect、全部だめなら Failure）。いつも待たずに続ける（--sync は使えない）
+     */
+    private fun openWebSocket(url: String, options: List<String>): Boolean {
+        val u = url.trim()
+        if (!u.startsWith("ws://") && !u.startsWith("wss://")) return false
+        val opts = options.map { it.trim() }.filter { it.startsWith("--") }.associate { it.substring(2).substringBefore('=').lowercase() to it.substringAfter('=', "") }
+        val id = opts["async"] ?: opts["sync"] ?: ""
+        if (u in sockets) {
+            raise(socketEvent(id, "Failure"), listOf(id, u, "already connected"), userInitiated = false)
+            return true
+        }
+        if (sockets.size >= MAX_WEBSOCKETS) {
+            raise(socketEvent(id, "Failure"), listOf(id, u, "busy"), userInitiated = false)
+            return true
+        }
+        val headers = options.map { it.trim() }.filter { it.startsWith("--header=") }.mapNotNull { h ->
+            val v = h.removePrefix("--header=")
+            v.substringBefore(':').trim().takeIf { ':' in v && it.isNotEmpty() && '\r' !in v && '\n' !in v }?.let { it to v.substringAfter(':').trim() }
+        } + listOfNotNull(opts["authorization"]?.let { "Authorization" to it }, opts["cookie"]?.let { "Cookie" to it })
+        val protocol = opts["m_websocketprotocol"]
+        lateinit var socket: Socket
+        val job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+            var attempt = 0
+            var opened = false
+            try {
+                while (true) {
+                    val session = try {
+                        withContext(Dispatchers.IO) { webSocketConnector.open(u, headers, protocol) }
+                    } catch (e: IOException) {
+                        if (!opened) {
+                            raise(socketEvent(id, "Failure"), listOf(id, u, e.message ?: "error"), userInitiated = false)
+                            return@launch
+                        }
+                        // 切れた後のつなぎ直し（だんだん間を空ける）
+                        if (++attempt > MAX_WEBSOCKET_RETRIES) {
+                            raise(socketEvent(id, "Failure"), listOf(id, u, "reconnect failed"), userInitiated = false)
+                            return@launch
+                        }
+                        delay(1000L shl (attempt - 1))
+                        continue
+                    }
+                    socket.session = session
+                    if (!opened) {
+                        session.tls?.let { t -> notify("OnExecuteWebSocket_SSLInfo", listOf(id, u, "101", t.protocol, t.cipher, t.subject, t.notBefore, t.notAfter, t.issuer)) }
+                        raise(socketEvent(id, "Open"), listOf(id, u, "200"), userInitiated = false)
+                        opened = true
+                    } else {
+                        raise(socketEvent(id, "Reconnect"), listOf(id, u, "200"), userInitiated = false)
+                    }
+                    attempt = 0
+                    val ended = try {
+                        while (true) {
+                            val m = withContext(Dispatchers.IO) { session.read() } ?: break
+                            val data = if (m.binary) java.util.Base64.getEncoder().encodeToString(m.data) else
+                                String(m.data, Charsets.UTF_8).replace("\r\n", "\u0001").replace('\n', '\u0001')
+                            raise(socketEvent(id, "Receive"), listOf(id, u, if (m.binary) "2" else "1", data), userInitiated = false)
+                        }
+                        true
+                    } catch (e: IOException) {
+                        false
+                    }
+                    // 相手が閉じた・こちらが閉じたなら終わり。エラーで切れたらつなぎ直す
+                    if (ended || socket.closing) {
+                        raise(socketEvent(id, "Close"), listOf(id, u, (session.closeCode ?: 1000).toString()), userInitiated = false)
+                        return@launch
+                    }
+                    if (++attempt > MAX_WEBSOCKET_RETRIES) {
+                        raise(socketEvent(id, "Failure"), listOf(id, u, "reconnect failed"), userInitiated = false)
+                        return@launch
+                    }
+                    delay(1000L shl (attempt - 1))
+                }
+            } finally {
+                socket.session?.abort()
+                if (sockets[u] === socket) sockets.remove(u)
+            }
+        }
+        socket = Socket(u, id, job)
+        sockets[u] = socket
+        job.start()
+        return true
+    }
+
+    /** \![send,websocket,URL,data1,data2...]（CRLF でつなぐ）と \![send,websocket-binary,URL,base64]。つながっていなければ何もしない */
+    private fun sendWebSocket(binary: Boolean, url: String, data: List<String>) {
+        val session = sockets[url.trim()]?.session ?: return
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                if (binary) session.sendBinary(java.util.Base64.getDecoder().decode(data.firstOrNull().orEmpty().trim()))
+                else session.sendText(data.joinToString("\r\n"))
+            }
+        }
+    }
+
+    /** \![close,websocket,URL,code]。Close を送り、相手の Close を待ってから OnExecuteWebSocketClose */
+    private fun closeWebSocket(url: String, code: Int) {
+        val socket = sockets[url.trim()] ?: return
+        socket.closing = true
+        scope.launch(Dispatchers.IO) { socket.session?.close(code) }
+    }
+
+    /** \![cancel,websocket,URL]。Close を送らずに切り、OnExecuteWebSocketClose（userbreak） */
+    private fun cancelWebSocket(url: String): Boolean {
+        val socket = sockets.remove(url.trim()) ?: return false
+        socket.job.cancel()
+        socket.session?.abort()
+        raise(socketEvent(socket.id, "Close"), listOf(socket.id, socket.url, "userbreak"), userInitiated = false)
+        return true
+    }
+
+    // ---- ping / nslookup ----
+
+    /** \![execute,ping,--host=,--count=,--timeout=,--event=]。1回ごとに OnPingProgress、最後に OnPingComplete */
+    private fun ping(options: Map<String, String>): Boolean {
+        val host = options["host"]?.takeIf { it.isNotBlank() } ?: return false
+        val event = options["event"].orEmpty()
+        val count = options["count"]?.toIntOrNull()?.coerceIn(1, MAX_PINGS) ?: 3
+        val timeout = options["timeout"]?.toIntOrNull()?.coerceIn(100, 30_000) ?: 5_000
+        val complete = if (event.startsWith("On")) event else "OnPingComplete"
+        val progress = if (event.startsWith("On")) event + "Progress" else "OnPingProgress"
+        scope.launch {
+            val replies = mutableListOf<NetTools.PingReply>()
+            val address = withContext(Dispatchers.IO) { runCatching { InetAddress.getByName(host) }.getOrNull() }
+            val source = withContext(Dispatchers.IO) { runCatching { InetAddress.getLocalHost().hostAddress }.getOrNull() }.orEmpty()
+            fun refs(): List<String> {
+                val ok = replies.count { it.ok }
+                return listOf(event, listOf(source, replies.size, ok, replies.size - ok).joinToString("\u0001")) +
+                    replies.map { listOf(if (it.ok) "OK" else it.error, it.address, it.rttMs).joinToString("\u0001") }
+            }
+            repeat(count) {
+                replies += address?.let { a -> withContext(Dispatchers.IO) { NetTools.ping(a, timeout) } } ?: NetTools.PingReply(false, host, 0, "unknown host")
+                if (replies.size < count) {
+                    raise(progress, refs(), userInitiated = false)
+                    delay(1000)
+                }
+            }
+            deliverLater(complete, refs())
+        }
+        return true
+    }
+
+    /** \![execute,nslookup,--host=,--event=]。名前なら IP（複数はカンマ区切り）、IP なら名前を調べる */
+    private fun nslookup(options: Map<String, String>): Boolean {
+        val host = options["host"]?.trim()?.takeIf { it.isNotEmpty() } ?: return false
+        val event = options["event"].orEmpty()
+        val reverse = NetTools.isAddress(host)
+        val mode = if (reverse) "reverse" else "lookup"
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    if (reverse) InetAddress.getByName(host).canonicalHostName.takeIf { it != host } else InetAddress.getAllByName(host).joinToString(",") { it.hostAddress.orEmpty() }
+                }.getOrNull()
+            }
+            if (result.isNullOrEmpty()) {
+                deliverLater(if (event.startsWith("On")) event + "Failure" else "OnNSLookupFailure", listOf(event, host, mode))
+            } else {
+                deliverLater(if (event.startsWith("On")) event else "OnNSLookupComplete", listOf(event, host, mode, result))
+            }
+        }
+        return true
+    }
+
+    // ---- ファイルの見張り（\![execute,filewatch] / \![cancel,filewatch]） ----
+
+    private val watches = HashMap<String, Job>()
+
+    /** ゴーストのフォルダの中のパス（ghost/master からの相対か、絶対パス）。外を指していれば null */
+    private fun ghostPath(name: String): File? {
+        val raw = name.trim().replace('\\', '/')
+        if (raw.isEmpty()) return null
+        val file = if (raw.startsWith("/")) File(raw) else File(ghost.masterDir, raw)
+        val canonical = runCatching { file.canonicalFile }.getOrNull() ?: return null
+        val root = ghost.dir.canonicalFile
+        return canonical.takeIf { it == root || it.path.startsWith(root.path + File.separator) }
+    }
+
+    private fun fileWatch(path: String, options: Map<String, String>): Boolean {
+        val id = options["async"].orEmpty()
+        val change = if (id.startsWith("On")) id else "OnExecuteFileWatchChange"
+        val failure = if (id.startsWith("On")) id + "Failure" else "OnExecuteFileWatchFailure"
+        val target = ghostPath(path)
+        when {
+            path.isBlank() -> raise(failure, listOf(id, path, "invalid"), userInitiated = false)
+            // ゴーストのフォルダの外は見張らない
+            target == null -> raise(failure, listOf(id, path, "notauthorized"), userInitiated = false)
+            !target.isDirectory && target.parentFile?.isDirectory != true -> raise(failure, listOf(id, path, "notfound"), userInitiated = false)
+            path !in watches && watches.size >= MAX_WATCHES -> raise(failure, listOf(id, path, "limit"), userInitiated = false)
+            else -> {
+                watches.remove(path)?.cancel()
+                val debounce = options["debounce"]?.toLongOrNull()?.coerceIn(0, 60_000) ?: 500
+                val watch = FileWatch(target, debounce)
+                watches[path] = scope.launch {
+                    while (true) {
+                        delay(WATCH_INTERVAL_MS)
+                        val kind = withContext(Dispatchers.IO) { watch.poll(System.currentTimeMillis()) } ?: continue
+                        if (kind == "failed") {
+                            raise(failure, listOf(id, path, "notfound"), userInitiated = false)
+                            break
+                        }
+                        raise(change, listOf(id, path, kind, target.absolutePath), userInitiated = false)
+                        if (kind == "deleted" && target.isDirectory.not() && watch.target.parentFile?.isDirectory != true) break
+                    }
+                    watches.remove(path)
+                }
+            }
+        }
+        return true
+    }
+
+    private fun cancelFileWatch(path: String): Boolean {
+        watches.remove(path.trim())?.cancel() ?: return false
+        return true
+    }
+
+    // ---- ZIP（\![execute,extractarchive / compressarchive]） ----
+
+    /** 待つ（--event が無い）なら終わるまでの Job を返す */
+    private fun archive(compress: Boolean, args: List<String>): Job? {
+        val file = args.getOrNull(0)?.let(::ghostPath)
+        val dir = args.getOrNull(1)?.let(::ghostPath)
+        val opts = args.drop(2).map { it.trim() }.filter { it.startsWith("--") }.associate { it.substring(2).substringBefore('=').lowercase() to it.substringAfter('=', "") }
+        val event = opts["event"].orEmpty()
+        val base = if (compress) "OnCompressArchive" else "OnExtractArchive"
+        val complete = if (event.startsWith("On")) event else base + "Complete"
+        val failure = if (event.startsWith("On")) event + "Failure" else base + "Failure"
+        val job = scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    when {
+                        // ゴーストのフォルダの外には書かない・外は読まない
+                        file == null || dir == null -> throw IOException("notauthorized")
+                        opts.containsKey("password") -> throw IOException("password not supported")
+                        compress -> NetTools.compress(dir, file)
+                        else -> NetTools.extract(file, dir)
+                    }
+                }
+            }
+            // 結果は、待っているスクリプトとは別に、話し終わってから送る
+            scope.launch {
+                result.onSuccess { r -> deliverLater(complete, listOf(event, r.files.toString(), r.compressed.toString(), r.uncompressed.toString())) }
+                    .onFailure { e -> deliverLater(failure, listOf(event, e.message ?: "error")) }
+            }
+        }
+        return if (event.isEmpty()) job else null
+    }
+
+    // ---- 時刻合わせ（\7 / \![executesntp]） ----
+
+    /** SNTP でずれを測り、OnSNTPCompareEx（答えが無ければ OnSNTPCompare）を送る。端末の時計は直さない（\6 は何もしない） */
+    private fun startSntp() {
+        val server = SNTP_SERVER
+        scope.launch {
+            raise("OnSNTPBegin", listOf(server), userInitiated = false)
+            val r = withContext(Dispatchers.IO) { runCatching { NetTools.sntp(server) }.getOrNull() }
+            if (r == null) {
+                deliverLater("OnSNTPFailure", listOf(server))
+                return@launch
+            }
+            fun time(millis: Long, ms: Boolean): String {
+                val c = Calendar.getInstance().apply { timeInMillis = millis }
+                val base = "%d,%d,%d,%d,%d,%d".format(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH),
+                    c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), c.get(Calendar.SECOND))
+                return if (ms) "$base,${c.get(Calendar.MILLISECOND)}" else base
+            }
+            val ex = listOf(server, time(r.serverTime, true), time(r.localTime, true), "%.3f".format(r.offsetMs / 1000.0), r.offsetMs.toString())
+            _state.first { !it.talking && !it.waitingChoice }
+            val script = request("OnSNTPCompareEx", ex)
+                ?: request(
+                    "OnSNTPCompare",
+                    listOf(server, time(if (abs(r.offsetMs) < 1000) r.localTime else r.serverTime, false), time(r.localTime, false), (abs(r.offsetMs) / 1000).toString()),
+                )
+            if (script != null) {
+                cancelScript()
+                runScript(script)
+            }
+        }
+    }
+
     /** URL の最後の部分（クエリは落とす）。無ければ index.html */
     private fun urlFileName(url: String): String =
         url.substringBefore('?').substringBefore('#').trimEnd('/').substringAfterLast('/').substringAfter("//").ifEmpty { "index.html" }
@@ -724,6 +1104,10 @@ class GhostController(
     /** SHIORI を閉じて終わる。[switchTo] があれば、そのゴーストに切り替える */
     private suspend fun shutdown(switchTo: Pair<Ghost, PreviousGhost>? = null) {
         timerJob?.cancel()
+        // WebSocket とファイルの見張りはゴーストが終わるときにすべてやめる
+        for (url in sockets.keys.toList()) cancelWebSocket(url)
+        watches.values.forEach { it.cancel() }
+        watches.clear()
         timers.values.forEach { it.cancel() }
         timers.clear()
         platform.stopSound()
@@ -1831,7 +2215,7 @@ class GhostController(
                 shutdown()
                 return@launch
             }
-            if (host.updateRequested) networkUpdate()
+            host.updateRequest?.let { (types, options) -> networkUpdate(types, options, "script") }
             if (raised.isNotEmpty()) {
                 // \![raise] が \![raise] を呼び続けると SHIORI を叩き続けてしまうので、連鎖の長さに上限を置く
                 if (chain >= MAX_RAISE_CHAIN) {
@@ -2215,7 +2599,7 @@ class GhostController(
         var choiceTimeoutMs = this@GhostController.choiceTimeoutMs
 
         /** `\![updatebymyself]`。スクリプトが終わってから始める */
-        var updateRequested = false
+        var updateRequest: Pair<List<String>, Set<String>>? = null
 
         /** `\![set,serikotalk,false]` の間は口パク（SERIKO の talk）を動かさない。このスクリプトの間だけ */
         private var serikoTalk = true
@@ -2279,34 +2663,67 @@ class GhostController(
         /** \f の飾り（キャラクターごと） */
         private val styles = HashMap<Int, TextStyle>()
 
-        override fun requestUpdate() {
-            updateRequested = true
+        override fun requestUpdate() = requestUpdate(listOf("ghost"), emptySet())
+
+        override fun requestUpdate(types: List<String>, options: Set<String>) {
+            if (types.isNotEmpty()) updateRequest = types to options
         }
+
+        override fun updateOther(args: List<String>) = this@GhostController.updateOther(args)
 
         override fun execute(name: String, args: List<String>): Boolean {
             HttpCommand.parse(name, args)?.let {
                 executeHttp(it)
                 return true
             }
+            val opts = args.map { it.trim() }.filter { it.startsWith("--") }
+                .associate { it.substring(2).substringBefore('=').lowercase() to it.substringAfter('=', "") }
             when (name) {
                 "resetwindowpos" -> resetWindowPositions()
+                "websocket" -> return args.firstOrNull()?.let { openWebSocket(it, args.drop(1)) } ?: false
+                "ping" -> return ping(opts)
+                "nslookup" -> return nslookup(opts)
+                "filewatch" -> return fileWatch(args.firstOrNull().orEmpty(), opts)
+                "extractarchive", "compressarchive" -> archive(name == "compressarchive", args)
                 else -> return false
             }
             return true
         }
 
-        /** http などは、--async でなければ通信が終わるまで待つ（SSP と同じ） */
+        /** http などは --async でなければ通信が終わるまで、ZIP は --event が無ければ終わるまで待つ（SSP と同じ） */
         override suspend fun runExecute(name: String, args: List<String>): Boolean {
-            val cmd = HttpCommand.parse(name, args) ?: return execute(name, args)
-            val job = executeHttp(cmd)
-            if (!cmd.async) job.join()
-            return true
+            HttpCommand.parse(name, args)?.let { cmd ->
+                val job = executeHttp(cmd)
+                if (!cmd.async) job.join()
+                return true
+            }
+            if (name == "extractarchive" || name == "compressarchive") {
+                archive(name == "compressarchive", args)?.join()
+                return true
+            }
+            return execute(name, args)
         }
 
         override fun cancel(kind: String, args: List<String>): Boolean = when (kind) {
             "http", "ical", "rss" -> args.firstOrNull()?.let(::cancelHttp) ?: false
+            "websocket" -> args.firstOrNull()?.let(::cancelWebSocket) ?: false
+            "filewatch" -> args.firstOrNull()?.let(::cancelFileWatch) ?: false
             else -> false
         }
+
+        override fun send(kind: String, args: List<String>): Boolean {
+            val url = args.firstOrNull() ?: return false
+            when (kind) {
+                "websocket" -> sendWebSocket(false, url, args.drop(1))
+                "websocket-binary" -> sendWebSocket(true, url, args.drop(1))
+                else -> return false
+            }
+            return true
+        }
+
+        override fun adjustClock() = startSntp()
+
+        override fun correctClock() = platform.log("\\6: 端末の時計は直せません（ずれを測るだけ）")
 
         override fun nudge(scope: Int, away: Boolean) {
             _state.update { it.update(scope) { c -> c.copy(nudge = ++animationCounter to away) } }
@@ -2618,6 +3035,10 @@ class GhostController(
         }
 
         override fun close(kind: String, args: List<String>): Boolean {
+            if (kind == "websocket") {
+                args.firstOrNull()?.let { closeWebSocket(it, args.getOrNull(1)?.trim()?.toIntOrNull() ?: 1000) } ?: return false
+                return true
+            }
             if (kind !in setOf("inputbox", "passwordinput", "communicatebox", "teachbox", "dateinput", "timeinput", "sliderinput", "textareabox")) return false
             closeInput(args.firstOrNull())
             return true
@@ -2725,6 +3146,16 @@ class GhostController(
 
         /** --progress-notify を送る間隔 */
         const val PROGRESS_INTERVAL_MS = 500L
+
+        /** 同時につなげる WebSocket の数、切れたときにつなぎ直す回数、1回の ping の数、見張れるファイルの数と見る間隔 */
+        const val MAX_WEBSOCKETS = 8
+        const val MAX_WEBSOCKET_RETRIES = 5
+        const val MAX_PINGS = 20
+        const val MAX_WATCHES = 16
+        const val WATCH_INTERVAL_MS = 300L
+
+        /** 時刻合わせで時刻を聞くサーバー */
+        const val SNTP_SERVER = "pool.ntp.org"
 
         /** `\![timerraise]` で同時に予約できる数 */
         const val MAX_TIMERS = 32

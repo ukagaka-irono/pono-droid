@@ -105,6 +105,9 @@ sealed interface UpdateResult {
     data object NoChange : UpdateResult
     data class Changed(val files: List<String>) : UpdateResult
 
+    /** checkonly で確かめただけ（[files] が空なら更新は無い）。testonly なら落として確かめたが置き換えていない */
+    data class Checked(val files: List<String>) : UpdateResult
+
     /** [reason] は OnUpdateFailure の Reference0 にそのまま渡す（"timeout", "md5 miss", HTTP のステータスなど） */
     data class Failure(val reason: String) : UpdateResult
 }
@@ -120,8 +123,11 @@ class NetworkUpdater(
 ) {
     private class Manifest(val base: String, val entries: List<UpdateEntry>)
 
+    /** 更新のやり方（SSP の更新オプション）。CHECK は更新があるかだけ、TEST は落として確かめるが置き換えない */
+    enum class Mode { NORMAL, CHECK, TEST }
+
     /** @param onReady 落とすファイル数が決まったとき（0 件なら呼ばない） */
-    suspend fun update(homeUrl: String, onReady: suspend (count: Int) -> Unit = {}): UpdateResult = withContext(Dispatchers.IO) {
+    suspend fun update(homeUrl: String, mode: Mode = Mode.NORMAL, onReady: suspend (count: Int) -> Unit = {}): UpdateResult = withContext(Dispatchers.IO) {
         val declared = normalizeBase(homeUrl) ?: return@withContext UpdateResult.Failure("invalid homeurl")
         val (manifest, fetched) = fetchManifest(declared)
         if (manifest == null) return@withContext failure(fetched)
@@ -136,6 +142,7 @@ class NetworkUpdater(
                 val file = safeFile(root, e.path) ?: return@filter false
                 !file.isFile || md5(file) != e.md5
             }
+            if (mode == Mode.CHECK) return@withContext UpdateResult.Checked(targets.map { it.path })
             if (targets.isEmpty()) return@withContext UpdateResult.NoChange
             onReady(targets.size)
 
@@ -154,6 +161,7 @@ class NetworkUpdater(
                 total += dest.length()
                 if (total > MAX_TOTAL_BYTES) return@withContext UpdateResult.Failure("file too large")
             }
+            if (mode == Mode.TEST) return@withContext UpdateResult.Checked(targets.map { it.path })
             for (e in targets) {
                 val dest = safeFile(root, e.path)!!
                 dest.parentFile?.mkdirs()

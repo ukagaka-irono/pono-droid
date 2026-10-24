@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 103）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 132）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -45,7 +45,11 @@ OnCPULoadHigh / Low（/proc/stat か /proc/loadavg を読める端末だけ）�
 OnOSUpdateInfo（Android の最後の更新だけ）、OnNotifyFontInfo、OnNotifyHolidayInfo（日本の祝日を決まりから求める。日本以外は送らない）、
 OnScreenSaverStart / End（Android のスクリーンセーバー）、
 OnExecuteHTTPComplete / Failure / Progress / Streaming / SSLInfo、OnExecuteRSSComplete / Failure / _SSLInfo、
-OnExecuteICalComplete / Failure / Progress / _SSLInfo
+OnExecuteICalComplete / Failure / Progress / _SSLInfo、OnExecuteWebSocketOpen / Receive / Reconnect / Close / Failure / _SSLInfo、
+OnPingComplete / Progress（Android では ICMP を直に送れないので InetAddress.isReachable で代わりにする）、OnNSLookupComplete / Failure、
+OnExecuteFileWatchChange / Failure（ゴーストのフォルダの中だけ）、OnExtractArchiveComplete / Failure・OnCompressArchiveComplete / Failure
+（ゴーストのフォルダの中だけ。パスワード付き ZIP は使えない）、OnSNTPBegin / CompareEx / Compare / Failure（ずれを測るだけ）、
+OnUpdateCheckComplete / Failure、OnUpdateResult(Ex) / OnUpdateCheckResult(Ex)、OnUpdateOtherBegin / Ready / Complete / Failure（シェルとバルーン）
 
 ### 🔨 Android で作れる
 - 共有・インストール: OnTextDrop・OnURLDropped / OnURLDropping / OnURLDropFailure（文字や URL の「共有」）、OnDirectoryDrop（使わない）、
@@ -53,10 +57,6 @@ OnExecuteICalComplete / Failure / Progress / _SSLInfo
   OnMediaPlayerOpen / OnPictureViewerOpen（渡したファイルを Android のアプリで開いたとき）
 - 入力: OnTeachStart / OnTeachInputCancel、OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
 - 音: OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（読み上げ）
-- 通信: OnExecuteWebSocket*（Open / Receive / Reconnect / Close / Failure）、OnPingComplete / Progress、OnNSLookupComplete / Failure、
-  OnExecuteFileWatchChange / Failure、OnExtractArchive* / OnCompressArchive*
-- 時刻合わせ: OnSNTPBegin / Compare(Ex) / Correct(Ex) / Failure（ずれを測って知らせる。端末の時計は直さない）
-- 更新: OnUpdateCheckComplete / Failure、OnUpdateResult(Ex) / OnUpdateCheckResult(Ex)、OnUpdateOther*（他のゴーストの更新）
 - 消去: OnVanishSelecting / Selected / Cancel / ButtonHold / Vanished、OnGhostTermsAccept / Decline（利用規約）
 - 開発: OnUpdatedataCreating / Created、OnNarCreating / Created（ゴーストのフォルダから .nar・更新データを作る）
 - その他: OnCloseAll（アプリごと終わるとき）、OnAITalk（\a）、OnURLQuery、OnXUkagakaLinkOpen（x-ukagaka-link: のリンク）
@@ -108,6 +108,7 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 --content-type / --accept / --accept-language / --authorization / --cookie / --header / --no-cache / --timeout / --progress-notify / --streaming /
 --nodescript、古い書き方のパラメータ。--insecure は使わず、証明書はいつも確かめる） \![cancel,http] \![execute,rss-get / rss-post] \![execute,ical-get / ical-post]
 （--from / --to / --expand / --limit、RRULE の FREQ・INTERVAL・COUNT・UNTIL・BYDAY・BYMONTHDAY・BYMONTH と EXDATE）
+\![execute,websocket]（--async / --header / --authorization / --cookie / --m_websocketProtocol、切れたら5回までつなぎ直す） \![send,websocket(-binary)] \![close / cancel,websocket] \![execute,ping / nslookup] \![execute,filewatch] \![cancel,filewatch] \![execute,extractarchive / compressarchive] \7 \![executesntp]（\6 は時計を直せないので何もしない） \![updatebymyself,checkonly / testonly / recovery] \![update,ghost+shell+balloon] \![update,platform]（Play ストアに任せる） \![updateother,--shell / --balloon]
 \![anim,offset / clear / stop] \![bind] \![bind-noevent] \![sound,play / loop / stop / wait] \![change,ghost / shell / balloon]
 \![execute,http-get] \![updatebymyself] \![reload,shiori] \![enter / leave,passivemode] \![quicksection]
 
@@ -116,11 +117,8 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
   \![reloadsurface] \![reload,shell / balloon / ghost / descript] \![load / unload,shiori]
 - 開く: \![open,file]（Android のアプリで開く）、\![open,mailer]、\![open,dialog,open / save / folder / color]（ファイル選択など）、\![open,ipinput]、
   \![open,terms]、\![open,help]、\![open,ghostexplorer など]（アプリの一覧画面）、\![open,surfacetest / developer / shiorirequest / errorlog / backlogviewer]（開発用の画面）
-- 実行: \![execute,websocket] \![send,websocket(-binary)] \![close / cancel,websocket]、
-  \![execute,ping / nslookup]、\![execute,filewatch] \![cancel,filewatch]（ゴーストのフォルダの中だけ）、
-  \![execute,extractarchive / compressarchive]（ゴーストのフォルダの中だけ）、\![execute,dumpsurface / dumpballoon]、
-  \![execute,install,path / url]、\![execute,createnar / createupdatedata]、\![execute,dropdefault]、\![executesntp] \6 \7（ずれを測るだけ）、
-  \![update,platform]（無視）、\![update,対象]、\![set,property]（書き換えてよいものだけ）、\![create,shortcut]（ホーム画面にゴーストのショートカット）
+- 実行: \![execute,dumpsurface / dumpballoon]、\![execute,install,path / url]、\![execute,createnar / createupdatedata]、\![execute,dropdefault]、
+  \![set,property]（書き換えてよいものだけ）、\![create,shortcut]（ホーム画面にゴーストのショートカット）
 - 環境変数: %lastghostname %lastobjectname %exh %et %wronghour %selfname2 %ms %mz %ml %mc %mh %mt %me %mp %m? %dms %*2
   （%ms などは SSP 同梱の単語表から選ぶもの。小さな単語表を持つ）
 - 通知: \![set,trayballoon] / \![set,tasktrayicon]（Android の通知で代用）

@@ -159,6 +159,15 @@ interface ScriptHost {
     /** `\![updatebymyself]`。ゴースト自身のネットワーク更新を頼まれた */
     fun requestUpdate() {}
 
+    /**
+     * `\![updatebymyself,オプション...]` / `\![update,ghost+shell+balloon,オプション...]`。[types] は更新するもの、
+     * [options] は checkonly / testonly / recovery
+     */
+    fun requestUpdate(types: List<String>, options: Set<String>) = requestUpdate()
+
+    /** `\![updateother,--shell=名前,--balloon=名前,...]` */
+    fun updateOther(args: List<String>) {}
+
     /** `\![set,name,args...]`。扱えたら true。 */
     fun setOption(name: String, args: List<String>): Boolean = false
 
@@ -173,6 +182,15 @@ interface ScriptHost {
 
     /** `\![cancel,http|websocket|filewatch,...]`。扱えたら true */
     fun cancel(kind: String, args: List<String>): Boolean = false
+
+    /** `\![send,websocket(-binary),URL,...]`。扱えたら true */
+    fun send(kind: String, args: List<String>): Boolean = false
+
+    /** `\7` / `\![executesntp]`。時刻サーバーとのずれを測る（OnSNTPBegin / OnSNTPCompare） */
+    fun adjustClock() {}
+
+    /** `\6`。時計をサーバーに合わせる（Android では直せない） */
+    fun correctClock() {}
 
     /** `\![bind,カテゴリ,パーツ,1/0]`（着せ替え）。 */
     fun bind(scope: Int, category: String, part: String, on: Boolean?) {}
@@ -416,6 +434,8 @@ class ScriptPlayer(
                 "_l" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { host.moveCursor(scope, it) }
                 "b" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { host.setBalloonId(scope, it) }
                 "4", "5" -> host.nudge(scope, away = token.name == "4")
+                "6" -> host.correctClock()
+                "7" -> host.adjustClock()
                 "v" -> host.bringToFront()
                 in layoutOnlyTags -> {}
                 else -> host.unknownTag(token)
@@ -447,7 +467,15 @@ class ScriptPlayer(
                 "close" -> if (a.size < 2 || !host.close(a[1].lowercase(), a.drop(2))) host.unknownTag(token)
                 "quicksection", "quicksession" -> quick = a.getOrNull(1)?.lowercase() in setOf("1", "true")
                 "*" -> host.addMarker(scope)
-                "updatebymyself" -> host.requestUpdate()
+                "updatebymyself" -> host.requestUpdate(listOf("ghost"), updateOptions(a.drop(1)))
+                // \![update,ghost+shell+balloon,...]。all は \![updatebymyself] と同じ。本体（platform）の更新は Play ストアに任せる
+                "update" -> when (val what = a.getOrNull(1)?.trim()?.lowercase()) {
+                    null, "" -> host.unknownTag(token)
+                    "platform" -> {}
+                    "all" -> host.requestUpdate(listOf("ghost"), updateOptions(a.drop(2)))
+                    else -> host.requestUpdate(what.split('+').map { it.trim() }.filter { it in setOf("ghost", "shell", "balloon") }, updateOptions(a.drop(2)))
+                }
+                "updateother" -> host.updateOther(a.drop(1))
                 // \![anim,offset,ID,x,y] など。pause / resume / add などは見た目の細かい制御なので扱えなくても飛ばす
                 "anim" -> host.animation(scope, a.drop(1))
                 "reload" -> host.reload(a.getOrNull(1)?.lowercase().orEmpty())
@@ -506,6 +534,8 @@ class ScriptPlayer(
                     !host.runExecute(a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
                 }
                 "cancel" -> if (a.size < 2 || !host.cancel(a[1].trim().lowercase(), a.drop(2))) host.unknownTag(token)
+                "send" -> if (a.size < 2 || !host.send(a[1].trim().lowercase(), a.drop(2))) host.unknownTag(token)
+                "executesntp" -> host.adjustClock()
                 // \![bind,カテゴリ,パーツ,1|0]（3つ目が無ければ切り替え）
                 "bind", "bind-noevent" -> if (a.size >= 3) host.bind(scope, a[1], a[2], a.getOrNull(3)?.let { it == "1" || it.lowercase() == "true" })
                 "set" -> when {
@@ -645,6 +675,10 @@ class ScriptPlayer(
             return true
         }
 
+        /** 更新オプション（checkonly など。--option=checkonly の形でもよい） */
+        private fun updateOptions(args: List<String>): Set<String> =
+            args.flatMap { it.trim().removePrefix("--option=").split('+') }.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+
         private fun setStyle(next: TextStyle) {
             if (next == (styles[scope] ?: TextStyle.Default)) return
             styles[scope] = next
@@ -666,15 +700,15 @@ class ScriptPlayer(
     /**
      * 見た目の細かい調整だけのタグ。バルーンを自前で描いているので、無視しても会話の流れは変わらない。
      * \* : 選択肢タイムアウト禁止、\C: 前のバルーンを消さない（先頭にあるかどうかは GhostController が見る）、
-     * \6 / \7: 時刻合わせ、\__t: 時刻、\_e: 終わり
+     * \__t: 時刻、\_e: 終わり
      */
-    private val layoutOnlyTags = setOf("*", "C", "6", "7", "__t", "_e")
+    private val layoutOnlyTags = setOf("*", "C", "__t", "_e")
 
     /** `\![コマンド,...]` のうち、pono-droid に無い仕組み（ウィンドウの重なり・効果・他のゴースト・プラグイン）向けのもの */
     private val silentCommands = setOf(
-        "effect", "effect2", "filter", "updateother",
+        "effect", "effect2", "filter",
         "timernotify", "raiseother", "timerraiseother", "notifyother", "timernotifyother",
-        "raiseplugin", "timerraiseplugin", "notifyplugin", "timernotifyplugin", "executesntp",
+        "raiseplugin", "timerraiseplugin", "notifyplugin", "timernotifyplugin",
     )
 
     /** `\![set,名前,...]` のうち、Windows のウィンドウやトレイ向けで、pono-droid では意味が無いもの */
