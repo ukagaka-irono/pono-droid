@@ -179,6 +179,7 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 - 切り替え: `\![change,shell]` / `\![change,balloon]`（random も可）と OnShellChanging / OnShellChanged / OnBalloonChange、着せ替えの OnDressupChanged。
 - ゴーストの切り替え: `\![change,ghost,名前]`（random / sequential / lastinstalled、`--option=raise-event`）と長押しメニューの「ゴースト切り替え」。メニューからなら OnGhostChanging（答えが無ければ OnClose）で別れを話してから切り替え、切り替わった先には OnGhostChanged（答えが無ければ OnBoot）を送ります。
 - 見た目: `\_s`（`\_s[ID,...]`）の同期、バルーンの中の画像 `\_b[ファイル,x,y]` / `\_b[ファイル,inline]`（`opaque`）、`\![set,scaling]`（反転も可）、`\![set,alpha]`、`\![anim,offset / clear / stop]`、SERIKO の `insert`（着せ替えの重なり順）と `parallelstart` / `parallelstop`、`talk,N`（話している間 N 文字ごとに動く口パクなど）と `yen-e`（話し終わりに動く）、サーフェスの別名（`sakura.surface.alias` / `kero.surface.alias` / `charN.surface.alias`、`alias.txt`、surfaces.txt の `name`。候補が複数ならランダム）。
+- シェル: 当たり判定の `collisionex`（rect / ellipse / circle / polygon）と `collision-sort`、アニメーション中だけの `animation*.collision`、`animation*.option`（exclusive / background / shared-index）、interval の組み合わせ（`bind+always` など）と `starttalk` / `endtalk`、描画メソッドの `overlay-fast` / `interpolate` / `asis` / `reduce` / `move` / `scaling` と `blend-*`（乗算・スクリーン・オーバーレイ・覆い焼きなど。`-fast` も）、`surface.append`、`point.basepos`（最初の位置と `\![move]` の基準）、`sakura.tooltips`（当たり判定に触れている間に出す）。
 - ウィンドウ: `\![move]` / `\![moveasync]`（新旧どちらの書式も。基準は screen・me・スコープ番号、`--base-offset` / `--move-offset`）、`\![set,position]` / `\![reset,position]`。座標は画面のピクセルで、画面の外には出しません。`\![set,zorder]`（重なり順）、`\![set,sticky-window]`（一緒に動く組。`\![move]` の `--option=ignore-sticky-window` で外せます）、`\![set,alignmenttodesktop]`（画面の端に付ける）、`\![set,windowstate,minimize]`、`\![execute,resetwindowpos]`、`\4` / `\5`（相方から離れる・寄る）、`\v`（手前に出す）、`sakura.defaultx` などの最初の位置。動かした後の重なりと画面からのはみ出しは OnOverlap / OnOffscreen、アプリでキャラクターの大きさを変えたら OnShellScaling で知らせます。
 - 文字: `\c[char,数,開始位置]` / `\c[line,数,開始位置]`（一部だけ消す）、`\n[half]` / `\n[150]`（負なら上へ戻る）、`\_n`（折り返さない）、`\_?`（タグをそのまま出す）、`\t`（タッチのイベントを止める）、`\f[name,...]`（ゴーストやバルーンのフォルダのフォントファイル。明朝・ゴシック・等幅などの名前は Android の系統に読み替えます）、`\f[shadowcolor / shadowstyle / outline / valign / disable]`、`\![set,balloonwait]`（文字の速さ）、`\![set,autoscroll]`、`\![set,serikotalk]`、`\![lock,balloonrepaint]` / `\![lock,repaint]`（`manual` も）、`\![enter,onlinemode / nouserbreakmode / inductionmode]`。バルーンの descript.txt の `font.name`・影・太字・白抜きなどの既定と、ネットワーク更新中のオンラインの印（`online*.png`）も使います。
 - 選択肢とリンク: `\f[cursor*]` / `\f[cursornotselect*]` / `\f[anchor*]` / `\f[anchornotselect*]` / `\f[anchorvisited*]`（形・塗り・枠・文字の色）と `\f[anchor.font.color]`、バルーンの `cursor.*` / `anchor.*`。選んだリンクは訪問済みの見た目になります。話している途中でも、出ている選択肢は選べます（SSP と同じ）。バルーンの置き方は `\![set,balloonalign]` / `\![set,balloonoffset]`、印の文字と数は `\![set,balloonmarker]` / `\![set,balloonnum]`。
@@ -193,7 +194,7 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 - `\_l` による選択肢の横並びは、座標どおりではなく列に分けて並べます。
 - サウンドは同時に鳴らせるのが1回分とループ1つまでです。
 - `\![move]` で他のゴーストを基準にすることはできません（複数ゴーストの同時起動が無いため）。`point.basepos` は見ず、`base` はウィンドウの中央・下端として扱います。
-- 楕円・多角形の当たり判定は外接矩形で近似します。
+- シェルの `sakura.balloon.offsetx` / `offsety` は使いません（バルーンはいつもキャラクターの上に出します）。
 - オーバーレイの透明な部分もタッチを受け取ります。Android の制約で画素単位では透過できないため、キャラクターと吹き出しを別々のウィンドウにして、塞ぐ範囲をそれぞれの矩形に絞っています。
 - ネットワーク更新: シェル画像の更新は次の起動から反映されます。
 - インストールできるのはゴーストとバルーンの `.nar`（シェル単体は不可）。複数ゴーストの同時起動は未対応です。

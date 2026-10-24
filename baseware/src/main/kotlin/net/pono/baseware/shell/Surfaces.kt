@@ -6,33 +6,90 @@ import kotlin.random.Random
 
 data class SurfaceElement(val id: Int, val method: String, val file: String, val x: Int, val y: Int)
 
-data class Collision(val left: Int, val top: Int, val right: Int, val bottom: Int, val id: String) {
-    fun contains(x: Int, y: Int) = x in left..right && y in top..bottom
+/** 当たり判定の形（collisionex の rect / ellipse / circle / polygon。collision は rect） */
+enum class CollisionShape { RECT, ELLIPSE, CIRCLE, POLYGON }
+
+/**
+ * 当たり判定。[left] から [bottom] は形を囲む矩形。[points] は polygon の頂点（x, y, x, y ...）
+ */
+data class Collision(
+    val left: Int,
+    val top: Int,
+    val right: Int,
+    val bottom: Int,
+    val id: String,
+    val shape: CollisionShape = CollisionShape.RECT,
+    val points: List<Int> = emptyList(),
+) {
+    fun contains(x: Int, y: Int): Boolean {
+        if (x !in left..right || y !in top..bottom) return false
+        return when (shape) {
+            CollisionShape.RECT -> true
+            CollisionShape.ELLIPSE, CollisionShape.CIRCLE -> {
+                val rx = (right - left) / 2.0
+                val ry = (bottom - top) / 2.0
+                if (rx <= 0 || ry <= 0) return false
+                val dx = (x - (left + rx)) / rx
+                val dy = (y - (top + ry)) / ry
+                dx * dx + dy * dy <= 1.0
+            }
+            // 頂点を順につないだ多角形。辺が交差していてもよい（偶奇で内側を決める）
+            CollisionShape.POLYGON -> {
+                var inside = false
+                val n = points.size / 2
+                var j = n - 1
+                for (i in 0 until n) {
+                    val xi = points[i * 2].toDouble()
+                    val yi = points[i * 2 + 1].toDouble()
+                    val xj = points[j * 2].toDouble()
+                    val yj = points[j * 2 + 1].toDouble()
+                    if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside
+                    j = i
+                }
+                inside
+            }
+        }
+    }
 }
 
-enum class IntervalKind { ALWAYS, SOMETIMES, RARELY, RANDOM, PERIODIC, RUNONCE, NEVER, BIND, TALK, YEN_E, UNKNOWN }
+enum class IntervalKind { ALWAYS, SOMETIMES, RARELY, RANDOM, PERIODIC, RUNONCE, NEVER, BIND, TALK, YEN_E, STARTTALK, ENDTALK, UNKNOWN }
 
-data class AnimationInterval(val kind: IntervalKind, val arg: Int = 0) {
+/**
+ * animation*.interval。SSP では bind+runonce+random,5 のように + でつないで組み合わせられる（引数は最後に1つだけ）
+ */
+data class AnimationInterval(val kinds: Set<IntervalKind>, val arg: Int = 0) {
+    constructor(kind: IntervalKind, arg: Int = 0) : this(setOf(kind), arg)
+
+    /** 着せ替え以外で、いちばん初めに書いたもの（着せ替えだけなら BIND） */
+    val kind: IntervalKind get() = kinds.firstOrNull { it != IntervalKind.BIND } ?: kinds.firstOrNull() ?: IntervalKind.NEVER
+
+    /** 動かさずに着せ替えとして重ねるだけのもの（bind だけ。bind+always などは着せ替えている間だけ動く） */
+    val isStaticBind: Boolean get() = kinds == setOf(IntervalKind.BIND)
+
+    operator fun contains(kind: IntervalKind) = kind in kinds
+
     companion object {
         fun parse(value: String): AnimationInterval {
             val parts = value.split(',').map { it.trim() }
-            // "sometimes+runonce" のような組み合わせは最初のものだけ見る
-            val name = parts[0].substringBefore('+').lowercase()
             val arg = parts.getOrNull(1)?.toIntOrNull() ?: 0
-            val kind = when (name) {
-                "always" -> IntervalKind.ALWAYS
-                "sometimes" -> IntervalKind.SOMETIMES
-                "rarely" -> IntervalKind.RARELY
-                "random" -> IntervalKind.RANDOM
-                "periodic" -> IntervalKind.PERIODIC
-                "runonce" -> IntervalKind.RUNONCE
-                "never" -> IntervalKind.NEVER
-                "bind" -> IntervalKind.BIND
-                "talk" -> IntervalKind.TALK
-                "yen-e" -> IntervalKind.YEN_E
-                else -> IntervalKind.UNKNOWN
-            }
-            return AnimationInterval(kind, arg)
+            val kinds = parts[0].split('+').map { name ->
+                when (name.trim().lowercase()) {
+                    "always" -> IntervalKind.ALWAYS
+                    "sometimes" -> IntervalKind.SOMETIMES
+                    "rarely" -> IntervalKind.RARELY
+                    "random" -> IntervalKind.RANDOM
+                    "periodic" -> IntervalKind.PERIODIC
+                    "runonce" -> IntervalKind.RUNONCE
+                    "never" -> IntervalKind.NEVER
+                    "bind" -> IntervalKind.BIND
+                    "talk" -> IntervalKind.TALK
+                    "yen-e" -> IntervalKind.YEN_E
+                    "starttalk" -> IntervalKind.STARTTALK
+                    "endtalk" -> IntervalKind.ENDTALK
+                    else -> IntervalKind.UNKNOWN
+                }
+            }.toCollection(LinkedHashSet())
+            return AnimationInterval(kinds, arg)
         }
     }
 }
@@ -40,6 +97,7 @@ data class AnimationInterval(val kind: IntervalKind, val arg: Int = 0) {
 /**
  * パターンの1コマ。[surface] が -1 ならそのレイヤーを消す。
  * start / stop / alternativestart / alternativestop のコマは、操作するアニメーションの番号を [targets] に持つ。
+ * [scaleX] / [scaleY] は scaling のコマの倍率（パーセント。小数も書ける）
  */
 data class PatternFrame(
     val method: String,
@@ -49,6 +107,8 @@ data class PatternFrame(
     val x: Int,
     val y: Int,
     val targets: List<Int> = emptyList(),
+    val scaleX: Float = 100f,
+    val scaleY: Float = 100f,
 ) {
     val isControl: Boolean get() = method in CONTROL_METHODS
 
@@ -61,6 +121,22 @@ class Animation(val id: Int) {
     var interval: AnimationInterval = AnimationInterval(IntervalKind.NEVER)
     val patterns = sortedMapOf<Int, PatternFrame>()
 
+    /** animation*.name（SSP 2.8.24）。\i[名前] などで番号の代わりに使える */
+    var name: String? = null
+
+    /** option,exclusive。動いている間、ほかのアニメーション（[exclusiveOf] があればそれだけ）を止める */
+    var exclusive: Boolean = false
+    var exclusiveOf: Set<Int> = emptySet()
+
+    /** option,background。土台のサーフェスの裏に重ねる */
+    var background: Boolean = false
+
+    /** option,shared-index。サーフェスを替えても、同じ番号のアニメーションを続きのコマから動かす */
+    var sharedIndex: Boolean = false
+
+    /** animation*.collision* / collisionex*。このアニメーションのコマが出ている間だけの当たり判定（書いた順） */
+    val collisions = LinkedHashMap<Int, Collision>()
+
     val frames: List<PatternFrame> get() = patterns.values.toList()
 
     /** コマ数の上限を超えたら捨てる */
@@ -69,17 +145,42 @@ class Animation(val id: Int) {
     }
 }
 
+/** surfaces.txt の descript ブレス（collision-sort / animation-sort）の並べ方 */
+enum class SortOrder { NONE, ASCEND, DESCEND }
+
 class SurfaceDefinition(val id: Int) {
     /** `name,定義名`（SSP 2.8.24）。\s[定義名] で、番号の代わりにこの名前で呼べる */
     var name: String? = null
 
     val elements = sortedMapOf<Int, SurfaceElement>()
     val animations = sortedMapOf<Int, Animation>()
-    val collisions = sortedMapOf<Int, Collision>()
+
+    /** 当たり判定。先に書いたものほど手前（collision-sort で ID の順にもできる） */
+    val collisions = LinkedHashMap<Int, Collision>()
+
+    /** point.basepos.x / y（位置を決めるときの基準点）。null なら中央・下 */
+    var baseposX: Int? = null
+    var baseposY: Int? = null
+
+    /** point.centerx / centery と point.kinoko.centerx / centery。null ならサーフェスの中心 */
+    var centerX: Int? = null
+    var centerY: Int? = null
+    var kinokoX: Int? = null
+    var kinokoY: Int? = null
+
+    /** descript ブレスの collision-sort / animation-sort */
+    var collisionSort: SortOrder = SortOrder.NONE
+    var animationSort: SortOrder = SortOrder.DESCEND
 
     /** 上限を超えたら新しい番号は受け付けない（null）。細工した surfaces.txt でアニメーションを無数に作らせないため */
     fun animation(id: Int): Animation? =
         animations[id] ?: if (animations.size < MAX_PARTS) Animation(id).also { animations[id] = it } else null
+
+    /** \i[名前] / \![anim,...,名前]。番号か animation*.name の名前を、アニメーション番号にする */
+    fun animationId(key: String): Int? {
+        val k = key.trim()
+        return k.toIntOrNull() ?: animations.values.firstOrNull { it.name == k }?.id
+    }
 
     /**
      * 話した文字の数が [from] から [to] に増えたときに動かす、interval が talk,N のアニメーション（SSP と同じく N 文字ごと）。
@@ -88,34 +189,39 @@ class SurfaceDefinition(val id: Int) {
     fun talkAnimations(from: Int, to: Int): List<Animation> {
         if (to <= from) return emptyList()
         return animations.values.filter { anim ->
-            if (anim.interval.kind != IntervalKind.TALK) return@filter false
+            if (IntervalKind.TALK !in anim.interval) return@filter false
             val every = anim.interval.arg.coerceAtLeast(1)
             to / every > from / every
         }
     }
 
     /** スクリプトを話し終えた（\e まで来た）ときに動かす、interval が yen-e のアニメーション */
-    val yenEAnimations: List<Animation> get() = animations.values.filter { it.interval.kind == IntervalKind.YEN_E }
+    val yenEAnimations: List<Animation> get() = animations.values.filter { IntervalKind.YEN_E in it.interval }
+
+    /** そのキャラクターが話し始めた・話し終えた（スコープを外れた）ときに動かす、starttalk / endtalk のアニメーション */
+    val startTalkAnimations: List<Animation> get() = animations.values.filter { IntervalKind.STARTTALK in it.interval }
+    val endTalkAnimations: List<Animation> get() = animations.values.filter { IntervalKind.ENDTALK in it.interval }
 
     /**
-     * 身に着けている着せ替え（interval が bind）のコマを、重ねる順（下から）に並べる。
+     * 身に着けている着せ替え（interval が bind だけのもの）のコマを、重ねる順（下から）に並べる。
      * `insert,ID` の位置には着せ替え ID のコマを差し込む（入れ子も可）。差し込まれる着せ替えは、自分の番号の位置には出さない。
-     * ID を身に着けていなければ何も出さない（SSP と同じ）
+     * ID を身に着けていなければ何も出さない（SSP と同じ）。bind+always などは動くアニメーションなので、ここには入れない
      */
     fun bindFrames(binds: Set<Int>): List<PatternFrame> {
-        val bindAnims = animations.values.filter { it.interval.kind == IntervalKind.BIND }
+        val bindAnims = animations.values.filter { it.interval.isStaticBind }
         val inserted = bindAnims.flatMap { a -> a.frames.filter { it.method == "insert" }.flatMap { it.targets } }.toSet()
         val out = mutableListOf<PatternFrame>()
         fun expand(anim: Animation, visiting: Set<Int>) {
-            for (f in anim.frames) {
+            for ((i, f) in anim.frames.withIndex()) {
                 if (f.method == "insert") {
                     for (id in f.targets) {
                         if (id in visiting || id !in binds) continue
-                        val target = animations[id]?.takeIf { it.interval.kind == IntervalKind.BIND } ?: continue
+                        val target = animations[id]?.takeIf { it.interval.isStaticBind } ?: continue
                         expand(target, visiting + id)
                     }
                 } else if (!f.isControl) {
-                    out += f
+                    // 着せ替えの base は最初のコマにしか使えない（それ以外は overlay として重ねる）
+                    out += if (f.method == "base" && i > 0) f.copy(method = "overlay") else f
                 }
             }
         }
@@ -133,15 +239,36 @@ class SurfaceDefinition(val id: Int) {
         const val MAX_PATTERNS = 4096
     }
 
-    fun hitTest(x: Int, y: Int): String? = collisions.values.firstOrNull { it.contains(x, y) }?.id
+    /** 当たり判定を、手前から並べたもの（collision-sort に従う） */
+    fun orderedCollisions(): List<Collision> = when (collisionSort) {
+        SortOrder.NONE -> collisions.values.toList()
+        SortOrder.ASCEND -> collisions.toSortedMap().values.toList()
+        SortOrder.DESCEND -> collisions.toSortedMap().values.reversed()
+    }
+
+    /**
+     * 指が触れた当たり判定。[active] はいまコマを出しているアニメーション（着せ替えも）で、その animation*.collision を先に見る。
+     * アニメーションは animation-sort（既定は番号の大きいものが手前）の順、その後に土台の当たり判定を見る
+     */
+    fun hitTest(x: Int, y: Int, active: Collection<Int> = emptyList()): String? {
+        val shown = active.mapNotNull { animations[it] }.filter { it.collisions.isNotEmpty() }
+        val order = when (animationSort) {
+            SortOrder.ASCEND -> shown.sortedBy { it.id }
+            else -> shown.sortedByDescending { it.id }
+        }
+        for (anim in order) anim.collisions.values.firstOrNull { it.contains(x, y) }?.let { return it.id }
+        return orderedCollisions().firstOrNull { it.contains(x, y) }?.id
+    }
 }
 
 /**
  * @param aliases キャラクター（0 が sakura、1 が kero、2 以降が charN）ごとの surface.alias。別名 → サーフェス番号の候補
+ * @param tooltips キャラクターごとの sakura.tooltips などのブレス。当たり判定の名前 → 出す文字
  */
 class SurfaceTable(
     val definitions: Map<Int, SurfaceDefinition>,
     val aliases: Map<Int, Map<String, List<Int>>> = emptyMap(),
+    val tooltips: Map<Int, Map<String, String>> = emptyMap(),
 ) {
     operator fun get(id: Int): SurfaceDefinition? = definitions[id]
 
@@ -159,28 +286,69 @@ class SurfaceTable(
     companion object {
         val EMPTY = SurfaceTable(emptyMap())
 
-        private val surfaceRange = Regex("""^(!?)surface(?:\.append)?(\d+)(?:-(\d+))?$""")
+        private val surfaceRange = Regex("""^(!?)surface(\.append)?(\d+)(?:-(\d+))?$""")
         /** surface の後ろに続く番号だけの項目。グループの並びは [surfaceRange] と同じ */
-        private val bareRange = Regex("""^(!?)(\d+)(?:-(\d+))?$""")
-        private val newAnimation = Regex("""^animation(\d+)\.(interval|pattern(\d+)|option|collision\d+|collisionex\d+)$""")
+        private val bareRange = Regex("""^(!?)()(\d+)(?:-(\d+))?$""")
+        private val newAnimation = Regex("""^animation(\d+)\.(interval|pattern(\d+)|option|name|collision(\d+)|collisionex(\d+))$""")
         private val oldInterval = Regex("""^(\d+)interval$""")
         private val oldPattern = Regex("""^(\d+)pattern(\d+)$""")
+        private val oldOption = Regex("""^(\d+)option$""")
         private val element = Regex("""^element(\d+)$""")
         private val collision = Regex("""^collision(\d+)$""")
         private val collisionEx = Regex("""^collisionex(\d+)$""")
 
-        fun parse(text: String): SurfaceTable {
+        /** ブレスの種類（surface / surface.alias / tooltips / descript） */
+        private sealed interface Block {
+            data class Surfaces(val ids: List<Int>) : Block
+            data class Alias(val scope: Int) : Block
+            data class Tooltips(val scope: Int) : Block
+            data object Descript : Block
+            data object Other : Block
+        }
+
+        /**
+         * @param existing surfaceN.png があるサーフェスの番号。surface.append はこれと、先に surface ブレスで書いたものにだけ足す
+         */
+        fun parse(text: String, existing: Set<Int> = emptySet()): SurfaceTable {
             val defs = sortedMapOf<Int, SurfaceDefinition>()
             val aliases = HashMap<Int, MutableMap<String, List<Int>>>()
+            val tooltips = HashMap<Int, MutableMap<String, String>>()
+            var collisionSort = SortOrder.NONE
+            var animationSort = SortOrder.DESCEND
             var header = StringBuilder()
-            var targets: List<Int>? = null
-            // sakura.surface.alias などのブロックの中なら、そのキャラクターの番号
-            var aliasScope: Int? = null
+            var block: Block? = null
+
+            fun apply(b: Block, line: String) {
+                when (b) {
+                    is Block.Surfaces -> for (id in b.ids) applyLine(defs.getOrPut(id) { SurfaceDefinition(id) }, line)
+                    is Block.Alias -> addAlias(aliases.getOrPut(b.scope) { LinkedHashMap() }, line)
+                    is Block.Tooltips -> {
+                        val into = tooltips.getOrPut(b.scope) { LinkedHashMap() }
+                        val key = line.substringBefore(',').trim()
+                        if (key.isNotEmpty() && (key in into || into.size < SurfaceDefinition.MAX_PARTS)) {
+                            into[key] = line.substringAfter(',', "").trim().take(MAX_TOOLTIP)
+                        }
+                    }
+                    Block.Descript -> {
+                        val value = line.substringAfter(',', "").trim().lowercase()
+                        val order = when (value) {
+                            "ascend" -> SortOrder.ASCEND
+                            "descend" -> SortOrder.DESCEND
+                            else -> SortOrder.NONE
+                        }
+                        when (line.substringBefore(',').trim().lowercase()) {
+                            "collision-sort" -> collisionSort = order
+                            "animation-sort" -> animationSort = if (order == SortOrder.ASCEND) SortOrder.ASCEND else SortOrder.DESCEND
+                        }
+                    }
+                    Block.Other -> {}
+                }
+            }
 
             for (raw in text.lineSequence()) {
                 var line = raw.substringBefore("//").trim()
                 if (line.isEmpty()) continue
-                if (targets == null) {
+                if (block == null) {
                     // ブロックの前のヘッダ行。"surface0,surface2-5" と "{" が同じ行のこともある
                     val brace = line.indexOf('{')
                     if (brace < 0) {
@@ -192,51 +360,47 @@ class SurfaceTable(
                         if (header.isNotEmpty()) header.append(',')
                         header.append(line.substring(0, brace))
                     }
-                    aliasScope = aliasScope(header.toString())
-                    targets = if (aliasScope != null) emptyList() else surfaceIds(header.toString())
+                    block = block(header.toString(), defs, existing)
                     header = StringBuilder()
                     line = line.substring(brace + 1).trim()
                     if (line.isEmpty()) continue
                 }
                 if (line.startsWith("}")) {
-                    targets = null
-                    aliasScope = null
+                    block = null
                     continue
                 }
                 // "surface0 { element0,... }" のように同じ行で閉じることもある
                 val closes = line.endsWith("}")
                 if (closes) line = line.removeSuffix("}").trim()
-                if (line.isNotEmpty()) {
-                    val scope = aliasScope
-                    if (scope != null) {
-                        addAlias(aliases.getOrPut(scope) { LinkedHashMap() }, line)
-                    } else {
-                        for (id in targets) {
-                            applyLine(defs.getOrPut(id) { SurfaceDefinition(id) }, line)
-                        }
-                    }
-                }
-                if (closes) {
-                    targets = null
-                    aliasScope = null
-                }
+                if (line.isNotEmpty()) apply(block, line)
+                if (closes) block = null
             }
-            return SurfaceTable(defs, aliases)
+            for (def in defs.values) {
+                def.collisionSort = collisionSort
+                def.animationSort = animationSort
+            }
+            return SurfaceTable(defs, aliases, tooltips)
         }
 
-        private val aliasHeader = Regex("""^(sakura|kero|char(\d+))\.surface\.alias$""", RegexOption.IGNORE_CASE)
+        private val scopedHeader = Regex("""^(sakura|kero|char(\d+))\.(surface\.alias|tooltips)$""", RegexOption.IGNORE_CASE)
 
         /**
-         * "sakura.surface.alias" / "kero.surface.alias" / "char2.surface.alias" ならキャラクターの番号、それ以外は null。
-         * ブロックの前の行（"charset,UTF-8" など）もヘッダにつながってくるので、区切った項目ごとに見る
+         * ヘッダの種類。"sakura.surface.alias" / "kero.tooltips" ならそのキャラクター、"descript" なら descript ブレス。
+         * ブロックの前の行（"charset,UTF-8" など）もヘッダにつながってくるので、区切った項目の最後の方から見る
          */
-        private fun aliasScope(header: String): Int? {
-            val m = header.split(',').asReversed().firstNotNullOfOrNull { aliasHeader.matchEntire(it.trim()) } ?: return null
-            return when (m.groupValues[1].lowercase()) {
-                "sakura" -> 0
-                "kero" -> 1
-                else -> m.groupValues[2].toIntOrNull()
+        private fun block(header: String, defs: Map<Int, SurfaceDefinition>, existing: Set<Int>): Block {
+            val tokens = header.split(',').map { it.trim() }
+            if (tokens.lastOrNull()?.lowercase() == "descript") return Block.Descript
+            tokens.asReversed().firstNotNullOfOrNull { scopedHeader.matchEntire(it) }?.let { m ->
+                val scope = when (m.groupValues[1].lowercase()) {
+                    "sakura" -> 0
+                    "kero" -> 1
+                    else -> m.groupValues[2].toIntOrNull() ?: return Block.Other
+                }
+                return if (m.groupValues[3].lowercase() == "tooltips") Block.Tooltips(scope) else Block.Alias(scope)
             }
+            val ids = surfaceIds(tokens, defs, existing)
+            return if (ids.isEmpty()) Block.Other else Block.Surfaces(ids)
         }
 
         /** "照れ,[1,101,201]" を読む（SSP と同じく区切りは . でもよい）。別名の数と候補の数には上限を置く */
@@ -250,30 +414,36 @@ class SurfaceTable(
 
         /**
          * "surface0,surface2-5,!surface3" を ID の一覧にする。surface 以外のブロックなら空。
-         * "surface.append0,6,7" のように、surface の後ろの番号だけの項目（範囲も）は同じ surface の続きとして読む（SSP と同じ）
+         * "surface.append0,6,7" のように、surface の後ろの番号だけの項目（範囲も）は同じ surface の続きとして読む（SSP と同じ）。
+         * surface.append の番号は、すでにある（画像があるか、先に surface ブレスで書いた）サーフェスだけにする
          */
-        private fun surfaceIds(header: String): List<Int> {
+        private fun surfaceIds(tokens: List<String>, defs: Map<Int, SurfaceDefinition>, existing: Set<Int>): List<Int> {
             val include = linkedSetOf<Int>()
             val exclude = mutableSetOf<Int>()
             var afterSurface = false
-            for (token in header.split(',').map { it.trim() }) {
-                val m = surfaceRange.matchEntire(token)
+            var append = false
+            for (token in tokens) {
+                val full = surfaceRange.matchEntire(token)
+                val m = full
                     ?: bareRange.matchEntire(token)?.takeIf { afterSurface }
                     ?: run {
                         afterSurface = false
                         null
                     }
                     ?: continue
+                // 番号だけの項目は、前の surface / surface.append の続き
+                if (full != null) append = full.groupValues[2].isNotEmpty()
                 afterSurface = true
                 // 桁あふれの番号は飛ばす。"surface0-999999999" のような範囲でメモリを食いつぶさないよう、幅と総数に上限を置く
-                val from = m.groupValues[2].toIntOrNull() ?: continue
-                val to = m.groupValues[3].toIntOrNull() ?: from
+                val from = m.groupValues[3].toIntOrNull() ?: continue
+                val to = m.groupValues[4].toIntOrNull() ?: from
                 val low = minOf(from, to)
                 val high = maxOf(from, to)
                 if (high.toLong() - low > MAX_RANGE_SPAN) continue
                 val set = if (m.groupValues[1] == "!") exclude else include
                 for (i in low..high) {
                     if (set.size >= MAX_IDS_PER_HEADER) break
+                    if (append && set === include && i !in defs && i !in existing) continue
                     set += i
                 }
             }
@@ -283,13 +453,24 @@ class SurfaceTable(
         private const val MAX_RANGE_SPAN = 10_000
         private const val MAX_IDS_PER_HEADER = 20_000
 
+        /** ツールチップの文字の長さの上限 */
+        private const val MAX_TOOLTIP = 500
+
         private fun applyLine(def: SurfaceDefinition, line: String) {
             val key = line.substringBefore(',').trim().lowercase()
             val args = line.substringAfter(',', "").split(',').map { it.trim() }
 
-            if (key == "name") {
-                def.name = line.substringAfter(',', "").trim().takeIf { it.isNotEmpty() }
-                return
+            when (key) {
+                "name" -> {
+                    def.name = line.substringAfter(',', "").trim().takeIf { it.isNotEmpty() }
+                    return
+                }
+                "point.basepos.x" -> def.baseposX = args[0].toIntOrNull()
+                "point.basepos.y" -> def.baseposY = args[0].toIntOrNull()
+                "point.centerx" -> def.centerX = args[0].toIntOrNull()
+                "point.centery" -> def.centerY = args[0].toIntOrNull()
+                "point.kinoko.centerx" -> def.kinokoX = args[0].toIntOrNull()
+                "point.kinoko.centery" -> def.kinokoY = args[0].toIntOrNull()
             }
 
             // 番号が桁あふれしていれば（細工された surfaces.txt）その行は無視する。数にも上限を置く
@@ -302,29 +483,28 @@ class SurfaceTable(
             }
             collision.matchEntire(key)?.let { m ->
                 val id = m.groupValues[1].toIntOrNull() ?: return
-                val n = args.take(4).map { it.toIntOrNull() }
-                if (args.size >= 5 && n.all { it != null } && (id in def.collisions || def.collisions.size < SurfaceDefinition.MAX_PARTS)) {
-                    def.collisions[id] = Collision(n[0]!!, n[1]!!, n[2]!!, n[3]!!, args[4])
-                }
+                parseCollision(args)?.let { if (id in def.collisions || def.collisions.size < SurfaceDefinition.MAX_PARTS) def.collisions[id] = it }
                 return
             }
             collisionEx.matchEntire(key)?.let { m ->
-                // collisionexN,ID,形状,座標... 当たり判定は外接矩形で近似する
                 val id = m.groupValues[1].toIntOrNull() ?: return
-                val coords = args.drop(2).mapNotNull { it.toIntOrNull() }
-                if (args.size >= 3 && coords.size >= 4 && (id in def.collisions || def.collisions.size < SurfaceDefinition.MAX_PARTS)) {
-                    val xs = coords.filterIndexed { i, _ -> i % 2 == 0 }
-                    val ys = coords.filterIndexed { i, _ -> i % 2 == 1 }
-                    def.collisions[id] = Collision(xs.min(), ys.min(), xs.max(), ys.max(), args[0])
-                }
+                parseCollisionEx(args)?.let { if (id in def.collisions || def.collisions.size < SurfaceDefinition.MAX_PARTS) def.collisions[id] = it }
                 return
             }
             newAnimation.matchEntire(key)?.let { m ->
                 val anim = m.groupValues[1].toIntOrNull()?.let(def::animation) ?: return
                 when {
                     m.groupValues[2] == "interval" -> anim.interval = AnimationInterval.parse(args.joinToString(","))
+                    m.groupValues[2] == "option" -> applyOption(anim, args)
+                    m.groupValues[2] == "name" -> anim.name = line.substringAfter(',', "").trim().takeIf { it.isNotEmpty() }
                     m.groupValues[3].isNotEmpty() -> m.groupValues[3].toIntOrNull()?.let { index ->
                         parseNewPattern(args)?.let { anim.putPattern(index, it) }
+                    }
+                    m.groupValues[4].isNotEmpty() -> m.groupValues[4].toIntOrNull()?.let { id ->
+                        parseCollision(args)?.let { if (id in anim.collisions || anim.collisions.size < SurfaceDefinition.MAX_PARTS) anim.collisions[id] = it }
+                    }
+                    m.groupValues[5].isNotEmpty() -> m.groupValues[5].toIntOrNull()?.let { id ->
+                        parseCollisionEx(args)?.let { if (id in anim.collisions || anim.collisions.size < SurfaceDefinition.MAX_PARTS) anim.collisions[id] = it }
                     }
                 }
                 return
@@ -334,6 +514,11 @@ class SurfaceTable(
                 anim.interval = AnimationInterval.parse(args.joinToString(","))
                 return
             }
+            oldOption.matchEntire(key)?.let { m ->
+                val anim = m.groupValues[1].toIntOrNull()?.let(def::animation) ?: return
+                applyOption(anim, args)
+                return
+            }
             oldPattern.matchEntire(key)?.let { m ->
                 val anim = m.groupValues[1].toIntOrNull()?.let(def::animation) ?: return
                 val index = m.groupValues[2].toIntOrNull() ?: return
@@ -341,6 +526,56 @@ class SurfaceTable(
                 return
             }
         }
+
+        /** option,exclusive / exclusive,(1,3,5) / background / shared-index（+ でつないでもよい） */
+        private fun applyOption(anim: Animation, args: List<String>) {
+            for (name in args.firstOrNull().orEmpty().split('+').map { it.trim().lowercase() }) {
+                when (name) {
+                    "exclusive" -> {
+                        anim.exclusive = true
+                        anim.exclusiveOf = Regex("""\d+""").findAll(args.drop(1).joinToString(",")).mapNotNull { it.value.toIntOrNull() }.toSet()
+                    }
+                    "background" -> anim.background = true
+                    "shared-index" -> anim.sharedIndex = true
+                }
+            }
+        }
+
+        /** collision*,左,上,右,下,ID */
+        private fun parseCollision(args: List<String>): Collision? {
+            val n = args.take(4).map { it.toIntOrNull() }
+            if (args.size < 5 || n.any { it == null }) return null
+            return Collision(minOf(n[0]!!, n[2]!!), minOf(n[1]!!, n[3]!!), maxOf(n[0]!!, n[2]!!), maxOf(n[1]!!, n[3]!!), args[4])
+        }
+
+        /** collisionex*,ID,rect|ellipse|circle|polygon,座標... */
+        private fun parseCollisionEx(args: List<String>): Collision? {
+            if (args.size < 3) return null
+            val id = args[0]
+            val coords = args.drop(2).mapNotNull { it.toIntOrNull() }.take(MAX_POLYGON_COORDS)
+            return when (args[1].lowercase()) {
+                "circle" -> {
+                    if (coords.size < 3) return null
+                    val (cx, cy, r) = coords
+                    Collision(cx - r, cy - r, cx + r, cy + r, id, CollisionShape.CIRCLE)
+                }
+                "ellipse", "rect" -> {
+                    if (coords.size < 4) return null
+                    val shape = if (args[1].lowercase() == "ellipse") CollisionShape.ELLIPSE else CollisionShape.RECT
+                    Collision(minOf(coords[0], coords[2]), minOf(coords[1], coords[3]), maxOf(coords[0], coords[2]), maxOf(coords[1], coords[3]), id, shape)
+                }
+                "polygon" -> {
+                    if (coords.size < 6) return null
+                    val points = coords.take(coords.size / 2 * 2)
+                    val xs = points.filterIndexed { i, _ -> i % 2 == 0 }
+                    val ys = points.filterIndexed { i, _ -> i % 2 == 1 }
+                    Collision(xs.min(), ys.min(), xs.max(), ys.max(), id, CollisionShape.POLYGON, points)
+                }
+                else -> null
+            }
+        }
+
+        private const val MAX_POLYGON_COORDS = 2048
 
         /** 新形式: method,surfaceID,wait,x,y（wait はミリ秒。"50-100" の範囲指定あり） */
         private fun parseNewPattern(args: List<String>): PatternFrame? {
@@ -353,7 +588,11 @@ class SurfaceTable(
             }
             val surface = args.getOrNull(1)?.toIntOrNull() ?: -1
             val (min, max) = parseWait(args.getOrNull(2), 1)
-            return PatternFrame(method, surface, min, max, args.getOrNull(3)?.toIntOrNull() ?: 0, args.getOrNull(4)?.toIntOrNull() ?: 0)
+            // scaling のコマだけ、倍率に小数を書ける
+            val fx = args.getOrNull(3)?.toFloatOrNull() ?: 0f
+            val fy = args.getOrNull(4)?.toFloatOrNull() ?: fx
+            if (method == "scaling") return PatternFrame(method, surface, min, max, fx.toInt(), fy.toInt(), scaleX = fx, scaleY = fy)
+            return PatternFrame(method, surface, min, max, fx.toInt(), fy.toInt())
         }
 
         /** 旧形式: surfaceID,wait,method,x,y（wait は 10 ミリ秒単位） */

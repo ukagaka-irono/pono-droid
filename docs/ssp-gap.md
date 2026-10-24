@@ -187,5 +187,10 @@ SSP 専用のメニュー項目の名前（ヘッドライン・プラグイン�
 - 👥 複数ゴーストの同時起動（上の 👥 はすべてこれが前提）
 - ⛔ SHIORI の美坂・偽林檎など（Windows の DLL。ソースが公開されていて Android 用にビルドできるものだけ作れる）
 - ⛔ SAORI・YAYA の EXECUTE・プラグイン（安全のために止めている。ゴーストに端末でプログラムを動かさせることになる）
-- 🔨 シェル単体の .nar のインストール、楕円・多角形の当たり判定、point.basepos、surfaces.txt の残り（animation*.option など）、
-  サウンドを同時にいくつも鳴らす、オーバーレイの透明な部分のタッチを下に通す（Android では画素単位にはできない）
+- ✅ surfaces.txt: collisionex の rect / ellipse / circle / polygon、descript ブレスの collision-sort / animation-sort、animation*.collision(ex)、
+  animation*.option（exclusive・background・shared-index）、animation*.name、interval の + の組み合わせと starttalk / endtalk、
+  surface.append（あるサーフェスにだけ足す）、element0 による surfaceN.png の置き換え、描画メソッドの overlay-fast / interpolate / replace /
+  asis / reduce / move / scaling / add / bind と blend-*（-fast も）、point.basepos / centerx / kinoko、sakura.tooltips など（触れている間に出す）
+- 🔨 シェル単体の .nar のインストール、サウンドを同時にいくつも鳴らす、surfaces.txt の import（APNG / GIF）、icon.rect（発言履歴の顔）
+- ⛔ surfaces.txt の cursor ブレス（マウスカーソルが無い）、sakura.balloon.offsetx / offsety（pono-droid のバルーンはいつもキャラクターの上）、
+  オーバーレイの透明な部分のタッチを下に通す（Android では画素単位にはできない）

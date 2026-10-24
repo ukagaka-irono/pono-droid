@@ -301,7 +301,7 @@ class GhostOverlayService : LifecycleService() {
             val (serial, move) = ch.move ?: continue
             if (handledMoves[scope] == serial) continue
             handledMoves[scope] = serial
-            window.move(move) { id -> windows.firstOrNull { it.scopeId == id }?.screenRect() }
+            window.move(move) { id -> windows.firstOrNull { it.scopeId == id } }
         }
     }
 

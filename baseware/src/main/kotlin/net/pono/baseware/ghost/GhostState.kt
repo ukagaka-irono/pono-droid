@@ -76,6 +76,9 @@ data class CharacterState(
     val pinned: Pair<Int, Int>? = null,
     /** このキャラクターがこれまでに話した文字の数。SERIKO の talk,N（N 文字ごとに動く口パクなど）に使う */
     val talkCount: Int = 0,
+    /** 話し始めた回数と、話し終えた（ほかのキャラクターに移った・スクリプトが終わった）回数。SERIKO の starttalk / endtalk に使う */
+    val talkStarts: Int = 0,
+    val talkEnds: Int = 0,
     /** いちばん新しい \4（true、相手から離れる）・\5（false、相手のそばへ寄る）と通し番号 */
     val nudge: Pair<Int, Boolean>? = null,
     /** \![set,alignmenttodesktop]。top / bottom / left / right なら画面のその端に付け、その向きにはドラッグで動かさない。null なら自由 */

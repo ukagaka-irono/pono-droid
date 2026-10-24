@@ -312,16 +312,27 @@ class CharacterWindow(
      * \![move]。[baseRect] は基準にするキャラクターの矩形（無ければ画面を基準にする）。
      * まだ大きさが決まっていなければ、測り終わってから動かす
      */
-    fun move(command: MoveCommand, baseRect: (Int) -> Rect?) {
+    fun move(command: MoveCommand, window: (Int) -> CharacterWindow?) {
         surfaceView.doOnLayout {
             val own = screenRect()
-            val base = when (val b = command.base) {
+            // 基準にするキャラクターの矩形と基準点（画面が基準なら基準点は中央・下）
+            val other = (command.base as? MoveCommand.Base.Scope)?.let { window(it.id) }
+            val base = when (command.base) {
                 MoveCommand.Base.Screen -> screenBounds()
                 MoveCommand.Base.Me -> own
-                is MoveCommand.Base.Scope -> baseRect(b.id) ?: screenBounds()
+                is MoveCommand.Base.Scope -> other?.screenRect() ?: screenBounds()
             }
-            val left = command.x?.let { base.left + anchorX(base, command.baseOffset.h) + it - anchorX(own, command.moveOffset.h) }
-            val top = command.y?.let { base.top + anchorY(base, command.baseOffset.v) + it - anchorY(own, command.moveOffset.v) }
+            val basePoint = when (command.base) {
+                MoveCommand.Base.Me -> basePoint()
+                is MoveCommand.Base.Scope -> other?.basePoint()
+                MoveCommand.Base.Screen -> null
+            }
+            val left = command.x?.let {
+                base.left + anchorX(base, command.baseOffset.h, basePoint?.first) + it - anchorX(own, command.moveOffset.h, basePoint().first)
+            }
+            val top = command.y?.let {
+                base.top + anchorY(base, command.baseOffset.v, basePoint?.second) + it - anchorY(own, command.moveOffset.v, basePoint().second)
+            }
             animateTo(left ?: own.left, top ?: own.top, command.timeMs, save = true, sticky = !command.ignoreSticky)
         }
     }
@@ -373,8 +384,9 @@ class CharacterWindow(
         whenSized {
             val own = screenRect()
             val bounds = screenBounds()
-            val left = position.windowLeft(own.width(), bounds.width()) ?: own.left
-            val top = position.windowTop(own.height(), bounds.height()) ?: own.top
+            val (bx, by) = basePoint()
+            val left = position.windowLeft(own.width(), bounds.width(), bx) ?: own.left
+            val top = position.windowTop(own.height(), bounds.height(), by) ?: own.top
             animateTo(left, top, 0, save = false, sticky = false)
         }
     }
@@ -434,18 +446,35 @@ class CharacterWindow(
         surfaceView.doOnLayout { animateTo(position.first, position.second, 0, save = false, sticky = true) }
     }
 
-    /** 矩形の中の、横の基準の位置（矩形の左からの距離）。base は真ん中とする */
-    private fun anchorX(r: Rect, edge: MoveCommand.Edge) = when (edge) {
+    /** 矩形の中の、横の基準の位置（矩形の左からの距離）。base は [base]（point.basepos）、無ければ真ん中 */
+    private fun anchorX(r: Rect, edge: MoveCommand.Edge, base: Int? = null) = when (edge) {
         MoveCommand.Edge.START -> 0
         MoveCommand.Edge.END -> r.width()
-        MoveCommand.Edge.CENTER, MoveCommand.Edge.BASE -> r.width() / 2
+        MoveCommand.Edge.CENTER -> r.width() / 2
+        MoveCommand.Edge.BASE -> base ?: (r.width() / 2)
     }
 
-    /** 矩形の中の、縦の基準の位置（矩形の上からの距離）。base は足元（下端）とする */
-    private fun anchorY(r: Rect, edge: MoveCommand.Edge) = when (edge) {
+    /** 矩形の中の、縦の基準の位置（矩形の上からの距離）。base は [base]（point.basepos）、無ければ足元（下端） */
+    private fun anchorY(r: Rect, edge: MoveCommand.Edge, base: Int? = null) = when (edge) {
         MoveCommand.Edge.START -> 0
         MoveCommand.Edge.CENTER -> r.height() / 2
-        MoveCommand.Edge.END, MoveCommand.Edge.BASE -> r.height()
+        MoveCommand.Edge.END -> r.height()
+        MoveCommand.Edge.BASE -> base ?: r.height()
+    }
+
+    /**
+     * いまのサーフェスの基準点（surfaces.txt の point.basepos。無ければ中央・下）の、ウィンドウの左上からの位置（px）。
+     * SSP と同じく、最初の位置や \![move] の base はここを基準にする
+     */
+    fun basePoint(): Pair<Int, Int> {
+        val c = controller.state.value.characters[scopeId]
+        val def = c?.let { controller.shell.surfaces[it.surface] }
+        val px = scale.floatValue * context.resources.displayMetrics.density
+        val w = surfaceView.width
+        val h = surfaceView.height
+        val x = def?.baseposX?.let { (it * px * abs(c.scaleX)).toInt() } ?: (w / 2)
+        val y = def?.baseposY?.let { (it * px * abs(c.scaleY)).toInt() } ?: h
+        return x to y
     }
 
     /**

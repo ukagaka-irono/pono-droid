@@ -3,6 +3,14 @@ package net.pono.droid.overlay
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -84,6 +92,17 @@ fun CharacterSurface(
         if (state.scriptEnds > ended && state.screenOn) animator.scriptEnd()
         ended = state.scriptEnds
     }
+    // このキャラクターが話し始めた・話し終えたら starttalk / endtalk のアニメーションを動かす
+    var starts by remember { mutableIntStateOf(character.talkStarts) }
+    LaunchedEffect(character.talkStarts) {
+        if (character.talkStarts > starts && state.screenOn) animator.startTalk()
+        starts = character.talkStarts
+    }
+    var ends by remember { mutableIntStateOf(character.talkEnds) }
+    LaunchedEffect(character.talkEnds) {
+        if (character.talkEnds > ends && state.screenOn) animator.endTalk()
+        ends = character.talkEnds
+    }
 
     val bitmap by produceState<Bitmap?>(null, character.surface, layers) {
         value = withContext(Dispatchers.Default) { renderer.render(character.surface, layers) }
@@ -91,9 +110,12 @@ fun CharacterSurface(
 
     val bmp = bitmap ?: return
     val density = LocalDensity.current
-    // \![set,scaling] の倍率（負なら反転）。大きさは絶対値で決め、向きは描くときに裏返す
-    val sx = character.scaleX.takeIf { it != 0f } ?: 1f
-    val sy = character.scaleY.takeIf { it != 0f } ?: 1f
+    // \![set,scaling] の倍率（負なら反転）に、SERIKO の scaling のコマの倍率を掛ける。大きさは絶対値で決め、向きは描くときに裏返す
+    val scalingFrames = layers.values.filter { it.method == "scaling" }
+    val animX = scalingFrames.fold(1f) { acc, f -> acc * f.scaleX / 100f }
+    val animY = scalingFrames.fold(1f) { acc, f -> acc * f.scaleY / 100f }
+    val sx = (character.scaleX * animX).takeIf { it != 0f } ?: 1f
+    val sy = (character.scaleY * animY).takeIf { it != 0f } ?: 1f
     val pxPerImagePxX = with(density) { (dpPerImagePx * abs(sx)).dp.toPx() }
     val pxPerImagePxY = with(density) { (dpPerImagePx * abs(sy)).dp.toPx() }
 
@@ -103,81 +125,109 @@ fun CharacterSurface(
         val iy = (y / pxPerImagePxY).toInt().let { if (sy < 0) bmp.height - 1 - it else it }
         return ix to iy
     }
-    fun hit(p: Pair<Int, Int>) = controller.shell.surfaces[character.surface]?.hitTest(p.first, p.second)
-    Image(
-        bitmap = bmp.asImageBitmap(),
-        contentDescription = controller.ghost.name,
-        // 拡大するときはドット絵がぼやけないよう補間しない
-        filterQuality = if (minOf(pxPerImagePxX, pxPerImagePxY) >= 1.5f) FilterQuality.None else FilterQuality.Low,
-        contentScale = ContentScale.FillBounds,
-        modifier = Modifier
-            .size((bmp.width * dpPerImagePx * abs(sx)).dp, (bmp.height * dpPerImagePx * abs(sy)).dp)
-            .graphicsLayer {
-                scaleX = if (sx < 0) -1f else 1f
-                scaleY = if (sy < 0) -1f else 1f
-                alpha = character.alpha
-            }
-            .onSizeChanged { onHeightChanged(it.height) }
-            .pointerInteropFilter { event ->
-                touchHandler.onTouch(event, object : SurfaceTouchCallbacks {
-                    override fun onDown(x: Float, y: Float) {
-                        val p = imagePoint(x, y)
-                        controller.onTouchEnter(scopeId, p.first, p.second, hit(p))
-                        controller.onMouseDown(scopeId, p.first, p.second, hit(p))
-                    }
+    // base のコマで土台を替えていれば、そのサーフェスの当たり判定を使う。コマを出しているアニメーションの当たり判定も見る
+    val baseSurface = layers.values.lastOrNull { it.method == "base" && it.surface >= 0 }?.surface ?: character.surface
+    val activeAnimations = layers.keys.filter { it >= 0 } + character.binds
+    fun hit(p: Pair<Int, Int>) = controller.shell.surfaces[baseSurface]?.hitTest(p.first, p.second, activeAnimations)
+    // sakura.tooltips などで決めた、当たり判定に触れている間に出す文字
+    val tooltips = controller.shell.surfaces.tooltips[scopeId]
+    var tooltip by remember { mutableStateOf<String?>(null) }
+    fun showTooltip(collision: String?) {
+        tooltip = collision?.let { tooltips?.get(it) }?.takeIf { it.isNotBlank() }
+    }
+    Box(contentAlignment = Alignment.TopCenter) {
+        Image(
+            bitmap = bmp.asImageBitmap(),
+            contentDescription = controller.ghost.name,
+            // 拡大するときはドット絵がぼやけないよう補間しない
+            filterQuality = if (minOf(pxPerImagePxX, pxPerImagePxY) >= 1.5f) FilterQuality.None else FilterQuality.Low,
+            contentScale = ContentScale.FillBounds,
+            modifier = Modifier
+                .size((bmp.width * dpPerImagePx * abs(sx)).dp, (bmp.height * dpPerImagePx * abs(sy)).dp)
+                .graphicsLayer {
+                    scaleX = if (sx < 0) -1f else 1f
+                    scaleY = if (sy < 0) -1f else 1f
+                    alpha = character.alpha
+                }
+                .onSizeChanged { onHeightChanged(it.height) }
+                .pointerInteropFilter { event ->
+                    touchHandler.onTouch(event, object : SurfaceTouchCallbacks {
+                        override fun onDown(x: Float, y: Float) {
+                            val p = imagePoint(x, y)
+                            showTooltip(hit(p))
+                            controller.onTouchEnter(scopeId, p.first, p.second, hit(p))
+                            controller.onMouseDown(scopeId, p.first, p.second, hit(p))
+                        }
 
-                    override fun onTap(x: Float, y: Float, count: Int) {
-                        val p = imagePoint(x, y)
-                        controller.onMouseUp(scopeId, p.first, p.second, hit(p), count)
-                    }
+                        override fun onTap(x: Float, y: Float, count: Int) {
+                            val p = imagePoint(x, y)
+                            controller.onMouseUp(scopeId, p.first, p.second, hit(p), count)
+                        }
 
-                    override fun onLongPress(x: Float, y: Float) {
-                        val p = imagePoint(x, y)
-                        controller.onMouseLongPress(scopeId, p.first, p.second, hit(p))
-                    }
+                        override fun onLongPress(x: Float, y: Float) {
+                            val p = imagePoint(x, y)
+                            tooltip = null
+                            controller.onMouseLongPress(scopeId, p.first, p.second, hit(p))
+                        }
 
-                    // 当たり判定（頭など）の上で触れて動かすと、なでる。当たり判定の外からならウィンドウを動かす
-                    override fun canStroke(x: Float, y: Float) = hit(imagePoint(x, y)) != null
+                        // 当たり判定（頭など）の上で触れて動かすと、なでる。当たり判定の外からならウィンドウを動かす
+                        override fun canStroke(x: Float, y: Float) = hit(imagePoint(x, y)) != null
 
-                    override fun onStroke(x: Float, y: Float) {
-                        val p = imagePoint(x, y)
-                        controller.onTouchCollision(scopeId, p.first, p.second, hit(p))
-                        controller.onMouseMove(scopeId, p.first, p.second, hit(p))
-                    }
+                        override fun onStroke(x: Float, y: Float) {
+                            val p = imagePoint(x, y)
+                            showTooltip(hit(p))
+                            controller.onTouchCollision(scopeId, p.first, p.second, hit(p))
+                            controller.onMouseMove(scopeId, p.first, p.second, hit(p))
+                        }
 
-                    override fun onDragStart(x: Float, y: Float) {
-                        val p = imagePoint(x, y)
-                        controller.onMouseDragStart(scopeId, p.first, p.second, hit(p))
-                    }
+                        override fun onDragStart(x: Float, y: Float) {
+                            val p = imagePoint(x, y)
+                            controller.onMouseDragStart(scopeId, p.first, p.second, hit(p))
+                        }
 
-                    override fun onDragEnd(x: Float, y: Float) {
-                        val p = imagePoint(x, y)
-                        controller.onMouseDragEnd(scopeId, p.first, p.second, hit(p))
-                    }
+                        override fun onDragEnd(x: Float, y: Float) {
+                            val p = imagePoint(x, y)
+                            controller.onMouseDragEnd(scopeId, p.first, p.second, hit(p))
+                        }
 
-                    override fun onGesture(x: Float, y: Float, startX: Float, startY: Float, direction: String, angle: Int) {
-                        val p = imagePoint(x, y)
-                        val s = imagePoint(startX, startY)
-                        controller.onMouseGesture(scopeId, p.first, p.second, hit(p), s.first, s.second, hit(s), direction, angle)
-                    }
+                        override fun onGesture(x: Float, y: Float, startX: Float, startY: Float, direction: String, angle: Int) {
+                            val p = imagePoint(x, y)
+                            val s = imagePoint(startX, startY)
+                            controller.onMouseGesture(scopeId, p.first, p.second, hit(p), s.first, s.second, hit(s), direction, angle)
+                        }
 
-                    override fun onWheel(x: Float, y: Float, amount: Int) {
-                        val p = imagePoint(x, y)
-                        controller.onMouseWheel(scopeId, p.first, p.second, hit(p), amount)
-                    }
+                        override fun onWheel(x: Float, y: Float, amount: Int) {
+                            val p = imagePoint(x, y)
+                            controller.onMouseWheel(scopeId, p.first, p.second, hit(p), amount)
+                        }
 
-                    override fun onMiddleClick(x: Float, y: Float) {
-                        val p = imagePoint(x, y)
-                        controller.onMiddleClick(scopeId, p.first, p.second, hit(p))
-                    }
+                        override fun onMiddleClick(x: Float, y: Float) {
+                            val p = imagePoint(x, y)
+                            controller.onMiddleClick(scopeId, p.first, p.second, hit(p))
+                        }
 
-                    override fun onRelease(x: Float, y: Float) {
-                        val p = imagePoint(x, y)
-                        controller.onTouchLeave(scopeId, p.first, p.second)
-                    }
-                })
-            },
-    )
+                        override fun onRelease(x: Float, y: Float) {
+                            val p = imagePoint(x, y)
+                            tooltip = null
+                            controller.onTouchLeave(scopeId, p.first, p.second)
+                        }
+                    })
+                },
+        )
+        tooltip?.let { SurfaceTooltip(it) }
+    }
+}
+
+/** 当たり判定のツールチップ（sakura.tooltips など）。指が触れている間、キャラクターの上の端に出す */
+@Composable
+private fun SurfaceTooltip(text: String) {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = Color(0xEE3E2723),
+        modifier = Modifier.padding(4.dp),
+    ) {
+        Text(text, color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+    }
 }
 
 /**

@@ -1471,6 +1471,7 @@ class GhostController(
             val result = try {
                 player.play(script, host).also { ended = true }
             } finally {
+                host.endSpeaking()
                 // 割り込まれて止まったスクリプトが、後から始まったスクリプトの「話している」を消さないようにする
                 if (run == scriptRuns) {
                     _state.update {
@@ -2097,8 +2098,34 @@ class GhostController(
             }
         }
 
+        /** いま話しているキャラクター（starttalk を動かした後、まだ endtalk を動かしていない） */
+        private val speaking = LinkedHashSet<Int>()
+
+        /**
+         * [scope] が話した。初めてなら SERIKO の starttalk を、それまで話していたほかのキャラクターには endtalk を動かす
+         * （SSP ではスコープを外れたときに endtalk。スコープが変わっただけでは分からないので、次のキャラクターが話したときにする）
+         */
+        private fun speak(scope: Int) {
+            if (scope in speaking) return
+            val ended = speaking.toList()
+            speaking.clear()
+            speaking += scope
+            _state.update { s ->
+                ended.fold(s) { acc, other -> acc.update(other) { c -> c.copy(talkEnds = c.talkEnds + 1) } }
+                    .update(scope) { c -> c.copy(talkStarts = c.talkStarts + 1) }
+            }
+        }
+
+        /** スクリプトが終わった（止められた）。話していたキャラクターの endtalk を動かす */
+        fun endSpeaking() {
+            val ended = speaking.toList()
+            speaking.clear()
+            if (ended.isNotEmpty()) _state.update { s -> ended.fold(s) { acc, other -> acc.update(other) { c -> c.copy(talkEnds = c.talkEnds + 1) } } }
+        }
+
         override fun appendText(scope: Int, text: String) {
             talked()
+            speak(scope)
             _state.update { it.update(scope) { c -> c.appendText(text, styles[scope] ?: TextStyle.Default, countTalk = serikoTalk) } }
         }
 
@@ -2110,6 +2137,7 @@ class GhostController(
 
         override fun addChoice(scope: Int, choice: Choice, looks: ChoiceLooks) {
             talked()
+            speak(scope)
             _state.update { it.update(scope) { c -> c.append(BalloonItem.ChoiceItem(choice, looks)) } }
         }
 

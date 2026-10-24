@@ -32,17 +32,20 @@ class SurfaceTableTest {
 
     @Test
     fun bareNumbersAfterSurfaceContinueTheList() {
-        // SSP と同じく "surface.append0,6,7" は 0・6・7、"surface1,3-4" は 1・3・4
+        // SSP と同じく "surface.append0,6,7" は 0・6・7、"surface1,3-4" は 1・3・4。
+        // surface.append は、すでにある（画像がある・先に書いた）サーフェスにだけ足す（6 は画像が無いので足さない）
         val table = SurfaceTable.parse(
             """
-            surface.append0,6,7{
+            surface1,3-4,!4 { element0,base,a.png,0,0 }
+            surface.append0,6,7,3{
             animation1.interval,never
             }
-            surface1,3-4,!4 { element0,base,a.png,0,0 }
             """.trimIndent(),
+            existing = setOf(0, 7),
         )
-        assertEquals(setOf(0, 1, 3, 6, 7), table.definitions.keys)
-        assertEquals(IntervalKind.NEVER, table[6]!!.animations[1]!!.interval.kind)
+        assertEquals(setOf(0, 1, 3, 7), table.definitions.keys)
+        assertEquals(IntervalKind.NEVER, table[7]!!.animations[1]!!.interval.kind)
+        assertEquals(IntervalKind.NEVER, table[3]!!.animations[1]!!.interval.kind)
     }
 
     @Test

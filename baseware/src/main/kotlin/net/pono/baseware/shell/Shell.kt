@@ -18,7 +18,11 @@ class Shell(val dir: File) {
         ?.sortedWith(compareBy({ it.name.lowercase() != "surfaces.txt" }, { it.name.lowercase() }))
         ?.takeIf { it.isNotEmpty() }
         ?.joinToString("\n") { TextCharsets.decode(it.readBytes()) }
-        ?.let(SurfaceTable::parse)
+        ?.let { text ->
+            // surface.append は、画像があるサーフェスにも足せる
+            val pngs = dir.listFiles()?.mapNotNull { SURFACE_FILE.matchEntire(it.name.lowercase())?.groupValues?.get(1)?.toIntOrNull() }.orEmpty()
+            SurfaceTable.parse(text, pngs.toSet())
+        }
         ?: SurfaceTable.EMPTY
 
     val name: String get() = descript["name"] ?: dir.name
@@ -76,14 +80,14 @@ class Shell(val dir: File) {
 
     /** あるサーフェスの番号（画像があるものと、surfaces.txt で element を組むもの）。OnNotifyShellInfo で伝える */
     fun surfaceIds(): List<Int> {
-        val fromFiles = files.keys.mapNotNull { surfaceFile.matchEntire(it)?.groupValues?.get(1)?.toIntOrNull() }
+        val fromFiles = files.keys.mapNotNull { SURFACE_FILE.matchEntire(it)?.groupValues?.get(1)?.toIntOrNull() }
         val fromTable = surfaces.definitions.filterValues { it.elements.isNotEmpty() }.keys
         return (fromFiles + fromTable).toSortedSet().toList()
     }
 
-    private val surfaceFile = Regex("""^surface0*(\d+)\.png$""")
-
     companion object {
+        private val SURFACE_FILE = Regex("""^surface0*(\d+)\.png$""")
+
         /** サーフェスの定義ファイル（surfaces.txt、surfaces_xxx.txt、surfaces2.txt など）と alias.txt */
         private val DEFINITION_FILE = Regex("""^(surfaces.*|alias)\.txt$""")
 

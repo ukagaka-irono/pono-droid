@@ -57,13 +57,13 @@ data class DefaultPosition(
 
     /**
      * 大きさ [width] × [height] のウィンドウの左上を、幅 [screenWidth]・高さ [screenHeight] の画面に置く位置。
-     * 決まっていない向きは null（いつもの置き方のまま）
+     * [baseX] / [baseY] はウィンドウの中の基準点（point.basepos。既定は中央・下）。決まっていない向きは null（いつもの置き方のまま）
      */
-    fun windowLeft(width: Int, screenWidth: Int): Int? =
-        x?.let { it.resolve(screenWidth) - width / 2 }
+    fun windowLeft(width: Int, screenWidth: Int, baseX: Int = width / 2): Int? =
+        x?.let { it.resolve(screenWidth) - baseX }
             ?: left?.let { if (it.fromEnd) screenWidth - it.value - width else it.value }
 
-    fun windowTop(height: Int, screenHeight: Int): Int? =
-        y?.let { it.resolve(screenHeight) - height }
+    fun windowTop(height: Int, screenHeight: Int, baseY: Int = height): Int? =
+        y?.let { it.resolve(screenHeight) - baseY }
             ?: top?.let { if (it.fromEnd) screenHeight - it.value - height else it.value }
 }

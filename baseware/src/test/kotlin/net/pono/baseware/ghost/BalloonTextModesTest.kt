@@ -118,6 +118,18 @@ class BalloonTextModesTest {
     }
 
     @Test
+    fun talkStartsAndEndsPerCharacter() = run(mapOf("OnTest" to """\0はじめ\1あいて\0もどる\e""")) { c, _, _ ->
+        c.raise("OnTest", emptyList())
+        c.awaitState { !it.talking && it.text(0) == "はじめもどる" }
+        val s = c.state.value
+        // \0 は2回話し始め、\1 に移ったときと終わりで2回話し終える。\1 は1回ずつ
+        assertEquals(2, s.characters[0]?.talkStarts)
+        assertEquals(2, s.characters[0]?.talkEnds)
+        assertEquals(1, s.characters[1]?.talkStarts)
+        assertEquals(1, s.characters[1]?.talkEnds)
+    }
+
+    @Test
     fun partialClearEditsTheBalloon() = run(mapOf("OnTest" to """\0トークを3文字削除\c[char,3]削除終了。\e""")) { c, _, _ ->
         c.raise("OnTest", emptyList())
         c.awaitState { it.text(0) == "トークを3文削除終了。" }
