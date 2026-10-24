@@ -1999,10 +1999,19 @@ class GhostController(
     /** OnVanishSelecting を話している消去の手続き。そのあいだにバルーンをタップすると取りやめる（OnVanishButtonHold） */
     private var vanishJob: Job? = null
 
-    /** 消去したあとに起こすゴースト（並びで次のもの）。ほかにゴーストがいなければ、誰もいなくなるので消去できない */
+    /** \![vanishbymyself,ゴースト名] で指定した、消去したあとに切り替える先 */
+    private var vanishNext: String? = null
+
+    /**
+     * 消去したあとに起こすゴースト（[vanishNext] があればそれ、無ければ並びで次のもの）。ほかにゴーストがいなければ、
+     * 誰もいなくなるので消去できない
+     */
     private fun ghostAfterVanish(): Ghost? {
         val self = ghost.dir.canonicalFile
         val ghosts = repository?.list().orEmpty()
+        vanishNext?.let { name ->
+            ghosts.firstOrNull { it.dir.canonicalFile != self && (it.name == name || it.sakuraName == name || it.dir.name == name) }?.let { return it }
+        }
         val i = ghosts.indexOfFirst { it.dir.canonicalFile == self }
         return (ghosts.drop(i + 1) + ghosts.take(i.coerceAtLeast(0))).firstOrNull { it.dir.canonicalFile != self }
     }
@@ -2061,10 +2070,8 @@ class GhostController(
 
     /** \![vanishbymyself(,ゴースト名)(,--option=query)]。消去できるのは自分だけ。query なら先に確かめる */
     private fun vanishByMyself(args: List<String>) {
-        val target = args.map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.startsWith("--") }
-        if (target != null && target != ghost.name && target != ghost.sakuraName && target != ghost.dir.name) {
-            return platform.log("ほかのゴーストは消去できません: $target")
-        }
+        // ゴースト名は、消去したあとに切り替える先（見つからなければいつもの次のゴースト）
+        vanishNext = args.map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.startsWith("--") }
         if (args.none { it.trim().lowercase() == "--option=query" }) return vanish(farewell = false)
         if (ghostAfterVanish() == null) return platform.log("ほかにゴーストがいないので消去できません")
         scope.launch {

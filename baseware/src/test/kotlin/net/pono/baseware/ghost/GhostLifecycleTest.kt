@@ -174,15 +174,15 @@ class GhostLifecycleTest {
     }
 
     @Test
-    fun vanishByMyselfCanAskFirstButNeverRemovesAnotherGhost() = run(
-        mapOf("OnFirstBoot" to """\0\![vanishbymyself,つぎ]\![vanishbymyself,わたし,--option=query]\e"""),
+    fun vanishByMyselfCanAskFirstAndNamesTheNextGhost() = run(
+        mapOf("OnFirstBoot" to """\0\![vanishbymyself,さんにんめ,--option=query]\e"""),
+        prepare = { me -> ghostIn(me.dir.parentFile, "third", "さんにんめ") },
     ) {
         c.awaitChoice("pono:vanish-yes")
-        assertTrue(platform.inner.logs.any { "ほかのゴーストは消去できません: つぎ" in it })
-        assertTrue(other!!.dir.exists())
         c.onChoice(Choice("消去する", "pono:vanish-yes", emptyList()))
-        assertEquals("next", platform.awaitSwitch().first)
-        assertTrue(other.dir.exists())
+        // 名前で選んだゴーストに切り替える（並びで次の「つぎ」ではなく）
+        assertEquals("third", platform.awaitSwitch().first)
+        assertTrue(other!!.dir.exists())
         assertFalse(ghost.dir.exists())
     }
 

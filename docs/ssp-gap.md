@@ -120,7 +120,7 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 \![anim,offset / clear / stop] \![bind] \![bind-noevent] \![sound,play / loop / stop / wait / load / pause / resume / option]
 （ファイルごとに何個でも。--volume / --balance / --rate / --seektime） \__v[disable] \__v[alternate,文字]（読み上げと発言履歴） \![change,ghost / shell / balloon]
 \![execute,http-get] \![updatebymyself] \![reload,shiori] \![enter / leave,passivemode] \![quicksection]
-\![vanishbymyself]（確かめずに消す。--option=query なら確かめる。消せるのは自分だけで、ほかにゴーストがいないときは消さない）、
+\![vanishbymyself]（確かめずに消す。--option=query なら確かめる。ゴースト名を書けば消したあとそのゴーストに替わる。ほかにゴーストがいないときは消さない）、
 \+ \_+（ほかのゴーストのどれか・並びで次のゴーストに替える）、\![change,calendarskin]（カレンダーが無いので何もしない）、\a（OnAITalk）、
 \![reloadsurface] \![reload,shell / balloon / ghost / descript]（ghost と descript はすべて読み直して起き直す。イベントは送らない）
 \![load / unload,shiori] \![open,terms]（ghost/master の terms.txt）
