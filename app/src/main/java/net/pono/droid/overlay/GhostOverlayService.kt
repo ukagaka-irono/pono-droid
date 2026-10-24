@@ -53,6 +53,7 @@ import net.pono.baseware.ghost.GhostRepository
 import net.pono.baseware.ghost.InputRequest
 import net.pono.baseware.ghost.NetworkStatus
 import net.pono.baseware.ghost.PreviousGhost
+import net.pono.baseware.ghost.SystemInfo
 import net.pono.baseware.ghost.WindowState
 import net.pono.baseware.shell.Shell
 import net.pono.droid.AppVersion
@@ -75,6 +76,7 @@ class GhostOverlayService : LifecycleService() {
     private var scopesJob: Job? = null
     private var positionsJob: Job? = null
     private var windowJob: Job? = null
+    private var loadJob: Job? = null
 
     /** 動かし終えた \![move] と \4 / \5 の通し番号（キャラクターごと） */
     private val handledMoves = HashMap<Int, Int>()
@@ -158,6 +160,8 @@ class GhostOverlayService : LifecycleService() {
                 override fun batteryInfo(): BatteryInfo? =
                     registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let(::batteryInfo)
 
+                override fun systemInfo(): SystemInfo = this@GhostOverlayService.systemInfo()
+
                 override fun networkStatus(): NetworkStatus {
                     val cm = getSystemService(ConnectivityManager::class.java)
                     val network = cm.activeNetwork
@@ -232,6 +236,7 @@ class GhostOverlayService : LifecycleService() {
         createWindows(c)
         watchPositions(c)
         watchWindowState(c)
+        watchLoad(c)
         // pono-droid の画面が前にある間は、キャラクターがボタンに重なっても押せるようにタッチを通す。
         // ただし入力の箱を出している間は、箱に触れられるように通さない
         touchJob = lifecycleScope.launch {
@@ -424,6 +429,8 @@ class GhostOverlayService : LifecycleService() {
         positionsJob = null
         windowJob?.cancel()
         windowJob = null
+        loadJob?.cancel()
+        loadJob = null
         windows.forEach { it.dismiss() }
         windows.clear()
         controller = null
@@ -439,14 +446,27 @@ class GhostOverlayService : LifecycleService() {
                 // Android にはパソコンのような「休止」が無いので、画面が消えたら休んだことにする（OnSysSuspend）
                 Intent.ACTION_SCREEN_OFF -> {
                     c.setScreenOn(false)
+                    c.onDisplayPower(false)
+                    // 画面が消えたら、次につけたときはロック画面から（OnSessionLock）
+                    c.onSessionLock()
                     c.onSystemSuspend()
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     c.setScreenOn(true)
+                    c.onDisplayPower(true)
                     // ロック画面の上にはキャラクターが出ないので、ロックがあれば解いてから OnSysResume
-                    if (!getSystemService(KeyguardManager::class.java).isKeyguardLocked) c.onSystemResume()
+                    if (!getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
+                        c.onSessionUnlock()
+                        c.onSystemResume()
+                    }
                 }
-                Intent.ACTION_USER_PRESENT -> c.onSystemResume()
+                Intent.ACTION_USER_PRESENT -> {
+                    c.onSessionUnlock()
+                    c.onSystemResume()
+                }
+                // Android のスクリーンセーバー
+                Intent.ACTION_DREAMING_STARTED -> c.onScreenSaver(true)
+                Intent.ACTION_DREAMING_STOPPED -> c.onScreenSaver(false)
             }
         }
     }
@@ -553,17 +573,94 @@ class GhostOverlayService : LifecycleService() {
                 addAction(Intent.ACTION_SCREEN_ON)
                 addAction(Intent.ACTION_SCREEN_OFF)
                 addAction(Intent.ACTION_USER_PRESENT)
+                addAction(Intent.ACTION_DREAMING_STARTED)
+                addAction(Intent.ACTION_DREAMING_STOPPED)
             },
         )
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(networkCallback)
     }
 
-    /** 画面の向きが変わった（OnDisplayChange） */
+    /** 画面の向き（OnDisplayChange）・ダークモード（OnDarkTheme）・言語（OnLanguageChange）が変わった */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         val metrics = resources.displayMetrics
         controller?.onDisplayChanged(metrics.widthPixels, metrics.heightPixels)
+        controller?.onSystemInfoChanged(systemInfo())
+    }
+
+    /** 端末の見た目・言語・フォント・更新。言語名と ID は SSP（Windows）と同じ形にする */
+    private fun systemInfo(): SystemInfo {
+        val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val locale = resources.configuration.locales[0]
+        val fonts = if (Build.VERSION.SDK_INT >= 29) {
+            runCatching {
+                android.graphics.fonts.SystemFonts.getAvailableFonts().mapNotNull { it.file?.nameWithoutExtension }.distinct().sorted().take(MAX_FONTS)
+            }.getOrDefault(emptyList())
+        } else {
+            emptyList()
+        }
+        return SystemInfo(
+            darkTheme = night,
+            languageName = locale.getDisplayLanguage(java.util.Locale.ENGLISH),
+            languageId = windowsLanguageId(locale),
+            fonts = fonts.ifEmpty { listOf("sans-serif", "serif", "monospace") },
+            osUpdated = Build.TIME.takeIf { it > 0 },
+            osUpdateTitle = "Android ${Build.VERSION.RELEASE} (${Build.VERSION.SECURITY_PATCH})",
+            country = locale.country,
+        )
+    }
+
+    /** Windows の言語 ID（LANGID）。よく使うものだけ */
+    private fun windowsLanguageId(locale: java.util.Locale): Int = when (locale.language) {
+        "ja" -> 1041
+        "en" -> if (locale.country == "GB") 2057 else 1033
+        "zh" -> if (locale.country in setOf("TW", "HK", "MO") || locale.script == "Hant") 1028 else 2052
+        "ko" -> 1042
+        "fr" -> 1036
+        "de" -> 1031
+        "es" -> 3082
+        "it" -> 1040
+        "pt" -> if (locale.country == "BR") 1046 else 2070
+        "ru" -> 1049
+        else -> 0
+    }
+
+    /**
+     * 端末の負荷を 5 秒ごとに測って、ゴーストに伝える（OnCPULoadHigh / OnMemoryLoadHigh など）。
+     * Android 8 からはほかのアプリの CPU の使い方は読めないので、読める端末だけ /proc/stat（だめなら /proc/loadavg）から求める
+     */
+    private fun watchLoad(c: GhostController) {
+        loadJob?.cancel()
+        loadJob = lifecycleScope.launch {
+            var previous: Pair<Long, Long>? = null
+            while (true) {
+                kotlinx.coroutines.delay(5_000)
+                if (!getSystemService(PowerManager::class.java).isInteractive) continue
+                val (cpu, sample) = withContext(Dispatchers.IO) { cpuLoad(previous) }
+                previous = sample
+                val memory = ActivityManager.MemoryInfo().also { getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
+                val used = if (memory.totalMem > 0) ((memory.totalMem - memory.availMem) * 100 / memory.totalMem).toInt() else null
+                c.onLoad(cpu, used)
+            }
+        }
+    }
+
+    /** CPU の負荷（パーセント）と、次に差を取るための値（全体の時間・休んでいた時間）。読めなければ null */
+    private fun cpuLoad(previous: Pair<Long, Long>?): Pair<Int?, Pair<Long, Long>?> {
+        val stat = runCatching { File("/proc/stat").useLines { it.firstOrNull() } }.getOrNull()
+        if (stat != null && stat.startsWith("cpu ")) {
+            val v = stat.split(WHITESPACE).drop(1).mapNotNull { it.toLongOrNull() }
+            if (v.size >= 4) {
+                val idle = v[3] + (v.getOrNull(4) ?: 0)
+                val total = v.sum()
+                val load = previous?.let { (t, i) -> if (total > t) (100 - (idle - i) * 100 / (total - t)).toInt() else null }
+                return load to (total to idle)
+            }
+        }
+        val avg = runCatching { File("/proc/loadavg").readText().split(' ').firstOrNull()?.toDoubleOrNull() }.getOrNull()
+        val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
+        return avg?.let { (it * 100 / cores).toInt().coerceIn(0, 100) } to null
     }
 
     override fun onDestroy() {
@@ -636,6 +733,11 @@ class GhostOverlayService : LifecycleService() {
         private const val ACTION_STOP = "net.pono.droid.STOP"
         private const val ACTION_UPDATE = "net.pono.droid.UPDATE"
         private const val ACTION_SHOW = "net.pono.droid.SHOW"
+
+        /** OnNotifyFontInfo で伝えるフォントの数の上限 */
+        private const val MAX_FONTS = 200
+
+        private val WHITESPACE = Regex("[ \t]+")
         private const val EXTRA_GHOST = "ghost"
 
         private val _appInFront = MutableStateFlow(false)

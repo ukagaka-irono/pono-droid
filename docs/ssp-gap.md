@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 88）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 103）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -39,15 +39,16 @@ OnSurfaceChange / OnSurfaceRestore、OnBalloonBreak / Close / Timeout、OnTransl
 OnUserInput(Cancel) / OnTextAreaInput(Cancel) / OnCommunicate(InputCancel) / OnTeach、
 OnFileDrop2 / OnFileDropEx、OnUpdateBegin / Ready / Complete / Failure、OnExecuteHTTPComplete / Failure、
 OnNetworkStatusChange、OnDisplayChange、OnBattery*（Notify / Low / Critical / ChargingStart / Stop）、OnRecommendsiteChoice、
-起動時の OnNotifySelfInfo / BalloonInfo / ShellInfo / DressupInfo / UserInfo / OSInfo / InternationalInfo
+起動時の OnNotifySelfInfo / BalloonInfo / ShellInfo / DressupInfo / UserInfo / OSInfo / InternationalInfo、
+OnSessionLock / OnSessionUnlock（画面が消えた・ロックを解いた）、OnDarkTheme、OnLanguageChange、OnDisplayPowerStatus、
+OnCPULoadHigh / Low（/proc/stat か /proc/loadavg を読める端末だけ）・OnMemoryLoadHigh / Low、OnNetworkHeavy（10 秒答えない）、
+OnOSUpdateInfo（Android の最後の更新だけ）、OnNotifyFontInfo、OnNotifyHolidayInfo（日本の祝日を決まりから求める。日本以外は送らない）、
+OnScreenSaverStart / End（Android のスクリーンセーバー）
 
 ### 🔨 Android で作れる
 - 共有・インストール: OnTextDrop・OnURLDropped / OnURLDropping / OnURLDropFailure（文字や URL の「共有」）、OnDirectoryDrop（使わない）、
   OnInstallBegin / Complete / CompleteEx / CompleteAll / Failure / Refuse / Reroute（.nar のインストールをゴーストに知らせる）、
   OnMediaPlayerOpen / OnPictureViewerOpen（渡したファイルを Android のアプリで開いたとき）
-- 端末の状態: OnSessionLock / OnSessionUnlock（画面ロック）、OnDarkTheme（ダークモード）、OnLanguageChange、
-  OnDisplayPowerStatus（画面の電源）、OnCPULoadHigh / Low・OnMemoryLoadHigh / Low、OnNetworkHeavy、OnOSUpdateInfo、
-  OnNotifyFontInfo、OnNotifyHolidayInfo（祝日表）、OnScreenSaverStart / End（Android のスクリーンセーバー）
 - 入力: OnTeachStart / OnTeachInputCancel、OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
 - 音: OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（読み上げ）
 - 通信: OnExecuteHTTPProgress / Streaming / SSLInfo、OnExecuteRSSComplete / Failure、OnExecuteICalComplete / Failure / Progress、

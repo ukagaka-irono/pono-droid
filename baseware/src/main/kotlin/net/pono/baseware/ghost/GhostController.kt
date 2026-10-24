@@ -69,6 +69,22 @@ data class DeviceInfo(
 data class BatteryInfo(val percent: Int, val charging: Boolean, val plugged: Boolean)
 
 /**
+ * 端末の見た目・言語・フォント・更新（OnDarkTheme・OnLanguageChange・OnNotifyFontInfo・OnOSUpdateInfo）。
+ * [languageName] は SSP と同じく英語の言語名（Japanese など）、[languageId] は Windows の言語 ID（日本語なら 1041）。
+ * [osUpdated] は端末を最後に更新した時刻（分からなければ null）、[osUpdateTitle] はその内容
+ */
+data class SystemInfo(
+    val darkTheme: Boolean = false,
+    val languageName: String = "",
+    val languageId: Int = 0,
+    val fonts: List<String> = emptyList(),
+    val osUpdated: Long? = null,
+    val osUpdateTitle: String = "",
+    /** 国（祝日に使う）。JP なら日本の祝日を伝える */
+    val country: String = "",
+)
+
+/**
  * ネットワークの状態（OnNetworkStatusChange）。[type] は SSP と同じ wifi / cellular / ethernet / none / other / unknown、
  * 速さは MBps（分からなければ 0）、[metering] は unknown / unrestricted / fixed / variable
  */
@@ -98,6 +114,9 @@ interface GhostPlatform {
 
     /** 今のネットワークの状態。null なら起動時の OnNetworkStatusChange を送らない */
     fun networkStatus(): NetworkStatus? = null
+
+    /** 端末の見た目・言語など。null なら OnDarkTheme・OnLanguageChange などを送らない */
+    fun systemInfo(): SystemInfo? = null
 
     /** readme のような長い文を見せる（\![open,readme]） */
     fun showText(title: String, text: String) {}
@@ -301,6 +320,13 @@ class GhostController(
         val dressup = dressupInfo()
         if (dressup.isNotEmpty()) s.notify("OnNotifyDressupInfo", *dressup.toTypedArray())
         s.notify("OnNotifyUserInfo", userName, "", "", "undef")
+        // 今日が祝日なら、OnNotifyUserInfo のすぐ後に（SSP と同じ。祝日表の代わりに日本の祝日を求める）
+        platform.systemInfo()?.takeIf { it.country.equals("JP", ignoreCase = true) }?.let {
+            val today = java.time.LocalDate.now()
+            JapaneseHolidays.name(today)?.let { name ->
+                s.notify("OnNotifyHolidayInfo", name, "%04d,%02d,%02d".format(today.year, today.monthValue, today.dayOfMonth), "JP")
+            }
+        }
         platform.deviceInfo()?.let { d ->
             s.notify(
                 "OnNotifyOSInfo",
@@ -328,6 +354,32 @@ class GhostController(
             lastNetwork = n
             s.notify("OnNetworkStatusChange", *networkReferences(n).toTypedArray())
         }
+        platform.systemInfo()?.let { info ->
+            lastSystem = info
+            s.notify("OnDarkTheme", *darkReferences(info).toTypedArray())
+            s.notify("OnLanguageChange", *languageReferences(info).toTypedArray())
+            if (info.fonts.isNotEmpty()) s.notify("OnNotifyFontInfo", *info.fonts.toTypedArray())
+            s.notify("OnOSUpdateInfo", *osUpdateReferences(info).toTypedArray())
+        }
+    }
+
+    private var lastSystem: SystemInfo? = null
+
+    /** アプリの設定と端末の設定（pono-droid は端末の設定に従うので、どちらも同じ） */
+    private fun darkReferences(info: SystemInfo) = List(2) { if (info.darkTheme) "1" else "0" }
+
+    /** 言語名・言語 ID・言語ファイルのフォルダ（無い）・ヘルプの URL（無い） */
+    private fun languageReferences(info: SystemInfo) = listOf(info.languageName, info.languageId.toString(), "", "")
+
+    /** 確認した時刻・更新した時刻と、履歴（状態[1]エラーコード[1]時刻[1]内容）。Android では最後の更新だけ分かる */
+    private fun osUpdateReferences(info: SystemInfo): List<String> {
+        val updated = info.osUpdated ?: return listOf("", "")
+        val c = Calendar.getInstance().apply { timeInMillis = updated }
+        val time = "%d,%d,%d,%d,%d,%d".format(
+            c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH),
+            c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), c.get(Calendar.SECOND),
+        )
+        return listOf(time, time, listOf("success", "0", time.replace(',', '/'), info.osUpdateTitle).joinToString("\u0001"))
     }
 
     /** OnNotifyDressupInfo の Reference: [キャラ ID, カテゴリ, パーツ, オプション, 有効 1/0, サムネイル] を 0x01 でつないだもの */
@@ -396,9 +448,11 @@ class GhostController(
                     return@launch
                 }
                 talkAndWait("OnUpdateBegin", listOf(ghost.name, ghost.dir.absolutePath + "/", "", "ghost"))
-                val result = NetworkUpdater(ghost.dir, updateFetcher).update(homeUrl) { count ->
-                    // Reference0 は「ファイル数 - 1」（SSP の仕様）
-                    talkAndWait("OnUpdateReady", refs((count - 1).toString(), ""))
+                val result = watchNetwork {
+                    NetworkUpdater(ghost.dir, updateFetcher).update(homeUrl) { count ->
+                        // Reference0 は「ファイル数 - 1」（SSP の仕様）
+                        talkAndWait("OnUpdateReady", refs((count - 1).toString(), ""))
+                    }
                 }
                 platform.log("network update: $result")
                 when (result) {
@@ -418,6 +472,24 @@ class GhostController(
             } finally {
                 updating = false
             }
+        }
+    }
+
+    /**
+     * 通信の相手が [NETWORK_HEAVY_MS] たっても答えなければ、待っている間 OnNetworkHeavy を送る
+     * （Reference0 はあきらめるまでの秒数、Reference1 は待った秒数。SSP と同じく1回の通信につき1回）
+     */
+    private suspend fun <T> watchNetwork(block: suspend () -> T): T {
+        val started = System.currentTimeMillis()
+        val watch = scope.launch {
+            delay(NETWORK_HEAVY_MS)
+            val elapsed = (System.currentTimeMillis() - started) / 1000
+            raise("OnNetworkHeavy", listOf((NETWORK_TIMEOUT_MS / 1000).toString(), elapsed.toString()), userInitiated = false)
+        }
+        try {
+            return block()
+        } finally {
+            watch.cancel()
         }
     }
 
@@ -452,7 +524,7 @@ class GhostController(
             }
             httpGetsInFlight++
             val (ok, detail) = try {
-                withContext(Dispatchers.IO) { download(url, opts["file"]?.let(NetworkUpdater::safeFileName)) }
+                watchNetwork { withContext(Dispatchers.IO) { download(url, opts["file"]?.let(NetworkUpdater::safeFileName)) } }
             } finally {
                 httpGetsInFlight--
             }
@@ -1272,6 +1344,74 @@ class GhostController(
         suspended = false
         lastUserActivity = System.currentTimeMillis()
         raise("OnSysResume", listOf("normal"), userInitiated = false)
+    }
+
+    private var sessionLocked = false
+
+    /** ロック画面に戻った（画面が消えた）・ロックを解いた。OnSessionLock / OnSessionUnlock を1回ずつ送る */
+    fun onSessionLock() {
+        if (sessionLocked) return
+        sessionLocked = true
+        raise("OnSessionLock", emptyList(), userInitiated = false)
+    }
+
+    fun onSessionUnlock() {
+        if (!sessionLocked) return
+        sessionLocked = false
+        raise("OnSessionUnlock", emptyList(), userInitiated = false)
+    }
+
+    /** 画面の電源が入った・切れた（OnDisplayPowerStatus） */
+    fun onDisplayPower(on: Boolean) = raise("OnDisplayPowerStatus", listOf(if (on) "1" else "0"), userInitiated = false)
+
+    /** Android のスクリーンセーバー（スクリーンセーバー / Daydream）が始まった（NOTIFY）・終わった */
+    fun onScreenSaver(started: Boolean) {
+        if (started) notify("OnScreenSaverStart", listOf("Android", "", "0")) else raise("OnScreenSaverEnd", emptyList(), userInitiated = false)
+    }
+
+    /** 端末の見た目や言語が変わった。変わったものだけ OnDarkTheme / OnLanguageChange を送る（今度は話せる） */
+    fun onSystemInfoChanged(info: SystemInfo) {
+        val previous = lastSystem
+        lastSystem = info
+        if (previous == null) return
+        if (info.darkTheme != previous.darkTheme) raise("OnDarkTheme", darkReferences(info), userInitiated = false)
+        if (info.languageName != previous.languageName || info.languageId != previous.languageId) {
+            raise("OnLanguageChange", languageReferences(info), userInitiated = false)
+        }
+        if (info.osUpdated != previous.osUpdated) raise("OnOSUpdateInfo", osUpdateReferences(info), userInitiated = false)
+    }
+
+    private var cpuHighCount = 0
+    private var cpuHigh = false
+    private var memoryHighCount = 0
+    private var memoryHigh = false
+
+    /**
+     * 端末の負荷（パーセント。CPU が分からなければ null）。数秒ごとに呼ぶ。80% 以上が続いたら OnCPULoadHigh / OnMemoryLoadHigh、
+     * その後 60% を下回ったら OnCPULoadLow / OnMemoryLoadLow（SSP と同じ）
+     */
+    fun onLoad(cpuPercent: Int?, memoryPercent: Int?) {
+        fun check(value: Int?, count: Int, high: Boolean, name: String, set: (Int, Boolean) -> Unit) {
+            value ?: return
+            when {
+                !high && value >= LOAD_HIGH -> {
+                    val n = count + 1
+                    if (n >= LOAD_HIGH_SAMPLES) {
+                        set(0, true)
+                        raise("On${name}LoadHigh", listOf(value.toString()), userInitiated = false)
+                    } else {
+                        set(n, false)
+                    }
+                }
+                !high -> set(0, false)
+                value < LOAD_LOW -> {
+                    set(0, false)
+                    raise("On${name}LoadLow", listOf(value.toString()), userInitiated = false)
+                }
+            }
+        }
+        check(cpuPercent, cpuHighCount, cpuHigh, "CPU") { n, h -> cpuHighCount = n; cpuHigh = h }
+        check(memoryPercent, memoryHighCount, memoryHigh, "Memory") { n, h -> memoryHighCount = n; memoryHigh = h }
     }
 
     /**
@@ -2443,6 +2583,15 @@ class GhostController(
 
         /** \![set,balloonmarker] / \![set,balloonnum] の文字の長さの上限 */
         const val MAX_BALLOON_LABEL = 100
+
+        /** OnCPULoadHigh などの境目（パーセント）と、高いのが何回続いたら知らせるか */
+        const val LOAD_HIGH = 80
+        const val LOAD_LOW = 60
+        const val LOAD_HIGH_SAMPLES = 3
+
+        /** 通信の相手がこれだけ答えなければ OnNetworkHeavy を送る。[NETWORK_TIMEOUT_MS] は通信をあきらめるまで（接続と読み込み） */
+        const val NETWORK_HEAVY_MS = 10_000L
+        const val NETWORK_TIMEOUT_MS = 45_000L
 
         /** \![anim,add,...] の1コマの時間と、\![anim,add,text] を出しておく時間の上限 */
         const val MAX_ADD_WAIT_MS = 60_000
