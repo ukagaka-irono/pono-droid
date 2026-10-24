@@ -36,4 +36,14 @@ object OverlaySettings {
     const val KEY_SSTP = "sstp"
 
     fun sstp(prefs: SharedPreferences) = prefs.getBoolean(KEY_SSTP, false)
+
+    /** ゴーストが端末の壁紙を変えてよいか（\![set,wallpaper]。最初は変えさせない。元の壁紙には戻せない） */
+    const val KEY_WALLPAPER = "wallpaper"
+
+    fun wallpaper(prefs: SharedPreferences) = prefs.getBoolean(KEY_WALLPAPER, false)
+
+    /** 開発者向けの機能（\![open,editor] で書き換えられるように開く・開発用の画面）。最初は使わない */
+    const val KEY_DEVELOPER = "developer"
+
+    fun developer(prefs: SharedPreferences) = prefs.getBoolean(KEY_DEVELOPER, false)
 }

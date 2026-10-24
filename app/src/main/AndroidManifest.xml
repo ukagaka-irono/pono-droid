@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- \![set,wallpaper]（アプリの設定で許したときだけ使う） -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <!-- ネットワークの切り替わりをゴーストに伝える（OnNetworkStatusChange） -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />

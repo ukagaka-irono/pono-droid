@@ -69,7 +69,8 @@ OnSSTPBreak（SSTP で届いたスクリプトをバルーンのタップで止�
 - OnVoiceRecognitionStatus / Word（マイクで声を聞く。マイクの権限が要る）
 - OnScheduleTodayNotify / 5MinutesToGo / Read、OnExecuteSchedule*（予定。端末のカレンダーを読む権限が要る）
 - OnBIFFBegin / Complete / Failure、OnBIFF2Complete（メールの確認。メールのパスワードをアプリに預けることになる）
-- OnDeviceArrival / Remove（USB 機器）、OnRecycleBin*（ゴミ箱）
+- OnDeviceArrival / Remove（USB 機器）
+- ⛔ OnRecycleBin*（Android にはごみ箱が無い。写真などのアプリのごみ箱を空にするのは、ユーザーのデータを消すことになるので作らない）
 
 ### 👥 複数ゴーストの同時起動が要る
 OnGhostCalling / Called / CallComplete、OnOtherGhostBooted / Changed / Closed / Vanished / Talk、OnOtherSurfaceChange、
@@ -133,19 +134,21 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 
 ### 🔒 決めてから
 - ✅ 読み上げ（Android の音声合成。アプリの設定で選ぶ。最初は読み上げない）。設定の切り替えの画面は 6c-2 の画面と一緒に作る
-- \![set,wallpaper] / \![save,wallpaper] / \![restore,wallpaper]（ゴーストが端末の壁紙を変える。壁紙の権限が要る）
-- \![open,editor] / \![open,explorer]（他のアプリでゴーストのファイルを開かせる）
+- ✅ \![set,wallpaper]（--file / --position=center・tile・stretch・fit・fill / --color。アプリの設定で許したときだけ。最初は変えさせない）
+- ⛔ \![save,wallpaper] / \![restore,wallpaper]（Android 13 からは、アプリが今の壁紙を読めないので、元に戻せない）
+- ✅ \![open,editor]（ゴーストのファイルを書き換えられるようにほかのアプリで開く。設定の「開発者向けの機能」を選んだときだけ）、
+  \![open,explorer]（ファイラーは無いので、そのファイルをほかのアプリで開く）
 - \![execute,schedule-add / delete / get]（端末のカレンダーに予定を書く）
 - \![biff]（メールの確認）、\![open,messenger]
-- \![execute,emptyrecyclebin]（ゴミ箱を空にする）
-- \![set,shioridebugmode]
+- ⛔ \![execute,emptyrecyclebin]（上の OnRecycleBin* と同じ理由）
+- ✅ \![set,shioridebugmode(,true/false)]（NOTIFY enable_debug）
 
 ### 👥 複数ゴーストの同時起動が要る
 \![call,ghost]、\![raiseother] \![notifyother] \![timerraiseother] \![timernotifyother]、\![set,otherghosttalk] \![set,othersurfacechange]、\![updateother]
 
 ### ⛔ 作れない
 \![effect] \![effect2] \![filter]（DLL のプラグイン）、\![raiseplugin] など（プラグイン）、\![execute,headline]、\![execute,calendarplugin]、
-\![reload,makoto] \![load / unload,makoto] \![reload,aigraph] \![open,aigraph]、\![open,headlinesensorexplorer / pluginexplorer / calendar*]、
+\![reload,makoto] \![load / unload,makoto] \![reload,aigraph]、\![open,headlinesensorexplorer / pluginexplorer / calendar*]、
 \m[umsg,wparam,lparam]（Windows のメッセージ）、\![set,windowstate,stayontop]（オーバーレイはいつも上）、\![set,alignmentondesktop]、\![sound,cdplay]、
 \![open,addressbar]
 

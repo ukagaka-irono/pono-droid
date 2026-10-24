@@ -784,9 +784,7 @@ class ScriptPlayer(
 
     /** `\![set,名前,...]` のうち、Windows のウィンドウやトレイ向けで、pono-droid では意味が無いもの */
     private val silentSetOptions = setOf(
-        "wallpaper",
         "otherghosttalk", "othersurfacechange", "alignmentondesktop",
-        "shioridebugmode",
     )
 
     private val silentExecutes = setOf("resetballoonpos")

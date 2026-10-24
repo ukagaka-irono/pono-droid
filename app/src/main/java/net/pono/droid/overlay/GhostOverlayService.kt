@@ -63,6 +63,7 @@ import net.pono.baseware.ghost.DiskInfo
 import net.pono.baseware.ghost.SoundStatus
 import net.pono.baseware.ghost.SurfaceDump
 import net.pono.baseware.ghost.SystemInfo
+import net.pono.baseware.ghost.WallpaperRequest
 import net.pono.baseware.ghost.WindowGeometry
 import net.pono.baseware.ghost.WindowState
 import net.pono.baseware.net.SstpResponse
@@ -287,6 +288,42 @@ class GhostOverlayService : LifecycleService() {
                 override fun stopSound(file: File?) = sound.stop(file)
 
                 override fun showTrayBalloon(title: String, text: String, icon: String) = showGhostMessage(title, text)
+
+                override fun setWallpaper(request: WallpaperRequest): Boolean {
+                    if (!OverlaySettings.wallpaper(OverlaySettings.prefs(this@GhostOverlayService))) {
+                        Log.i(TAG, "壁紙の変更はアプリの設定で許していません")
+                        return false
+                    }
+                    lifecycleScope.launch {
+                        val ok = withContext(Dispatchers.Default) {
+                            runCatching {
+                                val metrics = resources.displayMetrics
+                                val bitmap = Wallpapers.compose(request, metrics.widthPixels, metrics.heightPixels) ?: return@runCatching false
+                                android.app.WallpaperManager.getInstance(this@GhostOverlayService)
+                                    .setBitmap(bitmap, null, true, android.app.WallpaperManager.FLAG_SYSTEM)
+                                true
+                            }.getOrDefault(false)
+                        }
+                        if (!ok) toast("壁紙を変えられませんでした")
+                    }
+                    return true
+                }
+
+                /** 書き換えてよいという許可を付けて、そのファイル1つだけ渡す */
+                override fun editFile(file: File, line: Int?): Boolean {
+                    if (!OverlaySettings.developer(OverlaySettings.prefs(this@GhostOverlayService))) return false
+                    val uri = runCatching { FileProvider.getUriForFile(this@GhostOverlayService, "$packageName.files", file) }.getOrNull() ?: return false
+                    val intent = Intent(Intent.ACTION_EDIT).setDataAndType(uri, "text/plain")
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    if (line != null) intent.putExtra("line", line)
+                    return try {
+                        startActivity(intent)
+                        true
+                    } catch (e: ActivityNotFoundException) {
+                        toast("書き換えられるアプリが見つかりません")
+                        false
+                    }
+                }
 
                 override fun setTrayText(text: String) {
                     trayText = text.takeIf { it.isNotBlank() }

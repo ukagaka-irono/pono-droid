@@ -120,6 +120,11 @@ data class WindowGeometry(
     val balloonScale: Double = 1.0,
 )
 
+/**
+ * \![set,wallpaper]。[file] の画像（無ければ [color] の単色）を壁紙にする。[position] は center / tile / stretch / fit / fill（既定）
+ */
+data class WallpaperRequest(val file: File?, val position: String, val color: Int?)
+
 /** 端末の記憶領域の1つ（system.disk.index(ID).*）。[type] は fixed / removable など */
 data class DiskInfo(val mountpoint: String, val type: String, val totalMb: Long, val freeMb: Long)
 
@@ -217,6 +222,15 @@ interface GhostPlatform {
 
     /** \![set,tasktrayicon,ファイル,文字]。常駐の通知に [text] を出す（アイコンの画像は Android の通知では替えられない） */
     fun setTrayText(text: String) {}
+
+    /** \![set,wallpaper]。アプリの設定で許したときだけ壁紙を変える。変えたら true */
+    fun setWallpaper(request: WallpaperRequest): Boolean = false
+
+    /**
+     * \![open,editor,ファイル,行]。ゴーストのフォルダの [file] を、書き換えられるようにほかのアプリで開く
+     * （アプリの設定の「開発者向けの機能」を選んだときだけ）。開けたら true
+     */
+    fun editFile(file: File, line: Int?): Boolean = false
 
     /** [scope] のキャラクターのウィンドウの今の位置（出していなければ null） */
     fun windowGeometry(scope: Int): WindowGeometry? = null
@@ -1508,6 +1522,30 @@ class GhostController(
             if (event.isNotEmpty()) deliverLater(event, listOf(if (ok) "1" else "0"))
         }
         return if (event.isEmpty()) job else true
+    }
+
+    /**
+     * \![set,wallpaper,ファイル] / \![set,wallpaper,--file=ファイル,--position=fit,--color=navy]。ファイルは ghost/master か
+     * ゴーストのフォルダからの相対パス（ゴーストのフォルダの外は使わない）。ファイルも色も無ければ null
+     */
+    private fun wallpaperRequest(args: List<String>): WallpaperRequest? {
+        val (positional, opts) = splitArgs(args)
+        val name = opts["file"] ?: positional.firstOrNull()
+        val root = ghost.dir.canonicalFile
+        val file = name?.let { n ->
+            val raw = n.trim().replace('\\', '/')
+            listOf(File(ghost.masterDir, raw), File(ghost.dir, raw)).asSequence()
+                .mapNotNull { runCatching { it.canonicalFile }.getOrNull() }
+                .firstOrNull { it.path.startsWith(root.path + File.separator) && it.isFile }
+        }
+        if (name != null && file == null) {
+            platform.log("壁紙の画像が見つかりません: $name")
+            return null
+        }
+        val color = opts["color"]?.let { ScriptPlayer.parseColor(it.split(',', ' ').filter(String::isNotBlank)) }
+        if (file == null && color == null) return null
+        val position = opts["position"]?.lowercase()?.takeIf { it in WALLPAPER_POSITIONS } ?: "fill"
+        return WallpaperRequest(file, position, color)
     }
 
     /** \![open,file,ファイル]。ゴーストのフォルダの中のファイルを、Android のほかのアプリで開く */
@@ -4155,6 +4193,13 @@ class GhostController(
 
         override fun setOption(name: String, args: List<String>): Boolean {
             when (name) {
+                "wallpaper" -> return platform.setWallpaper(wallpaperRequest(args) ?: return false)
+                // 開発用パレットの SHIORI デバッグモード（enable_debug）。引数が無ければ入れる
+                "shioridebugmode" -> {
+                    val on = args.firstOrNull()?.trim()?.lowercase()?.let { it == "true" || it == "1" } ?: true
+                    notify("enable_debug", listOf(if (on) "1" else "0"))
+                    return true
+                }
                 // \![set,trayballoon,--text=...,--title=...,--icon=...]。--text は何個でも書け、1つずつ1行になる
                 "trayballoon", "tasktrayballoon" -> {
                     fun opt(key: String) = args.map { it.trim() }.filter { it.startsWith("--$key=") }.map { it.substringAfter('=') }
@@ -4337,6 +4382,12 @@ class GhostController(
                 // SSP のヘルプの代わりに、pono-droid の説明を開く
                 "help" -> platform.openUrl(HELP_URL)
                 "file" -> return openGhostFile(args.firstOrNull().orEmpty())
+                // ファイラーは Android に無いので、そのファイルをほかのアプリで開く
+                "explorer" -> return openGhostFile(args.firstOrNull().orEmpty())
+                "editor" -> {
+                    val file = ghostPath(args.firstOrNull().orEmpty())?.takeIf { it.isFile } ?: return false
+                    return platform.editFile(file, args.getOrNull(1)?.trim()?.toIntOrNull())
+                }
                 "mailer" -> {
                     val address = args.firstOrNull()?.trim().orEmpty()
                     if (address.isNotEmpty() && !MAIL_ADDRESS.matches(address)) return false
@@ -4489,6 +4540,8 @@ class GhostController(
 
         /** 発言履歴に残す数 */
         private const val MAX_BACKLOG = 200
+
+        private val WALLPAPER_POSITIONS = setOf("center", "tile", "stretch", "fit", "fill")
 
         /** SSTP の IfGhost で、ほかのゴースト向けとして扱う名前（SSP と同じ） */
         private val DEFAULT_GHOST_NAMES = setOf("さくら", "エミリ", "えみりぃ")
