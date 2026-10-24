@@ -216,8 +216,14 @@ interface ScriptHost {
     /** `%property[名前]`。知らない名前なら null */
     fun property(name: String): String? = null
 
-    /** `\![reload,shiori]` など。[what] は shiori / ghost / descript ... */
+    /** `\![reload,shiori]` など。[what] は shiori / shell / balloon / ghost / descript ... */
     fun reload(what: String) {}
+
+    /** `\![unload,shiori]`（false）/ `\![load,shiori]`（true） */
+    fun setShioriLoaded(loaded: Boolean) {}
+
+    /** `\![vanishbymyself(,ゴースト名)(,--option=query)]` */
+    fun vanish(args: List<String>) {}
 
     /** `\![enter,passivemode]` / `\![leave,passivemode]` */
     fun setPassive(on: Boolean) {}
@@ -437,6 +443,10 @@ class ScriptPlayer(
                 "6" -> host.correctClock()
                 "7" -> host.adjustClock()
                 "v" -> host.bringToFront()
+                // \a はランダムトーク（OnAITalk）。\+ はほかのゴーストのどれか、\_+ は並びで次のゴーストに切り替える（OnGhostChanging は送らない）
+                "a" -> host.raise("OnAITalk", emptyList())
+                "+" -> host.changeGhost("random", false)
+                "_+" -> host.changeGhost("sequential", false)
                 in layoutOnlyTags -> {}
                 else -> host.unknownTag(token)
             }
@@ -479,6 +489,13 @@ class ScriptPlayer(
                 // \![anim,offset,ID,x,y] など。pause / resume / add などは見た目の細かい制御なので扱えなくても飛ばす
                 "anim" -> host.animation(scope, a.drop(1))
                 "reload" -> host.reload(a.getOrNull(1)?.lowercase().orEmpty())
+                "reloadsurface" -> host.reload("shell")
+                "load", "unload" -> when (a.getOrNull(1)?.lowercase()) {
+                    "shiori" -> host.setShioriLoaded(command == "load")
+                    "makoto" -> {}
+                    else -> host.unknownTag(token)
+                }
+                "vanishbymyself" -> host.vanish(a.drop(1))
                 "sound" -> when (a.getOrNull(1)?.lowercase()) {
                     "play", "loop" -> a.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { file ->
                         val volume = a.drop(3).firstOrNull { it.startsWith("--volume=") }?.removePrefix("--volume=")?.trim()?.toIntOrNull()
@@ -495,6 +512,8 @@ class ScriptPlayer(
                     // \![change,ghost,名前(,--option=raise-event)]
                     a.size >= 3 && a[1].lowercase() == "ghost" &&
                         host.changeGhost(a[2].trim(), a.drop(3).any { it.trim().lowercase() == "--option=raise-event" }) -> {}
+                    // カレンダーは pono-droid に無い
+                    a.getOrNull(1)?.lowercase() == "calendarskin" -> {}
                     else -> host.unknownTag(token)
                 }
                 // \![move] は動き終わるまで待ち、\![moveasync] は待たずに続ける

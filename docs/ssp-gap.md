@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 146）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 157）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -52,14 +52,15 @@ OnExecuteFileWatchChange / Failure（ゴーストのフォルダの中だけ）�
 OnUpdateCheckComplete / Failure、OnUpdateResult(Ex) / OnUpdateCheckResult(Ex)、OnUpdateOtherBegin / Ready / Complete / Failure（シェルとバルーン）、
 OnTextDrop・OnURLQuery・OnURLDropping / OnURLDropped / OnURLDropFailure（Android の「共有」で文字や URL を渡す）、
 OnInstallBegin / CompleteEx / Complete / CompleteAll / Failure / Refuse（.nar を入れたとき）、OnPictureViewerOpen / OnMediaPlayerOpen
-（渡したファイルにゴーストが答えず、ほかのアプリで開いたとき）、OnXUkagakaLinkOpen（x-ukagaka-link: のリンク）
+（渡したファイルにゴーストが答えず、ほかのアプリで開いたとき）、OnXUkagakaLinkOpen（x-ukagaka-link: のリンク）、
+OnVanishSelecting / Selected / Cancel / ButtonHold（メニューの「消去」。確かめはバルーンの選択肢、話している途中にバルーンをタップすると取りやめ）・
+OnVanished（消去のあとに起きたゴースト。答えが無ければ OnBoot）、OnGhostTermsAccept / Decline（\![open,terms] をバルーンに出す）、
+OnTeachStart / OnTeachInputCancel、OnCloseAll（ゴーストを終えるとき。答えが無ければ OnClose。端末の電源を切るときは system）、OnAITalk（\a）
 
 ### 🔨 Android で作れる
-- 入力: OnTeachStart / OnTeachInputCancel、OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
+- 入力: OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
 - 音: OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（読み上げ）
-- 消去: OnVanishSelecting / Selected / Cancel / ButtonHold / Vanished、OnGhostTermsAccept / Decline（利用規約）
 - 開発: OnUpdatedataCreating / Created、OnNarCreating / Created（ゴーストのフォルダから .nar・更新データを作る）
-- その他: OnCloseAll（アプリごと終わるとき）、OnAITalk（\a）
 
 ### 🔒 決めてから
 - OnVoiceRecognitionStatus / Word（マイクで声を聞く。マイクの権限が要る）
@@ -111,12 +112,14 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 \![execute,websocket]（--async / --header / --authorization / --cookie / --m_websocketProtocol、切れたら5回までつなぎ直す） \![send,websocket(-binary)] \![close / cancel,websocket] \![execute,ping / nslookup] \![execute,filewatch] \![cancel,filewatch] \![execute,extractarchive / compressarchive] \7 \![executesntp]（\6 は時計を直せないので何もしない） \![updatebymyself,checkonly / testonly / recovery] \![update,ghost+shell+balloon] \![update,platform]（Play ストアに任せる） \![updateother,--shell / --balloon]
 \![anim,offset / clear / stop] \![bind] \![bind-noevent] \![sound,play / loop / stop / wait] \![change,ghost / shell / balloon]
 \![execute,http-get] \![updatebymyself] \![reload,shiori] \![enter / leave,passivemode] \![quicksection]
+\![vanishbymyself]（確かめずに消す。--option=query なら確かめる。消せるのは自分だけで、ほかにゴーストがいないときは消さない）、
+\+ \_+（ほかのゴーストのどれか・並びで次のゴーストに替える）、\![change,calendarskin]（カレンダーが無いので何もしない）、\a（OnAITalk）、
+\![reloadsurface] \![reload,shell / balloon / ghost / descript]（ghost と descript はすべて読み直して起き直す。イベントは送らない）
+\![load / unload,shiori] \![open,terms]（ghost/master の terms.txt）
 
 ### 🔨 Android で作れる
-- ゴースト: \![vanishbymyself]（確認してから消す）、\+ \_+（ランダム・順番にゴーストを替える）、\![change,calendarskin]（無視）、\a（OnAITalk）、
-  \![reloadsurface] \![reload,shell / balloon / ghost / descript] \![load / unload,shiori]
 - 開く: \![open,file]（Android のアプリで開く）、\![open,mailer]、\![open,dialog,open / save / folder / color]（ファイル選択など）、\![open,ipinput]、
-  \![open,terms]、\![open,help]、\![open,ghostexplorer など]（アプリの一覧画面）、\![open,surfacetest / developer / shiorirequest / errorlog / backlogviewer]（開発用の画面）
+  \![open,help]、\![open,ghostexplorer など]（アプリの一覧画面）、\![open,surfacetest / developer / shiorirequest / errorlog / backlogviewer]（開発用の画面）
 - 実行: \![execute,dumpsurface / dumpballoon]、\![execute,createnar / createupdatedata]、
   \![set,property]（書き換えてよいものだけ）、\![create,shortcut]（ホーム画面にゴーストのショートカット）
 - 環境変数: %lastghostname %lastobjectname %exh %et %wronghour %selfname2 %ms %mz %ml %mc %mh %mt %me %mp %m? %dms %*2
@@ -170,11 +173,11 @@ headlinelist.* / history.headline.*、pluginlist.* / history.plugin.*
 
 ### ✅ 対応済み
 version、craftman、craftmanw、name、homeurl、username、sakura / kero / char*.recommendsites・portalsites・*buttoncaption、readmebuttoncaption、updatebuttoncaption、
-sakura / kero / char*.defaultx / defaulty / defaultleft / defaulttop（位置を覚えていないときの最初の位置。descript.txt のものも）
+sakura / kero / char*.defaultx / defaulty / defaultleft / defaulttop（位置を覚えていないときの最初の位置。descript.txt のものも）、
+vanishbuttoncaption / vanishbuttonvisible（メニューの「消去」）
 
 ### 🔨 Android で作れる
 - sakura / kero / char*.popupmenu.visible / type / applybindtoself（長押しメニューを出すか）
-- vanishbuttoncaption / vanishbuttonvisible（メニューの「消去」）
 - メニューの見た目: menu.*.bitmap.filename、menu.*.font.color.*、menu.separator.color.*、menu.frame.color.*、menu.disable.font.color.*
 - メニューの項目名: *button.caption のうち pono-droid のメニューにある項目（シェル・バルーン・着せ替え・ゴースト切り替え・終了・更新・Read Me・利用規約など）
 - getaistate / getaistateex（AI の状態を聞いて、長押しメニューなどで見せる）、log_path、useorigin1、other_homeurl_override、tooltip / balloon_tooltip（長押しで代用）

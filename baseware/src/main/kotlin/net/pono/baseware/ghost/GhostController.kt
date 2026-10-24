@@ -163,8 +163,18 @@ interface GhostPlatform {
     fun switchGhost(dirName: String, previous: PreviousGhost) = onQuit()
 }
 
-/** ゴーストの切り替えで、次のゴーストに伝える前のゴーストのこと（OnGhostChanged の Reference） */
-data class PreviousGhost(val sakuraName: String, val script: String, val name: String, val path: String)
+/**
+ * ゴーストの切り替えで、次のゴーストに伝える前のゴーストのこと（OnGhostChanged の Reference）。
+ * [vanished] なら前のゴーストは消去された（OnVanished を送る）。[reload] なら同じゴーストの読み直しで、起動のイベントは送らない
+ */
+data class PreviousGhost(
+    val sakuraName: String,
+    val script: String,
+    val name: String,
+    val path: String,
+    val vanished: Boolean = false,
+    val reload: Boolean = false,
+)
 
 /**
  * ゴースト1体を動かす。SHIORI にイベントを送り、返ってきたさくらスクリプトを再生して [state] に反映する。
@@ -266,16 +276,18 @@ class GhostController(
             profile.setProperty("booted", "1")
             ghost.saveProfile(profile)
 
-            // 切り替わって来たときは OnGhostChanged。答えが無ければ OnBoot（SSP と同じ）
-            val changed = if (!firstBoot && previous != null) {
+            // 切り替わって来たときは OnGhostChanged（前のゴーストが消去されたなら OnVanished）。答えが無ければ OnBoot（SSP と同じ）。
+            // \![reload,ghost] の読み直しでは何も送らない
+            val changed = if (!firstBoot && previous != null && !previous.reload) {
                 request(
-                    "OnGhostChanged",
-                    listOf(previous.sakuraName, previous.script, previous.name, previous.path, "", "", "", shell.name),
+                    if (previous.vanished) "OnVanished" else "OnGhostChanged",
+                    listOf(previous.sakuraName, previous.script, previous.name, if (previous.vanished) "" else previous.path, "", "", "", shell.name),
                 )
             } else {
                 null
             }
             when {
+                previous?.reload == true -> {}
                 firstBoot -> raise("OnFirstBoot", listOf("0"))
                 changed != null -> runScript(changed)
                 else -> raise("OnBoot", listOf(shell.name, "", "", "", "", "", "", ""))
@@ -591,6 +603,23 @@ class GhostController(
         } finally {
             watch.cancel()
         }
+    }
+
+    /** \![reload,shell] / \![reloadsurface]。今のシェルをファイルから読み直す（今のサーフェスとイベントはそのまま） */
+    private fun reloadShell() {
+        scope.launch {
+            val next = runCatching { withContext(Dispatchers.Default) { Shell(shell.dir) } }.getOrNull()
+                ?: return@launch platform.log("シェルを読み直せません: ${shell.dir.name}")
+            shell = next
+            platform.onShellChanged(next)
+        }
+    }
+
+    /** \![reload,balloon]。今のバルーンをファイルから読み直す */
+    private fun reloadBalloon() {
+        val current = balloon ?: return
+        balloon = runCatching { Balloon(current.dir) }.getOrNull() ?: return platform.log("バルーンを読み直せません: ${current.dir.name}")
+        platform.onBalloonChanged(balloon)
     }
 
     private suspend fun reloadShiori() {
@@ -1240,13 +1269,16 @@ class GhostController(
         _state.first { !it.talking }
     }
 
-    /** OnClose を送り、そのスクリプトが終わったら SHIORI を閉じる。 */
-    fun close() {
+    /**
+     * 終わる。SSP でただ1体のゴーストを終えるときと同じく OnCloseAll を送り（答えが無ければ OnClose）、そのスクリプトが終わったら
+     * SHIORI を閉じる。[reason] は user（メニューや通知から）か system（端末の電源を切るとき）、[scopeId] はメニューを開いたキャラクター
+     */
+    fun close(reason: String = "user", scopeId: Int = 0) {
         if (closing) return
         closing = true
         timerJob?.cancel()
         scope.launch {
-            val script = request("OnClose", listOf("user"))
+            val script = request("OnCloseAll", listOf(reason, scopeId.toString(), scopeId.toString())) ?: request("OnClose", listOf(reason))
             if (script != null) {
                 cancelScript()
                 runScript(script).join()
@@ -1255,8 +1287,8 @@ class GhostController(
         }
     }
 
-    /** SHIORI を閉じて終わる。[switchTo] があれば、そのゴーストに切り替える */
-    private suspend fun shutdown(switchTo: Pair<Ghost, PreviousGhost>? = null) {
+    /** SHIORI を閉じて終わる。[switchTo] があれば、そのゴーストに切り替える。[uninstall] ならこのゴーストを消してから */
+    private suspend fun shutdown(switchTo: Pair<Ghost, PreviousGhost>? = null, uninstall: Boolean = false) {
         timerJob?.cancel()
         // WebSocket とファイルの見張りはゴーストが終わるときにすべてやめる
         for (url in sockets.keys.toList()) cancelWebSocket(url)
@@ -1267,6 +1299,7 @@ class GhostController(
         platform.stopSound()
         session?.unload()
         session = null
+        if (uninstall && repository?.uninstall(ghost) != true) platform.log("${ghost.name} を消去できませんでした")
         if (switchTo != null) platform.switchGhost(switchTo.first.dir.name, switchTo.second) else platform.onQuit()
     }
 
@@ -1312,6 +1345,124 @@ class GhostController(
         }
         return true
     }
+
+    /**
+     * \![reload,ghost] / \![reload,descript]。今のスクリプトを話し終えたら、descript.txt・シェル・バルーン・SHIORI をすべて
+     * 読み直して起動し直す（イベントは送らない）
+     */
+    private fun reloadGhost() {
+        if (closing) return
+        closing = true
+        timerJob?.cancel()
+        scope.launch {
+            withTimeoutOrNull(CHANGE_WAIT_MS) { _state.first { !it.talking } }
+            shutdown(ghost to PreviousGhost(ghost.sakuraName, "", ghost.name, ghost.dir.absolutePath + "/", reload = true))
+        }
+    }
+
+    // ---- 消去（vanish） ----
+
+    /** OnVanishSelecting を話している消去の手続き。そのあいだにバルーンをタップすると取りやめる（OnVanishButtonHold） */
+    private var vanishJob: Job? = null
+
+    /** 消去したあとに起こすゴースト（並びで次のもの）。ほかにゴーストがいなければ、誰もいなくなるので消去できない */
+    private fun ghostAfterVanish(): Ghost? {
+        val self = ghost.dir.canonicalFile
+        val ghosts = repository?.list().orEmpty()
+        val i = ghosts.indexOfFirst { it.dir.canonicalFile == self }
+        return (ghosts.drop(i + 1) + ghosts.take(i.coerceAtLeast(0))).firstOrNull { it.dir.canonicalFile != self }
+    }
+
+    /** メニューに「消去」を出すか。ゴーストが vanishbuttonvisible を 0 にしていれば出さない（答えが無ければ出す） */
+    private suspend fun vanishVisible(): Boolean = ghostAfterVanish() != null && resource("vanishbuttonvisible")?.trim() != "0"
+
+    /**
+     * メニューの「消去」。OnVanishSelecting で話してもらってから、本当に消去するかバルーンで確かめる
+     * （はい → OnVanishSelected、いいえ → OnVanishCancel）。話している途中でバルーンをタップすると OnVanishButtonHold で取りやめる
+     */
+    fun requestVanish(scopeId: Int = 0) {
+        if (closing || ghostAfterVanish() == null) return
+        vanishJob?.cancel()
+        vanishJob = scope.launch {
+            val script = request("OnVanishSelecting", emptyList())
+            if (script != null) {
+                cancelScript()
+                runScript(script)
+                _state.first { !it.talking }
+            }
+            vanishJob = null
+            confirmVanish(scopeId)
+        }
+    }
+
+    private fun confirmVanish(scopeId: Int) {
+        runScript(
+            "\\p[$scopeId]\\_q" + literalScript(ghost.name) + " を消去しますか？\\n（ゴーストのファイルをすべて消します。元に戻せません）\\n\\n" +
+                "\\q[消去する,pono:vanish-yes]\\n\\q[やめる,pono:vanish-no]\\e",
+        )
+    }
+
+    /**
+     * 消去する。[farewell] なら OnVanishSelected で別れを話してもらい、話し終えたらゴーストを消して次のゴーストに切り替える
+     * （次のゴーストには OnVanished）。\![vanishbymyself] は確かめずにすぐ（今のスクリプトを話し終えてから）
+     */
+    private fun vanish(farewell: Boolean) {
+        val next = ghostAfterVanish() ?: return platform.log("ほかにゴーストがいないので消去できません")
+        if (closing) return
+        closing = true
+        timerJob?.cancel()
+        scope.launch {
+            val script = if (farewell) {
+                request("OnVanishSelected", emptyList())?.also {
+                    cancelScript()
+                    runScript(it)
+                }.orEmpty()
+            } else {
+                lastScript
+            }
+            withTimeoutOrNull(CHANGE_WAIT_MS) { _state.first { !it.talking } }
+            shutdown(next to PreviousGhost(ghost.sakuraName, script, ghost.name, ghost.dir.absolutePath + "/", vanished = true), uninstall = true)
+        }
+    }
+
+    /** \![vanishbymyself(,ゴースト名)(,--option=query)]。消去できるのは自分だけ。query なら先に確かめる */
+    private fun vanishByMyself(args: List<String>) {
+        val target = args.map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.startsWith("--") }
+        if (target != null && target != ghost.name && target != ghost.sakuraName && target != ghost.dir.name) {
+            return platform.log("ほかのゴーストは消去できません: $target")
+        }
+        if (args.none { it.trim().lowercase() == "--option=query" }) return vanish(farewell = false)
+        if (ghostAfterVanish() == null) return platform.log("ほかにゴーストがいないので消去できません")
+        scope.launch {
+            withTimeoutOrNull(CHANGE_WAIT_MS) { _state.first { !it.talking } }
+            confirmVanish(0)
+        }
+    }
+
+    // ---- 利用規約（\![open,terms]） ----
+
+    private fun termsFile(): File? = File(ghost.masterDir, "terms.txt").takeIf { it.isFile } ?: File(ghost.dir, "terms.txt").takeIf { it.isFile }
+
+    /**
+     * ghost/master の terms.txt をバルーンに出し、同意（OnGhostTermsAccept）か拒否（OnGhostTermsDecline）を選んでもらう。
+     * 読むのに時間がかかるので、選ぶまで待つ。terms.txt が無ければ false
+     */
+    private fun showTerms(): Boolean {
+        val file = termsFile() ?: return false
+        val text = runCatching { TextCharsets.decode(file.readBytes()) }.getOrNull() ?: return false
+        scope.launch {
+            withTimeoutOrNull(CHANGE_WAIT_MS) { _state.first { !it.talking } }
+            runScript(
+                "\\![set,choicetimeout,0]\\0\\_q" + literalScript(text) + "\\n\\n" +
+                    "\\q[同意する,pono:terms,accept]\\n\\q[同意しない,pono:terms,decline]\\e",
+            )
+        }
+        return true
+    }
+
+    /** ファイルの文字やゴースト名を、そのままバルーンに出すスクリプトにする（タグや %変数として読ませない） */
+    private fun literalScript(text: String): String =
+        text.replace("\r\n", "\n").trimEnd().split('\n').joinToString("\\n") { it.replace("\\", "\\\\").replace("%", "\\%") }
 
     // ---- キャラクター ----
 
@@ -1853,6 +2004,7 @@ class GhostController(
         sb.append("\\q[${quote(resource("updatebuttoncaption") ?: "ネットワーク更新")},pono:update]\\n")
         sb.append("\\q[位置を戻す,pono:resetpos]\\n")
         sb.append("\\q[隠す,pono:hide]\\n")
+        if (vanishVisible()) sb.append("\\q[${quote(resource("vanishbuttoncaption") ?: "消去")},pono:vanish,$scopeId]\\n")
         sb.append("\\q[ゴーストを終了,pono:close]\\n\\q[閉じる,pono:cancel]\\e")
         return sb.toString()
     }
@@ -1954,10 +2106,13 @@ class GhostController(
             s.talking && s.noUserBreak -> {}
             s.talking -> {
                 val script = lastScript
+                // OnVanishSelecting の途中なら、消去を取りやめる
+                val vanishing = vanishJob?.also { it.cancel() } != null
+                vanishJob = null
                 cancelScript()
                 _state.update { it.copy(talking = false, waitingClick = false) }
                 hideBalloons()
-                raise("OnBalloonBreak", listOf(script, scopeId.toString(), ""), userInitiated = false)
+                raise(if (vanishing) "OnVanishButtonHold" else "OnBalloonBreak", listOf(script, scopeId.toString(), ""), userInitiated = false)
             }
             else -> {
                 hideBalloons()
@@ -2152,6 +2307,7 @@ class GhostController(
     private fun openInput(request: InputRequest) {
         inputTimeout?.cancel()
         _state.update { it.copy(input = request) }
+        if (request.kind == InputRequest.Kind.TEACH) raise("OnTeachStart", emptyList(), userInitiated = false)
         if (request.timeoutMs > 0) {
             inputTimeout = scope.launch {
                 delay(request.timeoutMs)
@@ -2214,7 +2370,7 @@ class GhostController(
                 raise("OnUserInputCancel", listOf(request.id, reason))
             InputRequest.Kind.TEXTAREA -> raise("OnTextAreaInputCancel", listOf(request.id, reason))
             InputRequest.Kind.COMMUNICATE -> raise("OnCommunicateInputCancel", listOf("", reason))
-            InputRequest.Kind.TEACH -> {}
+            InputRequest.Kind.TEACH -> raise("OnTeachInputCancel", listOf("", reason))
         }
     }
 
@@ -2488,7 +2644,11 @@ class GhostController(
                     "pono:hide" -> minimize("user")
                     "pono:resetpos" -> requestResetWindowPos()
                     "pono:update" -> networkUpdate()
-                    "pono:close" -> close()
+                    "pono:close" -> close("user", scopeId)
+                    "pono:vanish" -> requestVanish(scopeId)
+                    "pono:vanish-yes" -> vanish(farewell = true)
+                    "pono:vanish-no" -> raise("OnVanishCancel", emptyList())
+                    "pono:terms" -> raise(if (refs.firstOrNull() == "accept") "OnGhostTermsAccept" else "OnGhostTermsDecline", emptyList())
                     "pono:menu" -> scope.launch { runScript(basewareMenu(scopeId)) }
                     "pono:sites" -> scope.launch { runScript(sitesMenu(refs.getOrNull(0) ?: "recommend", refs.getOrNull(1)?.toIntOrNull() ?: 0)) }
                     "pono:site" -> scope.launch { openSite(refs.getOrNull(0) ?: "recommend", refs.getOrNull(1)?.toIntOrNull() ?: 0, refs.getOrNull(2)?.toIntOrNull() ?: 0) }
@@ -3224,6 +3384,7 @@ class GhostController(
             }
             when (kind) {
                 "readme" -> platform.showText(ghost.name, readmeText())
+                "terms" -> return showTerms()
                 "configurationdialog", "ghostexplorer", "shellexplorer", "balloonexplorer", "dressupexplorer" -> platform.openSettings()
                 else -> return false
             }
@@ -3286,10 +3447,30 @@ class GhostController(
 
         override fun reload(what: String) {
             when (what) {
-                "shiori", "ghost" -> scope.launch { reloadShiori() }
+                "shiori" -> scope.launch { reloadShiori() }
+                "shell" -> reloadShell()
+                "balloon" -> reloadBalloon()
+                "ghost", "descript" -> reloadGhost()
+                // MAKOTO と AI グラフは pono-droid に無い
+                "makoto", "aigraph" -> {}
                 else -> platform.log("未対応の reload: $what")
             }
         }
+
+        override fun setShioriLoaded(loaded: Boolean) {
+            scope.launch {
+                if (!loaded) {
+                    requestLock.withLock {
+                        session?.unload()
+                        session = null
+                    }
+                } else if (session == null) {
+                    loadShiori()
+                }
+            }
+        }
+
+        override fun vanish(args: List<String>) = vanishByMyself(args)
 
         override fun setPassive(on: Boolean) = _state.update { it.copy(passive = on) }
 

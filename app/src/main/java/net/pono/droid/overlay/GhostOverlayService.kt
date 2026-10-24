@@ -454,11 +454,13 @@ class GhostOverlayService : LifecycleService() {
         _running.value = null
     }
 
-    /** 画面が消えている間は、ゴーストのタイマーとアニメーションを止める */
+    /** 画面が消えている間は、ゴーストのタイマーとアニメーションを止める。端末の電源を切るときは終わる */
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val c = controller ?: return
             when (intent.action) {
+                // 端末の電源を切る（OnCloseAll の Reference0 は system）
+                Intent.ACTION_SHUTDOWN -> c.close("system")
                 // Android にはパソコンのような「休止」が無いので、画面が消えたら休んだことにする（OnSysSuspend）
                 Intent.ACTION_SCREEN_OFF -> {
                     c.setScreenOn(false)
@@ -591,6 +593,7 @@ class GhostOverlayService : LifecycleService() {
                 addAction(Intent.ACTION_USER_PRESENT)
                 addAction(Intent.ACTION_DREAMING_STARTED)
                 addAction(Intent.ACTION_DREAMING_STOPPED)
+                addAction(Intent.ACTION_SHUTDOWN)
             },
         )
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
