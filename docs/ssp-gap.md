@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 165）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 169）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -57,7 +57,8 @@ OnVanishSelecting / Selected / Cancel / ButtonHold（メニューの「消去」
 OnVanished（消去のあとに起きたゴースト。答えが無ければ OnBoot）、OnGhostTermsAccept / Decline（\![open,terms] をバルーンに出す）、
 OnTeachStart / OnTeachInputCancel、OnCloseAll（ゴーストを終えるとき。答えが無ければ OnClose。端末の電源を切るときは system）、OnAITalk（\a）、
 OnNarCreating / Created・OnUpdatedataCreating / Created（\![execute,createnar / createupdatedata] で作ったとき）、
-OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（起動時の NOTIFY と、読み上げの設定を変えたとき）
+OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（起動時の NOTIFY と、読み上げの設定を変えたとき）、
+OnUpdate.OnDownloadBegin / OnMD5CompareBegin / OnMD5CompareComplete / OnMD5CompareFailure（と OnUpdateOther. のもの）
 
 ### 🔨 Android で作れる
 - 入力: OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
@@ -146,7 +147,7 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 \![effect] \![effect2] \![filter]（DLL のプラグイン）、\![raiseplugin] など（プラグイン）、\![execute,headline]、\![execute,calendarplugin]、
 \![reload,makoto] \![load / unload,makoto] \![reload,aigraph] \![open,aigraph]、\![open,headlinesensorexplorer / pluginexplorer / calendar*]、
 \m[umsg,wparam,lparam]（Windows のメッセージ）、\![set,windowstate,stayontop]（オーバーレイはいつも上）、\![set,alignmentondesktop]、\![sound,cdplay]、
-\![open,addressbar] \![open,rateofusegraph*]（下の「使用率」を作れば作れる）
+\![open,addressbar]
 
 ---
 
@@ -179,13 +180,19 @@ headlinelist.* / history.headline.*、pluginlist.* / history.plugin.*
 ### ✅ 対応済み
 version、craftman、craftmanw、name、homeurl、username、sakura / kero / char*.recommendsites・portalsites・*buttoncaption、readmebuttoncaption、updatebuttoncaption、
 sakura / kero / char*.defaultx / defaulty / defaultleft / defaulttop（位置を覚えていないときの最初の位置。descript.txt のものも）、
-vanishbuttoncaption / vanishbuttonvisible（メニューの「消去」）
+vanishbuttoncaption / vanishbuttonvisible（メニューの「消去」）、sakura / kero / char*.popupmenu.visible / type（1 なら省略メニュー）/ applybindtoself、
+menu.background.font.color.* / menu.foreground.font.color.*（メニューの項目の文字と、選んでいる項目の文字の色）、
+*button.caption のうち pono-droid のメニューにある項目（ghostroot / shellroot / balloonroot / dressuproot / recommendroot / portalroot / readme / terms /
+aistate / rateofuse / update / hide / vanish / quit / closeballoon。新しい名前を古い名前より先に使う）、getaistate / getaistateex（メニューの
+「AI グラフ」と \![open,aigraph]。グラフの代わりにラベルと値を並べる）、useorigin1、other_homeurl_override、balloon_tooltip / tooltip（選択肢を長押ししたとき。
+画面に出すのは 6c-2 の画面と一緒に作る）
 
 ### 🔨 Android で作れる
-- sakura / kero / char*.popupmenu.visible / type / applybindtoself（長押しメニューを出すか）
-- メニューの見た目: menu.*.bitmap.filename、menu.*.font.color.*、menu.separator.color.*、menu.frame.color.*、menu.disable.font.color.*
-- メニューの項目名: *button.caption のうち pono-droid のメニューにある項目（シェル・バルーン・着せ替え・ゴースト切り替え・終了・更新・Read Me・利用規約など）
-- getaistate / getaistateex（AI の状態を聞いて、長押しメニューなどで見せる）、log_path、useorigin1、other_homeurl_override、tooltip / balloon_tooltip（長押しで代用）
+- log_path（開発用の画面の「開く」。6c-2 の画面と一緒に作る）
+
+### ⛔ 作れない（メニュー）
+- menu.*.bitmap.filename、menu.separator.color.*、menu.frame.color.*、menu.disable.font.color.*（pono-droid のメニューはバルーンに出すので、
+  メニューの絵や枠・区切り線・押せない項目が無い）
 
 ### ⛔ 作れない
 SSP 専用のメニュー項目の名前（ヘッドライン・プラグイン・カレンダー・DUI・タスクトレイ・SSTP 送信ボックスなど）、boxname.defaultleft、legacyinterface

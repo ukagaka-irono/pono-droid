@@ -54,6 +54,7 @@ import net.pono.baseware.update.FetchResult
 import net.pono.baseware.update.HttpFetcher
 import net.pono.baseware.update.NetworkUpdater
 import net.pono.baseware.update.NullOutputStream
+import net.pono.baseware.update.UpdateProgress
 import net.pono.baseware.update.UpdateResult
 import net.pono.baseware.update.UrlConnectionFetcher
 import java.io.File
@@ -601,6 +602,14 @@ class GhostController(
         runUpdates(targets, options, reason, extended = false)
     }
 
+    /** other_homeurl_override（種類, 名前, 作者, フォルダ名, 本来の homeurl）。空や答えが無ければ null（替えない） */
+    private suspend fun otherHomeUrl(t: UpdateTarget): String? {
+        val descript = runCatching { net.pono.baseware.text.Descript.read(File(t.dir, "descript.txt")) }.getOrNull()
+        val craftman = descript?.get("craftmanw") ?: descript?.get("craftman") ?: ""
+        return request("other_homeurl_override", listOf(t.type, t.name, craftman, t.dir.name, t.homeUrl.orEmpty()), translate = false)
+            ?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
     /** \![updateother,--shell=名前,--balloon=名前]。入っているシェルとバルーンを名前で更新し、OnUpdateResultEx でまとめる */
     fun updateOther(args: List<String>) {
         val opts = args.map { it.trim() }.filter { it.startsWith("--") }
@@ -654,17 +663,34 @@ class GhostController(
         fun row(ok: Boolean, detail: String) = (if (extended) listOf(t.name, t.type) else listOf(t.type)).plus(listOf(if (ok) "OK" else "NG", detail)).joinToString("\u0001")
         val check = mode == NetworkUpdater.Mode.CHECK
         try {
-            val homeUrl = t.homeUrl
+            // シェルとバルーンの更新先は、ゴーストが other_homeurl_override で替えられる
+            val homeUrl = if (ghostSide) t.homeUrl else otherHomeUrl(t) ?: t.homeUrl
+            // useorigin1 が 1 なら、ファイルの番号と数を 1 から数える（ふつうは MATERIA と同じ 0 から）
+            val origin = if (resource("useorigin1")?.trim() == "1") 1 else 0
             if (homeUrl.isNullOrBlank()) {
                 raise(if (check) "OnUpdateCheckFailure" else "${prefix}Failure", refs("none", ""), userInitiated = !check)
                 return row(false, "none")
             }
             if (!check) talkAndWait("${prefix}Begin", listOf(t.name, t.dir.absolutePath + "/", "", t.type, reason))
             val result = watchNetwork {
-                NetworkUpdater(t.dir, updateFetcher).update(homeUrl, mode) { count ->
-                    // Reference0 は「ファイル数 - 1」（SSP の仕様）
-                    talkAndWait("${prefix}Ready", refs((count - 1).toString(), ""))
-                }
+                NetworkUpdater(t.dir, updateFetcher).update(
+                    homeUrl, mode,
+                    onReady = { count ->
+                        // Reference0 は「ファイル数 - 1」（SSP の仕様。useorigin1 なら数そのもの）
+                        talkAndWait("${prefix}Ready", refs((count - 1 + origin).toString(), ""))
+                    },
+                    onProgress = { p ->
+                        when (p) {
+                            is UpdateProgress.Download ->
+                                raise("$prefix.OnDownloadBegin", listOf(p.path, (p.index + origin).toString(), (p.count - 1 + origin).toString(), t.type, reason), userInitiated = false)
+                            is UpdateProgress.Md5 -> {
+                                val r = listOf(p.path, p.expected, p.actual, t.type, reason)
+                                raise("$prefix.OnMD5CompareBegin", r, userInitiated = false)
+                                raise(if (p.matched) "$prefix.OnMD5CompareComplete" else "$prefix.OnMD5CompareFailure", r, userInitiated = false)
+                            }
+                        }
+                    },
+                )
             }
             platform.log("network update ${t.type}: $result")
             return when (result) {
@@ -1943,6 +1969,8 @@ class GhostController(
         lastUserActivity = System.currentTimeMillis()
         scope.launch {
             val script = request("OnMouseClick", mouseReferences(scopeId, x, y, collision, 1))
+            // popupmenu.visible が 0 なら、ゴーストが答えなくてもメニューは出さない
+            if (script == null && resource("${Shell.scopeName(scopeId)}.popupmenu.visible")?.trim() == "0") return@launch
             cancelScript()
             runScript(script ?: basewareMenu(scopeId))
         }
@@ -2270,26 +2298,106 @@ class GhostController(
      * 長押しのメニュー。SSP のオーナードローメニューと同じく、おすすめ・ポータル・きせかえ・シェル・バルーン・Read Me・
      * ネットワーク更新・終了を出す。選択肢の ID は [selectChoice] が pono: で見分ける
      */
+    /** メニューの項目名。ゴーストが返したもの（[names] の前のものほど先。新しい名前・古い名前の順）、無ければ [default] */
+    private suspend fun caption(default: String, vararg names: String): String {
+        for (n in names) resource(n)?.let { return quote(it) }
+        return quote(default)
+    }
+
+    /** menu.background.font.color.* を項目の文字の色に、menu.foreground.font.color.* を選んでいる項目の文字の色にする */
+    private suspend fun menuColors(): String {
+        suspend fun rgb(prefix: String): String? {
+            val parts = listOf("r", "g", "b").map { c -> resource("$prefix.$c")?.trim()?.toIntOrNull()?.coerceIn(0, 255) ?: return null }
+            return parts.joinToString(",")
+        }
+        val sb = StringBuilder()
+        rgb("menu.background.font.color")?.let { sb.append("\\f[color,$it]\\f[cursornotselectfontcolor,$it]") }
+        rgb("menu.foreground.font.color")?.let { sb.append("\\f[cursorfontcolor,$it]") }
+        return sb.toString()
+    }
+
+    /**
+     * 長押しのメニュー。SSP のオーナードローメニューと同じく、おすすめ・ポータル・きせかえ・シェル・バルーン・Read Me・
+     * ネットワーク更新・終了を出す。選択肢の ID は [selectChoice] が pono: で見分ける。項目名は *button.caption で替えられ、
+     * popupmenu.type が 1 なら省略メニュー（おすすめ・ポータル・着せ替え・隠す・終了だけ）。popupmenu.applybindtoself が 0 なら、
+     * 本体側のメニューの着せ替えは本体側のもの
+     */
     private suspend fun basewareMenu(scopeId: Int): String {
         val scopeName = Shell.scopeName(scopeId)
-        val sb = StringBuilder("\\p[$scopeId]\\_q【${ShioriSession.SENDER}】\\n")
+        val short = resource("$scopeName.popupmenu.type")?.trim() == "1"
+        val bindScope = if (!short && scopeId != 0 && resource("$scopeName.popupmenu.applybindtoself")?.trim() == "0") 0 else scopeId
+        val sb = StringBuilder("\\p[$scopeId]\\_q").append(menuColors()).append("【${ShioriSession.SENDER}】\\n")
         if (parseSites(resource("$scopeName.recommendsites")).isNotEmpty()) {
-            sb.append("\\q[${quote(resource("$scopeName.recommendbuttoncaption") ?: "おすすめ")},pono:sites,recommend,$scopeId]\\n")
+            sb.append("\\q[${caption("おすすめ", "$scopeName.recommendbuttoncaption", "recommendrootbutton.caption")},pono:sites,recommend,$scopeId]\\n")
         }
         if (parseSites(resource("$scopeName.portalsites")).isNotEmpty()) {
-            sb.append("\\q[${quote(resource("$scopeName.portalbuttoncaption") ?: "ポータル")},pono:sites,portal,$scopeId]\\n")
+            sb.append("\\q[${caption("ポータル", "$scopeName.portalbuttoncaption", "portalrootbutton.caption")},pono:sites,portal,$scopeId]\\n")
         }
-        sb.append("\\q[ゴーストのメニュー（中クリック）,pono:middle,$scopeId]\\n")
-        if (shell.bindGroups(scopeId).isNotEmpty() && bindMenu(scopeId) != "hidden") sb.append("\\q[きせかえ,pono:dressup,$scopeId]\\n")
-        if ((repository?.list()?.size ?: 0) > 1) sb.append("\\q[ゴースト切り替え,pono:ghosts,$scopeId]\\n")
-        if (ghost.shellDirs.size > 1) sb.append("\\q[シェル,pono:shells,$scopeId]\\n")
-        if (repository != null) sb.append("\\q[バルーン,pono:balloons,$scopeId]\\n")
-        if (readmeFile() != null) sb.append("\\q[${quote(resource("readmebuttoncaption") ?: "Read Me")},pono:readme]\\n")
-        sb.append("\\q[${quote(resource("updatebuttoncaption") ?: "ネットワーク更新")},pono:update]\\n")
-        sb.append("\\q[位置を戻す,pono:resetpos]\\n")
-        sb.append("\\q[隠す,pono:hide]\\n")
-        if (vanishVisible()) sb.append("\\q[${quote(resource("vanishbuttoncaption") ?: "消去")},pono:vanish,$scopeId]\\n")
-        sb.append("\\q[ゴーストを終了,pono:close]\\n\\q[閉じる,pono:cancel]\\e")
+        if (!short) sb.append("\\q[ゴーストのメニュー（中クリック）,pono:middle,$scopeId]\\n")
+        if (shell.bindGroups(bindScope).isNotEmpty() && bindMenu(bindScope) != "hidden") {
+            sb.append("\\q[${caption("きせかえ", "dressuprootbutton.caption")},pono:dressup,$bindScope]\\n")
+        }
+        if (!short) {
+            if ((repository?.list()?.size ?: 0) > 1) sb.append("\\q[${caption("ゴースト切り替え", "ghostrootbutton.caption")},pono:ghosts,$scopeId]\\n")
+            if (ghost.shellDirs.size > 1) sb.append("\\q[${caption("シェル", "shellrootbutton.caption")},pono:shells,$scopeId]\\n")
+            if (repository != null) sb.append("\\q[${caption("バルーン", "balloonrootbutton.caption")},pono:balloons,$scopeId]\\n")
+            if (readmeFile() != null) sb.append("\\q[${caption("Read Me", "readmebutton.caption", "readmebuttoncaption")},pono:readme]\\n")
+            if (termsFile() != null) sb.append("\\q[${caption("利用規約", "termsbutton.caption")},pono:terms-open]\\n")
+            if (aiStates().isNotEmpty()) sb.append("\\q[${caption("AI グラフ", "aistatebutton.caption")},pono:aistate,$scopeId]\\n")
+            if (history?.usage()?.isNotEmpty() == true) sb.append("\\q[${caption("使用率", "rateofusebutton.caption")},pono:rateofuse,$scopeId]\\n")
+            sb.append("\\q[${caption("ネットワーク更新", "updatebutton.caption", "updatebuttoncaption")},pono:update]\\n")
+            sb.append("\\q[位置を戻す,pono:resetpos]\\n")
+        }
+        sb.append("\\q[${caption("隠す", "hidebutton.caption")},pono:hide]\\n")
+        if (!short && vanishVisible()) sb.append("\\q[${caption("消去", "vanishbutton.caption", "vanishbuttoncaption")},pono:vanish,$scopeId]\\n")
+        sb.append("\\q[${caption("ゴーストを終了", "quitbutton.caption", "closebutton.caption")},pono:close]\\n")
+        sb.append("\\q[${caption("閉じる", "closeballoonbutton.caption")},pono:cancel]\\e")
+        return sb.toString()
+    }
+
+    /**
+     * getaistateex（Reference0 = 何個目か）か getaistate の答え。1つは 値群 [1] ラベル群 [1] 加算値群 [1] 最大値群（後ろの3つは省ける）。
+     * 答えが無ければ空
+     */
+    private suspend fun aiStates(): List<String> {
+        val ex = mutableListOf<String>()
+        for (i in 0 until MAX_AI_GRAPHS) {
+            ex += request("getaistateex", listOf(i.toString()), translate = false)?.takeIf { it.isNotBlank() } ?: break
+        }
+        return ex.ifEmpty { listOfNotNull(resource("getaistate")) }
+    }
+
+    /** \![open,aigraph] とメニューの「AI グラフ」。グラフの代わりに、ラベルと値をバルーンに並べる */
+    private suspend fun aiStateScript(scopeId: Int): String? {
+        val graphs = aiStates().takeIf { it.isNotEmpty() } ?: return null
+        val sb = StringBuilder("\\p[$scopeId]\\_q【AI グラフ】\\n")
+        graphs.forEachIndexed { gi, raw ->
+            val parts = raw.split('\u0001')
+            val values = parts[0].split(',').map { it.trim() }.filter { it.isNotEmpty() }
+            val labels = parts.getOrNull(1)?.split(',')?.map { it.trim() }?.takeIf { it.any(String::isNotEmpty) } ?: AI_LABELS
+            val max = parts.getOrNull(3)?.split(',')?.map { it.trim() }
+            if (gi > 0) sb.append("\\n")
+            values.forEachIndexed { i, v ->
+                val label = labels.getOrNull(i)?.takeIf { it.isNotEmpty() } ?: (i + 1).toString()
+                val limit = max?.getOrNull(i)?.takeIf { it.isNotEmpty() }?.let { " / $it" }.orEmpty()
+                sb.append(literalScript("$label: $v$limit")).append("\\n")
+            }
+        }
+        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        return sb.toString()
+    }
+
+    /** \![open,rateofusegraph] とメニューの「使用率」。起動していた時間の長いゴーストから順に、割合と時間を並べる */
+    private fun rateOfUseScript(scopeId: Int): String? {
+        val usage = history?.usage()?.takeIf { it.isNotEmpty() } ?: return null
+        val total = usage.sumOf { it.minutes }
+        val sb = StringBuilder("\\p[$scopeId]\\_q【使用率】\\n")
+        for (u in usage.take(MAX_RATE_ROWS)) {
+            val name = repository?.find(u.dirName)?.name ?: u.dirName
+            val percent = if (total > 0) formatNumber(u.minutes * 100.0 / total) else "0"
+            sb.append(literalScript("$name: $percent%（${u.minutes}分・${u.boots}回）")).append("\\n")
+        }
+        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -2688,12 +2796,20 @@ class GhostController(
         lastUserActivity = System.currentTimeMillis()
         val kind = if (anchor) "Anchor" else "Choice"
         if (choice == null) {
+            _state.update { it.copy(choiceTooltip = null) }
             raise("On${kind}Enter", emptyList(), userInitiated = false)
             return
         }
         val refs = listOf(choice.title, choice.id) + choice.references
         raise("On${kind}Enter", refs, userInitiated = false)
         raise("On${kind}Hover", refs, userInitiated = false)
+        // 選択肢のツールチップ（balloon_tooltip、無ければ tooltip）
+        if (!anchor) {
+            scope.launch {
+                val tip = request("balloon_tooltip", refs, translate = false) ?: request("tooltip", refs, translate = false)
+                _state.update { it.copy(choiceTooltip = tip?.takeIf { t -> t.isNotBlank() }) }
+            }
+        }
     }
 
     // ---- イベント ----
@@ -2941,6 +3057,9 @@ class GhostController(
                     "pono:vanish" -> requestVanish(scopeId)
                     "pono:vanish-yes" -> vanish(farewell = true)
                     "pono:vanish-no" -> raise("OnVanishCancel", emptyList())
+                    "pono:terms-open" -> showTerms()
+                    "pono:aistate" -> scope.launch { aiStateScript(scopeId)?.let { runScript(it) } }
+                    "pono:rateofuse" -> rateOfUseScript(scopeId)?.let { runScript(it) }
                     "pono:terms" -> raise(if (refs.firstOrNull() == "accept") "OnGhostTermsAccept" else "OnGhostTermsDecline", emptyList())
                     "pono:menu" -> scope.launch { runScript(basewareMenu(scopeId)) }
                     "pono:sites" -> scope.launch { runScript(sitesMenu(refs.getOrNull(0) ?: "recommend", refs.getOrNull(1)?.toIntOrNull() ?: 0)) }
@@ -4003,6 +4122,8 @@ class GhostController(
             when (kind) {
                 "readme" -> platform.showText(ghost.name, readmeText())
                 "terms" -> return showTerms()
+                "aigraph" -> scope.launch { aiStateScript(0)?.let { runScript(it) } }
+                "rateofusegraph", "rateofusegraphballoon", "rateofusegraphtotal" -> rateOfUseScript(0)?.let { runScript(it) } ?: return false
                 // SSP のヘルプの代わりに、pono-droid の説明を開く
                 "help" -> platform.openUrl(HELP_URL)
                 "file" -> return openGhostFile(args.firstOrNull().orEmpty())
@@ -4148,6 +4269,15 @@ class GhostController(
 
         /** 発言履歴に残す数 */
         private const val MAX_BACKLOG = 200
+
+        /** getaistateex で聞くグラフの数 */
+        private const val MAX_AI_GRAPHS = 8
+
+        /** getaistate がラベルを返さないときの名前（SSP と同じ） */
+        private val AI_LABELS = listOf("Neuron", "NeuronM", "NeuronK", "NeuronD", "NeuronE", "Synapse")
+
+        /** 使用率に並べるゴーストの数 */
+        private const val MAX_RATE_ROWS = 10
 
         /** この言葉を含むログは、エラーログ（developer.log.error）にも Warning として残す */
         private val WARNING_WORDS = listOf("未対応", "できません", "ありません", "見つかりません", "失敗")

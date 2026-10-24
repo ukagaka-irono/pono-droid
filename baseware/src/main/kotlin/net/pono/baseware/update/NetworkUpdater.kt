@@ -32,6 +32,17 @@ object UpdateManifest {
     }.toList()
 }
 
+/** ネットワーク更新の途中（OnUpdate.OnDownloadBegin / OnUpdate.OnMD5Compare*） */
+sealed interface UpdateProgress {
+    /** [count] 個のうち [index] 番目（0 から）の [path] を落とし始める */
+    data class Download(val path: String, val index: Int, val count: Int) : UpdateProgress
+
+    /** 落とした [path] の MD5。[expected] と [actual] が同じなら合っている */
+    data class Md5(val path: String, val expected: String, val actual: String) : UpdateProgress {
+        val matched: Boolean get() = expected.equals(actual, ignoreCase = true)
+    }
+}
+
 sealed interface FetchResult {
     data object Ok : FetchResult
     data class HttpError(val code: Int) : FetchResult
@@ -126,8 +137,16 @@ class NetworkUpdater(
     /** 更新のやり方（SSP の更新オプション）。CHECK は更新があるかだけ、TEST は落として確かめるが置き換えない */
     enum class Mode { NORMAL, CHECK, TEST }
 
-    /** @param onReady 落とすファイル数が決まったとき（0 件なら呼ばない） */
-    suspend fun update(homeUrl: String, mode: Mode = Mode.NORMAL, onReady: suspend (count: Int) -> Unit = {}): UpdateResult = withContext(Dispatchers.IO) {
+    /**
+     * @param onReady 落とすファイル数が決まったとき（0 件なら呼ばない）
+     * @param onProgress 1つ落とし始めるとき（[UpdateProgress.Download]）と、落としたものの MD5 を比べたとき（[UpdateProgress.Md5]）
+     */
+    suspend fun update(
+        homeUrl: String,
+        mode: Mode = Mode.NORMAL,
+        onProgress: suspend (UpdateProgress) -> Unit = {},
+        onReady: suspend (count: Int) -> Unit = {},
+    ): UpdateResult = withContext(Dispatchers.IO) {
         val declared = normalizeBase(homeUrl) ?: return@withContext UpdateResult.Failure("invalid homeurl")
         val (manifest, fetched) = fetchManifest(declared)
         if (manifest == null) return@withContext failure(fetched)
@@ -150,14 +169,17 @@ class NetworkUpdater(
             staging.deleteRecursively()
             staging.mkdirs()
             var total = 0L
-            for (e in targets) {
+            for ((i, e) in targets.withIndex()) {
                 val dest = File(staging, e.path).apply { parentFile?.mkdirs() }
                 val digest = MessageDigest.getInstance("MD5")
+                onProgress(UpdateProgress.Download(e.path, i, targets.size))
                 val result = DigestOutputStream(dest.outputStream(), digest).use {
                     fetcher.fetch(manifest.base + encodePath(e.path), it, MAX_FILE_BYTES)
                 }
                 if (result != FetchResult.Ok) return@withContext failure(result)
-                if (hex(digest.digest()) != e.md5) return@withContext UpdateResult.Failure("md5 miss")
+                val actual = hex(digest.digest())
+                onProgress(UpdateProgress.Md5(e.path, e.md5, actual))
+                if (actual != e.md5) return@withContext UpdateResult.Failure("md5 miss")
                 total += dest.length()
                 if (total > MAX_TOTAL_BYTES) return@withContext UpdateResult.Failure("file too large")
             }
