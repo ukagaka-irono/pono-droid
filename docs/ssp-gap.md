@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 161）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 165）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -56,11 +56,11 @@ OnInstallBegin / CompleteEx / Complete / CompleteAll / Failure / Refuse（.nar �
 OnVanishSelecting / Selected / Cancel / ButtonHold（メニューの「消去」。確かめはバルーンの選択肢、話している途中にバルーンをタップすると取りやめ）・
 OnVanished（消去のあとに起きたゴースト。答えが無ければ OnBoot）、OnGhostTermsAccept / Decline（\![open,terms] をバルーンに出す）、
 OnTeachStart / OnTeachInputCancel、OnCloseAll（ゴーストを終えるとき。答えが無ければ OnClose。端末の電源を切るときは system）、OnAITalk（\a）、
-OnNarCreating / Created・OnUpdatedataCreating / Created（\![execute,createnar / createupdatedata] で作ったとき）
+OnNarCreating / Created・OnUpdatedataCreating / Created（\![execute,createnar / createupdatedata] で作ったとき）、
+OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（起動時の NOTIFY と、読み上げの設定を変えたとき）
 
 ### 🔨 Android で作れる
 - 入力: OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
-- 音: OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（読み上げ）
 
 ### 🔒 決めてから
 - OnVoiceRecognitionStatus / Word（マイクで声を聞く。マイクの権限が要る）
@@ -110,7 +110,8 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 --nodescript、古い書き方のパラメータ。--insecure は使わず、証明書はいつも確かめる） \![cancel,http] \![execute,rss-get / rss-post] \![execute,ical-get / ical-post]
 （--from / --to / --expand / --limit、RRULE の FREQ・INTERVAL・COUNT・UNTIL・BYDAY・BYMONTHDAY・BYMONTH と EXDATE）
 \![execute,websocket]（--async / --header / --authorization / --cookie / --m_websocketProtocol、切れたら5回までつなぎ直す） \![send,websocket(-binary)] \![close / cancel,websocket] \![execute,ping / nslookup] \![execute,filewatch] \![cancel,filewatch] \![execute,extractarchive / compressarchive] \7 \![executesntp]（\6 は時計を直せないので何もしない） \![updatebymyself,checkonly / testonly / recovery] \![update,ghost+shell+balloon] \![update,platform]（Play ストアに任せる） \![updateother,--shell / --balloon]
-\![anim,offset / clear / stop] \![bind] \![bind-noevent] \![sound,play / loop / stop / wait] \![change,ghost / shell / balloon]
+\![anim,offset / clear / stop] \![bind] \![bind-noevent] \![sound,play / loop / stop / wait / load / pause / resume / option]
+（ファイルごとに何個でも。--volume / --balance / --rate / --seektime） \__v[disable] \__v[alternate,文字]（読み上げと発言履歴） \![change,ghost / shell / balloon]
 \![execute,http-get] \![updatebymyself] \![reload,shiori] \![enter / leave,passivemode] \![quicksection]
 \![vanishbymyself]（確かめずに消す。--option=query なら確かめる。消せるのは自分だけで、ほかにゴーストがいないときは消さない）、
 \+ \_+（ほかのゴーストのどれか・並びで次のゴーストに替える）、\![change,calendarskin]（カレンダーが無いので何もしない）、\a（OnAITalk）、
@@ -131,7 +132,7 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 - 通知: \![set,trayballoon] / \![set,tasktrayicon]（Android の通知で代用）
 
 ### 🔒 決めてから
-- \__v / \![open,...] の読み上げ（Android の読み上げ機能。権限は要らない）→ 作る
+- ✅ 読み上げ（Android の音声合成。アプリの設定で選ぶ。最初は読み上げない）。設定の切り替えの画面は 6c-2 の画面と一緒に作る
 - \![set,wallpaper] / \![save,wallpaper] / \![restore,wallpaper]（ゴーストが端末の壁紙を変える。壁紙の権限が要る）
 - \![open,editor] / \![open,explorer]（他のアプリでゴーストのファイルを開かせる）
 - \![execute,schedule-add / delete / get]（端末のカレンダーに予定を書く）
@@ -204,6 +205,7 @@ SSP 専用のメニュー項目の名前（ヘッドライン・プラグイン�
 - ✅ surfaces.txt の import（APNG / GIF / WebP。Android 9 より前は最初のコマだけ）
 - ✅ .nar の type,shell / supplement / package、accept（違うゴーストなら OnInstallRefuse）、refresh / refreshundeletemask、
   balloon0.directory などの複数同梱、\![execute,install,path / url]、\![execute,dropdefault,file / url]
-- 🔨 サウンドを同時にいくつも鳴らす、icon.rect（発言履歴の顔）
+- ✅ サウンドを同時にいくつも鳴らす（16 個まで）
+- 🔨 icon.rect（発言履歴の顔）
 - ⛔ surfaces.txt の cursor ブレス（マウスカーソルが無い）、sakura.balloon.offsetx / offsety（pono-droid のバルーンはいつもキャラクターの上）、
   オーバーレイの透明な部分のタッチを下に通す（Android では画素単位にはできない）

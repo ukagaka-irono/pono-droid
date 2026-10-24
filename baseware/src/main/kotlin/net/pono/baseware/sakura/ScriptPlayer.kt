@@ -234,6 +234,15 @@ interface ScriptHost {
     /** `\8[file]` `\_v[file]` `\![sound,play|loop,file,--volume=n]`。[file] は ghost/master からの相対パス */
     fun playSound(file: String, loop: Boolean, volume: Int?) {}
 
+    /** `\![sound,play|loop,file,オプション...]`。既定では [volume] だけ見る */
+    fun playSound(file: String, loop: Boolean, options: SoundOptions) = playSound(file, loop, options.volume)
+
+    /** `\![sound,load|pause|resume|option,file,オプション...]`。[file] が null なら鳴っている音すべて（pause / resume） */
+    fun soundControl(command: String, file: String?, options: SoundOptions) {}
+
+    /** 話した文字（読み上げと発言履歴）。`\__v[disable]` の間は来ず、`\__v[alternate,文字]` ならその文字が来る */
+    fun voice(scope: Int, text: String) {}
+
     /** `\![sound,stop(,file)]`。file が null なら全部 */
     fun stopSound(file: String?) {}
 
@@ -297,6 +306,9 @@ class ScriptPlayer(
         // \f[cursor*] / \f[anchor*] の選択肢とリンクの見た目（キャラクターごと）
         private val looks = HashMap<Int, ChoiceLooks>()
 
+        // \__v[disable] / \__v[alternate,文字] の間は、話した文字を読み上げと発言履歴に渡さない
+        private var voiceOff = false
+
         // \_s のシンクロナイズセクション。null でなければ、文字と改行をこのキャラクター全員に出す
         private var sync: List<Int>? = null
 
@@ -325,6 +337,7 @@ class ScriptPlayer(
                 anchorTitle.append(expanded)
                 return
             }
+            if (!voiceOff) host.voice(scope, expanded)
             val wait = charWait()
             if (quick || wait <= 0) {
                 for (t in targets()) host.appendText(t, expanded)
@@ -446,6 +459,16 @@ class ScriptPlayer(
                 "6" -> host.correctClock()
                 "7" -> host.adjustClock()
                 "v" -> host.bringToFront()
+                // \__v[disable] から \__v までは読み上げない。\__v[alternate,文字] はその文字を代わりに読む
+                "__v" -> when (a.firstOrNull()?.trim()?.lowercase()) {
+                    null, "" -> voiceOff = false
+                    "disable" -> voiceOff = true
+                    "alternate" -> {
+                        a.getOrNull(1)?.takeIf { it.isNotEmpty() && !voiceOff }?.let { host.voice(scope, expandEnv(it, host)) }
+                        voiceOff = true
+                    }
+                    else -> host.unknownTag(token)
+                }
                 // \a はランダムトーク（OnAITalk）。\+ はほかのゴーストのどれか、\_+ は並びで次のゴーストに切り替える（OnGhostChanging は送らない）
                 "a" -> host.raise("OnAITalk", emptyList())
                 "+" -> host.changeGhost("random", false)
@@ -502,13 +525,16 @@ class ScriptPlayer(
                 "create" -> if (a.getOrNull(1)?.trim()?.lowercase() != "shortcut" || !host.createShortcut(a.drop(2))) host.unknownTag(token)
                 "sound" -> when (a.getOrNull(1)?.lowercase()) {
                     "play", "loop" -> a.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { file ->
-                        val volume = a.drop(3).firstOrNull { it.startsWith("--volume=") }?.removePrefix("--volume=")?.trim()?.toIntOrNull()
-                        host.playSound(file, loop = a[1].lowercase() == "loop", volume = volume)
+                        host.playSound(file, loop = a[1].lowercase() == "loop", options = SoundOptions.parse(a.drop(3)))
                     }
                     "wait" -> host.waitSound()
                     "stop" -> host.stopSound(a.getOrNull(2)?.takeIf { it.isNotBlank() })
-                    // load / pause / resume / option / cdplay は、音を先に読む・止めるといった細かい制御なので飛ばす
-                    "load", "pause", "resume", "option", "cdplay" -> {}
+                    "load", "option" -> a.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { file ->
+                        host.soundControl(a[1].lowercase(), file, SoundOptions.parse(a.drop(3)))
+                    }
+                    "pause", "resume" -> host.soundControl(a[1].lowercase(), a.getOrNull(2)?.takeIf { it.isNotBlank() }, SoundOptions())
+                    // 音楽 CD は Android に無い
+                    "cdplay" -> {}
                     else -> host.unknownTag(token)
                 }
                 "change" -> when {

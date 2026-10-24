@@ -36,6 +36,7 @@ import net.pono.baseware.sakura.ChoiceLooks
 import net.pono.baseware.sakura.MoveCommand
 import net.pono.baseware.sakura.ScriptHost
 import net.pono.baseware.sakura.ScriptPlayer
+import net.pono.baseware.sakura.SoundOptions
 import net.pono.baseware.sakura.TextAlign
 import net.pono.baseware.sakura.TextStyle
 import net.pono.baseware.sakura.Token
@@ -156,6 +157,27 @@ interface GhostPlatform {
     /** 音を鳴らす（\8 \_v \![sound]）。[volume] は 0〜100（null なら既定） */
     fun playSound(file: File, loop: Boolean, volume: Int?) {}
 
+    /**
+     * 音を鳴らす（オプション付き）。同じファイルなら鳴らし直し、ほかの音はそのまま鳴らし続ける（SSP と同じく何個でも）。
+     * 鳴り終わったら [GhostController.onSoundStopped]、ループの頭に戻るたびに [GhostController.onSoundLooped]、
+     * 鳴らせなければ [GhostController.onSoundError] を呼ぶ
+     */
+    fun playSound(file: File, loop: Boolean, options: SoundOptions) = playSound(file, loop, options.volume)
+
+    /** load（先に読んでおく）/ pause / resume / option（音量・左右・速さ・位置を変える）。[file] が null なら鳴っている音すべて */
+    fun soundControl(command: String, file: File?, options: SoundOptions) {}
+
+    /** [file] の音だけ止める。null ならすべて（[stopSound]） */
+    fun stopSound(file: File?) {
+        if (file == null) stopSound()
+    }
+
+    /** 話した文字を読み上げるか（アプリの設定。OnSpeechSynthesisStatus で伝える） */
+    fun speechEnabled(): Boolean = false
+
+    /** [scope] のキャラクターが話した [text] を読み上げる（[speechEnabled] のときだけ呼ぶ） */
+    fun speak(scope: Int, text: String) {}
+
     /** 鳴っている音を全部止める */
     fun stopSound() {}
 
@@ -174,6 +196,9 @@ interface GhostPlatform {
      */
     fun switchGhost(dirName: String, previous: PreviousGhost) = onQuit()
 }
+
+/** 発言履歴の1つ（\![open,backlogviewer]）。[time] は話し終えた時刻（ミリ秒） */
+data class BacklogEntry(val time: Long, val scope: Int, val text: String)
 
 /**
  * \![execute,dumpsurface] で書き出すもの。ファイル名は [prefix] + サーフェス番号 + .png、[animation] があれば続けて
@@ -378,6 +403,7 @@ class GhostController(
         val dressup = dressupInfo()
         if (dressup.isNotEmpty()) s.notify("OnNotifyDressupInfo", *dressup.toTypedArray())
         s.notify("OnNotifyUserInfo", userName, "", "", "undef")
+        s.notify("OnSpeechSynthesisStatus", if (platform.speechEnabled()) "1" else "0")
         // 今日が祝日なら、OnNotifyUserInfo のすぐ後に（SSP と同じ。祝日表の代わりに日本の祝日を求める）
         platform.systemInfo()?.takeIf { it.country.equals("JP", ignoreCase = true) }?.let {
             val today = java.time.LocalDate.now()
@@ -628,6 +654,36 @@ class GhostController(
         } finally {
             watch.cancel()
         }
+    }
+
+    // ---- 音と読み上げ ----
+
+    /** 鳴らした音のファイルと、ゴーストが書いた名前（OnSoundStop などの Reference0） */
+    private val soundNames = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private fun soundName(file: File) = soundNames[file.path] ?: file.name
+
+    /** 音が鳴り終わった（OnSoundStop、Reference1 = end） */
+    fun onSoundStopped(file: File) = raise("OnSoundStop", listOf(soundName(file), "end"), userInitiated = false)
+
+    /** ループの音が最後まで鳴り、頭に戻る（OnSoundLoop） */
+    fun onSoundLooped(file: File) = raise("OnSoundLoop", listOf(soundName(file)), userInitiated = false)
+
+    /** 音を鳴らせなかった（OnSoundError）。[code] は Android の再生のエラーの番号 */
+    fun onSoundError(file: File, code: Int, message: String) =
+        raise("OnSoundError", listOf("play", code.toString(), soundName(file), message), userInitiated = false)
+
+    /** 読み上げの設定が変わった（OnSpeechSynthesisStatus） */
+    fun onSpeechSettingChanged(enabled: Boolean) = raise("OnSpeechSynthesisStatus", listOf(if (enabled) "1" else "0"), userInitiated = false)
+
+    private val _backlog = ArrayDeque<BacklogEntry>()
+
+    /** 発言履歴（新しいものが後ろ）。\__v[disable] の間に話したものは入らない */
+    val backlog: List<BacklogEntry> get() = synchronized(_backlog) { _backlog.toList() }
+
+    private fun addBacklog(scope: Int, text: String) = synchronized(_backlog) {
+        _backlog.addLast(BacklogEntry(System.currentTimeMillis(), scope, text))
+        while (_backlog.size > MAX_BACKLOG) _backlog.removeFirst()
     }
 
     /** \![reload,shell] / \![reloadsurface]。今のシェルをファイルから読み直す（今のサーフェスとイベントはそのまま） */
@@ -2716,6 +2772,7 @@ class GhostController(
                 player.play(script, host).also { ended = true }
             } finally {
                 host.endSpeaking()
+                host.flushVoice()
                 // 割り込まれて止まったスクリプトが、後から始まったスクリプトの「話している」を消さないようにする
                 if (run == scriptRuns) {
                     _state.update {
@@ -3272,12 +3329,42 @@ class GhostController(
             applyBind(scope, group, on, byUser = false)
         }
 
-        override fun playSound(file: String, loop: Boolean, volume: Int?) {
+        override fun playSound(file: String, loop: Boolean, volume: Int?) = playSound(file, loop, SoundOptions(volume = volume))
+
+        override fun playSound(file: String, loop: Boolean, options: SoundOptions) {
             val f = soundFile(file) ?: return platform.log("音が見つかりません: $file")
-            platform.playSound(f, loop, volume)
+            soundNames[f.path] = file
+            platform.playSound(f, loop, options)
         }
 
-        override fun stopSound(file: String?) = platform.stopSound()
+        override fun soundControl(command: String, file: String?, options: SoundOptions) {
+            val f = file?.let { soundFile(it) ?: return platform.log("音が見つかりません: $it") }
+            if (f != null && file != null) soundNames[f.path] = file
+            platform.soundControl(command, f, options)
+        }
+
+        override fun stopSound(file: String?) {
+            if (file == null) return platform.stopSound()
+            platform.stopSound(soundFile(file) ?: return)
+        }
+
+        /** 読み上げと発言履歴に渡す文字。キャラクターが替わるか、スクリプトが終わったらまとめて渡す */
+        private val voiceText = StringBuilder()
+        private var voiceScope = 0
+
+        override fun voice(scope: Int, text: String) {
+            if (scope != voiceScope) flushVoice()
+            voiceScope = scope
+            voiceText.append(text)
+        }
+
+        fun flushVoice() {
+            val text = voiceText.toString().trim()
+            voiceText.clear()
+            if (text.isEmpty()) return
+            addBacklog(voiceScope, text)
+            if (platform.speechEnabled()) platform.speak(voiceScope, text)
+        }
 
         override suspend fun waitSound() = platform.waitSound()
 
@@ -3703,6 +3790,9 @@ class GhostController(
 
         /** 一度に書き出すサーフェスの数 */
         private const val MAX_DUMP_SURFACES = 4096
+
+        /** 発言履歴に残す数 */
+        private const val MAX_BACKLOG = 200
 
         /** アプリから渡されないとき（テストなど）のバージョン */
         const val BASEWARE_VERSION = "0.1.0"

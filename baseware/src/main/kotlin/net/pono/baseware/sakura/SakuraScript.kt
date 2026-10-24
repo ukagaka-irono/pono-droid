@@ -46,10 +46,10 @@ object SakuraScript {
             var p = i + 1
             val name: String = when {
                 script.startsWith("__", p) -> {
-                    // \__q, \__w, \__c など
+                    // \__q, \__w, \__c など。名前は英字だけ（\__v のすぐ後に続く日本語は文字）
                     val start = p
                     p += 2
-                    while (p < script.length && script[p].isLetter()) p++
+                    while (p < script.length && (script[p] in 'a'..'z' || script[p] in 'A'..'Z')) p++
                     script.substring(start, p)
                 }
                 next == '_' -> {

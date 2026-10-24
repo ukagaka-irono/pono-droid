@@ -62,6 +62,7 @@ import net.pono.baseware.ghost.PreviousGhost
 import net.pono.baseware.ghost.SurfaceDump
 import net.pono.baseware.ghost.SystemInfo
 import net.pono.baseware.ghost.WindowState
+import net.pono.baseware.sakura.SoundOptions
 import net.pono.baseware.shell.Shell
 import net.pono.droid.AppVersion
 import net.pono.droid.GhostShortcutActivity
@@ -90,7 +91,12 @@ class GhostOverlayService : LifecycleService() {
     private val handledMoves = HashMap<Int, Int>()
     private val handledNudges = HashMap<Int, Int>()
     private var passThrough = false
-    private val sound = SoundPlayer()
+    private val sound = SoundPlayer(
+        onStop = { controller?.onSoundStopped(it) },
+        onLoop = { controller?.onSoundLooped(it) },
+        onError = { file, code, message -> controller?.onSoundError(file, code, message) },
+    )
+    private val speech by lazy { SpeechOutput(this) }
     private val windows = mutableListOf<CharacterWindow>()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -253,9 +259,26 @@ class GhostOverlayService : LifecycleService() {
                     startActivity(Intent(this@GhostOverlayService, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 }
 
-                override fun playSound(file: File, loop: Boolean, volume: Int?) = sound.play(file, loop, volume)
+                override fun playSound(file: File, loop: Boolean, volume: Int?) = sound.play(file, loop, SoundOptions(volume = volume))
+
+                override fun playSound(file: File, loop: Boolean, options: SoundOptions) = sound.play(file, loop, options)
+
+                override fun soundControl(command: String, file: File?, options: SoundOptions) {
+                    when (command) {
+                        "load" -> file?.let { sound.load(it, options) }
+                        "option" -> file?.let { sound.option(it, options) }
+                        "pause" -> sound.pause(file)
+                        "resume" -> sound.resume(file)
+                    }
+                }
 
                 override fun stopSound() = sound.stop()
+
+                override fun stopSound(file: File?) = sound.stop(file)
+
+                override fun speechEnabled(): Boolean = OverlaySettings.speech(OverlaySettings.prefs(this@GhostOverlayService))
+
+                override fun speak(scope: Int, text: String) = speech.speak(scope, text)
 
                 override suspend fun waitSound() = sound.await()
 
@@ -638,6 +661,11 @@ class GhostOverlayService : LifecycleService() {
                 balloonScale = OverlaySettings.balloonScale(p)
                 controller?.onBalloonScaling((balloonScale * 100).roundToInt(), (old * 100).roundToInt())
             }
+            OverlaySettings.KEY_SPEECH -> {
+                val on = OverlaySettings.speech(p)
+                if (!on) speech.stop()
+                controller?.onSpeechSettingChanged(on)
+            }
         }
     }
 
@@ -751,6 +779,7 @@ class GhostOverlayService : LifecycleService() {
         unregisterReceiver(batteryReceiver)
         runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback) }
         teardown()
+        speech.shutdown()
         super.onDestroy()
     }
 

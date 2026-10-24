@@ -26,4 +26,9 @@ object OverlaySettings {
 
     fun balloonScale(prefs: SharedPreferences) =
         prefs.getFloat(KEY_BALLOON_SCALE, DEFAULT_BALLOON_SCALE).coerceIn(MIN_BALLOON_SCALE, MAX_BALLOON_SCALE)
+
+    /** ゴーストが話した文字を読み上げるか（最初は読み上げない） */
+    const val KEY_SPEECH = "speech"
+
+    fun speech(prefs: SharedPreferences) = prefs.getBoolean(KEY_SPEECH, false)
 }
