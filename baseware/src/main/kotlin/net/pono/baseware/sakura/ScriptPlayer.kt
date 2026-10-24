@@ -276,6 +276,15 @@ interface ScriptHost {
     fun envVariable(name: String): String?
 
     fun unknownTag(tag: Token.Tag) {}
+
+    /**
+     * ほかのアプリから SSTP で届いたスクリプト。そのときは、端末やゴーストを変えるタグ（\![execute] \![open,browser] \![change]
+     * \![vanishbymyself] \- \j など）を使わせない（[refused] に回す）
+     */
+    val untrusted: Boolean get() = false
+
+    /** [untrusted] のスクリプトで使わせなかったタグ */
+    fun refused(tag: Token.Tag) = unknownTag(tag)
 }
 
 data class PlayResult(val quit: Boolean, val hasChoices: Boolean)
@@ -365,6 +374,7 @@ class ScriptPlayer(
 
         private suspend fun tag(token: Token.Tag, depth: Int) {
             val a = token.args
+            if (host.untrusted && token.name in UNTRUSTED_TAGS) return host.refused(token)
             when (token.name) {
                 "0", "h" -> scope = 0
                 "1", "u" -> scope = 1
@@ -490,6 +500,7 @@ class ScriptPlayer(
 
         private suspend fun bang(token: Token.Tag, depth: Int) {
             val a = token.args
+            if (host.untrusted && !untrustedAllowed(a)) return host.refused(token)
             when (val command = a.firstOrNull()?.lowercase()) {
                 "raise" -> if (a.size >= 2) host.raise(a[1], a.drop(2))
                 "notify" -> if (a.size >= 2) host.notify(a[1], a.drop(2))
@@ -799,8 +810,26 @@ class ScriptPlayer(
         return replaced.replace(SakuraScript.ESCAPED_PERCENT, '%')
     }
 
+    /** SSTP で届いたスクリプトで使ってよい \![...]。入力の箱は開けるが、ブラウザやファイルは開かせない */
+    private fun untrustedAllowed(a: List<String>): Boolean {
+        val command = a.firstOrNull()?.trim()?.lowercase() ?: return true
+        val sub = a.getOrNull(1)?.trim()?.lowercase()
+        return when (command) {
+            "raise", "notify", "embed", "timerraise", "get", "lock", "unlock", "anim", "bind", "bind-noevent", "move", "moveasync",
+            "enter", "leave", "wait", "reset", "*", "quicksection", "quicksession", "sound", "close" -> true
+            "open" -> sub in UNTRUSTED_OPEN
+            "set" -> sub != null && sub !in UNTRUSTED_SET_REFUSED
+            else -> false
+        }
+    }
+
     companion object {
         const val MAX_EMBED_DEPTH = 8
+
+        /** SSTP で届いたスクリプトで使わせないタグ（終了・ゴーストの切り替え・ブラウザ・時計） */
+        private val UNTRUSTED_TAGS = setOf("-", "+", "_+", "j", "6", "7")
+        private val UNTRUSTED_OPEN = setOf("inputbox", "passwordinput", "communicatebox", "teachbox", "dateinput", "timeinput", "sliderinput", "textareabox", "ipinput")
+        private val UNTRUSTED_SET_REFUSED = setOf("property", "wallpaper")
 
         /** \p[N] で使えるキャラクターの番号の上限 */
         const val MAX_SCOPE = 15

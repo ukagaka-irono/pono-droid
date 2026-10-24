@@ -65,6 +65,8 @@ import net.pono.baseware.ghost.SurfaceDump
 import net.pono.baseware.ghost.SystemInfo
 import net.pono.baseware.ghost.WindowGeometry
 import net.pono.baseware.ghost.WindowState
+import net.pono.baseware.net.SstpResponse
+import net.pono.baseware.net.SstpServer
 import net.pono.baseware.sakura.SoundOptions
 import net.pono.baseware.shell.Shell
 import net.pono.droid.AppVersion
@@ -367,6 +369,7 @@ class GhostOverlayService : LifecycleService() {
         )
         controller = c
         _controller.value = c
+        updateSstp()
         _running.value = ghost.dir.name
         c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
         createWindows(c)
@@ -548,7 +551,26 @@ class GhostOverlayService : LifecycleService() {
         createWindows(c)
     }
 
+    /** SSTP サーバー（設定で選んだときだけ。この端末の中のアプリからだけ受ける） */
+    private var sstp: SstpServer? = null
+
+    /** 設定とゴーストの起動に合わせて、SSTP サーバーを始める・やめる */
+    private fun updateSstp() {
+        val c = controller
+        val want = c != null && OverlaySettings.sstp(OverlaySettings.prefs(this))
+        if (!want) {
+            sstp?.stop()
+            sstp = null
+            return
+        }
+        if (sstp != null) return
+        val server = SstpServer(lifecycleScope, { req -> withContext(Dispatchers.Main) { controller?.handleSstp(req) ?: SstpResponse(503) } }, log = { Log.w(TAG, it) })
+        if (server.start()) sstp = server else toast("SSTP のポート ${SstpServer.DEFAULT_PORT} がほかのアプリに使われています")
+    }
+
     private fun teardown() {
+        sstp?.stop()
+        sstp = null
         startJob?.cancel()
         startJob = null
         loadingJob?.cancel()
@@ -695,6 +717,7 @@ class GhostOverlayService : LifecycleService() {
                 balloonScale = OverlaySettings.balloonScale(p)
                 controller?.onBalloonScaling((balloonScale * 100).roundToInt(), (old * 100).roundToInt())
             }
+            OverlaySettings.KEY_SSTP -> updateSstp()
             OverlaySettings.KEY_SPEECH -> {
                 val on = OverlaySettings.speech(p)
                 if (!on) speech.stop()

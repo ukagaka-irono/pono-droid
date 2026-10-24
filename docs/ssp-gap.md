@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 171）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 173）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -59,7 +59,8 @@ OnTeachStart / OnTeachInputCancel、OnCloseAll（ゴーストを終えるとき�
 OnNarCreating / Created・OnUpdatedataCreating / Created（\![execute,createnar / createupdatedata] で作ったとき）、
 OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（起動時の NOTIFY と、読み上げの設定を変えたとき）、
 OnUpdate.OnDownloadBegin / OnMD5CompareBegin / OnMD5CompareComplete / OnMD5CompareFailure（と OnUpdateOther. のもの）、
-OnTrayBalloonClick / Timeout（\![set,trayballoon] の Android の通知に触れた・消した。何行かある文は 0x01 でつなぐ）
+OnTrayBalloonClick / Timeout（\![set,trayballoon] の Android の通知に触れた・消した。何行かある文は 0x01 でつなぐ）、
+OnSSTPBreak（SSTP で届いたスクリプトをバルーンのタップで止めた）・OnSSTPBlacklisting（メニューの「SSTP を受けない」）
 
 ### 🔨 Android で作れる
 - 入力: OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
@@ -68,7 +69,6 @@ OnTrayBalloonClick / Timeout（\![set,trayballoon] の Android の通知に触�
 - OnVoiceRecognitionStatus / Word（マイクで声を聞く。マイクの権限が要る）
 - OnScheduleTodayNotify / 5MinutesToGo / Read、OnExecuteSchedule*（予定。端末のカレンダーを読む権限が要る）
 - OnBIFFBegin / Complete / Failure、OnBIFF2Complete（メールの確認。メールのパスワードをアプリに預けることになる）
-- OnSSTPBreak / OnSSTPBlacklisting（SSTP。外からゴーストに話させる口を開ける）
 - OnDeviceArrival / Remove（USB 機器）、OnRecycleBin*（ゴミ箱）
 
 ### 👥 複数ゴーストの同時起動が要る
@@ -201,7 +201,12 @@ SSP 専用のメニュー項目の名前（ヘッドライン・プラグイン�
 
 ## 5. そのほか（仕様書の項目以外）
 
-- 🔒 SSTP サーバー（外のアプリやパソコンからゴーストに話させる。端末の中だけ・LAN も、のどちらにするかを決める）
+- ✅ SSTP サーバー（設定で選んだときだけ。最初は受けない。この端末の中のアプリからだけ、127.0.0.1:9801）。SEND / NOTIFY（IfGhost の振り分け・
+  Option の nobreak / notify / notranslate）、COMMUNICATE、GIVE、EXECUTE（GetName / GetNames / GetGhostName / GetShellName / GetBalloonName / GetVersion /
+  GetShortVersion / Get*NameList / GetStatus / Quiet / Restore / GetProperty / SetCookie / GetCookie / SetTrayIcon / SetTrayBalloon。SetProperty・MoveAsync・
+  DumpSurface・CompressArchive・ExtractArchive は Owned SSTP だけ）、keep-alive、SSTP over HTTP（localhost のページからだけ）、ReceiverGhostName / Ghost。
+  ほかのアプリから届いたスクリプトは \![execute] \![open,browser / file] \![change] \![vanishbymyself] \- \j などを使えない（uniqueid を付けた Owned SSTP は使える）。
+  設定の切り替えの画面は 6c-2 の画面と一緒に作る
 - 👥 複数ゴーストの同時起動（上の 👥 はすべてこれが前提）
 - ⛔ SHIORI の美坂・偽林檎など（Windows の DLL。ソースが公開されていて Android 用にビルドできるものだけ作れる）
 - ⛔ SAORI・YAYA の EXECUTE・プラグイン（安全のために止めている。ゴーストに端末でプログラムを動かさせることになる）

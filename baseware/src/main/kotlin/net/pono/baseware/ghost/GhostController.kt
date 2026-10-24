@@ -25,6 +25,8 @@ import net.pono.baseware.net.SocketWebSocketConnector
 import net.pono.baseware.net.WebSocketConnector
 import net.pono.baseware.net.WebSocketSession
 import net.pono.baseware.net.HttpClient
+import net.pono.baseware.net.SstpRequest
+import net.pono.baseware.net.SstpResponse
 import net.pono.baseware.net.HttpCommand
 import net.pono.baseware.net.HttpOutcome
 import net.pono.baseware.net.HttpRequest
@@ -477,6 +479,8 @@ class GhostController(
         val dressup = dressupInfo()
         if (dressup.isNotEmpty()) s.notify("OnNotifyDressupInfo", *dressup.toTypedArray())
         s.notify("OnNotifyUserInfo", userName, "", "", "undef")
+        // Owned SSTP の ID（起動ごとに替わる）
+        s.notify("uniqueid", uniqueId)
         s.notify("OnSpeechSynthesisStatus", if (platform.speechEnabled()) "1" else "0")
         // 今日が祝日なら、OnNotifyUserInfo のすぐ後に（SSP と同じ。祝日表の代わりに日本の祝日を求める）
         platform.systemInfo()?.takeIf { it.country.equals("JP", ignoreCase = true) }?.let {
@@ -752,6 +756,168 @@ class GhostController(
             return block()
         } finally {
             watch.cancel()
+        }
+    }
+
+    // ---- SSTP（この端末のほかのアプリから） ----
+
+    /** Owned SSTP の ID。SHIORI に NOTIFY uniqueid で伝え、この ID の付いた SSTP はゴースト自身と同じに扱う */
+    val uniqueId: String = java.util.UUID.randomUUID().toString().replace("-", "")
+
+    /** SSTP で届いて再生中のスクリプト（runScript の通し番号）。バルーンをタップして止めたら OnSSTPBreak */
+    private var sstpRun = -1
+
+    /** 最後に SSTP でスクリプトを送ってきたもの（メニューの「受けない」で選べる）と、受けないことにした送り手 */
+    private var lastSstpSender: String? = null
+    private val blockedSstpSenders = HashSet<String>()
+
+    /** メニューの「SSTP を受けない」。この起動の間、その送り手からは受けない（OnSSTPBlacklisting。端末の中なので 127.0.0.1） */
+    private fun blockLastSstpSender() {
+        val sender = lastSstpSender ?: return
+        blockedSstpSenders += sender
+        lastSstpSender = null
+        raise("OnSSTPBlacklisting", listOf("127.0.0.1"), userInitiated = false)
+    }
+
+    /** EXECUTE Quiet で黙る期限 */
+    private var quietUntil = 0L
+
+    /** EXECUTE SetCookie / GetCookie（送り手ごと） */
+    private val sstpCookies = HashMap<String, MutableMap<String, String>>()
+
+    /**
+     * SSTP の要求に答える。SEND / NOTIFY はイベント（答えが無ければ Script ヘッダ。IfGhost で選ぶ）、COMMUNICATE は OnCommunicate、
+     * GIVE は OnCommunicate / OnMusicPlay、EXECUTE は情報を返す。ほかのアプリからのスクリプトは [ScriptHost.untrusted] で再生する
+     * （ID がこのゴーストの uniqueid なら制限しない）
+     */
+    suspend fun handleSstp(req: SstpRequest): SstpResponse {
+        val sender = req["Sender"] ?: req["User-Agent"] ?: return SstpResponse(400)
+        val owned = req["ID"] == uniqueId
+        if (!owned && sender in blockedSstpSenders) return SstpResponse(420)
+        val target = req["ReceiverGhostName"] ?: req["Ghost"]
+        if (target != null && target != ghost.sakuraName && target != ghost.name) return SstpResponse(404)
+        if (closing) return SstpResponse(503)
+        if (req.method == "EXECUTE") return sstpExecute(req, sender, owned)
+        val s = _state.value
+        if (s.window.minimized) return SstpResponse(512)
+        if (!owned && (s.timeCritical || s.passive)) return SstpResponse(409)
+        val refs = req.references
+        val script = when (req.method) {
+            "SEND", "NOTIFY" -> {
+                val event = req["Event"]?.trim()?.takeIf { it.isNotEmpty() }
+                val answered = when {
+                    event == null -> null
+                    "notify" in req.options -> {
+                        notify(event, refs)
+                        null
+                    }
+                    else -> request(event, refs, translate = "notranslate" !in req.options)
+                }
+                answered ?: sstpScript(req)
+            }
+            "COMMUNICATE" -> request("OnCommunicate", listOf(sender, req["Sentence"].orEmpty()) + refs)
+            "GIVE" -> when {
+                req["Document"] != null -> request("OnCommunicate", listOf(sender, req["Document"].orEmpty()))
+                req["Song"] != null -> request("OnMusicPlay", listOf(req["Song"].orEmpty()))
+                else -> return SstpResponse(400)
+            }
+            else -> return SstpResponse(501)
+        } ?: return SstpResponse(204)
+        if ("nobreak" in req.options) withTimeoutOrNull(SSTP_NOBREAK_WAIT_MS) { _state.first { !it.talking && !it.waitingChoice } }
+        cancelScript()
+        runScript(script, untrusted = !owned)
+        sstpRun = scriptRuns
+        if (!owned) lastSstpSender = sender
+        return SstpResponse(200, listOf("Script" to script))
+    }
+
+    /** IfGhost の後の Script はそのゴーストだけ、IfGhost より前の Script はほかのゴースト向け（さくら・エミリ宛てもほかのゴースト向け） */
+    private fun sstpScript(req: SstpRequest): String? {
+        var pending: String? = null
+        var fallback: String? = null
+        for ((name, value) in req.headers) {
+            when {
+                name.equals("IfGhost", ignoreCase = true) -> pending = value
+                name.equals("Script", ignoreCase = true) -> {
+                    val forGhost = pending
+                    pending = null
+                    if (forGhost == null) {
+                        if (fallback == null) fallback = value
+                        continue
+                    }
+                    val names = forGhost.split(',').map { it.trim() }
+                    val match = names[0] == ghost.sakuraName && (names.size < 2 || names[1] == ghost.keroName)
+                    if (match) return value
+                    if (names[0] in DEFAULT_GHOST_NAMES && fallback == null) fallback = value
+                }
+            }
+        }
+        return fallback
+    }
+
+    private suspend fun sstpExecute(req: SstpRequest, sender: String, owned: Boolean): SstpResponse {
+        val raw = req["Command"]?.trim() ?: return SstpResponse(400)
+        val command = raw.substringBefore('[').trim()
+        val params = if ('[' in raw) raw.substringAfter('[').substringBeforeLast(']').split(',').map { it.trim() } else req.references
+        fun data(text: String?) = if (text.isNullOrEmpty()) SstpResponse(204) else SstpResponse(200, data = text)
+        fun lines(items: List<String>) = SstpResponse(200, data = items.joinToString("") { "$it\r\n" })
+        return when (command.lowercase()) {
+            "getname" -> data("${ghost.sakuraName},${ghost.keroName}")
+            "getnames" -> lines(repository?.list()?.map { it.sakuraName } ?: listOf(ghost.sakuraName))
+            "getghostname" -> data(ghost.name)
+            "getshellname" -> data(shell.name)
+            "getballoonname" -> data(balloon?.name)
+            "getversion" -> data("${ShioriSession.SENDER}/$basewareVersion")
+            "getshortversion" -> data(basewareVersion.takeWhile { it.isDigit() || it == '.' })
+            "getghostnamelist" -> lines(repository?.list()?.map { it.name } ?: listOf(ghost.name))
+            "getshellnamelist" -> lines(ghost.shellDirs.map { runCatching { Shell(it).name }.getOrDefault(it.name) })
+            "getballoonnamelist" -> lines(repository?.balloons?.list()?.map { it.name }.orEmpty())
+            "getheadlinenamelist", "getpluginnamelist" -> SstpResponse(204)
+            "getstatus" -> data(property("currentghost.status"))
+            "quiet" -> {
+                quietUntil = System.currentTimeMillis() + SSTP_QUIET_MS
+                SstpResponse(204)
+            }
+            "restore" -> {
+                quietUntil = 0
+                SstpResponse(204)
+            }
+            "getproperty" -> data(params.firstOrNull()?.let(::property))
+            "setcookie" -> {
+                val name = params.getOrNull(0)?.takeIf { it.isNotEmpty() } ?: return SstpResponse(400)
+                val cookies = sstpCookies.getOrPut(sender) { HashMap() }
+                if (cookies.size >= MAX_SSTP_COOKIES && name !in cookies) return SstpResponse(413)
+                cookies[name] = params.getOrNull(1).orEmpty().take(MAX_SSTP_COOKIE_LENGTH)
+                SstpResponse(204)
+            }
+            "getcookie" -> data(sstpCookies[sender]?.get(params.getOrNull(0).orEmpty()))
+            "settrayballoon" -> if (Host(mutableListOf()).setOption("trayballoon", params)) SstpResponse(204) else SstpResponse(400)
+            "settrayicon" -> if (Host(mutableListOf()).setOption("tasktrayicon", params)) SstpResponse(204) else SstpResponse(400)
+            // ゴーストのファイルや状態を変えるものは、Owned SSTP（ゴースト自身）からだけ
+            "setproperty", "moveasync", "dumpsurface", "compressarchive", "extractarchive" -> if (!owned) {
+                SstpResponse(420)
+            } else {
+                when (command.lowercase()) {
+                    "setproperty" -> if (setProperty(params.getOrNull(0).orEmpty(), params.getOrNull(1).orEmpty())) SstpResponse(204) else SstpResponse(400)
+                    "moveasync" -> {
+                        runScript("\\![moveasync," + params.joinToString(",") { quote(it) } + "]")
+                        SstpResponse(204)
+                    }
+                    "dumpsurface" -> when (val r = dumpSurface(params)) {
+                        is Job -> {
+                            r.join()
+                            SstpResponse(204)
+                        }
+                        false -> SstpResponse(400)
+                        else -> SstpResponse(204)
+                    }
+                    else -> {
+                        archive(command.lowercase() == "compressarchive", params)?.join()
+                        SstpResponse(204)
+                    }
+                }
+            }
+            else -> SstpResponse(501)
         }
     }
 
@@ -2371,6 +2537,7 @@ class GhostController(
             sb.append("\\q[位置を戻す,pono:resetpos]\\n")
         }
         sb.append("\\q[${caption("隠す", "hidebutton.caption")},pono:hide]\\n")
+        lastSstpSender?.let { sb.append("\\q[${quote(literalScript("「$it」の SSTP を受けない"))},pono:sstp-block]\\n") }
         if (!short && vanishVisible()) sb.append("\\q[${caption("消去", "vanishbutton.caption", "vanishbuttoncaption")},pono:vanish,$scopeId]\\n")
         sb.append("\\q[${caption("ゴーストを終了", "quitbutton.caption", "closebutton.caption")},pono:close]\\n")
         sb.append("\\q[${caption("閉じる", "closeballoonbutton.caption")},pono:cancel]\\e")
@@ -2528,7 +2695,12 @@ class GhostController(
                 cancelScript()
                 _state.update { it.copy(talking = false, waitingClick = false) }
                 hideBalloons()
-                raise(if (vanishing) "OnVanishButtonHold" else "OnBalloonBreak", listOf(script, scopeId.toString(), ""), userInitiated = false)
+                val event = when {
+                    vanishing -> "OnVanishButtonHold"
+                    sstpRun == scriptRuns -> "OnSSTPBreak"
+                    else -> "OnBalloonBreak"
+                }
+                raise(event, listOf(script, scopeId.toString(), ""), userInitiated = false)
             }
             else -> {
                 hideBalloons()
@@ -2933,7 +3105,9 @@ class GhostController(
                 val uptimeHours = ((System.currentTimeMillis() - bootTime) / 3_600_000).toString()
                 val idleSec = ((System.currentTimeMillis() - lastUserActivity) / 1000).toString()
                 // Reference3 は「話せるか」。パッシブモードとインダクションモードでは常に 0（SSP と同じ）
-                val refs = listOf(uptimeHours, "0", "0", if (talking || s.passive || s.induction) "0" else "1", idleSec)
+                // SSTP の EXECUTE Quiet の間も話せない
+                val quiet = System.currentTimeMillis() < quietUntil
+                val refs = listOf(uptimeHours, "0", "0", if (talking || s.passive || s.induction || quiet) "0" else "1", idleSec)
                 raise("OnSecondChange", refs, userInitiated = false)
                 val now = Calendar.getInstance()
                 val minute = now.get(Calendar.MINUTE)
@@ -2962,7 +3136,7 @@ class GhostController(
         choiceWaiter = null
     }
 
-    private fun runScript(script: String, chain: Int = 0): Job {
+    private fun runScript(script: String, chain: Int = 0, untrusted: Boolean = false): Job {
         // talking は launch の前に立てる（呼び出し側が「話し終わるまで待つ」ときに取りこぼさないため）
         // 先頭が \C なら、今出ているバルーンを消さずに続ける
         if (!script.startsWith("\\C")) hideBalloons()
@@ -2973,7 +3147,7 @@ class GhostController(
         val run = ++scriptRuns
         val job = scope.launch {
             val raised = mutableListOf<Pair<String, List<String>>>()
-            val host = Host(raised)
+            val host = Host(raised, untrusted)
             // 割り込まれずに最後まで話したかどうか（話し終わりの SERIKO、yen-e を動かす）
             var ended = false
             val result = try {
@@ -3080,6 +3254,7 @@ class GhostController(
                     "pono:vanish-yes" -> vanish(farewell = true)
                     "pono:vanish-no" -> raise("OnVanishCancel", emptyList())
                     "pono:terms-open" -> showTerms()
+                    "pono:sstp-block" -> blockLastSstpSender()
                     "pono:aistate" -> scope.launch { aiStateScript(scopeId)?.let { runScript(it) } }
                     "pono:rateofuse" -> rateOfUseScript(scopeId)?.let { runScript(it) }
                     "pono:terms" -> raise(if (refs.firstOrNull() == "accept") "OnGhostTermsAccept" else "OnGhostTermsDecline", emptyList())
@@ -3664,7 +3839,7 @@ class GhostController(
         return runCatching { TextCharsets.decode(file.readBytes()) }.getOrDefault("$name を読めませんでした")
     }
 
-    private inner class Host(private val raised: MutableList<Pair<String, List<String>>>) : ScriptHost {
+    private inner class Host(private val raised: MutableList<Pair<String, List<String>>>, override val untrusted: Boolean = false) : ScriptHost {
         /** このスクリプトのあいだだけ有効。0 以下なら消さない／待ち続ける */
         var balloonTimeoutMs = this@GhostController.balloonTimeoutMs
         var choiceTimeoutMs = this@GhostController.choiceTimeoutMs
@@ -4298,6 +4473,8 @@ class GhostController(
         }
 
         override fun unknownTag(tag: Token.Tag) = platform.log("未対応のタグ: \\${tag.name}${tag.args}")
+
+        override fun refused(tag: Token.Tag) = platform.log("SSTP のスクリプトでは使えないタグ: \\${tag.name}${tag.args}")
     }
 
     companion object {
@@ -4312,6 +4489,13 @@ class GhostController(
 
         /** 発言履歴に残す数 */
         private const val MAX_BACKLOG = 200
+
+        /** SSTP の IfGhost で、ほかのゴースト向けとして扱う名前（SSP と同じ） */
+        private val DEFAULT_GHOST_NAMES = setOf("さくら", "エミリ", "えみりぃ")
+        private const val SSTP_QUIET_MS = 16_000L
+        private const val SSTP_NOBREAK_WAIT_MS = 60_000L
+        private const val MAX_SSTP_COOKIES = 64
+        private const val MAX_SSTP_COOKIE_LENGTH = 4096
 
         /** getaistateex で聞くグラフの数 */
         private const val MAX_AI_GRAPHS = 8

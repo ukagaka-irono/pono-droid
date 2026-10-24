@@ -31,4 +31,9 @@ object OverlaySettings {
     const val KEY_SPEECH = "speech"
 
     fun speech(prefs: SharedPreferences) = prefs.getBoolean(KEY_SPEECH, false)
+
+    /** SSTP を受けるか（この端末の中のアプリから。最初は受けない） */
+    const val KEY_SSTP = "sstp"
+
+    fun sstp(prefs: SharedPreferences) = prefs.getBoolean(KEY_SSTP, false)
 }
