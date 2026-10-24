@@ -47,7 +47,24 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
+            <!-- SSP の Web 関連付け（x-ukagaka-link:type=event&ghost=...&info=...） -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="x-ukagaka-link" />
+            </intent-filter>
         </activity>
+        <!-- ゴーストのフォルダのファイルを、ほかのアプリで開くとき（渡したファイルを画像や音のアプリで開くなど）だけ、その1つを見せる -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- readme などを読む画面（\![open,readme]） -->
         <activity

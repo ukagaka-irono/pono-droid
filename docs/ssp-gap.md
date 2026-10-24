@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 132）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 146）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -49,17 +49,17 @@ OnExecuteICalComplete / Failure / Progress / _SSLInfo、OnExecuteWebSocketOpen /
 OnPingComplete / Progress（Android では ICMP を直に送れないので InetAddress.isReachable で代わりにする）、OnNSLookupComplete / Failure、
 OnExecuteFileWatchChange / Failure（ゴーストのフォルダの中だけ）、OnExtractArchiveComplete / Failure・OnCompressArchiveComplete / Failure
 （ゴーストのフォルダの中だけ。パスワード付き ZIP は使えない）、OnSNTPBegin / CompareEx / Compare / Failure（ずれを測るだけ）、
-OnUpdateCheckComplete / Failure、OnUpdateResult(Ex) / OnUpdateCheckResult(Ex)、OnUpdateOtherBegin / Ready / Complete / Failure（シェルとバルーン）
+OnUpdateCheckComplete / Failure、OnUpdateResult(Ex) / OnUpdateCheckResult(Ex)、OnUpdateOtherBegin / Ready / Complete / Failure（シェルとバルーン）、
+OnTextDrop・OnURLQuery・OnURLDropping / OnURLDropped / OnURLDropFailure（Android の「共有」で文字や URL を渡す）、
+OnInstallBegin / CompleteEx / Complete / CompleteAll / Failure / Refuse（.nar を入れたとき）、OnPictureViewerOpen / OnMediaPlayerOpen
+（渡したファイルにゴーストが答えず、ほかのアプリで開いたとき）、OnXUkagakaLinkOpen（x-ukagaka-link: のリンク）
 
 ### 🔨 Android で作れる
-- 共有・インストール: OnTextDrop・OnURLDropped / OnURLDropping / OnURLDropFailure（文字や URL の「共有」）、OnDirectoryDrop（使わない）、
-  OnInstallBegin / Complete / CompleteEx / CompleteAll / Failure / Refuse / Reroute（.nar のインストールをゴーストに知らせる）、
-  OnMediaPlayerOpen / OnPictureViewerOpen（渡したファイルを Android のアプリで開いたとき）
 - 入力: OnTeachStart / OnTeachInputCancel、OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
 - 音: OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（読み上げ）
 - 消去: OnVanishSelecting / Selected / Cancel / ButtonHold / Vanished、OnGhostTermsAccept / Decline（利用規約）
 - 開発: OnUpdatedataCreating / Created、OnNarCreating / Created（ゴーストのフォルダから .nar・更新データを作る）
-- その他: OnCloseAll（アプリごと終わるとき）、OnAITalk（\a）、OnURLQuery、OnXUkagakaLinkOpen（x-ukagaka-link: のリンク）
+- その他: OnCloseAll（アプリごと終わるとき）、OnAITalk（\a）
 
 ### 🔒 決めてから
 - OnVoiceRecognitionStatus / Word（マイクで声を聞く。マイクの権限が要る）
@@ -117,7 +117,7 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
   \![reloadsurface] \![reload,shell / balloon / ghost / descript] \![load / unload,shiori]
 - 開く: \![open,file]（Android のアプリで開く）、\![open,mailer]、\![open,dialog,open / save / folder / color]（ファイル選択など）、\![open,ipinput]、
   \![open,terms]、\![open,help]、\![open,ghostexplorer など]（アプリの一覧画面）、\![open,surfacetest / developer / shiorirequest / errorlog / backlogviewer]（開発用の画面）
-- 実行: \![execute,dumpsurface / dumpballoon]、\![execute,install,path / url]、\![execute,createnar / createupdatedata]、\![execute,dropdefault]、
+- 実行: \![execute,dumpsurface / dumpballoon]、\![execute,createnar / createupdatedata]、
   \![set,property]（書き換えてよいものだけ）、\![create,shortcut]（ホーム画面にゴーストのショートカット）
 - 環境変数: %lastghostname %lastobjectname %exh %et %wronghour %selfname2 %ms %mz %ml %mc %mh %mt %me %mp %m? %dms %*2
   （%ms などは SSP 同梱の単語表から選ぶもの。小さな単語表を持つ）
@@ -195,6 +195,8 @@ SSP 専用のメニュー項目の名前（ヘッドライン・プラグイン�
   surface.append（あるサーフェスにだけ足す）、element0 による surfaceN.png の置き換え、描画メソッドの overlay-fast / interpolate / replace /
   asis / reduce / move / scaling / add / bind と blend-*（-fast も）、point.basepos / centerx / kinoko、sakura.tooltips など（触れている間に出す）
 - ✅ surfaces.txt の import（APNG / GIF / WebP。Android 9 より前は最初のコマだけ）
-- 🔨 シェル単体の .nar のインストール、サウンドを同時にいくつも鳴らす、icon.rect（発言履歴の顔）
+- ✅ .nar の type,shell / supplement / package、accept（違うゴーストなら OnInstallRefuse）、refresh / refreshundeletemask、
+  balloon0.directory などの複数同梱、\![execute,install,path / url]、\![execute,dropdefault,file / url]
+- 🔨 サウンドを同時にいくつも鳴らす、icon.rect（発言履歴の顔）
 - ⛔ surfaces.txt の cursor ブレス（マウスカーソルが無い）、sakura.balloon.offsetx / offsety（pono-droid のバルーンはいつもキャラクターの上）、
   オーバーレイの透明な部分のタッチを下に通す（Android では画素単位にはできない）

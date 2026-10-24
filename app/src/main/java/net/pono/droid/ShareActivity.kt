@@ -30,7 +30,21 @@ import java.io.OutputStream
 class ShareActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // x-ukagaka-link: のリンクを開いた（SSP の Web 関連付け）
+        if (intent.action == Intent.ACTION_VIEW && intent.data?.scheme == "x-ukagaka-link") {
+            val controller = GhostOverlayService.controller.value
+            if (controller == null || !controller.onUkagakaLink(intent.dataString.orEmpty())) toast("そのゴーストは起動していません")
+            finish()
+            return
+        }
         val uris = sharedUris(intent).filter { it.scheme == "content" }
+        // ファイルでなく文字（URL も）を共有された
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { uris.isEmpty() && it.isNotBlank() }
+        if (text != null) {
+            GhostOverlayService.controller.value?.onTextShared(text) ?: toast("ゴーストが起動していません")
+            finish()
+            return
+        }
         if (uris.isEmpty()) {
             toast("ファイルを選んで共有してください")
             finish()
@@ -49,17 +63,7 @@ class ShareActivity : ComponentActivity() {
         // .nar は SSP と同じくインストールする
         if (uris.size == 1 && displayName(uris[0])?.lowercase()?.endsWith(".nar") == true) {
             val result = withContext(Dispatchers.IO) { runCatching { GhostStore.install(this@ShareActivity, uris[0]) } }
-            toast(
-                result.fold(
-                    { r ->
-                        when (r.type) {
-                            NarInstaller.Type.GHOST -> "ゴーストをインストールしました: ${Ghost(r.dir).name}"
-                            NarInstaller.Type.BALLOON -> "バルーンをインストールしました: ${Balloon(r.dir).name}"
-                        }
-                    },
-                    { "インストールできませんでした: ${it.message}" },
-                ),
-            )
+            toast(result.fold({ GhostStore.describe(it) }, { "インストールできませんでした: ${it.message}" }))
             return
         }
         val controller = GhostOverlayService.controller.value ?: return toast("ゴーストが起動していません")

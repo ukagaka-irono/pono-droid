@@ -9,18 +9,29 @@ import java.nio.charset.Charset
 import java.util.zip.ZipFile
 
 /**
- * .nar（zip）を展開する。ゴーストはゴースト置き場に、バルーンはバルーン置き場に入れる。
- * ゴーストの .nar に同梱のバルーンがあれば、そのバルーンもバルーン置き場に入れる（SSP と同じ）。
+ * .nar（zip）を展開する。ゴーストはゴースト置き場に、バルーンはバルーン置き場に入れる。シェル（type,shell）と追加ファイル（supplement）は
+ * 受け取るゴースト（[install] の target。install.txt の accept と名前が合うもの）に入れ、package は中の .nar を順に入れる。
+ * ゴーストやシェルの .nar に同梱のバルーンがあれば、そのバルーンもバルーン置き場に入れる（SSP と同じ）。
  */
 class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
 
-    class InstallException(message: String) : IOException(message)
+    open class InstallException(message: String) : IOException(message)
 
-    enum class Type { GHOST, BALLOON }
+    /** install.txt の accept が受け取るゴーストと合わない（OnInstallRefuse） */
+    class RefusedException(val accept: String, val type: String, val name: String) : InstallException("refused")
 
-    data class Result(val type: Type, val dir: File)
+    enum class Type(val id: String) { GHOST("ghost"), BALLOON("balloon"), SHELL("shell"), SUPPLEMENT("supplement") }
 
-    fun install(nar: File): Result {
+    /** 入れたもの1つ。[name] は install.txt の name（無ければ directory） */
+    data class Installed(val type: Type, val name: String, val dir: File)
+
+    /** [type] と [dir] は最初に入れたもの、[installed] は同梱のバルーンや package の中身も含めた全部 */
+    data class Result(val type: Type, val dir: File, val installed: List<Installed> = listOf(Installed(type, dir.name, dir)))
+
+    /** @param target シェルと追加ファイルを受け取るゴースト（たいてい起動中のゴースト）。無ければそれらは入れられない */
+    fun install(nar: File, target: Ghost? = null): Result = install(nar, target, depth = 0)
+
+    private fun install(nar: File, target: Ghost?, depth: Int): Result {
         // 古いアーカイバで作られた nar はファイル名が CP932 のことがある
         val zip = openZip(nar, Charsets.UTF_8) ?: openZip(nar, TextCharsets.CP932)
             ?: throw InstallException("nar を開けません")
@@ -29,17 +40,32 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
             val installEntry = entries.firstOrNull { normalize(it.name).equals("install.txt", ignoreCase = true) }
                 ?: throw InstallException("install.txt がありません")
             val install = Descript.parse(TextCharsets.decode(zip.getInputStream(installEntry).readBytes()))
-            val type = when (install["type"]?.lowercase()) {
+            val typeName = install["type"]?.trim()?.lowercase()
+            if (typeName == "package") return installPackage(zip, entries, target, depth)
+            val type = when (typeName) {
                 "ghost" -> Type.GHOST
                 "balloon" -> Type.BALLOON
-                else -> throw InstallException("ゴーストとバルーン以外（type=${install["type"]}）はまだ対応していません")
+                "shell" -> Type.SHELL
+                "supplement" -> Type.SUPPLEMENT
+                else -> throw InstallException("ゴースト・シェル・バルーン・追加ファイル以外（type=${install["type"]}）は入れられません")
             }
             val dirName = install["directory"]?.let(::safeName) ?: throw InstallException("install.txt に directory がありません")
-
-            val target = File(if (type == Type.GHOST) ghostRoot else balloonRoot, dirName)
-            val canonicalTarget = target.canonicalFile
+            val name = install["name"]?.trim()?.takeIf { it.isNotEmpty() } ?: dirName
+            // シェルと追加ファイルは、accept で名指しされたゴーストにだけ入れる
+            if (type == Type.SHELL || type == Type.SUPPLEMENT) {
+                val accept = install["accept"]?.trim().orEmpty()
+                if (target == null || (accept.isNotEmpty() && !accepts(target, accept))) throw RefusedException(accept, type.id, name)
+            }
+            val target2 = when (type) {
+                Type.GHOST -> File(ghostRoot, dirName)
+                Type.BALLOON -> File(balloonRoot, dirName)
+                Type.SHELL -> File(target!!.dir, "shell/$dirName")
+                Type.SUPPLEMENT -> target!!.dir
+            }
+            if (install["refresh"]?.trim() == "1" && type != Type.SUPPLEMENT) refresh(target2, install["refreshundeletemask"])
+            val canonicalTarget = target2.canonicalFile
             for (entry in entries) {
-                val out = File(target, normalize(entry.name)).canonicalFile
+                val out = File(target2, normalize(entry.name)).canonicalFile
                 if (!out.path.startsWith(canonicalTarget.path + File.separator)) {
                     throw InstallException("不正なパス: ${entry.name}")
                 }
@@ -47,35 +73,76 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
                 zip.getInputStream(entry).use { input -> out.outputStream().use { input.copyTo(it) } }
             }
             // 上書きインストールで古いファイルを消す指示があれば従う
-            NetworkUpdater.applyDeleteList(target)
-            if (type == Type.GHOST) installBundledBalloons(target, install)
-            return Result(type, target)
+            NetworkUpdater.applyDeleteList(target2)
+            val installed = mutableListOf(Installed(type, name, target2))
+            if (type == Type.GHOST || type == Type.SHELL) installed += installBundledBalloons(target2, install)
+            return Result(type, target2, installed)
         }
     }
 
-    /**
-     * ゴーストに同梱のバルーンをバルーン置き場に写す。
-     * install.txt に balloon.directory があれば、.nar の中の balloon.source.directory のフォルダ
-     * （書いてなければ balloon.directory と同じ名前）を、balloon.directory の名前で入れる（SSP と同じ。Emily/Phase4.5 など）。
-     * 無ければ、balloon/名前/descript.txt の形で入っているものをその名前で入れる
-     */
-    private fun installBundledBalloons(ghostDir: File, install: Descript) {
-        val name = install["balloon.directory"]?.let(::safeName)
-        if (name != null) {
-            val sourceName = install["balloon.source.directory"]?.let(::normalize)?.trim()?.takeIf { it.isNotEmpty() } ?: name
-            val root = ghostDir.canonicalFile
-            val source = File(root, sourceName).canonicalFile
-            // .nar の外（ゴーストのフォルダの外）を指していたら写さない
-            if (source.path.startsWith(root.path + File.separator) && File(source, "descript.txt").isFile) {
-                source.copyRecursively(File(balloonRoot, name), overwrite = true)
-                return
+    /** accept がゴーストの本体側の名前か、descript.txt の install.accept と合うか */
+    private fun accepts(ghost: Ghost, accept: String): Boolean =
+        accept == ghost.sakuraName || accept == ghost.name || ghost.descript["install.accept"]?.split(',')?.any { it.trim() == accept } == true
+
+    /** refresh,1。入れる前に中身を消す（refreshundeletemask の名前のファイルは残す） */
+    private fun refresh(dir: File, mask: String?) {
+        if (!dir.isDirectory) return
+        val keep = mask.orEmpty().split(':').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+        dir.walkBottomUp().forEach { f ->
+            if (f == dir) return@forEach
+            if (f.isFile && f.name.lowercase() !in keep) f.delete()
+            if (f.isDirectory && f.listFiles().isNullOrEmpty()) f.delete()
+        }
+    }
+
+    /** type,package。中の .nar を順に入れる（package の中の package は入れない） */
+    private fun installPackage(zip: ZipFile, entries: List<java.util.zip.ZipEntry>, target: Ghost?, depth: Int): Result {
+        if (depth > 0) throw InstallException("package の中の package は入れられません")
+        val nars = entries.filter { it.name.lowercase().endsWith(".nar") }.take(MAX_PACKAGE_NARS)
+        if (nars.isEmpty()) throw InstallException("package に .nar がありません")
+        val installed = mutableListOf<Installed>()
+        for (entry in nars) {
+            val tmp = File.createTempFile("package", ".nar")
+            try {
+                zip.getInputStream(entry).use { input -> tmp.outputStream().use { input.copyTo(it) } }
+                installed += install(tmp, target, depth + 1).installed
+            } finally {
+                tmp.delete()
             }
         }
-        val bundled = File(ghostDir, "balloon").listFiles { f -> File(f, "descript.txt").isFile }.orEmpty()
-        for (dir in bundled) {
-            val name = safeName(dir.name) ?: continue
-            dir.copyRecursively(File(balloonRoot, name), overwrite = true)
+        return Result(installed.first().type, installed.first().dir, installed)
+    }
+
+    /**
+     * ゴーストやシェルに同梱のバルーンをバルーン置き場に写す。install.txt の balloon.directory（と balloon0.directory、balloon1… の続き）
+     * があれば、.nar の中の *.source.directory のフォルダ（書いてなければ *.directory と同じ名前）を、*.directory の名前で入れる
+     * （SSP と同じ。Emily/Phase4.5 など）。どれも無ければ、balloon/名前/descript.txt の形で入っているものをその名前で入れる
+     */
+    private fun installBundledBalloons(dir: File, install: Descript): List<Installed> {
+        val keys = listOf("balloon") + generateSequence(0) { it + 1 }.map { "balloon$it" }.takeWhile { install["$it.directory"] != null }
+        val named = keys.filter { install["$it.directory"] != null }
+        val out = mutableListOf<Installed>()
+        val root = dir.canonicalFile
+        for (key in named) {
+            val name = install["$key.directory"]?.let(::safeName) ?: continue
+            val sourceName = install["$key.source.directory"]?.let(::normalize)?.trim()?.takeIf { it.isNotEmpty() } ?: name
+            val source = File(root, sourceName).canonicalFile
+            // .nar の外（ゴーストのフォルダの外）を指していたら写さない
+            if (!source.path.startsWith(root.path + File.separator) || !File(source, "descript.txt").isFile) continue
+            val dest = File(balloonRoot, name)
+            if (install["$key.refresh"]?.trim() == "1") refresh(dest, install["$key.refreshundeletemask"])
+            source.copyRecursively(dest, overwrite = true)
+            out += Installed(Type.BALLOON, name, dest)
         }
+        if (named.isNotEmpty()) return out
+        val bundled = File(dir, "balloon").listFiles { f -> File(f, "descript.txt").isFile }.orEmpty()
+        for (b in bundled) {
+            val name = safeName(b.name) ?: continue
+            val dest = File(balloonRoot, name)
+            b.copyRecursively(dest, overwrite = true)
+            out += Installed(Type.BALLOON, name, dest)
+        }
+        return out
     }
 
     private fun openZip(file: File, charset: Charset): ZipFile? =
@@ -85,4 +152,9 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
 
     private fun safeName(name: String): String? =
         name.trim().takeIf { it.isNotEmpty() && it != "." && it != ".." && '/' !in it && '\\' !in it }
+
+    private companion object {
+        /** package に入れられる .nar の数 */
+        const val MAX_PACKAGE_NARS = 64
+    }
 }

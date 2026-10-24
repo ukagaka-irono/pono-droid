@@ -137,17 +137,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                 installing = false
             }
             result.onSuccess { reload() }
-            snackbar.showSnackbar(
-                result.fold(
-                    { r ->
-                        when (r.type) {
-                            NarInstaller.Type.GHOST -> "ゴーストをインストールしました: ${Ghost(r.dir).name}"
-                            NarInstaller.Type.BALLOON -> "バルーンをインストールしました: ${Balloon(r.dir).name}（ゴーストごとに選べます）"
-                        }
-                    },
-                    { "インストールできませんでした: ${it.message}" },
-                ),
-            )
+            snackbar.showSnackbar(result.fold({ GhostStore.describe(it) }, { "インストールできませんでした: ${it.message}" }))
         }
     }
 

@@ -132,6 +132,9 @@ interface GhostPlatform {
     /** 端末の見た目・言語など。null なら OnDarkTheme・OnLanguageChange などを送らない */
     fun systemInfo(): SystemInfo? = null
 
+    /** ゴーストのフォルダの [file] を、Android のほかのアプリ（画像を見る・音を鳴らすなど）で開く。開けたら true */
+    fun openFile(file: File, mimeType: String): Boolean = false
+
     /** readme のような長い文を見せる（\![open,readme]） */
     fun showText(title: String, text: String) {}
 
@@ -1051,6 +1054,157 @@ class GhostController(
         }
     }
 
+    // ---- インストール（.nar を入れたとき・\![execute,install]）と、文字や URL の共有 ----
+
+    /**
+     * .nar を入れる（アプリの画面・共有・\![execute,install,path]）。起動中のゴーストに OnInstallBegin を送り、
+     * 済んだら OnInstallCompleteEx（答えが無ければ OnInstallComplete）と OnInstallCompleteAll、だめなら OnInstallFailure か
+     * OnInstallRefuse（シェルなどが別のゴーストを名指ししていた）を送る。シェルと追加ファイルはこのゴーストに入れる
+     */
+    suspend fun installNar(nar: File): Result<NarInstaller.Result> {
+        val installer = repository?.installer() ?: return Result.failure(IOException("ゴーストの置き場がありません"))
+        raise("OnInstallBegin", emptyList(), userInitiated = false)
+        val result = withContext(Dispatchers.IO) { runCatching { installer.install(nar, ghost) } }
+        result.onSuccess { r ->
+            val items = r.installed
+            val refs = listOf(
+                items.joinToString("\u0001") { it.type.id },
+                items.joinToString("\u0001") { it.name },
+                items.joinToString("\u0001") { it.dir.absolutePath + "/" },
+            )
+            scope.launch {
+                _state.first { !it.talking && !it.waitingChoice }
+                val script = request("OnInstallCompleteEx", refs)
+                    ?: request("OnInstallComplete", listOf(items[0].type.id, items[0].name, items.getOrNull(1)?.name.orEmpty()))
+                if (script != null) {
+                    cancelScript()
+                    runScript(script).join()
+                }
+                raise("OnInstallCompleteAll", refs, userInitiated = false)
+            }
+        }.onFailure { e ->
+            if (e is NarInstaller.RefusedException) {
+                raise("OnInstallRefuse", listOf(e.accept, e.type, e.name), userInitiated = false)
+            } else {
+                raise("OnInstallFailure", listOf(installFailure(e)), userInitiated = false)
+            }
+        }
+        return result
+    }
+
+    /** OnInstallFailure の理由（SSP の決まった言葉に近いもの） */
+    private fun installFailure(e: Throwable): String = when {
+        e.message?.contains("install.txt") == true -> "invalid"
+        e.message?.contains("type=") == true -> "unsupported"
+        e is IOException -> "extraction"
+        else -> "unknown"
+    }
+
+    /**
+     * \![execute,install,path,ファイル名] / \![execute,install,url,URL,nar]。ゴーストのフォルダの中のファイルか、URL から取ってきた .nar を入れる
+     */
+    private fun executeInstall(args: List<String>): Job? {
+        val kind = args.firstOrNull()?.trim()?.lowercase()
+        return when (kind) {
+            "path" -> {
+                val file = args.getOrNull(1)?.let(::ghostPath)?.takeIf { it.isFile } ?: run {
+                    raise("OnInstallFailure", listOf("invalid"), userInitiated = false)
+                    return null
+                }
+                scope.launch { installNar(file) }
+            }
+            "url" -> {
+                val url = args.getOrNull(1)?.trim()?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: return null
+                // feed（RSS で配られる .nar の一覧）は扱えない
+                if (args.getOrNull(2)?.trim()?.lowercase() == "feed") {
+                    raise("OnInstallFailure", listOf("unsupported"), userInitiated = false)
+                    return null
+                }
+                scope.launch { downloadAndInstall(url, scopeId = 0, dropped = false) }
+            }
+            else -> null
+        }
+    }
+
+    /**
+     * URL の .nar を取ってきて入れる。[dropped] なら共有で渡された URL として、OnURLDropping / OnURLDropped / OnURLDropFailure も送る
+     */
+    private suspend fun downloadAndInstall(url: String, scopeId: Int, dropped: Boolean) {
+        if (dropped) raise("OnURLDropping", listOf(url, scopeId.toString()), userInitiated = false)
+        val file = File(FileDrop.dir(ghost), NetworkUpdater.safeFileName(url.substringBefore('?').substringAfterLast('/')) ?: "download.nar")
+        file.parentFile?.mkdirs()
+        val r = withContext(Dispatchers.IO) {
+            runCatching { file.outputStream().use { updateFetcher.fetch(url, it, FileDrop.MAX_TOTAL_BYTES) } }.getOrElse { FetchResult.Failed("fileio") }
+        }
+        if (r != FetchResult.Ok) {
+            if (dropped) raise("OnURLDropFailure", listOf(file.absolutePath, NetworkUpdater.describe(r), url, scopeId.toString()), userInitiated = false)
+            else raise("OnInstallFailure", listOf("download"), userInitiated = false)
+            file.delete()
+            return
+        }
+        if (dropped) raise("OnURLDropped", listOf(file.absolutePath, url, scopeId.toString()), userInitiated = false)
+        installNar(file)
+        file.delete()
+    }
+
+    /**
+     * Android の「共有」で文字を渡された。URL なら OnURLQuery を送り、ゴーストが答えなければ、.nar なら取ってきて入れる。
+     * それ以外の文字（と、扱えない URL）は OnTextDrop（改行はバイト値1）
+     */
+    fun onTextShared(text: String, scopeId: Int = 0) {
+        lastUserActivity = System.currentTimeMillis()
+        val t = text.trim().take(MAX_SHARED_TEXT)
+        val url = t.takeIf { (it.startsWith("https://") || it.startsWith("http://")) && it.none { c -> c.isWhitespace() } }
+        scope.launch {
+            if (url != null) {
+                val nar = url.substringBefore('?').lowercase().endsWith(".nar")
+                val mime = if (nar) "application/x-nar" else "text/html"
+                val script = request("OnURLQuery", listOf(url, scopeId.toString(), mime, if (nar) "nar" else "unknown"))
+                if (script != null) {
+                    cancelScript()
+                    runScript(script)
+                    return@launch
+                }
+                if (nar) {
+                    downloadAndInstall(url, scopeId, dropped = true)
+                    return@launch
+                }
+            }
+            raise("OnTextDrop", listOf(t.replace("\r\n", "\u0001").replace('\n', '\u0001').replace('\r', '\u0001'), scopeId.toString()), userInitiated = false)
+        }
+    }
+
+    /**
+     * x-ukagaka-link:type=event&ghost=名前&info=文字 を開いた。このゴースト宛てなら OnXUkagakaLinkOpen（Reference0 は info）を送る。
+     * 宛てでなければ false
+     */
+    fun onUkagakaLink(link: String): Boolean {
+        val query = link.substringAfter(':', "").substringAfter('?')
+        val params = query.split('&').associate { p ->
+            p.substringBefore('=').lowercase() to runCatching { java.net.URLDecoder.decode(p.substringAfter('=', ""), "UTF-8") }.getOrDefault("")
+        }
+        if (params["type"]?.lowercase() != "event") return false
+        val target = params["ghost"].orEmpty()
+        if (target != ghost.name && target != ghost.sakuraName) return false
+        raise("OnXUkagakaLinkOpen", listOf(params["info"].orEmpty()), userInitiated = false)
+        return true
+    }
+
+    /**
+     * 渡したファイルにゴーストが答えなかったとき（と \![execute,dropdefault,file]）の、SSP のいつもの扱い。
+     * .nar なら入れ、画像なら画像を見るアプリ、音や動画なら再生するアプリで開いて OnPictureViewerOpen / OnMediaPlayerOpen を送る
+     */
+    private suspend fun dropDefault(paths: List<String>, mimeTypes: List<String>, scopeId: Int) {
+        val first = paths.firstOrNull()?.let(::File) ?: return
+        val mime = mimeTypes.firstOrNull().orEmpty()
+        val refs = listOf(paths.joinToString("\u0001"), scopeId.toString(), mimeTypes.joinToString("\u0001"))
+        when {
+            first.name.lowercase().endsWith(".nar") -> installNar(first)
+            mime.startsWith("image/") -> if (platform.openFile(first, mime)) raise("OnPictureViewerOpen", refs, userInitiated = false)
+            mime.startsWith("audio/") || mime.startsWith("video/") -> if (platform.openFile(first, mime)) raise("OnMediaPlayerOpen", refs, userInitiated = false)
+        }
+    }
+
     /** URL の最後の部分（クエリは落とす）。無ければ index.html */
     private fun urlFileName(url: String): String =
         url.substringBefore('?').substringBefore('#').trimEnd('/').substringAfterLast('/').substringAfter("//").ifEmpty { "index.html" }
@@ -1941,10 +2095,50 @@ class GhostController(
         lastUserActivity = System.currentTimeMillis()
         val refs = listOf(paths.joinToString("\u0001"), scopeId.toString(), mimeTypes.joinToString("\u0001"))
         scope.launch {
-            val script = request("OnFileDrop2", refs) ?: request("OnFileDropEx", refs) ?: return@launch platform.log("ファイルを渡したが、ゴーストは答えなかった")
+            val script = request("OnFileDrop2", refs) ?: request("OnFileDropEx", refs)
+            if (script == null) {
+                // 答えが無ければ SSP のいつもの扱い（.nar を入れる・画像や音を開く）
+                dropDefault(paths, mimeTypes, scopeId)
+                return@launch
+            }
             cancelScript()
             runScript(script)
         }
+    }
+
+    /** \![execute,dropdefault,file,パス...] / \![execute,dropdefault,url,URL]。ゴーストが受け取らなかったときの扱いを、改めて頼む */
+    private fun dropDefaultCommand(args: List<String>): Boolean {
+        when (args.firstOrNull()?.trim()?.lowercase()) {
+            "file" -> {
+                val files = args.drop(1).mapNotNull { ghostPath(it) }.filter { it.isFile }
+                if (files.isEmpty()) return false
+                scope.launch { dropDefault(files.map { it.path }, files.map { mimeOf(it.name) }, 0) }
+            }
+            "url" -> {
+                val url = args.getOrNull(1)?.trim()?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: return false
+                if (url.substringBefore('?').lowercase().endsWith(".nar")) scope.launch { downloadAndInstall(url, 0, dropped = true) } else platform.openUrl(url)
+            }
+            else -> return false
+        }
+        return true
+    }
+
+    /** 拡張子からの MIME タイプ（画像・音・動画と .nar だけ見分ける） */
+    private fun mimeOf(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
+        "png" -> "image/png"
+        "jpg", "jpeg" -> "image/jpeg"
+        "gif" -> "image/gif"
+        "webp" -> "image/webp"
+        "bmp" -> "image/bmp"
+        "mp3" -> "audio/mpeg"
+        "ogg" -> "audio/ogg"
+        "wav" -> "audio/wav"
+        "m4a" -> "audio/mp4"
+        "mid", "midi" -> "audio/midi"
+        "mp4" -> "video/mp4"
+        "webm" -> "video/webm"
+        "nar" -> "application/x-nar"
+        else -> "application/octet-stream"
     }
 
     /** 画面の向きや大きさが変わった */
@@ -2685,6 +2879,8 @@ class GhostController(
                 "nslookup" -> return nslookup(opts)
                 "filewatch" -> return fileWatch(args.firstOrNull().orEmpty(), opts)
                 "extractarchive", "compressarchive" -> archive(name == "compressarchive", args)
+                "install" -> return executeInstall(args) != null
+                "dropdefault" -> return dropDefaultCommand(args)
                 else -> return false
             }
             return true
@@ -3168,6 +3364,9 @@ class GhostController(
 
         /** \![set,balloonoffset] でずらせる量の上限（シェル画像のピクセル） */
         const val MAX_BALLOON_OFFSET = 2000
+
+        /** 共有で受け取る文字の長さの上限 */
+        const val MAX_SHARED_TEXT = 64 * 1024
 
         /** \![set,balloonmarker] / \![set,balloonnum] の文字の長さの上限 */
         const val MAX_BALLOON_LABEL = 100

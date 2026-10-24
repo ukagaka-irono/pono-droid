@@ -162,6 +162,22 @@ class GhostOverlayService : LifecycleService() {
 
                 override fun systemInfo(): SystemInfo = this@GhostOverlayService.systemInfo()
 
+                /** ゴーストのフォルダのファイルだけ、その1つを読む許可を付けて渡す */
+                override fun openFile(file: File, mimeType: String): Boolean {
+                    val uri = runCatching {
+                        androidx.core.content.FileProvider.getUriForFile(this@GhostOverlayService, "$packageName.files", file)
+                    }.getOrNull() ?: return false
+                    val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mimeType)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    return try {
+                        startActivity(intent)
+                        true
+                    } catch (e: ActivityNotFoundException) {
+                        toast("開けるアプリが見つかりません")
+                        false
+                    }
+                }
+
                 override fun networkStatus(): NetworkStatus {
                     val cm = getSystemService(ConnectivityManager::class.java)
                     val network = cm.activeNetwork

@@ -38,7 +38,9 @@
 | 選択肢やリンクを長押し | カーソルを乗せたのと同じ（`OnChoiceEnter` / `OnChoiceHover`、リンクは `OnAnchorEnter` / `OnAnchorHover`）。離すと選ばずに外れる |
 | アプリの「バルーンの大きさ」 | バルーンを拡大・縮小（`OnBalloonScaling`） |
 | 吹き出しをタップ | `\x` の待ちを進める / 話し終わっていれば閉じる |
-| 他のアプリでファイルを「共有」→「ゴーストに渡す」 | 起動中のゴーストにファイルを渡す（`OnFileDrop2`）。`.nar` ならインストール |
+| 他のアプリでファイルを「共有」→「ゴーストに渡す」 | 起動中のゴーストにファイルを渡す（`OnFileDrop2`）。`.nar` ならインストール。ゴーストが答えなければ、画像や音はほかのアプリで開く（`OnPictureViewerOpen` / `OnMediaPlayerOpen`） |
+| 文字や URL を「共有」→「ゴーストに渡す」 | 文字は `OnTextDrop`、URL は `OnURLQuery`（答えが無く `.nar` なら取ってきてインストール。`OnURLDropping` / `OnURLDropped`） |
+| `x-ukagaka-link:` のリンクを開く | 名指しされた起動中のゴーストに `OnXUkagakaLinkOpen` |
 | 通知の「ネットワーク更新」、アプリの「更新」 | 起動中のゴーストをネットワーク更新 |
 | 通知の「終了」、アプリの「終了」 | `OnClose` を送ってゴーストを終了 |
 
