@@ -1,6 +1,7 @@
 package net.pono.baseware.ghost
 
 import net.pono.baseware.sakura.Choice
+import net.pono.baseware.sakura.ChoiceLooks
 import net.pono.baseware.sakura.MoveCommand
 import net.pono.baseware.sakura.TextAlign
 import net.pono.baseware.sakura.TextStyle
@@ -17,8 +18,8 @@ sealed interface BalloonItem {
     /** \f[valign,...]。この行から後の、行の中の縦のそろえ方 */
     data class VAlign(val align: VerticalAlign) : BalloonItem
 
-    /** \q の選択肢と、\_a / \__q のリンク。文の中にそのまま置く */
-    data class ChoiceItem(val choice: Choice) : BalloonItem
+    /** \q の選択肢と、\_a / \__q のリンク。文の中にそのまま置く。[looks] は \f[cursor*] などで決めた見た目 */
+    data class ChoiceItem(val choice: Choice, val looks: ChoiceLooks = ChoiceLooks.Default) : BalloonItem
 
     /** \![*]。次の選択肢の前に付ける印 */
     data object Marker : BalloonItem
@@ -81,6 +82,14 @@ data class CharacterState(
     val alignment: String? = null,
     /** \![set,autoscroll,disable] の間は false。文字が増えてもバルーンを最後までスクロールしない */
     val autoScroll: Boolean = true,
+    /** \![set,balloonoffset,x,y]。バルーンをいつもの位置からずらす量（シェル画像のピクセル、右と下が正） */
+    val balloonOffset: Pair<Int, Int>? = null,
+    /** \![set,balloonalign,...]。left / center / right / bottom ならキャラクターのその側にバルーンを出す。null ならいつもの上 */
+    val balloonAlign: String? = null,
+    /** \![set,balloonmarker,文字]。バルーンに出す印の文字（SSP では SSTP の送り主を出すところ） */
+    val balloonMarker: String? = null,
+    /** \![set,balloonnum,名前,今,最大]。バルーンに出す数（SSP ではファイルを受け取るときの「名前 今/最大」） */
+    val balloonNum: String? = null,
 ) {
     /** [countTalk] が false（\![set,serikotalk,false] の間）なら、口パクの文字数に数えない */
     fun appendText(text: String, style: TextStyle = TextStyle.Default, countTalk: Boolean = true): CharacterState {
@@ -135,6 +144,8 @@ data class GhostState(
     val noUserBreak: Boolean = false,
     /** \![enter,inductionmode] の間。パッシブモードと同じく「話せない」と伝えるが、バルーンや選択肢は時間で消える */
     val induction: Boolean = false,
+    /** 選んだことのある \_a のリンクの ID（訪問済みの見た目にする） */
+    val visitedAnchors: Set<String> = emptySet(),
 ) {
     fun update(scope: Int, f: (CharacterState) -> CharacterState): GhostState {
         val current = characters[scope] ?: CharacterState(scope, -1)

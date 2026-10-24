@@ -35,6 +35,8 @@
 | 2本指で上下になぞる・2本指で叩く | `OnMouseWheel`（ホイールの代わり）・中クリック（`OnMouseDownEx` / `OnMouseUpEx` / `OnMouseClickEx`） |
 | 長押しメニューの「隠す」・通知の「表示」 | キャラクターを隠す・出し直す（`OnWindowStateMinimize` / `OnWindowStateRestore`） |
 | 長押しメニューの「位置を戻す」 | `OnResetWindowPos`。ゴーストが答えなければ最初の位置に戻す |
+| 選択肢やリンクを長押し | カーソルを乗せたのと同じ（`OnChoiceEnter` / `OnChoiceHover`、リンクは `OnAnchorEnter` / `OnAnchorHover`）。離すと選ばずに外れる |
+| アプリの「バルーンの大きさ」 | バルーンを拡大・縮小（`OnBalloonScaling`） |
 | 吹き出しをタップ | `\x` の待ちを進める / 話し終わっていれば閉じる |
 | 他のアプリでファイルを「共有」→「ゴーストに渡す」 | 起動中のゴーストにファイルを渡す（`OnFileDrop2`）。`.nar` ならインストール |
 | 通知の「ネットワーク更新」、アプリの「更新」 | 起動中のゴーストをネットワーク更新 |
@@ -179,6 +181,7 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 - 見た目: `\_s`（`\_s[ID,...]`）の同期、バルーンの中の画像 `\_b[ファイル,x,y]` / `\_b[ファイル,inline]`（`opaque`）、`\![set,scaling]`（反転も可）、`\![set,alpha]`、`\![anim,offset / clear / stop]`、SERIKO の `insert`（着せ替えの重なり順）と `parallelstart` / `parallelstop`、`talk,N`（話している間 N 文字ごとに動く口パクなど）と `yen-e`（話し終わりに動く）、サーフェスの別名（`sakura.surface.alias` / `kero.surface.alias` / `charN.surface.alias`、`alias.txt`、surfaces.txt の `name`。候補が複数ならランダム）。
 - ウィンドウ: `\![move]` / `\![moveasync]`（新旧どちらの書式も。基準は screen・me・スコープ番号、`--base-offset` / `--move-offset`）、`\![set,position]` / `\![reset,position]`。座標は画面のピクセルで、画面の外には出しません。`\![set,zorder]`（重なり順）、`\![set,sticky-window]`（一緒に動く組。`\![move]` の `--option=ignore-sticky-window` で外せます）、`\![set,alignmenttodesktop]`（画面の端に付ける）、`\![set,windowstate,minimize]`、`\![execute,resetwindowpos]`、`\4` / `\5`（相方から離れる・寄る）、`\v`（手前に出す）、`sakura.defaultx` などの最初の位置。動かした後の重なりと画面からのはみ出しは OnOverlap / OnOffscreen、アプリでキャラクターの大きさを変えたら OnShellScaling で知らせます。
 - 文字: `\c[char,数,開始位置]` / `\c[line,数,開始位置]`（一部だけ消す）、`\n[half]` / `\n[150]`（負なら上へ戻る）、`\_n`（折り返さない）、`\_?`（タグをそのまま出す）、`\t`（タッチのイベントを止める）、`\f[name,...]`（ゴーストやバルーンのフォルダのフォントファイル。明朝・ゴシック・等幅などの名前は Android の系統に読み替えます）、`\f[shadowcolor / shadowstyle / outline / valign / disable]`、`\![set,balloonwait]`（文字の速さ）、`\![set,autoscroll]`、`\![set,serikotalk]`、`\![lock,balloonrepaint]` / `\![lock,repaint]`（`manual` も）、`\![enter,onlinemode / nouserbreakmode / inductionmode]`。バルーンの descript.txt の `font.name`・影・太字・白抜きなどの既定と、ネットワーク更新中のオンラインの印（`online*.png`）も使います。
+- 選択肢とリンク: `\f[cursor*]` / `\f[cursornotselect*]` / `\f[anchor*]` / `\f[anchornotselect*]` / `\f[anchorvisited*]`（形・塗り・枠・文字の色）と `\f[anchor.font.color]`、バルーンの `cursor.*` / `anchor.*`。選んだリンクは訪問済みの見た目になります。話している途中でも、出ている選択肢は選べます（SSP と同じ）。バルーンの置き方は `\![set,balloonalign]` / `\![set,balloonoffset]`、印の文字と数は `\![set,balloonmarker]` / `\![set,balloonnum]`。
 - 入力: `\![open,dateinput / timeinput / sliderinput / textareabox]`（OnUserInput と OnTextAreaInput）。入力の箱は SSP と同じく \0 のバルーンの位置に出します。バルーンに `balloonc0.png`（複数行は `balloonc5.png`）があればそれを敷いて `communicatebox.x / y / width / height` の範囲に入力欄を置き、無ければ簡易バルーンと同じ見た目の箱にします。戻るボタンで取り消せます。
 - 長押しのメニューは SSP のオーナードローメニューに合わせて、SHIORI の `sakura.recommendsites` / `portalsites`（と `*buttoncaption`）、きせかえ、シェル、バルーン、Read Me、ネットワーク更新を出します。おすすめを選ぶと OnRecommendsiteChoice を送ります。
 - Windows のウィンドウやトレイ向けのタグ（`\![set,trayicon]`、`\![lock,repaint]`、`\6` / `\7` など）は黙って読み飛ばします。

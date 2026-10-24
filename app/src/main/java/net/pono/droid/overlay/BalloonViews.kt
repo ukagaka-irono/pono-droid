@@ -67,6 +67,19 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.text.TextLayoutResult
 import net.pono.baseware.sakura.TextAlign
 import net.pono.baseware.sakura.TextStyle
 import net.pono.baseware.sakura.VerticalAlign
@@ -104,6 +117,7 @@ data class BalloonTextStyle(
     val strike: Boolean = false,
     val outline: Boolean = false,
     val disabledColor: Color = Color(0xFF9E9E9E),
+    val links: LinkDefaults = LinkDefaults(choiceColor),
 ) {
     /** 文全体に付ける既定の飾り */
     fun base(): ComposeTextStyle = ComposeTextStyle(
@@ -179,7 +193,14 @@ internal fun BalloonColor.toColor() = Color(r, g, b)
  * 幅は固定にする（文字が増えるたびにウィンドウの幅が変わらないように。高さは行が増えたときだけ変わる）
  */
 @Composable
-internal fun balloonMaxWidth(): Dp = (LocalConfiguration.current.screenWidthDp / 2 - 24).coerceIn(120, 280).dp
+internal fun balloonMaxWidth(): Dp {
+    val screen = LocalConfiguration.current.screenWidthDp
+    // アプリで変えたバルーンの大きさを掛ける（画面からははみ出さない）
+    return ((screen / 2 - 24).coerceIn(120, 280) * LocalBalloonScale.current).coerceAtMost(screen - 32f).dp
+}
+
+/** アプリの画面で変えたバルーンの大きさ（倍率） */
+val LocalBalloonScale = staticCompositionLocalOf { 1f }
 
 /**
  * 文字を出している間だけ最後まで追いかける。選択肢で終わるとき（メニューなど）は先頭の問いかけを見せたいので動かさない。
@@ -205,14 +226,20 @@ private fun SimpleOnlineMarker(modifier: Modifier) {
     Text("● オンライン", fontSize = 10.sp, color = Color(0xFF8D6E63), modifier = modifier.graphicsLayer { this.alpha = alpha })
 }
 
-/** pono-droid の簡易バルーン（ゴーストのバルーン画像が無いとき） */
+/** バルーンに出す印の文字（\![set,balloonmarker]）と数（\![set,balloonnum]） */
+data class BalloonLabels(val marker: String? = null, val number: String? = null) {
+    val isEmpty: Boolean get() = marker == null && number == null
+}
+
+/** pono-droid の簡易バルーン（ゴーストのバルーン画像が無いとき）。印の文字と数は下の端に小さく出す */
 @Composable
 fun SimpleBalloon(
     items: List<BalloonItem>,
     onClick: () -> Unit,
-    onChoice: (Choice) -> Unit,
+    choices: ChoiceActions,
     autoScroll: Boolean = true,
     online: Boolean = false,
+    labels: BalloonLabels = BalloonLabels(),
 ) {
     val scroll = rememberScrollState()
     AutoScroll(items, scroll, autoScroll)
@@ -229,11 +256,25 @@ fun SimpleBalloon(
     ) {
         Box {
             Box(Modifier.heightIn(max = maxHeight).verticalScroll(scroll).padding(horizontal = 12.dp, vertical = 8.dp)) {
-                BalloonBody(items, onChoice, BalloonTextStyle.Simple)
+                val s = LocalBalloonScale.current
+                BalloonBody(items, choices, BalloonTextStyle.Simple.let { it.copy(fontSize = it.fontSize * s, spPerPx = it.spPerPx * s) })
             }
             if (online) SimpleOnlineMarker(Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 2.dp))
+            if (!labels.isEmpty) {
+                Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp)) {
+                    Text(labels.marker.orEmpty(), fontSize = 10.sp, color = Color(0xFF8D6E63), maxLines = 1, modifier = Modifier.weight(1f))
+                    labels.number?.let { Text(it, fontSize = 10.sp, color = Color(0xFF8D6E63), maxLines = 1) }
+                }
+            }
         }
     }
+}
+
+/** バルーン画像の上の小さな文字（印の文字・数）。[height] はバルーン画像のピクセル、無ければ本文より小さく */
+@Composable
+private fun BalloonLabel(text: String, height: Int?, color: BalloonColor?, style: BalloonTextStyle, modifier: Modifier) {
+    val size = height?.let { maxOf(it * style.spPerPx, 9f) } ?: (style.fontSize.value * 0.8f)
+    Text(text, fontSize = size.sp, color = color?.toColor() ?: style.textColor, maxLines = 1, softWrap = false, modifier = modifier)
 }
 
 /** SHIORI やシェルを読み込んでいる間に出す、くるくる回る印と [text] だけの小さな吹き出し（簡易バルーンと同じ見た目） */
@@ -270,22 +311,23 @@ fun SkinBalloon(
     scopeId: Int,
     balloonId: Int?,
     onClick: () -> Unit,
-    onChoice: (Choice) -> Unit,
+    choices: ChoiceActions,
     autoScroll: Boolean = true,
     online: Boolean = false,
+    labels: BalloonLabels = BalloonLabels(),
 ) {
     val images by produceState<List<BalloonSkin.Image>?>(null, skin, scopeId) {
         value = withContext(Dispatchers.IO) { skin.images(scopeId) }
     }
     val candidates = images ?: return
     if (candidates.isEmpty()) {
-        SimpleBalloon(items, onClick, onChoice, autoScroll, online)
+        SimpleBalloon(items, onClick, choices, autoScroll, online, labels)
         return
     }
     val density = LocalDensity.current
     val maxWidthPx = with(density) { balloonMaxWidth().toPx() }
     // 1枚ごとに縮めると大きさで文字の大きさが変わるので、いちばん広い画像に合わせて同じ比率で縮める
-    val scale = minOf(density.density, maxWidthPx / candidates.maxOf { it.bitmap.width })
+    val scale = minOf(density.density * LocalBalloonScale.current, maxWidthPx / candidates.maxOf { it.bitmap.width })
     val style = skin.textStyle(scale / density.density, scale)
     val scroll = rememberScrollState()
     AutoScroll(items, scroll, autoScroll)
@@ -301,13 +343,13 @@ fun SkinBalloon(
         // 文字の高さを測って、収まる画像を選ぶ
         val chosen = requested ?: candidates.indices.firstOrNull { i ->
             val area = candidates[i].area
-            val measured = subcompose("measure$i") { BalloonBody(items, onChoice, style) }
+            val measured = subcompose("measure$i") { BalloonBody(items, choices, style) }
                 .first().measure(Constraints(minWidth = 0, maxWidth = (area.width * scale).toInt()))
             measured.height <= area.height * scale
         } ?: candidates.lastIndex
         val image = candidates[chosen]
         val placeable = subcompose("balloon") {
-            SkinFrame(image, skin, scale, scroll, onlineFrames) { BalloonBody(items, onChoice, style) }
+            SkinFrame(image, skin, scale, scroll, onlineFrames, labels, style) { BalloonBody(items, choices, style) }
         }.first().measure(Constraints())
         layout(placeable.width, placeable.height) { placeable.place(0, 0) }
     }
@@ -315,7 +357,8 @@ fun SkinBalloon(
 
 /**
  * バルーン画像を敷き、文字の範囲に中身を置く。続きや前があれば矢印を出し、押すと1画面分スクロールする。
- * [onlineFrames] があれば、オンラインの印として onlinemarker.x / y にコマを替えながら出す
+ * [onlineFrames] があれば、オンラインの印として onlinemarker.x / y にコマを替えながら出す。
+ * [labels] の印の文字は sstpmessage.x / y（無ければ文字の範囲の左上の上）、数は number.x / y を右端にして（無ければ右下）出す
  */
 @Composable
 private fun SkinFrame(
@@ -324,6 +367,8 @@ private fun SkinFrame(
     scale: Float,
     scroll: ScrollState,
     onlineFrames: List<ImageBitmap>,
+    labels: BalloonLabels,
+    style: BalloonTextStyle,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -347,6 +392,23 @@ private fun SkinFrame(
                 contentDescription = "オンライン",
                 contentScale = ContentScale.FillBounds,
                 modifier = Modifier.offset(px(x), px(y)).size(px(bmp.width), px(bmp.height)),
+            )
+        }
+        val b = skin.balloon
+        labels.marker?.let { marker ->
+            val (x, y) = b.markerPosition(w, h) ?: (image.area.left to maxOf(0, image.area.top - b.fontHeight - 2))
+            BalloonLabel(marker, b.markerFontHeight, b.markerColor, style, Modifier.offset(px(x), px(y)))
+        }
+        labels.number?.let { number ->
+            val (x, y) = b.numberPosition(w, h) ?: (image.area.right to maxOf(0, image.area.bottom - b.fontHeight))
+            val right = with(density) { (x * scale).toInt() }
+            BalloonLabel(
+                number, b.numberFontHeight, b.numberColor, style,
+                // 数は右端を x にそろえる
+                Modifier.layout { measurable, constraints ->
+                    val p = measurable.measure(constraints.copy(minWidth = 0))
+                    layout(p.width, p.height) { p.place(right - p.width, with(density) { (y * scale).toInt() }) }
+                },
             )
         }
         Box(
@@ -388,18 +450,18 @@ private fun SkinFrame(
 
 /** バルーンの中身。行ごとに文を並べ、\_l で分けた列は横に等分して並べる */
 @Composable
-fun BalloonBody(items: List<BalloonItem>, onChoice: (Choice) -> Unit, style: BalloonTextStyle) {
+fun BalloonBody(items: List<BalloonItem>, choices: ChoiceActions, style: BalloonTextStyle) {
     // \_b[ファイル,x,y] の画像は文字の下に置く
     Box {
         for (img in BalloonLayout.placedImages(items)) {
             BalloonPicture(img.path, img.opaque, style.spPerPx, Modifier.offset((img.x * style.spPerPx).dp, (img.y * style.spPerPx).dp))
         }
-        BalloonLines(items, onChoice, style)
+        BalloonLines(items, choices, style)
     }
 }
 
 @Composable
-private fun BalloonLines(items: List<BalloonItem>, onChoice: (Choice) -> Unit, style: BalloonTextStyle) {
+private fun BalloonLines(items: List<BalloonItem>, choices: ChoiceActions, style: BalloonTextStyle) {
     val lineHeightPx = with(LocalDensity.current) { (style.fontSize * LINE_HEIGHT).toPx() }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         for (line in BalloonLayout.lines(items)) {
@@ -420,11 +482,11 @@ private fun BalloonLines(items: List<BalloonItem>, onChoice: (Choice) -> Unit, s
             }
             Box(gap) {
                 if (line.columns.size == 1) {
-                    BalloonText(line.columns[0], onChoice, style, align, line.valign, Modifier.fillMaxWidth())
+                    BalloonText(line.columns[0], choices, style, align, line.valign, Modifier.fillMaxWidth())
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         for (column in line.columns) {
-                            BalloonText(column, onChoice, style, align, line.valign, Modifier.weight(1f))
+                            BalloonText(column, choices, style, align, line.valign, Modifier.weight(1f))
                         }
                     }
                 }
@@ -439,12 +501,16 @@ private const val LINE_HEIGHT = 1.4f
 /**
  * 1列分の文。選択肢とリンクは文の中で押せるようにする（\![*] があれば印を付ける）。\f の飾りも付ける。
  * [valign] は \f[valign]。大きさの違う文字が混じる行で、小さい文字を上か真ん中に寄せる（null と bottom は下にそろえる）。
- * \_n の文字がある行は折り返さない
+ * \_n の文字がある行は折り返さない。
+ *
+ * 選択肢とリンクは、押している間は「選択中」、それ以外は「非選択中」（選んだことのあるリンクは「訪問済み」）の見た目
+ * （\f[cursor*] / \f[anchor*]、無ければバルーンの cursor.* / anchor.*）で描く。長押しするとカーソルを乗せたことにして
+ * OnChoiceEnter / OnChoiceHover を送り、指を離すと選ばずに外れる
  */
 @Composable
 private fun BalloonText(
     runs: List<BalloonLayout.Run>,
-    onChoice: (Choice) -> Unit,
+    choices: ChoiceActions,
     style: BalloonTextStyle,
     align: ComposeTextAlign,
     valign: VerticalAlign?,
@@ -460,13 +526,18 @@ private fun BalloonText(
         return BaselineShift(if (valign == VerticalAlign.CENTER) up / 2 else up)
     }
     val noWrap = textRuns.any { it.style.noWrap }
-    val links = TextLinkStyles(
-        style = SpanStyle(color = style.choiceColor, fontWeight = FontWeight.Medium),
-        pressedStyle = SpanStyle(color = style.choiceColor, background = style.choiceColor.copy(alpha = 0.15f)),
-    )
+    val choiceRuns = runs.filterIsInstance<BalloonLayout.Run.ChoiceRun>()
+    var pressed by remember(choiceRuns) { mutableStateOf<Int?>(null) }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    /** k 番目の選択肢を、いまの状態で描く見た目 */
+    fun lookOf(k: Int): ResolvedLook {
+        val run = choiceRuns[k]
+        return style.links.resolve(run.looks, run.choice.anchor, selected = pressed == k, visited = run.choice.id in choices.visited)
+    }
     val density = LocalDensity.current
     // \_b[ファイル,inline] の画像は1文字として文の中に置く（大きさは先に画像の寸法だけ読んで決める）
     val inlineContent = HashMap<String, InlineTextContent>()
+    val ranges = ArrayList<IntRange>()
     val text = buildAnnotatedString {
         runs.forEachIndexed { index, run ->
             when (run) {
@@ -480,9 +551,10 @@ private fun BalloonText(
                 }
                 is BalloonLayout.Run.ChoiceRun -> {
                     if (run.marked) append("▸ ")
-                    withLink(LinkAnnotation.Clickable(tag = run.choice.id, styles = links) { onChoice(run.choice) }) {
-                        append(run.choice.title)
-                    }
+                    val look = lookOf(ranges.size)
+                    val start = length
+                    withStyle(SpanStyle(color = look.font, fontWeight = FontWeight.Medium)) { append(run.choice.title) }
+                    ranges += start until length
                 }
                 is BalloonLayout.Run.Image -> {
                     val (w, h) = ImageTransparency.size(java.io.File(run.path)) ?: return@forEachIndexed
@@ -501,7 +573,12 @@ private fun BalloonText(
         }
     }
     // 選択肢を含む行は指で押しやすいよう少し高さを取る
-    val hasChoice = runs.any { it is BalloonLayout.Run.ChoiceRun }
+    val hasChoice = choiceRuns.isNotEmpty()
+    val stroke = with(density) { 1.dp.toPx() }
+    val longPress = LocalViewConfiguration.current.longPressTimeoutMillis
+    // 指の操作は選択肢が変わるまで同じものを使い続けるので、範囲と操作は最新のものを読む
+    val currentRanges by rememberUpdatedState(ranges)
+    val currentChoices by rememberUpdatedState(choices)
     Text(
         text = text,
         fontSize = style.fontSize,
@@ -513,7 +590,63 @@ private fun BalloonText(
         maxLines = if (noWrap) 1 else Int.MAX_VALUE,
         overflow = TextOverflow.Clip,
         style = style.base(),
-        modifier = modifier.padding(vertical = if (hasChoice) 2.dp else 0.dp),
+        onTextLayout = { layout = it },
+        modifier = modifier
+            .padding(vertical = if (hasChoice) 2.dp else 0.dp)
+            .drawBehind {
+                val l = layout ?: return@drawBehind
+                ranges.forEachIndexed { k, r ->
+                    if (r.isEmpty() || r.last >= l.layoutInput.text.length) return@forEachIndexed
+                    val look = lookOf(k)
+                    if (look.square) {
+                        val path = l.getPathForRange(r.first, r.last + 1)
+                        look.brush?.let { drawPath(path, it) }
+                        look.pen?.let { drawPath(path, it, style = Stroke(stroke)) }
+                    }
+                    if (look.underline) {
+                        val color = look.pen ?: look.font
+                        for (line in l.getLineForOffset(r.first)..l.getLineForOffset(r.last)) {
+                            val left = if (line == l.getLineForOffset(r.first)) l.getHorizontalPosition(r.first, true) else l.getLineLeft(line)
+                            val right = if (line == l.getLineForOffset(r.last)) l.getHorizontalPosition(r.last + 1, true) else l.getLineRight(line)
+                            val y = l.getLineBaseline(line) + stroke * 2
+                            drawLine(color, Offset(left, y), Offset(right, y), stroke)
+                        }
+                    }
+                }
+            }
+            .pointerInput(choiceRuns) {
+                if (choiceRuns.isEmpty()) return@pointerInput
+                awaitEachGesture {
+                    // 選択肢の上で触れたときだけ受け取る（それ以外はバルーンを叩いたことにする）
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val l = layout ?: return@awaitEachGesture
+                    val at = l.getOffsetForPosition(down.position)
+                    val k = currentRanges.indexOfFirst {
+                        at in it && l.getPathForRange(it.first, it.last + 1).getBounds().inflate(stroke * 6).contains(down.position)
+                    }
+                    if (k < 0) return@awaitEachGesture
+                    down.consume()
+                    pressed = k
+                    val choice = choiceRuns[k].choice
+                    var held = false
+                    val up = try {
+                        withTimeout(longPress) { waitForUpOrCancellation() }
+                    } catch (e: PointerEventTimeoutCancellationException) {
+                        held = true
+                        null
+                    }
+                    if (held) {
+                        // 長押しはカーソルを乗せたのと同じ。離したら外れる（選ばない）
+                        currentChoices.onHover(choice)
+                        waitForUpOrCancellation()?.consume()
+                        currentChoices.onHover(null)
+                    } else if (up != null) {
+                        up.consume()
+                        currentChoices.onChoice(choice)
+                    }
+                    pressed = null
+                }
+            },
     )
 }
 
@@ -582,9 +715,19 @@ class BalloonSkin(val balloon: Balloon) {
      */
     fun textStyle(dpPerPx: Float, pxPerPx: Float): BalloonTextStyle {
         val simple = BalloonTextStyle.Simple
+        val choiceColor = balloon.choiceColor?.toColor() ?: simple.choiceColor
         return BalloonTextStyle(
             textColor = balloon.fontColor?.toColor() ?: simple.textColor,
-            choiceColor = balloon.choiceColor?.toColor() ?: simple.choiceColor,
+            choiceColor = choiceColor,
+            links = LinkDefaults(
+                choiceColor = choiceColor,
+                anchorColor = balloon.anchorColor?.toColor() ?: choiceColor,
+                cursor = balloon.linkLook("cursor"),
+                cursorNotSelect = balloon.linkLook("cursor.notselect"),
+                anchor = balloon.linkLook("anchor"),
+                anchorNotSelect = balloon.linkLook("anchor.notselect"),
+                anchorVisited = balloon.linkLook("anchor.visited"),
+            ),
             fontSize = maxOf(balloon.fontHeight * dpPerPx, 12f).sp,
             spPerPx = dpPerPx,
             pxPerPx = pxPerPx,

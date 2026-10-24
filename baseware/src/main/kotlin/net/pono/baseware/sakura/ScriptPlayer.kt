@@ -10,6 +10,28 @@ enum class TextAlign { LEFT, CENTER, RIGHT }
 /** \f[valign,...]。1行の中で大きさの違う文字をどこにそろえるか */
 enum class VerticalAlign { TOP, CENTER, BOTTOM }
 
+/**
+ * 選択肢やリンクの、ある状態（押している・押していない・訪問済み）の見た目。null はバルーンの既定。
+ * [shape] は square / underline / square+underline / none、[brush] は矩形の中、[pen] は枠と下線、[font] は文字の色（0xRRGGBB）
+ */
+data class LinkLook(val shape: String? = null, val brush: Int? = null, val pen: Int? = null, val font: Int? = null) {
+    /** [other] で決めていないところを、こちらで埋める */
+    fun or(other: LinkLook) = LinkLook(shape ?: other.shape, brush ?: other.brush, pen ?: other.pen, font ?: other.font)
+}
+
+/** \f[cursor*] / \f[cursornotselect*] / \f[anchor*] / \f[anchornotselect*] / \f[anchorvisited*] と \f[anchor.font.color] */
+data class ChoiceLooks(
+    val cursor: LinkLook = LinkLook(),
+    val cursorNotSelect: LinkLook = LinkLook(),
+    val anchor: LinkLook = LinkLook(),
+    val anchorNotSelect: LinkLook = LinkLook(),
+    val anchorVisited: LinkLook = LinkLook(),
+) {
+    companion object {
+        val Default = ChoiceLooks()
+    }
+}
+
 /** \f で決める文字の飾り。 */
 data class TextStyle(
     val bold: Boolean = false,
@@ -82,6 +104,9 @@ interface ScriptHost {
     /** `\![enter,onlinemode|nouserbreakmode|inductionmode]` / `\![leave,...]`。扱えたら true */
     fun setMode(name: String, on: Boolean): Boolean = false
     fun addChoice(scope: Int, choice: Choice)
+
+    /** [looks] は \f[cursor*] などで決めた見た目（既定なら [ChoiceLooks.Default]） */
+    fun addChoice(scope: Int, choice: Choice, looks: ChoiceLooks) = addChoice(scope, choice)
     fun startAnimation(scope: Int, id: Int) {}
 
     /** `\![anim,offset|clear|stop,...]`。扱えたら true */
@@ -219,6 +244,9 @@ class ScriptPlayer(
         // \f の飾り（キャラクターごと）
         private val styles = HashMap<Int, TextStyle>()
 
+        // \f[cursor*] / \f[anchor*] の選択肢とリンクの見た目（キャラクターごと）
+        private val looks = HashMap<Int, ChoiceLooks>()
+
         // \_s のシンクロナイズセクション。null でなければ、文字と改行をこのキャラクター全員に出す
         private var sync: List<Int>? = null
 
@@ -320,6 +348,7 @@ class ScriptPlayer(
                         host.clearBalloon(1)
                         for (s in styles.keys.toList()) host.setFont(s, TextStyle.Default)
                         styles.clear()
+                        looks.clear()
                     }
                 }
                 // \z は古い書き方の、選択肢を含むスクリプトの \e
@@ -328,7 +357,7 @@ class ScriptPlayer(
                 "-" -> quit = true
                 "q" -> if (a.size >= 2) {
                     hasChoices = true
-                    host.addChoice(scope, Choice(expandEnv(a[0], host), a[1], a.drop(2)))
+                    host.addChoice(scope, Choice(expandEnv(a[0], host), a[1], a.drop(2)), looks[scope] ?: ChoiceLooks.Default)
                 }
                 "__q", "_a" -> {
                     val open = anchor
@@ -336,7 +365,7 @@ class ScriptPlayer(
                         anchor = Choice("", a[0], a.drop(1), anchor = token.name == "_a")
                     } else if (open != null) {
                         hasChoices = true
-                        host.addChoice(scope, open.copy(title = anchorTitle.toString()))
+                        host.addChoice(scope, open.copy(title = anchorTitle.toString()), looks[scope] ?: ChoiceLooks.Default)
                         anchor = null
                         anchorTitle.clear()
                     }
@@ -459,8 +488,11 @@ class ScriptPlayer(
 
         /** \f[...]。飾りを変えて host に伝える */
         private fun font(a: List<String>) {
-            val name = a.firstOrNull()?.lowercase() ?: return
+            val name = a.firstOrNull()?.trim()?.lowercase() ?: return
             val arg = a.getOrNull(1)?.trim()?.lowercase()
+            if (linkLook(name, a.drop(1))) return
+            // \f[default] は選択肢とリンクの見た目も戻す
+            if (name == "default") looks.remove(scope)
             val current = styles[scope] ?: TextStyle.Default
             fun flag() = arg == "1" || arg == "true"
             val next = when (name) {
@@ -532,6 +564,44 @@ class ScriptPlayer(
             setStyle(next)
         }
 
+        /**
+         * \f[cursorstyle,...] / \f[anchornotselectfontcolor,...] / \f[anchor.font.color,...] など、選択肢とリンクの見た目。
+         * 扱ったら true。method（描き方）は Android では選べないので読み飛ばす
+         */
+        private fun linkLook(name: String, args: List<String>): Boolean {
+            val current = looks[scope] ?: ChoiceLooks.Default
+            if (name == "anchor.font.color") {
+                looks[scope] = current.copy(anchorNotSelect = current.anchorNotSelect.copy(font = parseColor(args)))
+                return true
+            }
+            val prefix = listOf("cursornotselect", "cursor", "anchornotselect", "anchorvisited", "anchor").firstOrNull { name.startsWith(it) }
+                ?: return false
+            val look = when (prefix) {
+                "cursornotselect" -> current.cursorNotSelect
+                "cursor" -> current.cursor
+                "anchornotselect" -> current.anchorNotSelect
+                "anchorvisited" -> current.anchorVisited
+                else -> current.anchor
+            }
+            val value = args.firstOrNull()?.trim()?.lowercase()
+            val next = when (name.removePrefix(prefix)) {
+                "style" -> look.copy(shape = value?.takeIf { it in setOf("square", "underline", "square+underline", "none") })
+                "color", "brushcolor" -> look.copy(brush = parseColor(args))
+                "pencolor" -> look.copy(pen = parseColor(args))
+                "fontcolor" -> look.copy(font = parseColor(args))
+                "method" -> look
+                else -> return false
+            }
+            looks[scope] = when (prefix) {
+                "cursornotselect" -> current.copy(cursorNotSelect = next)
+                "cursor" -> current.copy(cursor = next)
+                "anchornotselect" -> current.copy(anchorNotSelect = next)
+                "anchorvisited" -> current.copy(anchorVisited = next)
+                else -> current.copy(anchor = next)
+            }
+            return true
+        }
+
         private fun setStyle(next: TextStyle) {
             if (next == (styles[scope] ?: TextStyle.Default)) return
             styles[scope] = next
@@ -568,7 +638,6 @@ class ScriptPlayer(
     private val silentSetOptions = setOf(
         "trayicon", "tasktrayicon", "trayballoon", "tasktrayballoon", "wallpaper",
         "otherghosttalk", "othersurfacechange", "alignmentondesktop",
-        "balloonmarker", "balloonalign", "balloonoffset", "balloonnum",
         "syncobject", "shioridebugmode", "property",
     )
 
@@ -626,6 +695,8 @@ class ScriptPlayer(
             }
             val v = parts.firstOrNull()?.lowercase() ?: return null
             if (v.startsWith("#") && v.length == 7) return v.substring(1).toIntOrNull(16)
+            // #07f は #0077ff
+            if (v.startsWith("#") && v.length == 4) return v.substring(1).map { "$it$it" }.joinToString("").toIntOrNull(16)
             if (v.length == 6 && v.all { it.isDigit() || it in 'a'..'f' }) return v.toIntOrNull(16)
             return namedColors[v]
         }

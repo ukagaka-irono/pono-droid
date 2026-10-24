@@ -1,10 +1,14 @@
 package net.pono.baseware.balloon
 
+import net.pono.baseware.sakura.LinkLook
 import net.pono.baseware.text.Descript
 import java.io.File
 
 /** 色（0〜255）。descript.txt の xxx.r / xxx.g / xxx.b から作る */
-data class BalloonColor(val r: Int, val g: Int, val b: Int)
+data class BalloonColor(val r: Int, val g: Int, val b: Int) {
+    /** 0xRRGGBB */
+    val rgb: Int get() = (r shl 16) or (g shl 8) or b
+}
 
 /** テキストを書ける範囲（バルーン画像の左上からのピクセル） */
 data class TextArea(val left: Int, val top: Int, val right: Int, val bottom: Int) {
@@ -172,6 +176,37 @@ class Balloon(val dir: File) {
 
     /** \f[disable] の薄い文字の色（disable.font.color） */
     val disabledColor: BalloonColor? get() = color("disable.font.color")
+
+    /**
+     * 選択肢やリンクのある状態の見た目。[prefix] は cursor / cursor.notselect / anchor / anchor.notselect / anchor.visited で、
+     * その .style（square / underline / square+underline / none）と .brush.color / .pen.color / .font.color
+     */
+    fun linkLook(prefix: String): LinkLook = LinkLook(
+        shape = descript["$prefix.style"]?.trim()?.lowercase()?.takeIf { it in setOf("square", "underline", "square+underline", "none") },
+        brush = color("$prefix.brush.color")?.rgb,
+        pen = color("$prefix.pen.color")?.rgb,
+        font = color("$prefix.font.color")?.rgb,
+    )
+
+    // ---- \![set,balloonmarker] と \![set,balloonnum] の文字 ----
+
+    /** 印の文字を置く位置（sstpmessage.x / y。負なら右端・下端から）。書いてなければ null（文字の範囲の左上） */
+    fun markerPosition(imageWidth: Int, imageHeight: Int): Pair<Int, Int>? = position("sstpmessage.x", "sstpmessage.y", imageWidth, imageHeight)
+
+    /** 数の右端の位置（number.x か number.xr と number.y）。書いてなければ null（文字の範囲の右下） */
+    fun numberPosition(imageWidth: Int, imageHeight: Int): Pair<Int, Int>? =
+        position(if (descript["number.xr"] != null) "number.xr" else "number.x", "number.y", imageWidth, imageHeight)
+
+    val markerFontHeight: Int? get() = descript.int("sstpmessage.font.height")
+    val markerColor: BalloonColor? get() = color("sstpmessage.font.color")
+    val numberFontHeight: Int? get() = descript.int("number.font.height")
+    val numberColor: BalloonColor? get() = color("number.font.color")
+
+    private fun position(xKey: String, yKey: String, imageWidth: Int, imageHeight: Int): Pair<Int, Int>? {
+        val x = descript.int(xKey) ?: return null
+        val y = descript.int(yKey) ?: return null
+        return (if (x < 0) imageWidth + x else x) to (if (y < 0) imageHeight + y else y)
+    }
 
     // ---- オンラインの印（ネットワーク更新と \![enter,onlinemode] の間に出す） ----
 

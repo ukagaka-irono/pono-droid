@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import net.pono.baseware.balloon.Balloon
 import net.pono.baseware.sakura.Choice
+import net.pono.baseware.sakura.ChoiceLooks
 import net.pono.baseware.sakura.MoveCommand
 import net.pono.baseware.sakura.ScriptHost
 import net.pono.baseware.sakura.ScriptPlayer
@@ -943,6 +944,12 @@ class GhostController(
         raise("OnShellScaling", listOf(newPercent.toString(), oldPercent.toString(), newPercent.toString(), oldPercent.toString()), userInitiated = false)
     }
 
+    /** アプリの画面で「バルーンの大きさ」を変えた（パーセント）。OnBalloonScaling（横・縦とも同じ倍率） */
+    fun onBalloonScaling(newPercent: Int, oldPercent: Int) {
+        if (newPercent == oldPercent) return
+        raise("OnBalloonScaling", listOf(newPercent.toString(), oldPercent.toString(), newPercent.toString(), oldPercent.toString()), userInitiated = false)
+    }
+
     /**
      * \![set,zorder,1,0]。左ほど手前。数だけならそのキャラクターのバルーンとサーフェス（バルーンが手前）、
      * "s1" / "b1"（surface1 / balloon1）なら片方だけ。新しい組と重なる古い組は消す。引数が無ければ全部やめる
@@ -1291,7 +1298,35 @@ class GhostController(
 
     fun onChoice(choice: Choice) {
         lastUserActivity = System.currentTimeMillis()
-        choiceWaiter?.complete(choice)
+        val waiter = choiceWaiter
+        if (waiter != null) {
+            waiter.complete(choice)
+            return
+        }
+        // 選択肢を待っていないとき（話している途中、\C で続けた後など）も、出ている選択肢なら SSP と同じく選べる
+        // 描くときに題名の前後の空白を落としているので、ID と Reference で見分ける
+        fun same(c: Choice) = c.id == choice.id && c.references == choice.references && c.anchor == choice.anchor
+        val shown = _state.value.characters.values.any { c -> c.balloon?.any { it is BalloonItem.ChoiceItem && same(it.choice) } == true }
+        if (!shown) return
+        cancelScript()
+        _state.update { it.copy(talking = false, waitingClick = false, waitingChoice = false) }
+        selectChoice(choice)
+    }
+
+    /**
+     * 選択肢・リンクを長押しした（[choice]）・指を離した（null）。カーソルを乗せたのと同じに扱い、
+     * OnChoiceEnter / OnAnchorEnter と OnChoiceHover / OnAnchorHover を送る。離れたときは Reference なしの Enter（SSP と同じ）
+     */
+    fun onChoiceHover(choice: Choice?, anchor: Boolean = choice?.anchor == true) {
+        lastUserActivity = System.currentTimeMillis()
+        val kind = if (anchor) "Anchor" else "Choice"
+        if (choice == null) {
+            raise("On${kind}Enter", emptyList(), userInitiated = false)
+            return
+        }
+        val refs = listOf(choice.title, choice.id) + choice.references
+        raise("On${kind}Enter", refs, userInitiated = false)
+        raise("On${kind}Hover", refs, userInitiated = false)
     }
 
     // ---- イベント ----
@@ -1555,8 +1590,9 @@ class GhostController(
                 cancelScript()
                 runScript(id.removePrefix("script:"))
             }
-            // \_a のジャンパは OnAnchorSelectEx → OnAnchorSelect
+            // \_a のジャンパは OnAnchorSelectEx → OnAnchorSelect。選んだものは訪問済みの見た目にする
             choice.anchor -> scope.launch {
+                _state.update { it.copy(visitedAnchors = it.visitedAnchors + id) }
                 val script = request("OnAnchorSelectEx", listOf(choice.title, id) + choice.references)
                     ?: request("OnAnchorSelect", listOf(id) + choice.references)
                 cancelScript()
@@ -1612,8 +1648,12 @@ class GhostController(
                     CharacterState(
                         scope, defaultSurface(scope),
                         binds = shell.bindGroups(scope).filter { g -> g.default }.map { g -> g.id }.toSet(),
-                        // 画面の端への吸着もゴーストが終わるまで続く
+                        // 画面の端への吸着やバルーンの置き方・印もゴーストが終わるまで続く
                         alignment = it.characters[scope]?.alignment,
+                        balloonOffset = it.characters[scope]?.balloonOffset,
+                        balloonAlign = it.characters[scope]?.balloonAlign,
+                        balloonMarker = it.characters[scope]?.balloonMarker,
+                        balloonNum = it.characters[scope]?.balloonNum,
                     )
                 },
                 screenOn = it.screenOn,
@@ -1625,6 +1665,7 @@ class GhostController(
                 online = it.online,
                 noUserBreak = it.noUserBreak,
                 induction = it.induction,
+                visitedAnchors = it.visitedAnchors,
             )
         }
     }
@@ -1967,6 +2008,37 @@ class GhostController(
                     }
                     _state.update { it.update(scope) { c -> c.copy(autoScroll = on) } }
                 }
+                // \![set,balloonoffset,x,y]。@ 付きは既定の位置から（pono-droid の既定はずらさない位置なので、どちらも同じ）
+                "balloonoffset" -> {
+                    fun coord(i: Int) = args.getOrNull(i)?.trim()?.removePrefix("@")?.toIntOrNull()
+                    val x = coord(0) ?: return false
+                    val y = coord(1) ?: 0
+                    fun clamp(v: Int) = v.coerceIn(-MAX_BALLOON_OFFSET, MAX_BALLOON_OFFSET)
+                    _state.update { it.update(scope) { c -> c.copy(balloonOffset = clamp(x) to clamp(y)) } }
+                }
+                // \![set,balloonalign,left|center|top|right|bottom|none]
+                "balloonalign" -> {
+                    val align = when (val a = args.firstOrNull()?.trim()?.lowercase()) {
+                        "left", "right", "bottom" -> a
+                        "center", "top" -> "center"
+                        else -> null
+                    }
+                    _state.update { it.update(scope) { c -> c.copy(balloonAlign = align) } }
+                }
+                // \![set,balloonmarker,文字]。空なら消す
+                "balloonmarker" -> {
+                    val marker = args.joinToString(",").trim().take(MAX_BALLOON_LABEL).takeIf { it.isNotEmpty() }
+                    _state.update { it.update(scope) { c -> c.copy(balloonMarker = marker) } }
+                }
+                // \![set,balloonnum,名前,今,最大]。全部空なら消す
+                "balloonnum" -> {
+                    val name = args.getOrNull(0)?.trim().orEmpty().take(MAX_BALLOON_LABEL)
+                    val now = args.getOrNull(1)?.trim()?.toIntOrNull()
+                    val max = args.getOrNull(2)?.trim()?.toIntOrNull()
+                    val count = listOfNotNull(now, max).joinToString("/")
+                    val label = listOf(name, count).filter { it.isNotEmpty() }.joinToString(" ").takeIf { it.isNotEmpty() }
+                    _state.update { it.update(scope) { c -> c.copy(balloonNum = label) } }
+                }
                 // \![set,serikotalk,true|false]
                 "serikotalk" -> serikoTalk = when (args.firstOrNull()?.trim()?.lowercase()) {
                     "false", "0", "disable" -> false
@@ -2034,9 +2106,11 @@ class GhostController(
 
         override fun clearBalloon(scope: Int) = _state.update { it.update(scope) { c -> c.copy(balloon = emptyList()) } }
 
-        override fun addChoice(scope: Int, choice: Choice) {
+        override fun addChoice(scope: Int, choice: Choice) = addChoice(scope, choice, ChoiceLooks.Default)
+
+        override fun addChoice(scope: Int, choice: Choice, looks: ChoiceLooks) {
             talked()
-            _state.update { it.update(scope) { c -> c.append(BalloonItem.ChoiceItem(choice)) } }
+            _state.update { it.update(scope) { c -> c.append(BalloonItem.ChoiceItem(choice, looks)) } }
         }
 
         override fun startAnimation(scope: Int, id: Int) = command(scope, AnimationCommand.Start(id))
@@ -2190,6 +2264,12 @@ class GhostController(
 
         /** \![set,scaling] の倍率の上限（4 = 400%）。画面より大きなウィンドウを作らせない */
         const val MAX_SCALING = 4f
+
+        /** \![set,balloonoffset] でずらせる量の上限（シェル画像のピクセル） */
+        const val MAX_BALLOON_OFFSET = 2000
+
+        /** \![set,balloonmarker] / \![set,balloonnum] の文字の長さの上限 */
+        const val MAX_BALLOON_LABEL = 100
 
         /** \f[name,...] でファイルとして扱う拡張子 */
         val FONT_EXTENSIONS = setOf("ttf", "otf", "ttc")

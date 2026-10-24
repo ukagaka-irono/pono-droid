@@ -192,7 +192,7 @@ fun CharacterBalloon(scopeId: Int, controller: GhostController, skin: BalloonSki
     // 入力の箱は SSP と同じく \0 のバルーンの位置に、話している文の下に出す
     val input = state.input?.takeIf { scopeId == 0 }
     Column(horizontalAlignment = if (scopeId == 1) Alignment.Start else Alignment.End) {
-        TalkBalloon(scopeId, character, state.loading, state.online && scopeId == 0, controller, skin)
+        TalkBalloon(scopeId, character, state.loading, state.online && scopeId == 0, state.visitedAnchors, controller, skin)
         if (input != null) InputBalloon(input, skin, controller::onInputSubmit, controller::onInputCancel)
     }
 }
@@ -204,6 +204,7 @@ private fun TalkBalloon(
     character: CharacterState,
     loading: String?,
     online: Boolean,
+    visited: Set<String>,
     controller: GhostController,
     skin: BalloonSkin?,
 ) {
@@ -215,10 +216,12 @@ private fun TalkBalloon(
     // \b[-1] はバルーンを隠す（文字は流れ続ける）
     if (character.balloonId == -1) return
     val onClick = { controller.onBalloonClick(scopeId) }
+    val choices = ChoiceActions(controller::onChoice, { controller.onChoiceHover(it) }, visited)
+    val labels = BalloonLabels(character.balloonMarker, character.balloonNum)
     if (skin != null) {
-        SkinBalloon(items, skin, scopeId, character.balloonId, onClick, controller::onChoice, character.autoScroll, online)
+        SkinBalloon(items, skin, scopeId, character.balloonId, onClick, choices, character.autoScroll, online, labels)
     } else {
-        SimpleBalloon(items, onClick, controller::onChoice, character.autoScroll, online)
+        SimpleBalloon(items, onClick, choices, character.autoScroll, online, labels)
     }
 }
 

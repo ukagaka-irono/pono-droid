@@ -2,6 +2,7 @@ package net.pono.droid
 
 import android.Manifest
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -184,6 +185,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
             }
             if (installing) LinearProgressIndicator(Modifier.fillMaxWidth())
             CharacterScaleSlider()
+            BalloonScaleSlider()
             if (!listed) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -259,19 +261,37 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     }
 }
 
-/** キャラクターの大きさ。起動中のゴーストにもすぐ反映される。 */
+/** キャラクターの大きさ。起動中のゴーストにもすぐ反映される（OnShellScaling）。 */
 @Composable
-private fun CharacterScaleSlider() {
+private fun CharacterScaleSlider() = ScaleSlider(
+    label = "キャラクターの大きさ",
+    key = OverlaySettings.KEY_CHARACTER_SCALE,
+    read = OverlaySettings::characterScale,
+    range = OverlaySettings.MIN_CHARACTER_SCALE..OverlaySettings.MAX_CHARACTER_SCALE,
+)
+
+/** バルーンの大きさ。起動中のゴーストにもすぐ反映される（OnBalloonScaling）。 */
+@Composable
+private fun BalloonScaleSlider() = ScaleSlider(
+    label = "バルーンの大きさ",
+    key = OverlaySettings.KEY_BALLOON_SCALE,
+    read = OverlaySettings::balloonScale,
+    range = OverlaySettings.MIN_BALLOON_SCALE..OverlaySettings.MAX_BALLOON_SCALE,
+)
+
+/** 倍率の設定。0.1 刻みで、指を離したときに保存する */
+@Composable
+private fun ScaleSlider(label: String, key: String, read: (SharedPreferences) -> Float, range: ClosedFloatingPointRange<Float>) {
     val context = LocalContext.current
     val prefs = remember { OverlaySettings.prefs(context) }
-    var scale by remember { mutableFloatStateOf(OverlaySettings.characterScale(prefs)) }
+    var scale by remember { mutableFloatStateOf(read(prefs)) }
     Column {
-        Text("キャラクターの大きさ: ${"%.1f".format(scale)}×", style = MaterialTheme.typography.bodyMedium)
+        Text("$label: ${"%.1f".format(scale)}×", style = MaterialTheme.typography.bodyMedium)
         Slider(
             value = scale,
             onValueChange = { scale = (it * 10).roundToInt() / 10f },
-            onValueChangeFinished = { prefs.edit().putFloat(OverlaySettings.KEY_CHARACTER_SCALE, scale).apply() },
-            valueRange = OverlaySettings.MIN_CHARACTER_SCALE..OverlaySettings.MAX_CHARACTER_SCALE,
+            onValueChangeFinished = { prefs.edit().putFloat(key, scale).apply() },
+            valueRange = range,
         )
     }
 }

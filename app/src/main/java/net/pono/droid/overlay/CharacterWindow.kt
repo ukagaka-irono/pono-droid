@@ -15,6 +15,7 @@ import android.view.ViewConfiguration
 import android.view.WindowManager
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,8 +87,12 @@ class CharacterWindow(
 
     // アプリの画面で大きさを変えたら、起動中のゴーストにもすぐ反映する
     private val scale = mutableFloatStateOf(OverlaySettings.characterScale(prefs))
+    private val balloonScale = mutableFloatStateOf(OverlaySettings.balloonScale(prefs))
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
-        if (key == OverlaySettings.KEY_CHARACTER_SCALE) scale.floatValue = OverlaySettings.characterScale(p)
+        when (key) {
+            OverlaySettings.KEY_CHARACTER_SCALE -> scale.floatValue = OverlaySettings.characterScale(p)
+            OverlaySettings.KEY_BALLOON_SCALE -> balloonScale.floatValue = OverlaySettings.balloonScale(p)
+        }
     }
 
     /** ウィンドウが動いた（画面の px、右と下が正）。sticky-window の組の相手を一緒に動かすのに使う */
@@ -125,7 +130,9 @@ class CharacterWindow(
         }
         balloonView.setContent {
             FitWindow(corner, onSize = { w, h -> resize(balloonView, balloonParams, w, h) }) {
-                CharacterBalloon(scopeId, controller, balloonSkin)
+                CompositionLocalProvider(LocalBalloonScale provides balloonScale.floatValue) {
+                    CharacterBalloon(scopeId, controller, balloonSkin)
+                }
             }
         }
         prefs.registerOnSharedPreferenceChangeListener(prefsListener)
@@ -147,8 +154,13 @@ class CharacterWindow(
             p.width = width
             p.height = height
             if (view.isAttachedToWindow) windowManager.updateViewLayout(view, p)
+            // 横や下に置くバルーンは、自分の大きさで位置が変わる
+            if (view === balloonView && controller.state.value.characters[scopeId]?.balloonAlign != null) placeBalloon()
         }
     }
+
+    /** \![set,balloonalign] / \![set,balloonoffset] が変わった */
+    fun refreshBalloon() = placeBalloon()
 
     private var touchable = true
     private var hidden = false
@@ -202,10 +214,28 @@ class CharacterWindow(
         if (!view.isAttachedToWindow) runCatching { windowManager.addView(view, p) }
     }
 
-    /** バルーンのウィンドウをサーフェスの真上に合わせる */
+    /**
+     * バルーンのウィンドウをサーフェスに合わせる。いつもは真上で、\![set,balloonalign] なら左・右（上の端をそろえる）・
+     * 真ん中の上・下に置き、\![set,balloonoffset] の分（シェル画像のピクセル）だけずらす
+     */
     private fun placeBalloon(add: Boolean = false) {
-        balloonParams.x = params.x
-        balloonParams.y = params.y + surfaceHeight
+        val c = controller.state.value.characters[scopeId]
+        val pxPerImagePx = scale.floatValue * context.resources.displayMetrics.density
+        val (ox, oy) = c?.balloonOffset?.let { (x, y) -> (x * pxPerImagePx).toInt() to (y * pxPerImagePx).toInt() } ?: (0 to 0)
+        val sw = if (params.width > 0) params.width else surfaceView.width
+        val bw = balloonParams.width.coerceAtLeast(0)
+        val bh = balloonParams.height.coerceAtLeast(0)
+        // x はウィンドウを寄せた側（\0 などは右、\1 は左）の端からの距離、y は下の端からの距離
+        val (x, y) = when (c?.balloonAlign) {
+            "center" -> params.x + (sw - bw) / 2 to params.y + surfaceHeight
+            "bottom" -> params.x + (sw - bw) / 2 to params.y - bh
+            "left" -> (if (alignEnd) params.x + sw else params.x - bw) to params.y + surfaceHeight - bh
+            "right" -> (if (alignEnd) params.x - bw else params.x + sw) to params.y + surfaceHeight - bh
+            else -> params.x to params.y + surfaceHeight
+        }
+        // 右と下へのずれ。右に寄せたウィンドウでは、右へずらすと端からの距離が減る
+        balloonParams.x = x + if (alignEnd) -ox else ox
+        balloonParams.y = y - oy
         if (add) {
             windowManager.addView(balloonView, balloonParams)
         } else if (balloonView.isAttachedToWindow) {

@@ -1,6 +1,7 @@
 package net.pono.baseware.ghost
 
 import net.pono.baseware.sakura.Choice
+import net.pono.baseware.sakura.ChoiceLooks
 import net.pono.baseware.sakura.TextAlign
 import net.pono.baseware.sakura.TextStyle
 import net.pono.baseware.sakura.VerticalAlign
@@ -13,8 +14,8 @@ object BalloonLayout {
     sealed interface Run {
         data class Text(val text: String, val style: TextStyle = TextStyle.Default) : Run
 
-        /** [marked] は \![*] の印を付けるか */
-        data class ChoiceRun(val choice: Choice, val marked: Boolean) : Run
+        /** [marked] は \![*] の印を付けるか、[looks] は \f[cursor*] などの見た目 */
+        data class ChoiceRun(val choice: Choice, val marked: Boolean, val looks: ChoiceLooks = ChoiceLooks.Default) : Run
 
         /** \_b[ファイル,inline]。文字の中に1文字として置く画像 */
         data class Image(val path: String, val opaque: Boolean) : Run
@@ -74,7 +75,7 @@ object BalloonLayout {
                 is BalloonItem.Align -> align = item.align
                 is BalloonItem.ChoiceItem -> {
                     // 等幅で揃えるための空白が後ろに付いていることがあるので落とす
-                    current() += Run.ChoiceRun(item.choice.copy(title = item.choice.title.trim()), marker)
+                    current() += Run.ChoiceRun(item.choice.copy(title = item.choice.title.trim()), marker, item.looks)
                     marker = false
                 }
                 is BalloonItem.Image -> if (item.x == null || item.y == null) current() += Run.Image(item.path, item.opaque)

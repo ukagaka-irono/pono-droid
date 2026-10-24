@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 78）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 83）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -32,7 +32,8 @@ OnBalloonChange、OnSysSuspend / OnSysResume、OnSecondChange / OnMinuteChange /
 OnMouseDown / Up / Click / DoubleClick / MultipleClick / Move、OnMouseEnter / Leave(All)（指が触れた・離れた）、
 OnMouseDragStart / End、OnMouseGesture（当たり判定の上をさっと払う）、OnMouseWheel（2本指で上下・上下に払った代わり）、
 OnMouseDownEx / UpEx / ClickEx（2本指で叩く・メニューの「中クリック」）、OnChoiceSelect(Ex) / OnChoiceTimeout、OnAnchorSelect(Ex)、
-OnOverlap / OnOffscreen、OnResetWindowPos、OnShellScaling、OnWindowStateMinimize / Restore、
+OnOverlap / OnOffscreen、OnResetWindowPos、OnShellScaling / OnBalloonScaling、OnWindowStateMinimize / Restore、
+OnChoiceEnter / OnChoiceHover / OnAnchorEnter / OnAnchorHover（選択肢を長押し）、
 OnSurfaceChange / OnSurfaceRestore、OnBalloonBreak / Close / Timeout、OnTranslate、
 OnUserInput(Cancel) / OnTextAreaInput(Cancel) / OnCommunicate(InputCancel) / OnTeach、
 OnFileDrop2 / OnFileDropEx、OnUpdateBegin / Ready / Complete / Failure、OnExecuteHTTPComplete / Failure、
@@ -40,14 +41,12 @@ OnNetworkStatusChange、OnDisplayChange、OnBattery*（Notify / Low / Critical /
 起動時の OnNotifySelfInfo / BalloonInfo / ShellInfo / DressupInfo / UserInfo / OSInfo / InternationalInfo
 
 ### 🔨 Android で作れる
-- 操作: OnChoiceEnter / OnChoiceHover / OnAnchorEnter / OnAnchorHover（押した瞬間で代用）
 - 共有・インストール: OnTextDrop・OnURLDropped / OnURLDropping / OnURLDropFailure（文字や URL の「共有」）、OnDirectoryDrop（使わない）、
   OnInstallBegin / Complete / CompleteEx / CompleteAll / Failure / Refuse / Reroute（.nar のインストールをゴーストに知らせる）、
   OnMediaPlayerOpen / OnPictureViewerOpen（渡したファイルを Android のアプリで開いたとき）
 - 端末の状態: OnSessionLock / OnSessionUnlock（画面ロック）、OnDarkTheme（ダークモード）、OnLanguageChange、
   OnDisplayPowerStatus（画面の電源）、OnCPULoadHigh / Low・OnMemoryLoadHigh / Low、OnNetworkHeavy、OnOSUpdateInfo、
   OnNotifyFontInfo、OnNotifyHolidayInfo（祝日表）、OnScreenSaverStart / End（Android のスクリーンセーバー）
-- ウィンドウ: OnBalloonScaling（バルーンの大きさの変更）
 - 入力: OnTeachStart / OnTeachInputCancel、OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
 - 音: OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（読み上げ）
 - 通信: OnExecuteHTTPProgress / Streaming / SSLInfo、OnExecuteRSSComplete / Failure、OnExecuteICalComplete / Failure / Progress、
@@ -99,12 +98,12 @@ OnOtherOverlap / Offscreen、OnRaiseOtherFailure / OnNotifyOtherFailure、OnOthe
 \![set,autoscroll / balloonwait / serikotalk] \![lock / unlock,balloonrepaint / repaint（manual も）/ balloonmove] \![execute,resetballoonpos]
 \![enter / leave,onlinemode / nouserbreakmode / inductionmode]、バルーンの descript.txt の font.name / shadowcolor / shadowstyle / bold / italic /
 underline / strike / outline / disable.font.color と、オンラインの印（online*.png、onlinemarker.x / y / interval）
+\f[anchor.font.color] \f[cursor* / cursornotselect* / anchor* / anchornotselect* / anchorvisited*]（style / color / brushcolor / pencolor / fontcolor。
+method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,balloonoffset / balloonalign / balloonmarker / balloonnum]（sstpmessage.* / number.*）
 \![anim,offset / clear / stop] \![bind] \![bind-noevent] \![sound,play / loop / stop / wait] \![change,ghost / shell / balloon]
 \![execute,http-get] \![updatebymyself] \![reload,shiori] \![enter / leave,passivemode] \![quicksection]
 
 ### 🔨 Android で作れる
-- 文字とバルーン: \f[anchor.font.color]、\f[cursor* / anchor*]（選択肢とリンクの色と形）、
-  \![set,balloonoffset / balloonalign / balloonmarker / balloonnum]
 - アニメーション: \![anim,pause / resume / add,overlay / add,text]、\__w[animation,ID]、\i[ID,wait]、\![wait,syncobject] / \![set,syncobject] / \![reset,syncobject]
 - ゴースト: \![vanishbymyself]（確認してから消す）、\+ \_+（ランダム・順番にゴーストを替える）、\![change,calendarskin]（無視）、\a（OnAITalk）、
   \![reloadsurface] \![reload,shell / balloon / ghost / descript] \![load / unload,shiori]

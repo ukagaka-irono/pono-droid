@@ -277,7 +277,9 @@ class GhostOverlayService : LifecycleService() {
         handledNudges.clear()
         positionsJob?.cancel()
         positionsJob = lifecycleScope.launch {
-            c.state.map { s -> s.characters.mapValues { (_, ch) -> listOf(ch.move?.first, ch.pinned, ch.nudge?.first, ch.alignment) } }
+            c.state.map { s ->
+                s.characters.mapValues { (_, ch) -> listOf(ch.move?.first, ch.pinned, ch.nudge?.first, ch.alignment, ch.balloonAlign, ch.balloonOffset) }
+            }
                 .distinctUntilChanged()
                 .collect { applyPositions(c) }
         }
@@ -288,6 +290,7 @@ class GhostOverlayService : LifecycleService() {
             val window = windows.firstOrNull { it.scopeId == scope } ?: continue
             window.setPinned(ch.pinned)
             window.setAlignment(ch.alignment)
+            window.refreshBalloon()
             ch.nudge?.let { (serial, away) ->
                 if (handledNudges[scope] == serial) return@let
                 handledNudges[scope] = serial
@@ -520,17 +523,28 @@ class GhostOverlayService : LifecycleService() {
 
     /** アプリの画面で変えたキャラクターの大きさ。変わったらゴーストに伝える（OnShellScaling） */
     private var characterScale = 1f
+    /** バルーンの大きさ（OnBalloonScaling） */
+    private var balloonScale = 1f
     private val scaleListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
-        if (key != OverlaySettings.KEY_CHARACTER_SCALE) return@OnSharedPreferenceChangeListener
-        val old = characterScale
-        characterScale = OverlaySettings.characterScale(p)
-        controller?.onShellScaling((characterScale * 100).roundToInt(), (old * 100).roundToInt())
+        when (key) {
+            OverlaySettings.KEY_CHARACTER_SCALE -> {
+                val old = characterScale
+                characterScale = OverlaySettings.characterScale(p)
+                controller?.onShellScaling((characterScale * 100).roundToInt(), (old * 100).roundToInt())
+            }
+            OverlaySettings.KEY_BALLOON_SCALE -> {
+                val old = balloonScale
+                balloonScale = OverlaySettings.balloonScale(p)
+                controller?.onBalloonScaling((balloonScale * 100).roundToInt(), (old * 100).roundToInt())
+            }
+        }
     }
 
     override fun onCreate() {
         super.onCreate()
         OverlaySettings.prefs(this).let {
             characterScale = OverlaySettings.characterScale(it)
+            balloonScale = OverlaySettings.balloonScale(it)
             it.registerOnSharedPreferenceChangeListener(scaleListener)
         }
         registerReceiver(

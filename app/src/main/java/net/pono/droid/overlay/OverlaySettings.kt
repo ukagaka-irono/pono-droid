@@ -16,4 +16,14 @@ object OverlaySettings {
 
     fun characterScale(prefs: SharedPreferences) =
         prefs.getFloat(KEY_CHARACTER_SCALE, DEFAULT_CHARACTER_SCALE).coerceIn(MIN_CHARACTER_SCALE, MAX_CHARACTER_SCALE)
+
+    const val KEY_BALLOON_SCALE = "balloonScale"
+
+    /** バルーンの大きさ（ふつうの大きさに対する倍率） */
+    const val DEFAULT_BALLOON_SCALE = 1.0f
+    const val MIN_BALLOON_SCALE = 0.5f
+    const val MAX_BALLOON_SCALE = 2.0f
+
+    fun balloonScale(prefs: SharedPreferences) =
+        prefs.getFloat(KEY_BALLOON_SCALE, DEFAULT_BALLOON_SCALE).coerceIn(MIN_BALLOON_SCALE, MAX_BALLOON_SCALE)
 }
