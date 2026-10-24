@@ -58,7 +58,7 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         currentBinds = binds
         def ?: return
         // 着せ替えは動かさず、パターンのコマを全部重ねて出しておく
-        setRaw(def.bindFrames(binds).mapIndexed { i, f -> BIND_LAYER_BASE + i to f }.toMap())
+        setRaw(bindLayers(def, binds))
         for (anim in def.animations.values) {
             if (anim.frames.all { it.isControl && it.method !in STARTERS }) continue
             val interval = anim.interval
@@ -261,13 +261,17 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         if (!drew) delay(1000)
     }
 
-    private companion object {
+    companion object {
         /** 着せ替えのコマは、普通のアニメーション（番号 = アニメーション番号）より下に重ねる */
-        const val BIND_LAYER_BASE = -1_000_000
+        private const val BIND_LAYER_BASE = -1_000_000
+
+        /** 着せ替え [binds] を身に着けた [def] の、動かないコマ（レイヤーの番号ごと）。\![execute,dumpsurface] でも使う */
+        fun bindLayers(def: SurfaceDefinition?, binds: Set<Int>): Map<Int, PatternFrame> =
+            def?.bindFrames(binds).orEmpty().mapIndexed { i, f -> BIND_LAYER_BASE + i to f }.toMap()
 
         /** \![anim,add] のコマは、普通のアニメーションより上に重ねる */
-        const val ADD_LAYER_BASE = 1_000_000
-        const val MAX_ADD_LAYERS = 64
+        private const val ADD_LAYER_BASE = 1_000_000
+        private const val MAX_ADD_LAYERS = 64
 
         private val STARTERS = setOf("start", "alternativestart", "parallelstart")
     }

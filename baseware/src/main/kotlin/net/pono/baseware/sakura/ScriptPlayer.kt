@@ -225,6 +225,9 @@ interface ScriptHost {
     /** `\![vanishbymyself(,ゴースト名)(,--option=query)]` */
     fun vanish(args: List<String>) {}
 
+    /** `\![create,shortcut(,startup)]`。扱えたら true */
+    fun createShortcut(args: List<String>): Boolean = false
+
     /** `\![enter,passivemode]` / `\![leave,passivemode]` */
     fun setPassive(on: Boolean) {}
 
@@ -496,6 +499,7 @@ class ScriptPlayer(
                     else -> host.unknownTag(token)
                 }
                 "vanishbymyself" -> host.vanish(a.drop(1))
+                "create" -> if (a.getOrNull(1)?.trim()?.lowercase() != "shortcut" || !host.createShortcut(a.drop(2))) host.unknownTag(token)
                 "sound" -> when (a.getOrNull(1)?.lowercase()) {
                     "play", "loop" -> a.getOrNull(2)?.takeIf { it.isNotBlank() }?.let { file ->
                         val volume = a.drop(3).firstOrNull { it.startsWith("--volume=") }?.removePrefix("--volume=")?.trim()?.toIntOrNull()

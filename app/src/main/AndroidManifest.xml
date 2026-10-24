@@ -66,6 +66,15 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- ホーム画面のショートカット（\![create,shortcut]）から、そのゴーストを起こす。画面は出さない -->
+        <activity
+            android:name=".GhostShortcutActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- readme などを読む画面（\![open,readme]） -->
         <activity
             android:name=".TextViewerActivity"

@@ -4,6 +4,7 @@ import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.graphics.Point
 import android.graphics.Rect
@@ -25,6 +26,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.Constraints
 import androidx.core.animation.doOnEnd
 import androidx.core.view.doOnLayout
+import androidx.core.view.drawToBitmap
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -97,6 +99,9 @@ class CharacterWindow(
 
     /** ウィンドウが動いた（画面の px、右と下が正）。sticky-window の組の相手を一緒に動かすのに使う */
     var onShift: ((dx: Int, dy: Int) -> Unit)? = null
+
+    /** バルーンの今の絵（\![execute,dumpballoon]）。まだ描いていなければ null */
+    fun balloonBitmap(): Bitmap? = balloonView.takeIf { it.width > 0 && it.height > 0 }?.drawToBitmap()
 
     /** ドラッグや \![move] などで動き終えた。重なりと見切れ（OnOverlap / OnOffscreen）を調べ直すのに使う */
     var onSettled: (() -> Unit)? = null

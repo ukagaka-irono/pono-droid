@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 157）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 161）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -55,12 +55,12 @@ OnInstallBegin / CompleteEx / Complete / CompleteAll / Failure / Refuse（.nar �
 （渡したファイルにゴーストが答えず、ほかのアプリで開いたとき）、OnXUkagakaLinkOpen（x-ukagaka-link: のリンク）、
 OnVanishSelecting / Selected / Cancel / ButtonHold（メニューの「消去」。確かめはバルーンの選択肢、話している途中にバルーンをタップすると取りやめ）・
 OnVanished（消去のあとに起きたゴースト。答えが無ければ OnBoot）、OnGhostTermsAccept / Decline（\![open,terms] をバルーンに出す）、
-OnTeachStart / OnTeachInputCancel、OnCloseAll（ゴーストを終えるとき。答えが無ければ OnClose。端末の電源を切るときは system）、OnAITalk（\a）
+OnTeachStart / OnTeachInputCancel、OnCloseAll（ゴーストを終えるとき。答えが無ければ OnClose。端末の電源を切るときは system）、OnAITalk（\a）、
+OnNarCreating / Created・OnUpdatedataCreating / Created（\![execute,createnar / createupdatedata] で作ったとき）
 
 ### 🔨 Android で作れる
 - 入力: OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
 - 音: OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（読み上げ）
-- 開発: OnUpdatedataCreating / Created、OnNarCreating / Created（ゴーストのフォルダから .nar・更新データを作る）
 
 ### 🔒 決めてから
 - OnVoiceRecognitionStatus / Word（マイクで声を聞く。マイクの権限が要る）
@@ -116,12 +116,16 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 \+ \_+（ほかのゴーストのどれか・並びで次のゴーストに替える）、\![change,calendarskin]（カレンダーが無いので何もしない）、\a（OnAITalk）、
 \![reloadsurface] \![reload,shell / balloon / ghost / descript]（ghost と descript はすべて読み直して起き直す。イベントは送らない）
 \![load / unload,shiori] \![open,terms]（ghost/master の terms.txt）
+\![open,file]（ゴーストのフォルダの中のファイルを Android のアプリで開く） \![open,mailer] \![open,help]（pono-droid の説明を開く）
+\![execute,createnar]（出力先を省けば pono/nar/ に作って「共有」で渡す。developer_options.txt・.narignore・.narinclude と、いつも外すもの）
+\![execute,createupdatedata]（updates2.dau / updates.txt、MD5 と大きさ） \![execute,dumpsurface]（サーフェスの一覧・着せ替え・--animation の連番）
+\![execute,dumpballoon] \![create,shortcut]（ホーム画面にそのゴーストを起こすショートカット。startup は Android に無いので扱わない）。
+書き出しはどれもゴーストのフォルダの中だけ
 
 ### 🔨 Android で作れる
-- 開く: \![open,file]（Android のアプリで開く）、\![open,mailer]、\![open,dialog,open / save / folder / color]（ファイル選択など）、\![open,ipinput]、
-  \![open,help]、\![open,ghostexplorer など]（アプリの一覧画面）、\![open,surfacetest / developer / shiorirequest / errorlog / backlogviewer]（開発用の画面）
-- 実行: \![execute,dumpsurface / dumpballoon]、\![execute,createnar / createupdatedata]、
-  \![set,property]（書き換えてよいものだけ）、\![create,shortcut]（ホーム画面にゴーストのショートカット）
+- 開く: \![open,dialog,open / save / folder / color]（ファイル選択など）、\![open,ipinput]、
+  \![open,ghostexplorer など]（アプリの一覧画面）、\![open,surfacetest / developer / shiorirequest / errorlog / backlogviewer]（開発用の画面）
+- 実行: \![set,property]（書き換えてよいものだけ）
 - 環境変数: %lastghostname %lastobjectname %exh %et %wronghour %selfname2 %ms %mz %ml %mc %mh %mt %me %mp %m? %dms %*2
   （%ms などは SSP 同梱の単語表から選ぶもの。小さな単語表を持つ）
 - 通知: \![set,trayballoon] / \![set,tasktrayicon]（Android の通知で代用）

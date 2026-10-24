@@ -138,6 +138,18 @@ interface GhostPlatform {
     /** readme のような長い文を見せる（\![open,readme]） */
     fun showText(title: String, text: String) {}
 
+    /** ゴーストのフォルダの [file] を、Android の「共有」でほかのアプリに渡せるようにする（作った .nar を保存・送る） */
+    fun shareFile(file: File, mimeType: String) {}
+
+    /** \![create,shortcut]。ホーム画面に、[dirName] のゴーストを起こすショートカットを置くよう頼む。頼めたら true */
+    fun createShortcut(dirName: String, label: String): Boolean = false
+
+    /** \![execute,dumpsurface]。[dump] のサーフェスを PNG に書き出し、書いたファイルの数を返す */
+    suspend fun dumpSurfaces(dump: SurfaceDump): Int = 0
+
+    /** \![execute,dumpballoon]。[scope] のバルーンの今の絵を [file] に PNG で書く。書けたら true */
+    suspend fun dumpBalloon(scope: Int, file: File): Boolean = false
+
     /** pono-droid の設定画面（SSP の本体設定やゴーストエクスプローラの代わり） */
     fun openSettings() {}
 
@@ -162,6 +174,19 @@ interface GhostPlatform {
      */
     fun switchGhost(dirName: String, previous: PreviousGhost) = onQuit()
 }
+
+/**
+ * \![execute,dumpsurface] で書き出すもの。ファイル名は [prefix] + サーフェス番号 + .png、[animation] があれば続けて
+ * そのアニメーションのコマを [prefix] + サーフェス番号 + _0000.png からの連番で。[binds] は身に着けている着せ替え
+ */
+data class SurfaceDump(
+    val dir: File,
+    val scope: Int,
+    val surfaces: List<Int>,
+    val prefix: String,
+    val binds: Set<Int>,
+    val animation: Int? = null,
+)
 
 /**
  * ゴーストの切り替えで、次のゴーストに伝える前のゴーストのこと（OnGhostChanged の Reference）。
@@ -1022,6 +1047,144 @@ class GhostController(
     // ---- ZIP（\![execute,extractarchive / compressarchive]） ----
 
     /** 待つ（--event が無い）なら終わるまでの Job を返す */
+    // ---- 開発のための書き出し（\![execute,createnar / createupdatedata / dumpsurface / dumpballoon]） ----
+
+    /** "--名前=値" のオプションと、それ以外の引数（現れた順） */
+    private fun splitArgs(args: List<String>): Pair<List<String>, Map<String, String>> {
+        val (opts, positional) = args.map { it.trim() }.partition { it.startsWith("--") }
+        return positional to opts.associate { it.substring(2).substringBefore('=').lowercase() to it.substringAfter('=', "") }
+    }
+
+    /**
+     * ゴースト自身の .nar を作る（OnNarCreating → OnNarCreated）。出力先は ghost/master からの相対パスか絶対パスで、ゴーストの
+     * フォルダの中だけ。省略すれば pono/nar/ディレクトリ名.nar に作り、Android の「共有」で保存や送り先を選んでもらう
+     */
+    private fun createNar(args: List<String>) {
+        val given = args.map { it.trim() }.firstOrNull { it.isNotEmpty() }
+        val out = if (given != null) ghostPath(given) else File(ghost.dir, GhostPackager.PONO_DIR + "/nar/${ghost.dir.name}.nar")
+        if (out == null || out.isDirectory) return platform.log("nar の出力先にできません: $given")
+        scope.launch {
+            val refs = listOf(ghost.name, out.absolutePath, "ghost")
+            deliverLater("OnNarCreating", refs)
+            withContext(Dispatchers.IO) { runCatching { GhostPackager(ghost.dir).createNar(out) } }
+                .onSuccess {
+                    deliverLater("OnNarCreated", refs)
+                    if (given == null) platform.shareFile(out, "application/x-nar")
+                }
+                .onFailure { platform.log("nar を作れませんでした: ${it.message}") }
+        }
+    }
+
+    /**
+     * 更新の一覧を作る（OnUpdatedataCreating → OnUpdatedataCreated）。出力先を指定すればそこに1つだけ（.dau なら updates2.dau の形、
+     * ほかは updates.txt の形）、省略すればゴーストのフォルダと ghost/master の updates2.dau・updates.txt
+     */
+    private fun createUpdateData(args: List<String>) {
+        val given = args.map { it.trim() }.firstOrNull { it.isNotEmpty() }
+        val outputs = if (given != null) {
+            listOf(ghostPath(given)?.takeIf { !it.isDirectory } ?: return platform.log("更新データの出力先にできません: $given"))
+        } else {
+            listOf(ghost.dir, ghost.masterDir).flatMap { listOf(File(it, "updates2.dau"), File(it, "updates.txt")) }
+        }
+        scope.launch {
+            deliverLater("OnUpdatedataCreating", emptyList())
+            withContext(Dispatchers.IO) { runCatching { GhostPackager(ghost.dir).createUpdateData(outputs) } }
+                .onSuccess { deliverLater("OnUpdatedataCreated", emptyList()) }
+                .onFailure { platform.log("更新データを作れませんでした: ${it.message}") }
+        }
+    }
+
+    /** 書き出すファイル名の頭。フォルダの外に出られないよう、区切りや .. は使わせない */
+    private fun dumpPrefix(raw: String?, default: String): String? {
+        val p = raw?.trim().orEmpty().ifEmpty { default }
+        return p.takeIf { it.none { c -> c == '/' || c == '\\' || c == ':' } && ".." !in it }
+    }
+
+    /**
+     * 書き出すサーフェスの番号。"0-9,!5" のような書き方（surface を前に付けてもよい）か、__system_surface_all__（既定）・
+     * __system_surface_defined__（surfaces.txt に書いたものだけ）
+     */
+    private fun dumpSurfaceIds(list: String): List<Int> {
+        val all = shell.surfaceIds()
+        val ids = when (list.trim().lowercase()) {
+            "", "__system_surface_all__" -> all
+            "__system_surface_defined__" -> shell.surfaces.definitions.keys.sorted()
+            else -> {
+                val include = linkedSetOf<Int>()
+                val exclude = mutableSetOf<Int>()
+                for (raw in list.split(',')) {
+                    val token = raw.trim().lowercase()
+                    val negated = token.startsWith("!")
+                    val m = DUMP_RANGE.matchEntire(token.removePrefix("!").removePrefix("surface")) ?: continue
+                    val from = m.groupValues[1].toIntOrNull() ?: continue
+                    val to = m.groupValues[2].toIntOrNull() ?: from
+                    if (maxOf(from, to).toLong() - minOf(from, to) > MAX_DUMP_SURFACES) continue
+                    for (i in minOf(from, to)..maxOf(from, to)) (if (negated) exclude else include) += i
+                }
+                (include - exclude).toList()
+            }
+        }
+        return ids.filter { shell.hasSurface(it) }.take(MAX_DUMP_SURFACES)
+    }
+
+    /**
+     * サーフェスを PNG に書き出す。引数は ディレクトリ, スコープ, サーフェスの一覧, prefix, イベント, ゼロ位置切り出し, アニメーション ID
+     * （--dir= などでもよい）。書き出せるのはゴーストのフォルダの中だけ。イベントがあれば終わってから（Reference0 = ファイルの数）。
+     * イベントが無ければ返す Job が終わるまでスクリプトが待つ。引数がおかしければ false
+     */
+    private fun dumpSurface(args: List<String>): Any {
+        val (positional, opts) = splitArgs(args)
+        val dir = (opts["dir"] ?: positional.getOrNull(0))?.let(::ghostPath)
+        val scopeId = (opts["scope"] ?: positional.getOrNull(1))?.trim()?.toIntOrNull() ?: 0
+        val prefix = dumpPrefix(opts["prefix"] ?: positional.getOrNull(3), "surface")
+        val event = opts["event"] ?: opts["async"] ?: positional.getOrNull(4).orEmpty()
+        val animation = (opts["animation"] ?: positional.getOrNull(6))?.trim()?.toIntOrNull()
+        if (dir == null || dir.isFile || prefix == null) {
+            platform.log("サーフェスを書き出せる場所ではありません（ゴーストのフォルダの中だけ）")
+            return false
+        }
+        val dump = SurfaceDump(
+            dir, scopeId, dumpSurfaceIds(opts["surface"] ?: positional.getOrNull(2).orEmpty()), prefix,
+            _state.value.characters[scopeId]?.binds.orEmpty(), animation,
+        )
+        val job = scope.launch {
+            val count = runCatching {
+                withContext(Dispatchers.IO) { dir.mkdirs() }
+                platform.dumpSurfaces(dump)
+            }.getOrDefault(0)
+            if (event.isNotEmpty()) deliverLater(event, listOf(count.toString()))
+        }
+        return if (event.isEmpty()) job else true
+    }
+
+    /** バルーンの今の絵を書き出す（prefix + スコープ + .png、既定は balloon0.png）。引数は ディレクトリ, スコープ, prefix, イベント */
+    private fun dumpBalloon(args: List<String>): Any {
+        val (positional, opts) = splitArgs(args)
+        val dir = (opts["dir"] ?: positional.getOrNull(0))?.let(::ghostPath)
+        val scopeId = (opts["scope"] ?: positional.getOrNull(1))?.trim()?.toIntOrNull() ?: 0
+        val prefix = dumpPrefix(opts["prefix"] ?: positional.getOrNull(2), "balloon")
+        val event = opts["event"] ?: opts["async"] ?: positional.getOrNull(3).orEmpty()
+        if (dir == null || dir.isFile || prefix == null) {
+            platform.log("バルーンを書き出せる場所ではありません（ゴーストのフォルダの中だけ）")
+            return false
+        }
+        val job = scope.launch {
+            val ok = runCatching {
+                withContext(Dispatchers.IO) { dir.mkdirs() }
+                platform.dumpBalloon(scopeId, File(dir, "$prefix$scopeId.png"))
+            }.getOrDefault(false)
+            if (event.isNotEmpty()) deliverLater(event, listOf(if (ok) "1" else "0"))
+        }
+        return if (event.isEmpty()) job else true
+    }
+
+    /** \![open,file,ファイル]。ゴーストのフォルダの中のファイルを、Android のほかのアプリで開く */
+    private fun openGhostFile(name: String): Boolean {
+        val file = ghostPath(name)?.takeIf { it.isFile } ?: return false
+        val mime = mimeOf(file.name).takeIf { it != "application/octet-stream" } ?: "*/*"
+        return platform.openFile(file, mime)
+    }
+
     private fun archive(compress: Boolean, args: List<String>): Job? {
         val file = args.getOrNull(0)?.let(::ghostPath)
         val dir = args.getOrNull(1)?.let(::ghostPath)
@@ -2293,6 +2456,9 @@ class GhostController(
         "mp4" -> "video/mp4"
         "webm" -> "video/webm"
         "nar" -> "application/x-nar"
+        "txt", "log", "ini", "csv" -> "text/plain"
+        "html", "htm" -> "text/html"
+        "pdf" -> "application/pdf"
         else -> "application/octet-stream"
     }
 
@@ -3041,6 +3207,10 @@ class GhostController(
                 "extractarchive", "compressarchive" -> archive(name == "compressarchive", args)
                 "install" -> return executeInstall(args) != null
                 "dropdefault" -> return dropDefaultCommand(args)
+                "createnar" -> createNar(args)
+                "createupdatedata" -> createUpdateData(args)
+                "dumpsurface" -> return dumpSurface(args) != false
+                "dumpballoon" -> return dumpBalloon(args) != false
                 else -> return false
             }
             return true
@@ -3055,6 +3225,14 @@ class GhostController(
             }
             if (name == "extractarchive" || name == "compressarchive") {
                 archive(name == "compressarchive", args)?.join()
+                return true
+            }
+            // イベントを指定しなければ、書き出し終わるまで待つ（SSP と同じ）
+            if (name == "dumpsurface" || name == "dumpballoon") {
+                when (val r = if (name == "dumpsurface") dumpSurface(args) else dumpBalloon(args)) {
+                    is Job -> r.join()
+                    false -> return false
+                }
                 return true
             }
             return execute(name, args)
@@ -3385,6 +3563,14 @@ class GhostController(
             when (kind) {
                 "readme" -> platform.showText(ghost.name, readmeText())
                 "terms" -> return showTerms()
+                // SSP のヘルプの代わりに、pono-droid の説明を開く
+                "help" -> platform.openUrl(HELP_URL)
+                "file" -> return openGhostFile(args.firstOrNull().orEmpty())
+                "mailer" -> {
+                    val address = args.firstOrNull()?.trim().orEmpty()
+                    if (address.isNotEmpty() && !MAIL_ADDRESS.matches(address)) return false
+                    platform.openUrl("mailto:$address")
+                }
                 "configurationdialog", "ghostexplorer", "shellexplorer", "balloonexplorer", "dressupexplorer" -> platform.openSettings()
                 else -> return false
             }
@@ -3472,6 +3658,12 @@ class GhostController(
 
         override fun vanish(args: List<String>) = vanishByMyself(args)
 
+        override fun createShortcut(args: List<String>): Boolean {
+            // Android にはスタートアップのフォルダが無い
+            if (args.any { it.trim().lowercase() == "startup" }) return false
+            return platform.createShortcut(ghost.dir.name, ghost.name)
+        }
+
         override fun setPassive(on: Boolean) = _state.update { it.copy(passive = on) }
 
         /** 開くのはウェブのページだけ。tel: や他のアプリのスキームをゴーストに開かせない */
@@ -3503,6 +3695,15 @@ class GhostController(
     }
 
     companion object {
+        /** \![open,help] で開く pono-droid の説明 */
+        const val HELP_URL = "https://github.com/ukagaka-irono/pono-droid#readme"
+
+        private val MAIL_ADDRESS = Regex("""^[^@\s,;?&]+@[^@\s,;?&]+$""")
+        private val DUMP_RANGE = Regex("""^(\d+)(?:-(\d+))?$""")
+
+        /** 一度に書き出すサーフェスの数 */
+        private const val MAX_DUMP_SURFACES = 4096
+
         /** アプリから渡されないとき（テストなど）のバージョン */
         const val BASEWARE_VERSION = "0.1.0"
         private val timerEvents = setOf("OnSecondChange", "OnMinuteChange", "OnMouseMove")

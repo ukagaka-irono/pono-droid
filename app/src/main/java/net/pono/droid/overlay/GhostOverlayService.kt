@@ -7,6 +7,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -14,6 +15,7 @@ import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.graphics.Rect
 import android.net.ConnectivityManager
 import android.net.LinkProperties
@@ -30,6 +32,10 @@ import android.widget.RemoteViews
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.FileProvider
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -53,10 +59,12 @@ import net.pono.baseware.ghost.GhostRepository
 import net.pono.baseware.ghost.InputRequest
 import net.pono.baseware.ghost.NetworkStatus
 import net.pono.baseware.ghost.PreviousGhost
+import net.pono.baseware.ghost.SurfaceDump
 import net.pono.baseware.ghost.SystemInfo
 import net.pono.baseware.ghost.WindowState
 import net.pono.baseware.shell.Shell
 import net.pono.droid.AppVersion
+import net.pono.droid.GhostShortcutActivity
 import net.pono.droid.GhostStore
 import net.pono.droid.MainActivity
 import net.pono.droid.R
@@ -161,6 +169,61 @@ class GhostOverlayService : LifecycleService() {
                     registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let(::batteryInfo)
 
                 override fun systemInfo(): SystemInfo = this@GhostOverlayService.systemInfo()
+
+                /** 作った .nar などを「共有」で渡す。読む許可はそのファイル1つだけ */
+                override fun shareFile(file: File, mimeType: String) {
+                    val uri = runCatching { FileProvider.getUriForFile(this@GhostOverlayService, "$packageName.files", file) }.getOrNull() ?: return
+                    val send = Intent(Intent.ACTION_SEND).setType(mimeType).putExtra(Intent.EXTRA_STREAM, uri)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    send.clipData = ClipData.newRawUri(file.name, uri)
+                    try {
+                        startActivity(Intent.createChooser(send, file.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                    } catch (e: ActivityNotFoundException) {
+                        toast("渡せるアプリが見つかりません")
+                    }
+                }
+
+                /** ホーム画面にショートカットを置くよう頼む。置くかどうかは Android がユーザーに確かめる */
+                override fun createShortcut(dirName: String, label: String): Boolean {
+                    val context = this@GhostOverlayService
+                    if (!ShortcutManagerCompat.isRequestPinShortcutSupported(context)) return false
+                    val intent = Intent(context, GhostShortcutActivity::class.java).setAction(Intent.ACTION_VIEW)
+                        .putExtra(GhostShortcutActivity.EXTRA_GHOST, dirName)
+                    val info = ShortcutInfoCompat.Builder(context, "ghost:$dirName")
+                        .setShortLabel(label.ifBlank { dirName })
+                        .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
+                        .setIntent(intent)
+                        .build()
+                    return ShortcutManagerCompat.requestPinShortcut(context, info, null)
+                }
+
+                override suspend fun dumpSurfaces(dump: SurfaceDump): Int {
+                    val r = renderer ?: return 0
+                    val shell = controller?.shell ?: return 0
+                    return withContext(Dispatchers.Default) {
+                        var count = 0
+                        for (id in dump.surfaces) {
+                            val def = shell.surfaces[id]
+                            val binds = SerikoAnimator.bindLayers(def, dump.binds)
+                            if (writePng(r.render(id, binds), File(dump.dir, "${dump.prefix}$id.png"))) count++
+                            // アニメーションのコマを、\i[ID] で動かしたときと同じ順に重ねて連番で
+                            val anim = dump.animation?.let { def?.animations?.get(it) } ?: continue
+                            var n = 0
+                            for (frame in anim.frames) {
+                                if (frame.isControl) continue
+                                if (n >= MAX_DUMP_FRAMES) break
+                                if (writePng(r.render(id, binds + (anim.id to frame)), File(dump.dir, "%s%d_%04d.png".format(dump.prefix, id, n)))) count++
+                                n++
+                            }
+                        }
+                        count
+                    }
+                }
+
+                override suspend fun dumpBalloon(scope: Int, file: File): Boolean {
+                    val bitmap = withContext(Dispatchers.Main) { windows.firstOrNull { it.scopeId == scope }?.balloonBitmap() } ?: return false
+                    return withContext(Dispatchers.IO) { writePng(bitmap, file) }
+                }
 
                 /** ゴーストのフォルダのファイルだけ、その1つを読む許可を付けて渡す */
                 override fun openFile(file: File, mimeType: String): Boolean {
@@ -743,6 +806,11 @@ class GhostOverlayService : LifecycleService() {
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
+    private fun writePng(bitmap: Bitmap?, file: File): Boolean {
+        bitmap ?: return false
+        return runCatching { file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } }.getOrDefault(false)
+    }
+
     companion object {
         private const val TAG = "pono"
         private const val CHANNEL = "ghost_running"
@@ -758,6 +826,9 @@ class GhostOverlayService : LifecycleService() {
 
         private val WHITESPACE = Regex("[ \t]+")
         private const val EXTRA_GHOST = "ghost"
+
+        /** \![execute,dumpsurface] で1つのアニメーションから書き出すコマの数 */
+        private const val MAX_DUMP_FRAMES = 1000
 
         private val _appInFront = MutableStateFlow(false)
 
