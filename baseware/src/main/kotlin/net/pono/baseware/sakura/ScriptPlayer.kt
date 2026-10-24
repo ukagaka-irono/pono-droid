@@ -333,8 +333,15 @@ class ScriptPlayer(
             }
         }
 
-        /** [literal] なら \_? の中の文字で、環境変数も展開しない */
+        /** [literal] なら \_? の中の文字で、環境変数も展開しない。%* は \![*] と同じ印 */
         private suspend fun text(s: String, literal: Boolean = false) {
+            if (!literal && "%*" in s) {
+                s.split("%*").forEachIndexed { i, piece ->
+                    if (i > 0) host.addMarker(scope)
+                    if (piece.isNotEmpty()) text(piece)
+                }
+                return
+            }
             val expanded = if (literal) s else expandEnv(s, host)
             if (anchor != null) {
                 anchorTitle.append(expanded)
@@ -766,14 +773,14 @@ class ScriptPlayer(
 
     /** `\![set,名前,...]` のうち、Windows のウィンドウやトレイ向けで、pono-droid では意味が無いもの */
     private val silentSetOptions = setOf(
-        "trayicon", "tasktrayicon", "trayballoon", "tasktrayballoon", "wallpaper",
+        "wallpaper",
         "otherghosttalk", "othersurfacechange", "alignmentondesktop",
         "shioridebugmode",
     )
 
     private val silentExecutes = setOf("resetballoonpos")
 
-    private val envPattern = Regex("""%([a-zA-Z][a-zA-Z0-9]*)""")
+    private val envPattern = Regex("""%(m\?|[a-zA-Z][a-zA-Z0-9]*)""")
     private val propertyPattern = Regex("""%property\[([^\]]*)\]""")
 
     private fun expandEnv(s: String, host: ScriptHost): String {

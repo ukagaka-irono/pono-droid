@@ -207,6 +207,15 @@ interface GhostPlatform {
         if (file == null) stopSound()
     }
 
+    /**
+     * \![set,trayballoon]。Android の通知で知らせる。触れたら [GhostController.onTrayBalloonClick]、
+     * 消したら [GhostController.onTrayBalloonTimeout]。[icon] は info / warning / error / none
+     */
+    fun showTrayBalloon(title: String, text: String, icon: String) {}
+
+    /** \![set,tasktrayicon,ファイル,文字]。常駐の通知に [text] を出す（アイコンの画像は Android の通知では替えられない） */
+    fun setTrayText(text: String) {}
+
     /** [scope] のキャラクターのウィンドウの今の位置（出していなければ null） */
     fun windowGeometry(scope: Int): WindowGeometry? = null
 
@@ -745,6 +754,17 @@ class GhostController(
             watch.cancel()
         }
     }
+
+    /** %lastghostname / %lastobjectname */
+    private var lastInstalledGhost: String? = null
+    private var lastInstalledObject: String? = null
+
+    /** \![set,trayballoon] の通知に触れた（OnTrayBalloonClick）。何行かあれば 0x01 でつなぐ */
+    fun onTrayBalloonClick(title: String, text: String) = raise("OnTrayBalloonClick", listOf(title, text.replace('\n', '\u0001')))
+
+    /** \![set,trayballoon] の通知を消した（OnTrayBalloonTimeout） */
+    fun onTrayBalloonTimeout(title: String, text: String) =
+        raise("OnTrayBalloonTimeout", listOf(title, text.replace('\n', '\u0001')), userInitiated = false)
 
     // ---- 音と読み上げ ----
 
@@ -1405,6 +1425,8 @@ class GhostController(
         val result = withContext(Dispatchers.IO) { runCatching { installer.install(nar, ghost) } }
         result.onSuccess { r ->
             val items = r.installed
+            lastInstalledObject = items.firstOrNull()?.name
+            items.firstOrNull { it.type == NarInstaller.Type.GHOST }?.let { lastInstalledGhost = it.name }
             val refs = listOf(
                 items.joinToString("\u0001") { it.type.id },
                 items.joinToString("\u0001") { it.name },
@@ -3957,6 +3979,19 @@ class GhostController(
         }
 
         override fun setOption(name: String, args: List<String>): Boolean {
+            when (name) {
+                // \![set,trayballoon,--text=...,--title=...,--icon=...]。--text は何個でも書け、1つずつ1行になる
+                "trayballoon", "tasktrayballoon" -> {
+                    fun opt(key: String) = args.map { it.trim() }.filter { it.startsWith("--$key=") }.map { it.substringAfter('=') }
+                    val text = opt("text").joinToString("\n").takeIf { it.isNotEmpty() } ?: return false
+                    platform.showTrayBalloon(opt("title").firstOrNull().orEmpty(), text, opt("icon").firstOrNull()?.lowercase() ?: "none")
+                    return true
+                }
+                "trayicon", "tasktrayicon" -> {
+                    platform.setTrayText(args.getOrNull(1)?.trim().orEmpty())
+                    return true
+                }
+            }
             val ms = args.firstOrNull()?.trim()?.toLongOrNull() ?: return false
             when (name) {
                 "balloontimeout" -> balloonTimeoutMs = ms
@@ -4250,6 +4285,14 @@ class GhostController(
                 "second" -> now.get(Calendar.SECOND).toString()
                 "screenwidth" -> platform.deviceInfo()?.screenWidth?.toString()
                 "screenheight" -> platform.deviceInfo()?.screenHeight?.toString()
+                // 端末が起きてからの時間（時）。%et はわざと間違えた時間（単位つき）、%wronghour はわざと間違えた今の時
+                "exh" -> ((platform.deviceInfo()?.uptimeSeconds ?: 0) / 3600).toString()
+                "et" -> "${kotlin.random.Random.nextInt(2, 1000)}${listOf("年", "万年", "億年", "世紀", "光年").random()}"
+                "wronghour" -> ((now.get(Calendar.HOUR_OF_DAY) + kotlin.random.Random.nextInt(1, 24)) % 24).toString()
+                "ms", "mz", "ml", "mc", "mh", "mt", "me", "mp", "m?", "dms" -> EnvWords.pick(name)
+                // 最後にインストールしたゴーストの名前と、最後にインストールしたものの名前
+                "lastghostname" -> lastInstalledGhost.orEmpty()
+                "lastobjectname" -> lastInstalledObject.orEmpty()
                 else -> null
             }
         }

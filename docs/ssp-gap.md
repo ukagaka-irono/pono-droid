@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 169）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 171）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -58,7 +58,8 @@ OnVanished（消去のあとに起きたゴースト。答えが無ければ OnB
 OnTeachStart / OnTeachInputCancel、OnCloseAll（ゴーストを終えるとき。答えが無ければ OnClose。端末の電源を切るときは system）、OnAITalk（\a）、
 OnNarCreating / Created・OnUpdatedataCreating / Created（\![execute,createnar / createupdatedata] で作ったとき）、
 OnSoundStop / OnSoundLoop / OnSoundError、OnSpeechSynthesisStatus（起動時の NOTIFY と、読み上げの設定を変えたとき）、
-OnUpdate.OnDownloadBegin / OnMD5CompareBegin / OnMD5CompareComplete / OnMD5CompareFailure（と OnUpdateOther. のもの）
+OnUpdate.OnDownloadBegin / OnMD5CompareBegin / OnMD5CompareComplete / OnMD5CompareFailure（と OnUpdateOther. のもの）、
+OnTrayBalloonClick / Timeout（\![set,trayballoon] の Android の通知に触れた・消した。何行かある文は 0x01 でつなぐ）
 
 ### 🔨 Android で作れる
 - 入力: OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
@@ -77,7 +78,7 @@ OnOtherOverlap / Offscreen、OnRaiseOtherFailure / OnNotifyOtherFailure、OnOthe
 ### ⛔ 作れない
 - プラグイン・ヘッドライン・SAORI・MAKOTO（Windows の DLL）: OnRaisePluginFailure / OnNotifyPluginFailure、OnHeadlinesense*、
   OnRSSBegin / Complete / Failure（ヘッドラインセンサー版）、OnSchedulesense* / OnSchedulepost*、OnInternalSaori*
-- パソコン専用: OnTrayBalloonClick / Timeout（タスクトレイ）、OnWallpaperChange / OnDesktopWallpaperChange、OnVirtualDesktopChanged、
+- パソコン専用: OnWallpaperChange / OnDesktopWallpaperChange、OnVirtualDesktopChanged、
   OnFullScreenAppMinimize / Restore、OnTabletMode、OnWindowModeChange、OnDisplayHandover、OnDisplayChangeEx（複数モニター）、
   OnSessionDisconnect / Reconnect（Windows のユーザー切り替え）、OnGamepad*（作れるが、Android でゲームパッドをつなぐ人はまずいない）、
   OnKeyPress（オーバーレイがキーを受けるには、他のアプリへの文字の入力を横取りすることになる）
@@ -93,6 +94,8 @@ OnOtherOverlap / Offscreen、OnRaiseOtherFailure / OnNotifyOtherFailure、OnOthe
 \0 \1 \h \u \p \s \i \n \n[half] \c \e \- \w \_w \__w \x \_q \q（タイトル,ID / On・r 付き / script:）\__q \_a \* \![*]
 \b \_b \_l \_s \f（bold / italic / underline / strike / sub / sup / color / height / align / default / disable）\_u \_m \& \8 \_v \_V \j
 \![raise] \![embed] \![notify] \![timerraise] \![get,property] %property[...] %month %day %hour %minute %second %username %selfname %keroname %screenwidth %screenheight
+%selfname2 %exh %et %wronghour %ms %mz %ml %mc %mh %mt %me %mp %m? %dms（小さな単語表から選ぶ） %lastghostname %lastobjectname（最後にインストールしたもの）
+%*（\![*] と同じ印） \![set,trayballoon]（Android の通知。--text は何個でも） \![set,tasktrayicon]（常駐の通知に文を出す。アイコンは替えられない）
 \![open,browser / inputbox / passwordinput / communicatebox / teachbox / dateinput / timeinput / sliderinput / textareabox / readme / configurationdialog]
 \![close,...] \![set,balloontimeout / choicetimeout / scaling / alpha / position] \![reset,position] \![move] \![moveasync]（--option=ignore-sticky-window も）
 \![set,zorder] \![reset,zorder] \![set,sticky-window] \![reset,sticky-window] \![set,windowstate,minimize] \![set,alignmenttodesktop]
@@ -127,9 +130,6 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 ### 🔨 Android で作れる
 - 開く: \![open,dialog,open / save / folder / color]（ファイル選択など）、\![open,ipinput]、
   \![open,ghostexplorer など]（アプリの一覧画面）、\![open,surfacetest / developer / shiorirequest / errorlog / backlogviewer]（開発用の画面）
-- 環境変数: %lastghostname %lastobjectname %exh %et %wronghour %selfname2 %ms %mz %ml %mc %mh %mt %me %mp %m? %dms %*2
-  （%ms などは SSP 同梱の単語表から選ぶもの。小さな単語表を持つ）
-- 通知: \![set,trayballoon] / \![set,tasktrayicon]（Android の通知で代用）
 
 ### 🔒 決めてから
 - ✅ 読み上げ（Android の音声合成。アプリの設定で選ぶ。最初は読み上げない）。設定の切り替えの画面は 6c-2 の画面と一緒に作る

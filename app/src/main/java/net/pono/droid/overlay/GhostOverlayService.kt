@@ -108,6 +108,11 @@ class GhostOverlayService : LifecycleService() {
             ACTION_STOP -> controller?.close() ?: stopSelf()
             ACTION_UPDATE -> controller?.networkUpdate() ?: toast("ゴーストが起動していません")
             ACTION_SHOW -> controller?.restoreWindows("user")
+            ACTION_TRAY_CLICK, ACTION_TRAY_DISMISS -> {
+                val title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+                val text = intent.getStringExtra(EXTRA_TEXT).orEmpty()
+                if (intent.action == ACTION_TRAY_CLICK) controller?.onTrayBalloonClick(title, text) else controller?.onTrayBalloonTimeout(title, text)
+            }
             ACTION_START -> {
                 startInForeground()
                 val dirName = intent.getStringExtra(EXTRA_GHOST)
@@ -278,6 +283,13 @@ class GhostOverlayService : LifecycleService() {
                 override fun stopSound() = sound.stop()
 
                 override fun stopSound(file: File?) = sound.stop(file)
+
+                override fun showTrayBalloon(title: String, text: String, icon: String) = showGhostMessage(title, text)
+
+                override fun setTrayText(text: String) {
+                    trayText = text.takeIf { it.isNotBlank() }
+                    startInForeground(minimized = controller?.state?.value?.window?.minimized == true)
+                }
 
                 override fun windowGeometry(scope: Int): WindowGeometry? =
                     windows.firstOrNull { it.scopeId == scope }?.geometry(characterScale.toDouble(), balloonScale.toDouble())
@@ -813,6 +825,34 @@ class GhostOverlayService : LifecycleService() {
         super.onDestroy()
     }
 
+    /** \![set,tasktrayicon] で決めた、常駐の通知に出す文（null なら出さない） */
+    private var trayText: String? = null
+
+    /**
+     * \![set,trayballoon]。常駐の通知とは別の通知で、ゴーストからのお知らせを出す。触れたら OnTrayBalloonClick、
+     * 消したら OnTrayBalloonTimeout（次のお知らせは前のものを置き換える）
+     */
+    private fun showGhostMessage(title: String, text: String) {
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel(MESSAGE_CHANNEL, "ゴーストからのお知らせ", NotificationManager.IMPORTANCE_DEFAULT))
+        fun action(action: String, code: Int) = PendingIntent.getService(
+            this, code,
+            Intent(this, GhostOverlayService::class.java).setAction(action).putExtra(EXTRA_TITLE, title).putExtra(EXTRA_TEXT, text),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val name = controller?.ghost?.name.orEmpty()
+        val notification = NotificationCompat.Builder(this, MESSAGE_CHANNEL)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title.ifEmpty { name })
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(action(ACTION_TRAY_CLICK, 10))
+            .setDeleteIntent(action(ACTION_TRAY_DISMISS, 11))
+            .setAutoCancel(true)
+            .build()
+        nm.notify(MESSAGE_NOTIFICATION_ID, notification)
+    }
+
     /** 常駐の通知を出す（出し直す）。[minimized] ならキャラクターを隠しているので、「表示」で出し直せるようにする */
     private fun startInForeground(minimized: Boolean = false) {
         val nm = getSystemService(NotificationManager::class.java)
@@ -849,6 +889,7 @@ class GhostOverlayService : LifecycleService() {
         val builder = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
+            .setContentText(trayText)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(collapsed)
             // 隠している間は、通知に触れたら出し直す
@@ -875,6 +916,12 @@ class GhostOverlayService : LifecycleService() {
         private const val CHANNEL = "ghost_running"
         private const val OLD_CHANNEL = "ghost"
         private const val NOTIFICATION_ID = 1
+        private const val MESSAGE_CHANNEL = "ghost_message"
+        private const val MESSAGE_NOTIFICATION_ID = 2
+        private const val ACTION_TRAY_CLICK = "net.pono.droid.TRAY_CLICK"
+        private const val ACTION_TRAY_DISMISS = "net.pono.droid.TRAY_DISMISS"
+        private const val EXTRA_TITLE = "title"
+        private const val EXTRA_TEXT = "text"
         private const val ACTION_START = "net.pono.droid.START"
         private const val ACTION_STOP = "net.pono.droid.STOP"
         private const val ACTION_UPDATE = "net.pono.droid.UPDATE"

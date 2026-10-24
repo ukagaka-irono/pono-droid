@@ -149,7 +149,7 @@ class SakuraScriptTest {
             """\_u[0x3042]\_m[0x41]\&[amp]\&[#x42]%property[baseware.name]\![notify,OnN,1]\![embed,OnEmbed]""" +
                 """\![timerraise,500,0,OnT,a]\![timerraise,0,1,OnT]\![get,property,OnP,system.year]""" +
                 """\f[bold,1]太\f[color,255,0,0]赤\f[height,+2]\f[align,center]\f[default]\_a[ID]link\_a\q[x,script:\0hi]""" +
-                """\![enter,passivemode]\![leave,passivemode]\![reload,shiori]\![lock,repaint]\![set,trayicon,x]\4\![open,foo]""" +
+                """\![enter,passivemode]\![leave,passivemode]\![reload,shiori]\![lock,repaint]\![set,wallpaper,x]\4\![open,foo]""" +
                 """\8[a.wav]\_v[se/b.mp3]\_V\![sound,play,c.wav,--volume=50]\![sound,loop,d.wav]\![sound,wait]\![sound,stop]\![sound,pause]\![change,shell,master]\![change,balloon,x]""",
             host,
         )
