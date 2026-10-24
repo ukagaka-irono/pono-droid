@@ -153,9 +153,14 @@ class MenuResourcesTest {
         c.awaitChoice("yes")
         c.onChoiceHover(Choice("はい", "yes", listOf("x")))
         assertEquals(listOf("はい", "yes", "x"), shiori.awaitEvent("tooltip"))
-        withTimeout(5000) { c.state.first { it.choiceTooltip == "そうする" } }
+        withTimeout(5000) { c.state.first { it.choiceTooltip == (0 to "そうする") } }
         c.onChoiceHover(null)
         withTimeout(5000) { c.state.first { it.choiceTooltip == null } }
+        // 指を離したあとに届いた答えは出さない
+        c.onChoiceHover(Choice("はい", "yes", listOf("x")))
+        c.onChoiceHover(null)
+        delay(300)
+        assertEquals(null, c.state.value.choiceTooltip)
     }
 
     @Test

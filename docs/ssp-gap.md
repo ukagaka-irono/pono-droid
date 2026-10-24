@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 184）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 186）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -66,10 +66,11 @@ OnExecuteScheduleComplete / Failure / GetComplete（ゴースト用の予定表�
 OnVoiceRecognitionStatus / OnVoiceRecognitionWord（設定で選び、マイクを許可したときだけ聞く。名前を呼ぶとそのキャラクターに伝わり、
 呼んでから 30 秒のうちに言ったこともそのキャラクターへ。誰も呼んでいない話し声は送らない。画面が消えている間は聞かない）、
 OnBIFFBegin / Complete / Failure・OnBIFF2Complete（\![biff] とメニュー・設定した間隔。POP3 と IMAP をいつも TLS で。パスワードは
-Android Keystore の鍵で暗号にして保存する。中身は読まず、差出人と件名だけ）
+Android Keystore の鍵で暗号にして保存する。中身は読まず、差出人と件名だけ）、
+OnSystemDialog / OnSystemDialogCancel（\![open,dialog,...]。選んだファイルはゴーストのフォルダの pono/dialog/ に写して渡す）
 
 ### 🔨 Android で作れる
-- 入力: OnSystemDialog / Cancel（ファイル選択などのダイアログ）、OnConfigurationDialogHelp
+- ⛔ OnConfigurationDialogHelp（SSP の設定画面の項目ごとのヘルプ。pono-droid の設定画面にはヘルプのボタンが無い）
 
 ### 🔒 決めてから
 - ⛔ OnScheduleRead（カレンダーのアイコンの上にカーソルを置いたとき。pono-droid にはカレンダーの画面もカーソルも無い）
@@ -133,19 +134,20 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 書き出しはどれもゴーストのフォルダの中だけ
 
 ### 🔨 Android で作れる
-- 開く: \![open,dialog,open / save / folder / color]（ファイル選択など）、\![open,ipinput]、
-  \![open,ghostexplorer など]（アプリの一覧画面）、\![open,surfacetest / developer / shiorirequest / errorlog / backlogviewer]（開発用の画面）
+- ✅ \![open,dialog,open / save / folder / color] と \![close,dialog]（Android の選ぶ画面。open は選んだファイルを、folder は選んだフォルダの中身を
+  ゴーストのフォルダの pono/dialog/ に写して渡す。save はゴーストがそのパスに書き終えたら、選んだ場所に写す。色はアプリの画面で選ぶ）、
+  \![open,ipinput]、\![open,ghostexplorer など]（アプリの一覧と設定の画面）、\![open,backlogviewer / errorlog]（発言履歴・ログ）と
+  \![open,surfacetest / developer / shiorirequest]（設定の「開発者向けの機能」を選んだときだけ）
 
 ### 🔒 決めてから
-- ✅ 読み上げ（Android の音声合成。アプリの設定で選ぶ。最初は読み上げない）。設定の切り替えの画面は 6c-2 の画面と一緒に作る
+- ✅ 読み上げ（Android の音声合成。アプリの設定で選ぶ。最初は読み上げない）
 - ✅ \![set,wallpaper]（--file / --position=center・tile・stretch・fit・fill / --color。アプリの設定で許したときだけ。最初は変えさせない）
 - ⛔ \![save,wallpaper] / \![restore,wallpaper]（Android 13 からは、アプリが今の壁紙を読めないので、元に戻せない）
 - ✅ \![open,editor]（ゴーストのファイルを書き換えられるようにほかのアプリで開く。設定の「開発者向けの機能」を選んだときだけ）、
   \![open,explorer]（ファイラーは無いので、そのファイルをほかのアプリで開く）
 - ✅ \![execute,schedule-add / delete / get]（ゴースト用の予定表。ゴーストのフォルダの pono/schedule.ics。--uid / --summary / --start / --end / --rrule /
-  --notify / --description / --location / --event、get は --from / --to / --expand / --limit）。端末のカレンダーの読み取りは、設定の切り替えと
-  許可を求める画面を 6c-2 の画面と一緒に作る
-- ✅ \![biff(,アカウント名)]（アカウントを入れる画面は 6c-2 の画面と一緒に作る）
+  --notify / --description / --location / --event、get は --from / --to / --expand / --limit）。端末のカレンダーは、設定で選んで読む許可を出したときだけ読む
+- ✅ \![biff(,アカウント名)]（アカウントと確かめる間隔はアプリの設定の画面で入れる）
 - ⛔ \![open,messenger]（SSP のメッセンジャーは pono-droid に無い）
 - ⛔ \![execute,emptyrecyclebin]（上の OnRecycleBin* と同じ理由）
 - ✅ \![set,shioridebugmode(,true/false)]（NOTIFY enable_debug）
@@ -194,11 +196,11 @@ vanishbuttoncaption / vanishbuttonvisible（メニューの「消去」）、sak
 menu.background.font.color.* / menu.foreground.font.color.*（メニューの項目の文字と、選んでいる項目の文字の色）、
 *button.caption のうち pono-droid のメニューにある項目（ghostroot / shellroot / balloonroot / dressuproot / recommendroot / portalroot / readme / terms /
 aistate / rateofuse / update / hide / vanish / quit / closeballoon。新しい名前を古い名前より先に使う）、getaistate / getaistateex（メニューの
-「AI グラフ」と \![open,aigraph]。グラフの代わりにラベルと値を並べる）、useorigin1、other_homeurl_override、balloon_tooltip / tooltip（選択肢を長押ししたとき。
-画面に出すのは 6c-2 の画面と一緒に作る）
+「AI グラフ」と \![open,aigraph]。グラフの代わりにラベルと値を並べる）、useorigin1、other_homeurl_override、balloon_tooltip / tooltip（選択肢を長押ししている間、
+そのバルーンのキャラクターの上に出す）
 
 ### 🔨 Android で作れる
-- log_path（開発用の画面の「開く」。6c-2 の画面と一緒に作る）
+- log_path（開発用パレットから SHIORI のログを開く。パレットにまだ「開く」が無い）
 
 ### ⛔ 作れない（メニュー）
 - menu.*.bitmap.filename、menu.separator.color.*、menu.frame.color.*、menu.disable.font.color.*（pono-droid のメニューはバルーンに出すので、
@@ -215,8 +217,7 @@ SSP 専用のメニュー項目の名前（ヘッドライン・プラグイン�
   Option の nobreak / notify / notranslate）、COMMUNICATE、GIVE、EXECUTE（GetName / GetNames / GetGhostName / GetShellName / GetBalloonName / GetVersion /
   GetShortVersion / Get*NameList / GetStatus / Quiet / Restore / GetProperty / SetCookie / GetCookie / SetTrayIcon / SetTrayBalloon。SetProperty・MoveAsync・
   DumpSurface・CompressArchive・ExtractArchive は Owned SSTP だけ）、keep-alive、SSTP over HTTP（localhost のページからだけ）、ReceiverGhostName / Ghost。
-  ほかのアプリから届いたスクリプトは \![execute] \![open,browser / file] \![change] \![vanishbymyself] \- \j などを使えない（uniqueid を付けた Owned SSTP は使える）。
-  設定の切り替えの画面は 6c-2 の画面と一緒に作る
+  ほかのアプリから届いたスクリプトは \![execute] \![open,browser / file] \![change] \![vanishbymyself] \- \j などを使えない（uniqueid を付けた Owned SSTP は使える）
 - 👥 複数ゴーストの同時起動（上の 👥 はすべてこれが前提）
 - ⛔ SHIORI の美坂・偽林檎など（Windows の DLL。ソースが公開されていて Android 用にビルドできるものだけ作れる）
 - ⛔ SAORI・YAYA の EXECUTE・プラグイン（安全のために止めている。ゴーストに端末でプログラムを動かさせることになる）

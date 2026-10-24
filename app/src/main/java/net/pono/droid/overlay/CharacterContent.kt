@@ -301,11 +301,15 @@ fun CharacterSurface(
         val file = frame.file?.let(controller.shell::file) ?: continue
         key(layer, frame) { ImportedAnimation(file, frame, pxPerImagePxX, pxPerImagePxY) }
     }
-    tooltip?.let { SurfaceTooltip(it) }
+    // 当たり判定に触れている間はそのツールチップ。無ければ、このキャラクターのバルーンで長押ししている選択肢のツールチップ
+    (tooltip ?: state.choiceTooltip?.takeIf { it.first == scopeId }?.second)?.let { SurfaceTooltip(it) }
     }
 }
 
-/** 当たり判定のツールチップ（sakura.tooltips など）。指が触れている間、キャラクターの上の端に出す */
+/**
+ * 当たり判定のツールチップ（sakura.tooltips など）と、バルーンで長押ししている選択肢のツールチップ（balloon_tooltip / tooltip）。
+ * 指が触れている間、キャラクターの上の端に出す
+ */
 @Composable
 private fun SurfaceTooltip(text: String) {
     Surface(

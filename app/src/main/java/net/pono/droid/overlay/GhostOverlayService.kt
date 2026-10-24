@@ -63,6 +63,7 @@ import net.pono.baseware.ghost.DeviceEvent
 import net.pono.baseware.ghost.DiskInfo
 import net.pono.baseware.ghost.SoundStatus
 import net.pono.baseware.ghost.SurfaceDump
+import net.pono.baseware.ghost.SystemDialogRequest
 import net.pono.baseware.ghost.SystemInfo
 import net.pono.baseware.ghost.WallpaperRequest
 import net.pono.baseware.ghost.WindowGeometry
@@ -72,10 +73,12 @@ import net.pono.baseware.net.SstpServer
 import net.pono.baseware.sakura.SoundOptions
 import net.pono.baseware.shell.Shell
 import net.pono.droid.AppVersion
+import net.pono.droid.DeveloperActivity
 import net.pono.droid.GhostShortcutActivity
 import net.pono.droid.GhostStore
 import net.pono.droid.MainActivity
 import net.pono.droid.R
+import net.pono.droid.SystemDialogActivity
 import net.pono.droid.TextViewerActivity
 import java.io.File
 import kotlin.math.roundToInt
@@ -266,6 +269,17 @@ class GhostOverlayService : LifecycleService() {
                 }
 
                 override fun showText(title: String, text: String) = TextViewerActivity.start(this@GhostOverlayService, title, text)
+
+                override fun openSystemDialog(request: SystemDialogRequest): Boolean {
+                    SystemDialogActivity.start(this@GhostOverlayService, request)
+                    return true
+                }
+
+                override fun closeSystemDialog(id: String?) = SystemDialogActivity.close(id)
+
+                override fun developerMode(): Boolean = OverlaySettings.developer(OverlaySettings.prefs(this@GhostOverlayService))
+
+                override fun openDeveloperScreen(page: String) = DeveloperActivity.start(this@GhostOverlayService, page)
 
                 override fun openSettings() {
                     startActivity(Intent(this@GhostOverlayService, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -651,6 +665,29 @@ class GhostOverlayService : LifecycleService() {
         voice = VoiceListener(this) { text -> controller?.onVoiceRecognized(text) }.also { it.start() }
     }
 
+    /**
+     * \![open,dialog,save] で選んだ保存先。ゴーストがゴーストのフォルダの [file] に書き終えたら（大きさが変わらなくなったら）、
+     * 選ばれた場所 [uri] に写す。[SAVE_WAIT_MS] のうちに書かれなければやめる
+     */
+    private fun watchSave(file: File, uri: Uri) {
+        lifecycleScope.launch {
+            var lastSize = -1L
+            val until = SystemClock.elapsedRealtime() + SAVE_WAIT_MS
+            while (SystemClock.elapsedRealtime() < until) {
+                kotlinx.coroutines.delay(1000)
+                val size = if (file.isFile) file.length() else -1L
+                if (size >= 0 && size == lastSize) {
+                    val ok = withContext(Dispatchers.IO) {
+                        runCatching { contentResolver.openOutputStream(uri, "wt")?.use { out -> file.inputStream().use { it.copyTo(out) } } != null }.getOrDefault(false)
+                    }
+                    if (!ok) toast("保存できませんでした")
+                    return@launch
+                }
+                lastSize = size
+            }
+        }
+    }
+
     /** SSTP サーバー（設定で選んだときだけ。この端末の中のアプリからだけ受ける） */
     private var sstp: SstpServer? = null
 
@@ -836,6 +873,7 @@ class GhostOverlayService : LifecycleService() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         OverlaySettings.prefs(this).let {
             characterScale = OverlaySettings.characterScale(it)
             balloonScale = OverlaySettings.balloonScale(it)
@@ -947,6 +985,7 @@ class GhostOverlayService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         OverlaySettings.prefs(this).unregisterOnSharedPreferenceChangeListener(scaleListener)
         unregisterReceiver(screenReceiver)
         unregisterReceiver(batteryReceiver)
@@ -1084,6 +1123,16 @@ class GhostOverlayService : LifecycleService() {
         fun setAppInFront(inFront: Boolean) {
             _appInFront.value = inFront
         }
+
+        /** 動いているサービス（\![open,dialog,save] の保存先を見張るため） */
+        private var instance: GhostOverlayService? = null
+
+        /** [file] にゴーストが書いたら [uri] に写す（ゴーストが動いていなければ何もしない） */
+        fun watchSave(file: File, uri: Uri) {
+            instance?.watchSave(file, uri)
+        }
+
+        private const val SAVE_WAIT_MS = 120_000L
 
         private val _controller = MutableStateFlow<GhostController?>(null)
 

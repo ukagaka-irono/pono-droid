@@ -66,7 +66,7 @@ private val SimpleText = Color(0xFF3E2723)
 /**
  * ゴーストの入力の箱（\![open,inputbox,...] など）。SSP と同じく \0 のバルーンの位置（話している文の下）に出す。
  * バルーンに入力の箱の画像（balloonc0.png、複数行は balloonc5.png）があればそれを敷き、communicatebox の範囲に入力欄を置く。
- * 無ければ簡易バルーンと同じ見た目の箱にする。年月日・時分秒・スライダーは数を入れる欄が要るので、いつも簡易な見た目。
+ * 無ければ簡易バルーンと同じ見た目の箱にする。年月日・時分秒・スライダー・IP アドレスは数を入れる欄が要るので、いつも簡易な見た目。
  * 戻るボタンは取り消し。答えや取り消しは [onSubmit] / [onCancel] に箱の通し番号と一緒に返す。
  */
 @Composable
@@ -78,7 +78,7 @@ fun InputBalloon(request: InputRequest, skin: BalloonSkin?, onSubmit: (Int, Stri
     val textState: MutableState<TextFieldValue> =
         remember(request.serial) { mutableStateOf(TextFieldValue(request.text, TextRange(0, request.text.length))) }
     var text by textState
-    // 年月日・時分秒・スライダーの値
+    // 年月日・時分秒・IP アドレス・スライダーの値
     val numbers = remember(request.serial) { request.values.map { mutableStateOf(it.toString()) } }
     var slider by remember(request.serial) { mutableStateOf(request.values.firstOrNull()?.toFloat() ?: 0f) }
     val focus = remember(request.serial) { FocusRequester() }
@@ -86,6 +86,8 @@ fun InputBalloon(request: InputRequest, skin: BalloonSkin?, onSubmit: (Int, Stri
     val submit = {
         val answer = when (request.kind) {
             InputRequest.Kind.DATE, InputRequest.Kind.TIME -> numbers.joinToString(",") { it.value.trim().toIntOrNull()?.toString() ?: "0" }
+            // IP アドレスは4つの数を「.」でつなぐ（空の欄は 0、それぞれ 0〜255 に収める）
+            InputRequest.Kind.IP -> numbers.joinToString(".") { ((it.value.trim().toIntOrNull() ?: 0).coerceIn(0, 255)).toString() }
             InputRequest.Kind.SLIDER -> slider.roundToInt().toString()
             else -> text.text
         }
@@ -194,9 +196,9 @@ private fun SimpleInputBox(
     cancel: () -> Unit,
 ) {
     var text by textState
-    // 年月日・時分秒は欄が3つ並ぶので、バルーンより広く取る（画面には収める）
-    val threeFields = request.kind == InputRequest.Kind.DATE || request.kind == InputRequest.Kind.TIME
-    val width = if (threeFields) (LocalConfiguration.current.screenWidthDp - 32).coerceIn(160, 320).dp else balloonMaxWidth()
+    // 年月日・時分秒は欄が3つ、IP アドレスは4つ並ぶので、バルーンより広く取る（画面には収める）
+    val fieldRow = request.kind == InputRequest.Kind.DATE || request.kind == InputRequest.Kind.TIME || request.kind == InputRequest.Kind.IP
+    val width = if (fieldRow) (LocalConfiguration.current.screenWidthDp - 32).coerceIn(160, 320).dp else balloonMaxWidth()
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = Color.White,
@@ -206,13 +208,19 @@ private fun SimpleInputBox(
         Column(Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp)) {
             val fieldModifier = Modifier.padding(end = 8.dp)
             when (request.kind) {
-                InputRequest.Kind.DATE, InputRequest.Kind.TIME -> {
-                    val labels = if (request.kind == InputRequest.Kind.DATE) listOf("年", "月", "日") else listOf("時", "分", "秒")
+                InputRequest.Kind.DATE, InputRequest.Kind.TIME, InputRequest.Kind.IP -> {
+                    val labels = when (request.kind) {
+                        InputRequest.Kind.DATE -> listOf("年", "月", "日")
+                        InputRequest.Kind.TIME -> listOf("時", "分", "秒")
+                        else -> listOf("1", "2", "3", "4")
+                    }
+                    // IP アドレスの欄は 0〜255 なので3桁まで
+                    val maxDigits = if (request.kind == InputRequest.Kind.IP) 3 else 6
                     Row(fieldModifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         numbers.forEachIndexed { i, state ->
                             OutlinedTextField(
                                 value = state.value,
-                                onValueChange = { v -> state.value = v.filter { it.isDigit() }.take(6) },
+                                onValueChange = { v -> state.value = v.filter { it.isDigit() }.take(maxDigits) },
                                 label = { Text(labels.getOrElse(i) { "" }, fontSize = 11.sp) },
                                 singleLine = true,
                                 textStyle = TextStyle(color = SimpleText, fontSize = 14.sp),
@@ -289,6 +297,7 @@ private fun InputRequest.label() = when (kind) {
     InputRequest.Kind.TEACH -> "教える"
     InputRequest.Kind.DATE -> "日付"
     InputRequest.Kind.TIME -> "時刻"
+    InputRequest.Kind.IP -> "IP アドレス"
     InputRequest.Kind.SLIDER -> "値"
     InputRequest.Kind.TEXTAREA -> "入力（複数行）"
 }

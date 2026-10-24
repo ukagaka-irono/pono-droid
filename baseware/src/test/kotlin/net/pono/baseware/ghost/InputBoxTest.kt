@@ -25,7 +25,8 @@ class InputBoxTest {
         assertEquals(InputRequest(InputRequest.Kind.COMMUNICATE, "", "", 0, 3), InputRequest.fromOpenTag("communicatebox", emptyList(), 3))
         // ID の無い inputbox と知らない種類は扱わない
         assertNull(InputRequest.fromOpenTag("inputbox", emptyList(), 4))
-        assertNull(InputRequest.fromOpenTag("ipinput", listOf("x"), 5))
+        // ipinput は数が無ければ 0.0.0.0 から
+        assertEquals(listOf(0, 0, 0, 0), InputRequest.fromOpenTag("ipinput", listOf("x"), 5)!!.values)
         // 日付・時刻・スライダー・複数行。--option は読み飛ばす
         assertEquals(listOf(2012, 12, 23), InputRequest.fromOpenTag("dateinput", listOf("D", "30000", "2012", "12", "23"), 6)?.values)
         assertEquals(listOf(23, 45, 12), InputRequest.fromOpenTag("timeinput", listOf("T", "0", "23", "45", "12", "--option=x"), 7)?.values)

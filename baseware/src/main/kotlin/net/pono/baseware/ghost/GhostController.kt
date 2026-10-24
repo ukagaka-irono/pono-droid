@@ -129,6 +129,21 @@ data class WindowGeometry(
  */
 data class WallpaperRequest(val file: File?, val position: String, val color: Int?)
 
+/**
+ * \![open,dialog,open / save / folder / color]。[kind] は open / save / folder / color。選んだファイルはゴーストのフォルダの
+ * [dir] に写して渡す（Android では、ほかのアプリのファイルのパスをそのまま渡せないため）。[filters] は 名前 → *.txt;*.dic
+ */
+data class SystemDialogRequest(
+    val serial: Int,
+    val kind: String,
+    val id: String,
+    val title: String,
+    val filters: List<Pair<String, String>>,
+    val defaultName: String,
+    val color: Int?,
+    val dir: File,
+)
+
 /** 端末のカレンダーの予定1件（ユーザーの予定。アプリの設定で許したときだけ読む）。終日なら [start] はその日の 0 時 */
 data class DeviceEvent(val title: String, val description: String, val start: java.time.LocalDateTime, val end: java.time.LocalDateTime, val allDay: Boolean)
 
@@ -229,6 +244,21 @@ interface GhostPlatform {
 
     /** \![set,tasktrayicon,ファイル,文字]。常駐の通知に [text] を出す（アイコンの画像は Android の通知では替えられない） */
     fun setTrayText(text: String) {}
+
+    /**
+     * ファイルを選ぶ・保存先を選ぶ・フォルダを選ぶ・色を選ぶ画面を出す。答えは [GhostController.onSystemDialogResult] に返す。
+     * 出せたら true
+     */
+    fun openSystemDialog(request: SystemDialogRequest): Boolean = false
+
+    /** \![close,dialog,ID]。[id] が null なら全部 */
+    fun closeSystemDialog(id: String?) {}
+
+    /** アプリの設定の「開発者向けの機能」。\![open,surfacetest / developer / shiorirequest] はこれを選んだときだけ */
+    fun developerMode(): Boolean = false
+
+    /** 開発用の画面を開く（page は backlog / log / shiorirequest / surfacetest / developer） */
+    fun openDeveloperScreen(page: String) {}
 
     /** [day] のユーザーの予定（端末のカレンダー）。読む許可が無ければ空 */
     fun deviceSchedule(day: java.time.LocalDate): List<DeviceEvent> = emptyList()
@@ -886,6 +916,73 @@ class GhostController(
             day("from"), day("to"), opts["expand"]?.toIntOrNull()?.coerceIn(1, 1830), opts.containsKey("expand"), opts["limit"]?.toIntOrNull()?.coerceAtLeast(0),
         )
         raise(event, net.pono.baseware.net.ICal.references(schedule.calendar(), range), userInitiated = false)
+    }
+
+    // ---- ダイアログ（\![open,dialog,...]、OnSystemDialog / OnSystemDialogCancel） ----
+
+    private var dialogSerial = 0
+    private val openDialogs = HashMap<Int, SystemDialogRequest>()
+
+    /** \![open,dialog,種類,--title,--filter,--ext,--name,--id,--color]。--dir は Android では使えない（いつも端末の選ぶ画面から） */
+    private fun openSystemDialog(args: List<String>): Boolean {
+        val kind = args.firstOrNull()?.trim()?.lowercase()?.takeIf { it in setOf("open", "save", "folder", "color") } ?: return false
+        val (_, opts) = splitArgs(args.drop(1))
+        val filters = opts["filter"]?.split('|')?.chunked(2)?.mapNotNull { c -> c.getOrNull(1)?.let { c[0] to it } }.orEmpty()
+        val ext = opts["ext"]?.trim()?.removePrefix(".").orEmpty()
+        val name = opts["name"]?.trim().orEmpty().let { n -> if (n.isNotEmpty() && ext.isNotEmpty() && !n.contains('.')) "$n.$ext" else n }
+        val color = opts["color"]?.let { ScriptPlayer.parseColor(it.split(' ', ',').filter(String::isNotBlank)) }
+        val request = SystemDialogRequest(
+            ++dialogSerial, kind, opts["id"].orEmpty(), opts["title"].orEmpty(), filters, name, color,
+            File(ghost.dir, GhostPackager.PONO_DIR + "/dialog"),
+        )
+        openDialogs[request.serial] = request
+        if (!platform.openSystemDialog(request)) {
+            openDialogs.remove(request.serial)
+            return false
+        }
+        return true
+    }
+
+    /**
+     * ダイアログの答え。[value] はゴーストのフォルダに写したファイル・フォルダのパスか "R,G,B"、null なら取り消し。
+     * --id が On で始まればそのイベント（取り消しは後ろに Cancel）、無ければ OnSystemDialog / OnSystemDialogCancel
+     */
+    fun onSystemDialogResult(serial: Int, value: String?) {
+        val r = openDialogs.remove(serial) ?: return
+        val custom = r.id.startsWith("On")
+        if (value != null) {
+            raise(if (custom) r.id else "OnSystemDialog", listOf(r.kind, r.id, value))
+        } else {
+            raise(if (custom) r.id + "Cancel" else "OnSystemDialogCancel", listOf(r.kind, r.id))
+        }
+    }
+
+    // ---- 開発用の画面から ----
+
+    /** SHIORI リクエスト送信の画面から。[event] を送り、返ってきたスクリプトを返す（[play] なら再生もする） */
+    suspend fun sendShioriRequest(event: String, references: List<String>, play: Boolean): String? {
+        val name = event.trim().takeIf { it.isNotEmpty() } ?: return null
+        val script = request(name, references)
+        if (play && script != null) {
+            cancelScript()
+            runScript(script)
+        }
+        return script
+    }
+
+    /** サーフェステストの画面から。[scope] のキャラクターに [surface] を出す */
+    fun testSurface(scope: Int, surface: Int) {
+        cancelScript()
+        runScript("\\p[$scope]\\s[$surface]\\e")
+    }
+
+    /** 開発用パレットから: SHIORI・シェル・ゴーストを読み直す */
+    fun reloadFromDeveloper(what: String) {
+        when (what) {
+            "shiori" -> scope.launch { reloadShiori() }
+            "shell" -> reloadShell()
+            "ghost" -> reloadGhost()
+        }
     }
 
     // ---- SSTP（この端末のほかのアプリから） ----
@@ -3199,7 +3296,7 @@ class GhostController(
         }
         when (request.kind) {
             InputRequest.Kind.INPUT, InputRequest.Kind.PASSWORD -> answer("OnUserInput")
-            InputRequest.Kind.DATE, InputRequest.Kind.TIME -> answer("OnUserInput", sensitive = false)
+            InputRequest.Kind.DATE, InputRequest.Kind.TIME, InputRequest.Kind.IP -> answer("OnUserInput", sensitive = false)
             // スライダーは Reference2 に「最小,最大」
             InputRequest.Kind.SLIDER -> answer("OnUserInput", listOf("${request.values.getOrNull(1) ?: 0},${request.values.getOrNull(2) ?: 0}"), sensitive = false)
             InputRequest.Kind.TEXTAREA -> {
@@ -3218,7 +3315,7 @@ class GhostController(
         _state.update { it.copy(input = null) }
         val reason = if (timeout) "timeout" else "cancel"
         when (request.kind) {
-            InputRequest.Kind.INPUT, InputRequest.Kind.PASSWORD, InputRequest.Kind.DATE, InputRequest.Kind.TIME, InputRequest.Kind.SLIDER ->
+            InputRequest.Kind.INPUT, InputRequest.Kind.PASSWORD, InputRequest.Kind.DATE, InputRequest.Kind.TIME, InputRequest.Kind.SLIDER, InputRequest.Kind.IP ->
                 raise("OnUserInputCancel", listOf(request.id, reason))
             InputRequest.Kind.TEXTAREA -> raise("OnTextAreaInputCancel", listOf(request.id, reason))
             InputRequest.Kind.COMMUNICATE -> raise("OnCommunicateInputCancel", listOf("", reason))
@@ -3243,6 +3340,9 @@ class GhostController(
         selectChoice(choice)
     }
 
+    /** 選択肢の長押しの通し番号（指を離したあとに届いたツールチップを捨てるため） */
+    private var choiceHoverSerial = 0
+
     /**
      * 選択肢・リンクを長押しした（[choice]）・指を離した（null）。カーソルを乗せたのと同じに扱い、
      * OnChoiceEnter / OnAnchorEnter と OnChoiceHover / OnAnchorHover を送る。離れたときは Reference なしの Enter（SSP と同じ）
@@ -3250,6 +3350,8 @@ class GhostController(
     fun onChoiceHover(choice: Choice?, anchor: Boolean = choice?.anchor == true) {
         lastUserActivity = System.currentTimeMillis()
         val kind = if (anchor) "Anchor" else "Choice"
+        // 指を離したら、まだ答えの来ていないツールチップも出さない
+        val hover = ++choiceHoverSerial
         if (choice == null) {
             _state.update { it.copy(choiceTooltip = null) }
             raise("On${kind}Enter", emptyList(), userInitiated = false)
@@ -3262,7 +3364,14 @@ class GhostController(
         if (!anchor) {
             scope.launch {
                 val tip = request("balloon_tooltip", refs, translate = false) ?: request("tooltip", refs, translate = false)
-                _state.update { it.copy(choiceTooltip = tip?.takeIf { t -> t.isNotBlank() }) }
+                if (hover != choiceHoverSerial) return@launch
+                _state.update { s ->
+                    // その選択肢が出ているバルーンのキャラクター（もう出ていなければ出さない）
+                    val owner = s.characters.entries.firstOrNull { (_, c) ->
+                        c.balloon?.any { it is BalloonItem.ChoiceItem && it.choice.id == choice.id && it.choice.references == choice.references } == true
+                    }?.key
+                    s.copy(choiceTooltip = tip?.takeIf { t -> t.isNotBlank() && owner != null }?.let { owner!! to it })
+                }
             }
         }
     }
@@ -4623,6 +4732,11 @@ class GhostController(
                     platform.openUrl("mailto:$address")
                 }
                 "configurationdialog", "ghostexplorer", "shellexplorer", "balloonexplorer", "dressupexplorer" -> platform.openSettings()
+                "dialog" -> return openSystemDialog(args)
+                "backlogviewer" -> platform.openDeveloperScreen("backlog")
+                "errorlog" -> platform.openDeveloperScreen("log")
+                // 開発者向けの機能を選んでいなければ何もしない（SSP と同じ）
+                "surfacetest", "developer", "shiorirequest" -> if (platform.developerMode()) platform.openDeveloperScreen(kind)
                 else -> return false
             }
             return true
@@ -4633,7 +4747,11 @@ class GhostController(
                 args.firstOrNull()?.let { closeWebSocket(it, args.getOrNull(1)?.trim()?.toIntOrNull() ?: 1000) } ?: return false
                 return true
             }
-            if (kind !in setOf("inputbox", "passwordinput", "communicatebox", "teachbox", "dateinput", "timeinput", "sliderinput", "textareabox")) return false
+            if (kind == "dialog") {
+                platform.closeSystemDialog(args.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() && it != "__SYSTEM_ALL_DIALOG__" })
+                return true
+            }
+            if (kind !in setOf("inputbox", "passwordinput", "communicatebox", "teachbox", "dateinput", "timeinput", "sliderinput", "textareabox", "ipinput")) return false
             closeInput(args.firstOrNull())
             return true
         }

@@ -3,6 +3,7 @@ package net.pono.droid
 import android.Manifest
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -24,6 +25,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -34,10 +38,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -54,7 +60,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import kotlinx.coroutines.Dispatchers
@@ -64,8 +73,10 @@ import net.pono.baseware.balloon.Balloon
 import net.pono.baseware.balloon.BalloonRepository
 import net.pono.baseware.ghost.Ghost
 import net.pono.baseware.ghost.NarInstaller
+import net.pono.baseware.net.MailAccount
 import net.pono.baseware.shell.Shell
 import net.pono.droid.overlay.GhostOverlayService
+import net.pono.droid.overlay.MailAccounts
 import net.pono.droid.overlay.OverlaySettings
 import kotlin.math.roundToInt
 
@@ -238,6 +249,30 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                         },
                     )
                 }
+                item(key = "settings-header") {
+                    Text("設定", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                }
+                item(key = "setting:developer") { SettingSwitch("開発者向けの機能", OverlaySettings.KEY_DEVELOPER, OverlaySettings::developer) }
+                item(key = "setting:speech") { SettingSwitch("話した文字を読み上げる", OverlaySettings.KEY_SPEECH, OverlaySettings::speech) }
+                item(key = "setting:sstp") { SettingSwitch("ほかのアプリから SSTP を受ける（この端末の中だけ）", OverlaySettings.KEY_SSTP, OverlaySettings::sstp) }
+                item(key = "setting:wallpaper") {
+                    SettingSwitch("ゴーストが壁紙を変えてよい（元の壁紙には戻せません）", OverlaySettings.KEY_WALLPAPER, OverlaySettings::wallpaper)
+                }
+                item(key = "setting:calendar") {
+                    SettingSwitch(
+                        "今日の予定をゴーストに伝える（端末のカレンダー）", OverlaySettings.KEY_CALENDAR, OverlaySettings::calendar,
+                        permission = Manifest.permission.READ_CALENDAR,
+                        onDenied = { scope.launch { snackbar.showSnackbar("カレンダーを読む許可がありません") } },
+                    )
+                }
+                item(key = "setting:voice") {
+                    SettingSwitch(
+                        "名前を呼ぶと声を聞く（マイク）", OverlaySettings.KEY_VOICE, OverlaySettings::voice,
+                        permission = Manifest.permission.RECORD_AUDIO,
+                        onDenied = { scope.launch { snackbar.showSnackbar("マイクの許可がありません") } },
+                    )
+                }
+                item(key = "setting:mail") { MailAccountRow(onMessage = { scope.launch { snackbar.showSnackbar(it) } }) }
                 item(key = "version") {
                     Text(
                         "pono-droid バージョン $version",
@@ -284,6 +319,160 @@ private fun ScaleSlider(label: String, key: String, read: (SharedPreferences) ->
             valueRange = range,
         )
     }
+}
+
+/**
+ * 入り切りの設定。切り替えたときに保存する。permission があれば、入れる前に許可を求め、許されなければ切ったままにする。
+ * 後から端末の設定で許可を取り消されたら、設定が入っていても切れているように出す（画面に戻るたびに確かめる）
+ */
+@Composable
+private fun SettingSwitch(
+    label: String,
+    key: String,
+    read: (SharedPreferences) -> Boolean,
+    permission: String? = null,
+    onDenied: () -> Unit = {},
+) {
+    val context = LocalContext.current
+    val prefs = remember { OverlaySettings.prefs(context) }
+    var checked by remember { mutableStateOf(read(prefs)) }
+    fun hasPermission() = permission == null || ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+    var granted by remember { mutableStateOf(hasPermission()) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { granted = hasPermission() }
+    fun save(value: Boolean) {
+        checked = value
+        prefs.edit().putBoolean(key, value).apply()
+    }
+    val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        granted = ok
+        if (ok) save(true) else onDenied()
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Switch(
+            checked = checked && granted,
+            onCheckedChange = { on -> if (on && permission != null) request.launch(permission) else save(on) },
+        )
+    }
+}
+
+/** メールの確認（\![biff]）のアカウントと、確かめる間隔。アカウントは1つだけ */
+@Composable
+private fun MailAccountRow(onMessage: (String) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var account by remember { mutableStateOf<MailAccount?>(null) }
+    // 読み終わるまでは編集させない（無いと思って保存すると、あったアカウントを消してしまう）
+    var loaded by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    var interval by remember { mutableStateOf(MailAccounts.intervalMinutes(context)) }
+    LaunchedEffect(Unit) {
+        // パスワードを鍵で戻すので IO スレッドで読む
+        account = withContext(Dispatchers.IO) { runCatching { MailAccounts.load(context) }.getOrDefault(emptyList()) }.firstOrNull()
+        loaded = true
+    }
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("メールのアカウント: ${account?.name ?: "なし"}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            TextButton(onClick = { editing = true }, enabled = loaded) { Text("編集") }
+            TextButton(onClick = { confirmDelete = true }, enabled = account != null) { Text("削除") }
+        }
+        // 前に入れた値が選べるものに無くても、今の値として出す
+        val minutes = listOf(0, 15, 30, 60).let { if (interval in it) it else (it + interval).sorted() }
+        SelectButton("確かめる間隔", minutes.map { it to if (it == 0) "しない" else "$it 分" }, interval, { value ->
+            interval = value
+            MailAccounts.setIntervalMinutes(context, value)
+        })
+    }
+    if (editing) {
+        MailAccountDialog(
+            account = account,
+            onDismiss = { editing = false },
+            onSave = { new ->
+                editing = false
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { runCatching { MailAccounts.save(context, listOf(new)) } }
+                    result.onSuccess { account = new }
+                    onMessage(result.fold({ "保存しました" }, { "保存できませんでした: ${it.message}" }))
+                }
+            },
+        )
+    }
+    val current = account
+    if (confirmDelete && current != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("メールのアカウントを削除") },
+            text = { Text("「${current.name}」を削除しますか？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    scope.launch {
+                        val ok = withContext(Dispatchers.IO) { runCatching { MailAccounts.save(context, emptyList()) }.isSuccess }
+                        if (ok) account = null
+                        onMessage(if (ok) "削除しました: ${current.name}" else "削除できませんでした: ${current.name}")
+                    }
+                }) { Text("削除") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("やめる") } },
+        )
+    }
+}
+
+private fun defaultMailPort(protocol: String) = if (protocol == "pop3") 995 else 993
+
+/** メールのアカウントを入れる。削除は一覧の行から（確かめてから） */
+@Composable
+private fun MailAccountDialog(account: MailAccount?, onDismiss: () -> Unit, onSave: (MailAccount) -> Unit) {
+    var name by remember { mutableStateOf(account?.name ?: "") }
+    var host by remember { mutableStateOf(account?.host ?: "") }
+    var protocol by remember { mutableStateOf(account?.protocol ?: "imap") }
+    var port by remember { mutableStateOf((account?.port ?: defaultMailPort(protocol)).toString()) }
+    var user by remember { mutableStateOf(account?.user ?: "") }
+    var password by remember { mutableStateOf(account?.password ?: "") }
+    val portNumber = port.trim().toIntOrNull()
+    val canSave = name.isNotBlank() && host.isNotBlank() && user.isNotBlank() && password.isNotEmpty() && portNumber != null
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("メールのアカウント") },
+        text = {
+            // 小さい画面では入りきらないので流せるようにする
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("名前") }, singleLine = true)
+                OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text("サーバー") }, singleLine = true)
+                OutlinedTextField(
+                    value = port,
+                    onValueChange = { port = it },
+                    label = { Text("ポート") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text("ユーザー名") }, singleLine = true)
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("パスワード") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                )
+                Text("パスワードは端末の鍵で暗号にして保存します", style = MaterialTheme.typography.bodySmall)
+                SelectButton("種類", listOf("imap" to "IMAP", "pop3" to "POP3"), protocol, { value ->
+                    // ポートが前の種類の決まりのままなら、新しい種類の決まりに合わせる
+                    if (port.trim() == defaultMailPort(protocol).toString()) port = defaultMailPort(value).toString()
+                    protocol = value
+                })
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { portNumber?.let { onSave(MailAccount(name.trim(), protocol, host.trim(), it, user.trim(), password)) } },
+                enabled = canSave,
+            ) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("やめる") } },
+    )
 }
 
 /** 一覧の1行に出すもの。シェルやバルーンの名前を読むのにファイルを開くので、まとめて IO スレッドで作る */

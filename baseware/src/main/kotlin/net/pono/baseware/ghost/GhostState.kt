@@ -182,8 +182,8 @@ data class GhostState(
     val induction: Boolean = false,
     /** 選んだことのある \_a のリンクの ID（訪問済みの見た目にする） */
     val visitedAnchors: Set<String> = emptySet(),
-    /** 長押ししている選択肢のツールチップ（balloon_tooltip / tooltip リソース）。無ければ null */
-    val choiceTooltip: String? = null,
+    /** 長押ししている選択肢のツールチップ（balloon_tooltip / tooltip リソース）と、その選択肢のあるバルーンのキャラクター。無ければ null */
+    val choiceTooltip: Pair<Int, String>? = null,
     /** \![enter,collisionmode] の間は "names"（名前も出す）か "rect"（枠だけ）。当たり判定をキャラクターの上に描く */
     val collisionMode: String? = null,
     /** \![enter,selectmode] の間 */

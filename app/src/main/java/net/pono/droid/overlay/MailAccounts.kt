@@ -55,6 +55,9 @@ object MailAccounts {
     fun intervalMinutes(context: Context): Int =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_INTERVAL, 0).coerceIn(0, 24 * 60)
 
+    fun setIntervalMinutes(context: Context, minutes: Int) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(KEY_INTERVAL, minutes.coerceIn(0, 24 * 60)).apply()
+
     private fun key(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (store.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }

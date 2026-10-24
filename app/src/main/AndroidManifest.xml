@@ -82,6 +82,19 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- 開発用の画面（\![open,backlogviewer / errorlog / surfacetest / developer / shiorirequest]） -->
+        <activity
+            android:name=".DeveloperActivity"
+            android:exported="false" />
+
+        <!-- \![open,dialog,open / save / folder / color]。選ぶ画面は Android のもので、色だけこの画面で選ぶ -->
+        <activity
+            android:name=".SystemDialogActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- readme などを読む画面（\![open,readme]） -->
         <activity
             android:name=".TextViewerActivity"

@@ -41,17 +41,21 @@ data class InputRequest(
 
         /** 何行かの文。答えは改行を 0x01 にした文で、イベントは OnTextAreaInput */
         TEXTAREA,
+
+        /** IP アドレス（4つの数）。答えは "192.168.0.1" で、イベントは INPUT と同じ */
+        IP,
     }
 
     /** 答えを送るときの値 */
-    val isNumeric: Boolean get() = kind == Kind.DATE || kind == Kind.TIME || kind == Kind.SLIDER
+    val isNumeric: Boolean get() = kind == Kind.DATE || kind == Kind.TIME || kind == Kind.SLIDER || kind == Kind.IP
 
     companion object {
         /**
          * `\![open,種類,引数...]` の種類と引数から作る。扱えない種類なら null。
          * inputbox / passwordinput / textareabox は 引数 = ID, タイムアウト（ミリ秒）, 最初の文字。
          * dateinput は ID, タイムアウト, 年, 月, 日。timeinput は ID, タイムアウト, 時, 分, 秒。
-         * sliderinput は ID, タイムアウト, 今の値, 最小, 最大。"--" で始まる引数（オプション）は読み飛ばす。
+         * sliderinput は ID, タイムアウト, 今の値, 最小, 最大。ipinput は ID, タイムアウト, 4つの数（か --text="192,168,0,1"）。
+         * "--" で始まる引数（オプション）は、ipinput の --text と --timeout のほかは読み飛ばす。
          */
         fun fromOpenTag(kind: String, args: List<String>, serial: Int): InputRequest? {
             when (kind.lowercase()) {
@@ -60,6 +64,13 @@ data class InputRequest(
             }
             val positional = args.filterNot { it.trim().startsWith("--") }
             val id = positional.firstOrNull() ?: return null
+            if (kind.lowercase() == "ipinput") {
+                fun opt(name: String) = args.map { it.trim() }.firstOrNull { it.startsWith("--$name=") }?.substringAfter('=')
+                val timeout = positional.getOrNull(1)?.trim()?.toLongOrNull() ?: opt("timeout")?.toLongOrNull() ?: 0L
+                val parts = opt("text")?.split(',', '.')?.map { it.trim() } ?: positional.drop(2)
+                val ip = (0 until 4).map { i -> parts.getOrNull(i)?.trim()?.toIntOrNull()?.coerceIn(0, 255) ?: 0 }
+                return InputRequest(Kind.IP, id, "", timeout, serial, ip)
+            }
             fun timeout() = positional.getOrNull(1)?.trim()?.toLongOrNull() ?: 0L
             fun number(i: Int, default: Int) = positional.getOrNull(i)?.trim()?.toIntOrNull() ?: default
             val now = java.util.Calendar.getInstance()
