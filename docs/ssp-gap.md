@@ -94,16 +94,18 @@ OnOtherOverlap / Offscreen、OnRaiseOtherFailure / OnNotifyOtherFailure、OnOthe
 \![close,...] \![set,balloontimeout / choicetimeout / scaling / alpha / position] \![reset,position] \![move] \![moveasync]（--option=ignore-sticky-window も）
 \![set,zorder] \![reset,zorder] \![set,sticky-window] \![reset,sticky-window] \![set,windowstate,minimize] \![set,alignmenttodesktop]
 \![execute,resetwindowpos] \4 \5 \v
+\c[char,数,開始位置] \c[line,数,開始位置] \n[half] \n[パーセント] \_n \x[noclear]（\x は \f も戻す） \t \z \_? \_!
+\f[name]（ゴーストやバルーンのフォルダのフォントファイルと、明朝・ゴシックなどの系統） \f[shadowcolor / shadowstyle / outline / valign / disable]
+\![set,autoscroll / balloonwait / serikotalk] \![lock / unlock,balloonrepaint / repaint（manual も）/ balloonmove] \![execute,resetballoonpos]
+\![enter / leave,onlinemode / nouserbreakmode / inductionmode]、バルーンの descript.txt の font.name / shadowcolor / shadowstyle / bold / italic /
+underline / strike / outline / disable.font.color と、オンラインの印（online*.png、onlinemarker.x / y / interval）
 \![anim,offset / clear / stop] \![bind] \![bind-noevent] \![sound,play / loop / stop / wait] \![change,ghost / shell / balloon]
 \![execute,http-get] \![updatebymyself] \![reload,shiori] \![enter / leave,passivemode] \![quicksection]
 
 ### 🔨 Android で作れる
-- 文字とバルーン: \c[char,n] / \c[line,n]（一部を消す）、\n[パーセント]、\_n（自動改行の切り替え）、\x[noclear]、\t（割り込み禁止）、\z、\_! \_?（タグを文字として出す）、
-  \f[name]（バルーン同梱のフォント）、\f[shadowcolor / shadowstyle / outline / valign / anchor.font.color]、\f[cursor* / anchor*]（選択肢とリンクの色と形）、
-  \![set,autoscroll / balloonoffset / balloonalign / balloonmarker / balloonnum / balloonwait / serikotalk]、
-  \![lock,balloonrepaint / balloonmove]、\![execute,resetballoonpos]、\![enter / leave,onlinemode / nouserbreakmode / inductionmode]
+- 文字とバルーン: \f[anchor.font.color]、\f[cursor* / anchor*]（選択肢とリンクの色と形）、
+  \![set,balloonoffset / balloonalign / balloonmarker / balloonnum]
 - アニメーション: \![anim,pause / resume / add,overlay / add,text]、\__w[animation,ID]、\i[ID,wait]、\![wait,syncobject] / \![set,syncobject] / \![reset,syncobject]
-- ウィンドウ: \![lock / unlock,repaint]（描き直しを止める。アニメーションとシェルのまとまりで作る）
 - ゴースト: \![vanishbymyself]（確認してから消す）、\+ \_+（ランダム・順番にゴーストを替える）、\![change,calendarskin]（無視）、\a（OnAITalk）、
   \![reloadsurface] \![reload,shell / balloon / ghost / descript] \![load / unload,shiori]
 - 開く: \![open,file]（Android のアプリで開く）、\![open,mailer]、\![open,dialog,open / save / folder / color]（ファイル選択など）、\![open,ipinput]、

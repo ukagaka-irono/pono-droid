@@ -2,7 +2,8 @@ package net.pono.baseware.sakura
 
 /** さくらスクリプトの字句。 */
 sealed interface Token {
-    data class Text(val text: String) : Token
+    /** [literal] は \_? ... \_? の中。タグも環境変数もそのまま文字として出す */
+    data class Text(val text: String, val literal: Boolean = false) : Token
 
     /** `\s[10]` なら name="s", args=["10"]。`\_w[100]` なら name="_w"。 */
     data class Tag(val name: String, val args: List<String> = emptyList()) : Token
@@ -61,6 +62,16 @@ object SakuraScript {
                     p += 1
                     next.toString()
                 }
+            }
+
+            // \_? から次の \_? まで（古い書き方は \_!）は、タグを実行せずにそのまま出す
+            if (name == "_?" || name == "_!") {
+                flush()
+                val close = script.indexOf("\\$name", p)
+                val end = if (close < 0) script.length else close
+                if (end > p) tokens += Token.Text(script.substring(p, end), literal = true)
+                i = if (close < 0) script.length else close + 3
+                continue
             }
 
             val args: List<String>

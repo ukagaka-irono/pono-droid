@@ -51,8 +51,25 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign as ComposeTextAlign
+import androidx.compose.ui.text.TextStyle as ComposeTextStyle
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.Fill
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 import net.pono.baseware.sakura.TextAlign
 import net.pono.baseware.sakura.TextStyle
+import net.pono.baseware.sakura.VerticalAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -68,36 +85,85 @@ import net.pono.baseware.ghost.BalloonItem
 import net.pono.baseware.ghost.BalloonLayout
 import net.pono.baseware.sakura.Choice
 
-/** バルーンの中の文の色と大きさ。[spPerPx] は \f[height,px] のピクセルを sp にする倍率 */
+/**
+ * バルーンの中の文の色と大きさと、バルーンの descript.txt の既定の飾り（font.name・影・白抜きなど）。
+ * [spPerPx] は \f[height,px] のピクセルを sp にする倍率、[pxPerPx] はバルーン画像の 1px が画面の何 px か（影のずれに使う）
+ */
 data class BalloonTextStyle(
     val textColor: Color,
     val choiceColor: Color,
     val fontSize: TextUnit,
     val spPerPx: Float = 1f,
+    val pxPerPx: Float = 2f,
+    val fontFamily: FontFamily? = null,
+    val shadowColor: Color? = null,
+    val shadowOutline: Boolean = false,
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val underline: Boolean = false,
+    val strike: Boolean = false,
+    val outline: Boolean = false,
+    val disabledColor: Color = Color(0xFF9E9E9E),
 ) {
-    /** \f の飾りを Compose の文字飾りにする */
-    fun span(style: TextStyle): SpanStyle {
+    /** 文全体に付ける既定の飾り */
+    fun base(): ComposeTextStyle = ComposeTextStyle(
+        fontFamily = fontFamily,
+        fontWeight = if (bold) FontWeight.Bold else null,
+        fontStyle = if (italic) FontStyle.Italic else null,
+        textDecoration = decoration(underline, strike),
+        shadow = shadowColor?.let { shadow(it, shadowOutline) },
+        drawStyle = if (outline) outlineStroke() else null,
+    )
+
+    /** \f[shadowstyle,outline] は縁取り（ずらさずにぼかす）、それ以外は右下にずらす */
+    private fun shadow(color: Color, outline: Boolean) =
+        if (outline) Shadow(color, Offset.Zero, blurRadius = 2.5f * pxPerPx) else Shadow(color, Offset(pxPerPx, pxPerPx), blurRadius = 1f)
+
+    /** 白抜き（\f[outline,1]・font.outline）。縁だけ描く */
+    private fun outlineStroke() = Stroke(width = maxOf(1f, pxPerPx * 0.75f))
+
+    private fun decoration(underline: Boolean, strike: Boolean): TextDecoration? {
+        val decorations = listOfNotNull(TextDecoration.Underline.takeIf { underline }, TextDecoration.LineThrough.takeIf { strike })
+        return if (decorations.isEmpty()) null else TextDecoration.combine(decorations)
+    }
+
+    /** \f[height] を考えた文字の大きさ（sp。下付き・上付きなら小さく） */
+    fun size(style: TextStyle): Float {
         val base = fontSize.value
         val size = when (style.heightMode) {
             TextStyle.HeightMode.ABSOLUTE -> style.height?.let { it * spPerPx }
             TextStyle.HeightMode.RELATIVE -> style.height?.let { base + it * spPerPx }
             TextStyle.HeightMode.PERCENT -> style.height?.let { base * it / 100f }
         }?.coerceIn(6f, 72f) ?: base
-        val decorations = listOfNotNull(
-            TextDecoration.Underline.takeIf { style.underline },
-            TextDecoration.LineThrough.takeIf { style.strike },
-        )
+        return if (style.sub || style.sup) size * 0.75f else size
+    }
+
+    /** \f の飾りを Compose の文字飾りにする。指定していないもの（null）はバルーンの既定のまま */
+    fun span(style: TextStyle, baselineShift: BaselineShift? = null): SpanStyle {
+        val shadow = when {
+            style.noShadow -> Shadow.None
+            style.shadowColor != null || style.shadowStyle != null ->
+                (style.shadowColor?.let { Color(it or 0xFF000000.toInt()) } ?: shadowColor)
+                    ?.let { shadow(it, style.shadowStyle?.let { s -> s == TextStyle.ShadowStyle.OUTLINE } ?: shadowOutline) }
+            else -> null
+        }
         return SpanStyle(
-            color = style.color?.let { Color(it or 0xFF000000.toInt()) } ?: Color.Unspecified,
+            color = when {
+                style.disabled -> disabledColor
+                else -> style.color?.let { Color(it or 0xFF000000.toInt()) } ?: Color.Unspecified
+            },
             fontWeight = if (style.bold) FontWeight.Bold else null,
             fontStyle = if (style.italic) FontStyle.Italic else null,
-            fontSize = (if (style.sub || style.sup) size * 0.75f else size).sp,
+            fontSize = size(style).sp,
+            fontFamily = style.font?.let(BalloonFonts::family),
             baselineShift = when {
                 style.sub -> BaselineShift.Subscript
                 style.sup -> BaselineShift.Superscript
-                else -> null
+                else -> baselineShift
             },
-            textDecoration = if (decorations.isEmpty()) null else TextDecoration.combine(decorations),
+            textDecoration = decoration(style.underline, style.strike),
+            shadow = shadow,
+            drawStyle = style.outline?.let { if (it) outlineStroke() else Fill },
         )
     }
 
@@ -115,20 +181,41 @@ internal fun BalloonColor.toColor() = Color(r, g, b)
 @Composable
 internal fun balloonMaxWidth(): Dp = (LocalConfiguration.current.screenWidthDp / 2 - 24).coerceIn(120, 280).dp
 
-/** 文字を出している間だけ最後まで追いかける。選択肢で終わるとき（メニューなど）は先頭の問いかけを見せたいので動かさない */
+/**
+ * 文字を出している間だけ最後まで追いかける。選択肢で終わるとき（メニューなど）は先頭の問いかけを見せたいので動かさない。
+ * [enabled] が false（\![set,autoscroll,disable]）なら追いかけない
+ */
 @Composable
-private fun AutoScroll(items: List<BalloonItem>, scroll: ScrollState) {
+private fun AutoScroll(items: List<BalloonItem>, scroll: ScrollState, enabled: Boolean) {
     val last = items.lastOrNull()
-    LaunchedEffect(items.size, (last as? BalloonItem.Text)?.text?.length) {
-        if (last !is BalloonItem.ChoiceItem) scroll.animateScrollTo(scroll.maxValue)
+    LaunchedEffect(items.size, (last as? BalloonItem.Text)?.text?.length, enabled) {
+        if (enabled && last !is BalloonItem.ChoiceItem) scroll.animateScrollTo(scroll.maxValue)
     }
+}
+
+/** オンラインの印（ネットワーク更新と \![enter,onlinemode] の間）。簡易バルーンでは、点滅する小さな文字にする */
+@Composable
+private fun SimpleOnlineMarker(modifier: Modifier) {
+    val alpha by rememberInfiniteTransition(label = "online").animateFloat(
+        initialValue = 1f,
+        targetValue = 0.3f,
+        animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
+        label = "online",
+    )
+    Text("● オンライン", fontSize = 10.sp, color = Color(0xFF8D6E63), modifier = modifier.graphicsLayer { this.alpha = alpha })
 }
 
 /** pono-droid の簡易バルーン（ゴーストのバルーン画像が無いとき） */
 @Composable
-fun SimpleBalloon(items: List<BalloonItem>, onClick: () -> Unit, onChoice: (Choice) -> Unit) {
+fun SimpleBalloon(
+    items: List<BalloonItem>,
+    onClick: () -> Unit,
+    onChoice: (Choice) -> Unit,
+    autoScroll: Boolean = true,
+    online: Boolean = false,
+) {
     val scroll = rememberScrollState()
-    AutoScroll(items, scroll)
+    AutoScroll(items, scroll, autoScroll)
     val maxHeight = (LocalConfiguration.current.screenHeightDp / 2).coerceIn(220, 400).dp
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -140,8 +227,11 @@ fun SimpleBalloon(items: List<BalloonItem>, onClick: () -> Unit, onChoice: (Choi
             .border(1.5.dp, Color(0xFF8D6E63), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick),
     ) {
-        Box(Modifier.heightIn(max = maxHeight).verticalScroll(scroll).padding(horizontal = 12.dp, vertical = 8.dp)) {
-            BalloonBody(items, onChoice, BalloonTextStyle.Simple)
+        Box {
+            Box(Modifier.heightIn(max = maxHeight).verticalScroll(scroll).padding(horizontal = 12.dp, vertical = 8.dp)) {
+                BalloonBody(items, onChoice, BalloonTextStyle.Simple)
+            }
+            if (online) SimpleOnlineMarker(Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 2.dp))
         }
     }
 }
@@ -181,22 +271,27 @@ fun SkinBalloon(
     balloonId: Int?,
     onClick: () -> Unit,
     onChoice: (Choice) -> Unit,
+    autoScroll: Boolean = true,
+    online: Boolean = false,
 ) {
     val images by produceState<List<BalloonSkin.Image>?>(null, skin, scopeId) {
         value = withContext(Dispatchers.IO) { skin.images(scopeId) }
     }
     val candidates = images ?: return
     if (candidates.isEmpty()) {
-        SimpleBalloon(items, onClick, onChoice)
+        SimpleBalloon(items, onClick, onChoice, autoScroll, online)
         return
     }
     val density = LocalDensity.current
     val maxWidthPx = with(density) { balloonMaxWidth().toPx() }
     // 1枚ごとに縮めると大きさで文字の大きさが変わるので、いちばん広い画像に合わせて同じ比率で縮める
     val scale = minOf(density.density, maxWidthPx / candidates.maxOf { it.bitmap.width })
-    val style = skin.textStyle(scale / density.density)
+    val style = skin.textStyle(scale / density.density, scale)
     val scroll = rememberScrollState()
-    AutoScroll(items, scroll)
+    AutoScroll(items, scroll, autoScroll)
+    val onlineFrames by produceState<List<ImageBitmap>>(emptyList(), skin, scopeId, online) {
+        value = if (online) withContext(Dispatchers.IO) { skin.onlineFrames(scopeId) } else emptyList()
+    }
 
     // \b[n] で選ばれた画像（無ければ文字の量で選ぶ）
     val requested = balloonId?.let { id -> skin.balloon.imageForId(scopeId, id) }
@@ -212,15 +307,25 @@ fun SkinBalloon(
         } ?: candidates.lastIndex
         val image = candidates[chosen]
         val placeable = subcompose("balloon") {
-            SkinFrame(image, skin, scale, scroll) { BalloonBody(items, onChoice, style) }
+            SkinFrame(image, skin, scale, scroll, onlineFrames) { BalloonBody(items, onChoice, style) }
         }.first().measure(Constraints())
         layout(placeable.width, placeable.height) { placeable.place(0, 0) }
     }
 }
 
-/** バルーン画像を敷き、文字の範囲に中身を置く。続きや前があれば矢印を出し、押すと1画面分スクロールする */
+/**
+ * バルーン画像を敷き、文字の範囲に中身を置く。続きや前があれば矢印を出し、押すと1画面分スクロールする。
+ * [onlineFrames] があれば、オンラインの印として onlinemarker.x / y にコマを替えながら出す
+ */
 @Composable
-private fun SkinFrame(image: BalloonSkin.Image, skin: BalloonSkin, scale: Float, scroll: ScrollState, content: @Composable () -> Unit) {
+private fun SkinFrame(
+    image: BalloonSkin.Image,
+    skin: BalloonSkin,
+    scale: Float,
+    scroll: ScrollState,
+    onlineFrames: List<ImageBitmap>,
+    content: @Composable () -> Unit,
+) {
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
     fun px(v: Int) = with(density) { (v * scale).toDp() }
@@ -228,6 +333,22 @@ private fun SkinFrame(image: BalloonSkin.Image, skin: BalloonSkin, scale: Float,
     val h = image.bitmap.height
     Box(Modifier.size(px(w), px(h))) {
         Image(image.bitmap, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.size(px(w), px(h)))
+        if (onlineFrames.isNotEmpty()) {
+            val frame by produceState(0, onlineFrames) {
+                while (true) {
+                    delay(skin.balloon.onlineInterval)
+                    value = (value + 1) % onlineFrames.size
+                }
+            }
+            val bmp = onlineFrames[frame.coerceIn(0, onlineFrames.lastIndex)]
+            val (x, y) = skin.balloon.onlinePosition(w, h)
+            Image(
+                bmp,
+                contentDescription = "オンライン",
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.offset(px(x), px(y)).size(px(bmp.width), px(bmp.height)),
+            )
+        }
         Box(
             Modifier
                 .offset(px(image.area.left), px(image.area.top))
@@ -279,6 +400,7 @@ fun BalloonBody(items: List<BalloonItem>, onChoice: (Choice) -> Unit, style: Bal
 
 @Composable
 private fun BalloonLines(items: List<BalloonItem>, onChoice: (Choice) -> Unit, style: BalloonTextStyle) {
+    val lineHeightPx = with(LocalDensity.current) { (style.fontSize * LINE_HEIGHT).toPx() }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         for (line in BalloonLayout.lines(items)) {
             val align = when (line.align) {
@@ -286,12 +408,24 @@ private fun BalloonLines(items: List<BalloonItem>, onChoice: (Choice) -> Unit, s
                 TextAlign.RIGHT -> ComposeTextAlign.End
                 TextAlign.LEFT -> ComposeTextAlign.Start
             }
-            if (line.columns.size == 1) {
-                BalloonText(line.columns[0], onChoice, style, align, Modifier.fillMaxWidth())
+            // \n[half] / \n[150] は、ふつうの1行との差だけ行を上下にずらす（負なら前の行に重なる）
+            val shift = ((line.gap - 100) / 100f * lineHeightPx).roundToInt()
+            val gap = if (shift == 0) {
+                Modifier
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (column in line.columns) {
-                        BalloonText(column, onChoice, style, align, Modifier.weight(1f))
+                Modifier.layout { measurable, constraints ->
+                    val p = measurable.measure(constraints)
+                    layout(p.width, (p.height + shift).coerceAtLeast(0)) { p.place(0, shift) }
+                }
+            }
+            Box(gap) {
+                if (line.columns.size == 1) {
+                    BalloonText(line.columns[0], onChoice, style, align, line.valign, Modifier.fillMaxWidth())
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (column in line.columns) {
+                            BalloonText(column, onChoice, style, align, line.valign, Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -299,15 +433,33 @@ private fun BalloonLines(items: List<BalloonItem>, onChoice: (Choice) -> Unit, s
     }
 }
 
-/** 1列分の文。選択肢とリンクは文の中で押せるようにする（\![*] があれば印を付ける）。\f の飾りも付ける */
+/** ふつうの行の高さ（文字の大きさに対する倍率） */
+private const val LINE_HEIGHT = 1.4f
+
+/**
+ * 1列分の文。選択肢とリンクは文の中で押せるようにする（\![*] があれば印を付ける）。\f の飾りも付ける。
+ * [valign] は \f[valign]。大きさの違う文字が混じる行で、小さい文字を上か真ん中に寄せる（null と bottom は下にそろえる）。
+ * \_n の文字がある行は折り返さない
+ */
 @Composable
 private fun BalloonText(
     runs: List<BalloonLayout.Run>,
     onChoice: (Choice) -> Unit,
     style: BalloonTextStyle,
     align: ComposeTextAlign,
+    valign: VerticalAlign?,
     modifier: Modifier = Modifier,
 ) {
+    val textRuns = runs.filterIsInstance<BalloonLayout.Run.Text>()
+    val largest = textRuns.maxOfOrNull { style.size(it.style) } ?: style.fontSize.value
+    /** 小さい文字を上（か真ん中）に寄せる分。BaselineShift はその文字の大きさに対する割合で、上が正 */
+    fun shiftFor(s: TextStyle): BaselineShift? {
+        val size = style.size(s)
+        if (size >= largest || valign == null || valign == VerticalAlign.BOTTOM) return null
+        val up = (largest - size) * 0.8f / size
+        return BaselineShift(if (valign == VerticalAlign.CENTER) up / 2 else up)
+    }
+    val noWrap = textRuns.any { it.style.noWrap }
     val links = TextLinkStyles(
         style = SpanStyle(color = style.choiceColor, fontWeight = FontWeight.Medium),
         pressedStyle = SpanStyle(color = style.choiceColor, background = style.choiceColor.copy(alpha = 0.15f)),
@@ -319,7 +471,12 @@ private fun BalloonText(
         runs.forEachIndexed { index, run ->
             when (run) {
                 is BalloonLayout.Run.Text -> {
-                    if (run.style == TextStyle.Default) append(run.text) else withStyle(style.span(run.style)) { append(run.text) }
+                    val shift = shiftFor(run.style)
+                    if (run.style == TextStyle.Default && shift == null) {
+                        append(run.text)
+                    } else {
+                        withStyle(style.span(run.style, shift)) { append(run.text) }
+                    }
                 }
                 is BalloonLayout.Run.ChoiceRun -> {
                     if (run.marked) append("▸ ")
@@ -331,8 +488,13 @@ private fun BalloonText(
                     val (w, h) = ImageTransparency.size(java.io.File(run.path)) ?: return@forEachIndexed
                     val id = "img$index"
                     appendInlineContent(id, "□")
+                    val imageAlign = when (valign) {
+                        VerticalAlign.TOP -> PlaceholderVerticalAlign.Top
+                        VerticalAlign.CENTER -> PlaceholderVerticalAlign.Center
+                        else -> PlaceholderVerticalAlign.TextBottom
+                    }
                     inlineContent[id] = InlineTextContent(
-                        with(density) { Placeholder((w * style.spPerPx).dp.toSp(), (h * style.spPerPx).dp.toSp(), PlaceholderVerticalAlign.TextBottom) },
+                        with(density) { Placeholder((w * style.spPerPx).dp.toSp(), (h * style.spPerPx).dp.toSp(), imageAlign) },
                     ) { BalloonPicture(run.path, run.opaque, style.spPerPx, Modifier) }
                 }
             }
@@ -343,10 +505,14 @@ private fun BalloonText(
     Text(
         text = text,
         fontSize = style.fontSize,
-        lineHeight = style.fontSize * (if (hasChoice) 1.7f else 1.4f),
+        lineHeight = style.fontSize * (if (hasChoice) 1.7f else LINE_HEIGHT),
         color = style.textColor,
         textAlign = align,
         inlineContent = inlineContent,
+        softWrap = !noWrap,
+        maxLines = if (noWrap) 1 else Int.MAX_VALUE,
+        overflow = TextOverflow.Clip,
+        style = style.base(),
         modifier = modifier.padding(vertical = if (hasChoice) 2.dp else 0.dp),
     )
 }
@@ -402,14 +568,35 @@ class BalloonSkin(val balloon: Balloon) {
         balloon.arrowImage(which)?.let { ImageTransparency.load(it, balloon.pnaFor(it), selfAlpha = null) }?.asImageBitmap()
     }
 
-    /** [dpPerPx] は画像の 1px が何 dp になるか。字が小さくなりすぎないよう 12sp は残す */
-    fun textStyle(dpPerPx: Float): BalloonTextStyle {
+    private val online = HashMap<Int, List<ImageBitmap>>()
+
+    /** オンラインの印のコマ（online0.png…）。無いバルーンなら空 */
+    @Synchronized
+    fun onlineFrames(scope: Int): List<ImageBitmap> = online.getOrPut(scope) {
+        balloon.onlineImages(scope).mapNotNull { ImageTransparency.load(it, balloon.pnaFor(it), selfAlpha = null)?.asImageBitmap() }
+    }
+
+    /**
+     * [dpPerPx] は画像の 1px が何 dp になるか、[pxPerPx] は画面の何 px になるか。字が小さくなりすぎないよう 12sp は残す。
+     * font.name・影・太字などの既定もバルーンの descript.txt から取る
+     */
+    fun textStyle(dpPerPx: Float, pxPerPx: Float): BalloonTextStyle {
         val simple = BalloonTextStyle.Simple
         return BalloonTextStyle(
             textColor = balloon.fontColor?.toColor() ?: simple.textColor,
             choiceColor = balloon.choiceColor?.toColor() ?: simple.choiceColor,
             fontSize = maxOf(balloon.fontHeight * dpPerPx, 12f).sp,
             spPerPx = dpPerPx,
+            pxPerPx = pxPerPx,
+            fontFamily = BalloonFonts.family(balloon.fontNames),
+            shadowColor = balloon.shadowColor?.toColor(),
+            shadowOutline = balloon.shadowOutline,
+            bold = balloon.bold,
+            italic = balloon.italic,
+            underline = balloon.underline,
+            strike = balloon.strike,
+            outline = balloon.outline,
+            disabledColor = balloon.disabledColor?.toColor() ?: simple.disabledColor,
         )
     }
 }

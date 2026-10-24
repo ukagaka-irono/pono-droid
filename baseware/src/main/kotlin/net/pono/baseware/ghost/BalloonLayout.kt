@@ -3,6 +3,7 @@ package net.pono.baseware.ghost
 import net.pono.baseware.sakura.Choice
 import net.pono.baseware.sakura.TextAlign
 import net.pono.baseware.sakura.TextStyle
+import net.pono.baseware.sakura.VerticalAlign
 
 /**
  * バルーンの中身を「行 → 列 → 文字と選択肢の並び」に組み立てる。描くのはプラットフォーム側。
@@ -19,8 +20,16 @@ object BalloonLayout {
         data class Image(val path: String, val opaque: Boolean) : Run
     }
 
-    /** 1行。列が1つなら普通の行、2つ以上なら横に並べる。[align] は \f[align] の寄せ方 */
-    data class Line(val columns: List<List<Run>>, val align: TextAlign = TextAlign.LEFT)
+    /**
+     * 1行。列が1つなら普通の行、2つ以上なら横に並べる。[align] は \f[align] の寄せ方。
+     * [gap] は前の行からの改行の幅（ふつうの改行に対する %。\n[half] なら 50）、[valign] は \f[valign]（null なら既定）
+     */
+    data class Line(
+        val columns: List<List<Run>>,
+        val align: TextAlign = TextAlign.LEFT,
+        val gap: Int = 100,
+        val valign: VerticalAlign? = null,
+    )
 
     /** \_b[ファイル,x,y]。バルーンの x, y（文字の下）に置く画像 */
     data class PlacedImage(val path: String, val x: Int, val y: Int, val opaque: Boolean)
@@ -30,13 +39,17 @@ object BalloonLayout {
         var columns = mutableListOf<MutableList<Run>>(mutableListOf())
         var marker = false
         var align = TextAlign.LEFT
+        var gap = 100
+        // \f[valign] は改行しても続く
+        var valign: VerticalAlign? = null
 
         fun current() = columns.last()
-        fun endLine() {
-            lines += Line(columns.map { it.toList() }, align)
+        fun endLine(nextGap: Int = 100) {
+            lines += Line(columns.map { it.toList() }, align, gap, valign)
             columns = mutableListOf(mutableListOf())
             marker = false
             align = TextAlign.LEFT
+            gap = nextGap
         }
 
         for (item in items) {
@@ -50,6 +63,8 @@ object BalloonLayout {
                     }
                 }
                 BalloonItem.NewLine -> endLine()
+                is BalloonItem.LineBreak -> endLine(item.percent)
+                is BalloonItem.VAlign -> valign = item.align
                 BalloonItem.Marker -> marker = true
                 // 行の頭での \_l は位置合わせだけなので、列は増やさない。\_l の後は左寄せに戻る（SSP と同じ）
                 BalloonItem.Column -> {

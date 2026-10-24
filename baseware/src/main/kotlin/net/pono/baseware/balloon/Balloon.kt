@@ -141,6 +141,65 @@ class Balloon(val dir: File) {
     val choiceColor: BalloonColor?
         get() = anchorColor ?: color("cursor.pen.color") ?: color("cursor.font.color")
 
+    // ---- 文字の既定の飾り（\f[default] で戻る先） ----
+
+    /** font.name。カンマ区切りの候補で、バルーンのフォルダのフォントファイル（の絶対パス）か名前 */
+    val fontNames: List<String>
+        get() = descript["font.name"].orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.map { name ->
+            if (name.substringAfterLast('.', "").lowercase() in setOf("ttf", "otf", "ttc")) fontFile(name)?.path.orEmpty() else name
+        }
+
+    /** バルーンのフォルダの中のフォントファイル（フォルダの外を指していたら null） */
+    private fun fontFile(name: String): File? {
+        val root = runCatching { dir.canonicalFile }.getOrNull() ?: return null
+        val file = runCatching { File(dir, name.replace('\\', '/')).canonicalFile }.getOrNull() ?: return null
+        return file.takeIf { it.path.startsWith(root.path + File.separator) && it.isFile }
+    }
+
+    /** 文字の影の色（font.shadowcolor）。null なら影なし */
+    val shadowColor: BalloonColor? get() = color("font.shadowcolor")
+
+    /** 影の付け方（font.shadowstyle）。outline なら縁取り、それ以外は右下にずらす */
+    val shadowOutline: Boolean get() = descript["font.shadowstyle"]?.trim()?.lowercase() == "outline"
+
+    val bold: Boolean get() = descript.int("font.bold") == 1
+    val italic: Boolean get() = descript.int("font.italic") == 1
+    val underline: Boolean get() = descript.int("font.underline") == 1
+    val strike: Boolean get() = descript.int("font.strike") == 1
+
+    /** 白抜き（font.outline） */
+    val outline: Boolean get() = descript.int("font.outline") == 1
+
+    /** \f[disable] の薄い文字の色（disable.font.color） */
+    val disabledColor: BalloonColor? get() = color("disable.font.color")
+
+    // ---- オンラインの印（ネットワーク更新と \![enter,onlinemode] の間に出す） ----
+
+    /**
+     * オンラインの印の絵（onlinemarker.filename、既定は online）。online0.png・online1.png… の順に並べたもので、
+     * キャラクターごとの onlines / onlinek / onlinepN があればそちらを使う
+     */
+    fun onlineImages(scope: Int): List<File> {
+        val base = descript["onlinemarker.filename"]?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: "online"
+        val own = when (scope) {
+            0 -> base + "s"
+            1 -> base + "k"
+            else -> base + "p$scope"
+        }
+        fun frames(prefix: String) = generateSequence(0) { it + 1 }.map { files["$prefix$it.png"] }.takeWhile { it != null }.filterNotNull().toList()
+        return frames(own).ifEmpty { frames(base) }
+    }
+
+    /** オンラインの印の位置（onlinemarker.x / y、負なら右端・下端から）。書いてなければ左上 */
+    fun onlinePosition(imageWidth: Int, imageHeight: Int): Pair<Int, Int> {
+        val x = descript.int("onlinemarker.x")?.let { if (it < 0) imageWidth + it else it } ?: 0
+        val y = descript.int("onlinemarker.y")?.let { if (it < 0) imageHeight + it else it } ?: 0
+        return x to y
+    }
+
+    /** オンラインの印のコマを替える間隔（50 ミリ秒より短くはしない） */
+    val onlineInterval: Long get() = (descript.int("onlinemarker.interval") ?: 500).toLong().coerceAtLeast(50)
+
     private fun color(key: String): BalloonColor? {
         val r = descript.int("$key.r") ?: return null
         val g = descript.int("$key.g") ?: return null

@@ -7,6 +7,9 @@ data class Choice(val title: String, val id: String, val references: List<String
 
 enum class TextAlign { LEFT, CENTER, RIGHT }
 
+/** \f[valign,...]。1行の中で大きさの違う文字をどこにそろえるか */
+enum class VerticalAlign { TOP, CENTER, BOTTOM }
+
 /** \f で決める文字の飾り。 */
 data class TextStyle(
     val bold: Boolean = false,
@@ -20,9 +23,26 @@ data class TextStyle(
     val heightMode: HeightMode = HeightMode.ABSOLUTE,
     val sub: Boolean = false,
     val sup: Boolean = false,
+    /** \f[name,...]。フォントの候補（ゴーストやバルーンのフォルダのフォントファイルか、フォントの名前）。null ならバルーンの既定 */
+    val font: List<String>? = null,
+    /** \f[shadowcolor,...]。0xRRGGBB。null ならバルーンの既定 */
+    val shadowColor: Int? = null,
+    /** \f[shadowcolor,none]。影を付けない */
+    val noShadow: Boolean = false,
+    /** \f[shadowstyle,...]。null ならバルーンの既定 */
+    val shadowStyle: ShadowStyle? = null,
+    /** \f[outline,...]。白抜き（縁だけ描く）。null ならバルーンの既定 */
+    val outline: Boolean? = null,
+    /** \f[disable]。操作できないことを表す薄い色の文字 */
+    val disabled: Boolean = false,
+    /** \_n から次の \_n まで。自動で折り返さない */
+    val noWrap: Boolean = false,
 ) {
     /** ABSOLUTE: ピクセル、RELATIVE: 既定からの差（ピクセル）、PERCENT: 既定に対する割合 */
     enum class HeightMode { ABSOLUTE, RELATIVE, PERCENT }
+
+    /** 影の付け方。OFFSET は右下にずらし、OUTLINE は縁取りにする */
+    enum class ShadowStyle { OFFSET, OUTLINE }
 
     companion object {
         val Default = TextStyle()
@@ -39,7 +59,28 @@ interface ScriptHost {
     }
     fun appendText(scope: Int, text: String)
     fun newLine(scope: Int)
+
+    /** `\n[half]` / `\n[150]` など。[percent] はふつうの改行に対する割合（負なら上へ戻る） */
+    fun newLine(scope: Int, percent: Int) = newLine(scope)
     fun clearBalloon(scope: Int)
+
+    /**
+     * `\c[char,数,開始位置]` / `\c[line,数,開始位置]`。[lines] なら行、そうでなければ文字を [count] だけ消す。
+     * [start] が null なら最後から（カーソルの手前を）、あれば頭から数えて [start] 番目（0 から）から消す
+     */
+    fun clearPart(scope: Int, lines: Boolean, count: Int, start: Int?) {}
+
+    /** `\f[valign,...]`。今の行から後の、行の中の縦のそろえ方 */
+    fun setVerticalAlign(scope: Int, align: VerticalAlign) {}
+
+    /** `\t`。スクリプトが終わるか止められるまで、マウス（タッチ）のイベントを送らない */
+    fun setTimeCritical() {}
+
+    /** `\![lock,balloonrepaint|repaint|balloonmove(,manual)]` / `\![unlock,...]`。扱えたら true */
+    fun lock(what: String, locked: Boolean, manual: Boolean): Boolean = false
+
+    /** `\![enter,onlinemode|nouserbreakmode|inductionmode]` / `\![leave,...]`。扱えたら true */
+    fun setMode(name: String, on: Boolean): Boolean = false
     fun addChoice(scope: Int, choice: Choice)
     fun startAnimation(scope: Int, id: Int) {}
 
@@ -184,23 +225,30 @@ class ScriptPlayer(
         /** 文字や改行を出す先 */
         private fun targets(): List<Int> = sync ?: listOf(scope)
 
+        /** \![set,balloonwait,...] で変えた、1文字ごとの待ち時間。null ならふつう（このスクリプトの間だけ） */
+        private var charWaitOverride: Long? = null
+
+        private fun charWait(): Long = charWaitOverride ?: charWaitMs
+
         suspend fun run(script: String, depth: Int) {
             for (token in SakuraScript.tokenize(script)) {
                 if (ended) return
                 when (token) {
-                    is Token.Text -> text(token.text)
+                    is Token.Text -> text(token.text, literal = token.literal)
                     is Token.Tag -> tag(token, depth)
                 }
             }
         }
 
-        private suspend fun text(s: String) {
-            val expanded = expandEnv(s, host)
+        /** [literal] なら \_? の中の文字で、環境変数も展開しない */
+        private suspend fun text(s: String, literal: Boolean = false) {
+            val expanded = if (literal) s else expandEnv(s, host)
             if (anchor != null) {
                 anchorTitle.append(expanded)
                 return
             }
-            if (quick || charWaitMs <= 0) {
+            val wait = charWait()
+            if (quick || wait <= 0) {
                 for (t in targets()) host.appendText(t, expanded)
             } else {
                 // サロゲートペアを分けないよう、コードポイント単位で出す
@@ -209,7 +257,7 @@ class ScriptPlayer(
                     val n = Character.charCount(expanded.codePointAt(i))
                     for (t in targets()) host.appendText(t, expanded.substring(i, i + n))
                     i += n
-                    delay(charWaitMs)
+                    delay(wait)
                 }
             }
         }
@@ -223,7 +271,20 @@ class ScriptPlayer(
                 "p" -> scope = a.firstOrNull()?.trim()?.toIntOrNull()?.takeIf { it in 0..MAX_SCOPE } ?: scope
                 "s" -> a.firstOrNull()?.takeIf { it.isNotBlank() }?.let { host.setSurface(scope, it) }
                 "i" -> a.firstOrNull()?.toIntOrNull()?.let { host.startAnimation(scope, it) }
-                "n" -> for (t in targets()) host.newLine(t)
+                // \n[half] は半分、\n[150] は1行半の改行。負の値なら上へ戻る
+                "n" -> {
+                    val percent = when (val p = a.firstOrNull()?.trim()?.lowercase()) {
+                        null, "" -> 100
+                        "half" -> 50
+                        else -> p.toIntOrNull()?.coerceIn(-MAX_LINE_PERCENT, MAX_LINE_PERCENT) ?: 100
+                    }
+                    for (t in targets()) if (percent == 100) host.newLine(t) else host.newLine(t, percent)
+                }
+                // 次の \_n まで自動で折り返さない
+                "_n" -> {
+                    val current = styles[scope] ?: TextStyle.Default
+                    setStyle(current.copy(noWrap = !current.noWrap))
+                }
                 // \_s で始めて \_s で終わる。引数が無ければ \0 と \1、あれば並べたキャラクター
                 "_s" -> sync = if (sync != null) {
                     null
@@ -240,18 +301,30 @@ class ScriptPlayer(
                         "opaque" in opts,
                     )
                 }
-                "c" -> host.clearBalloon(scope)
+                // \c[char,数,開始位置] / \c[line,数,開始位置] は一部だけ、\c は全部消す
+                "c" -> when (val unit = a.firstOrNull()?.trim()?.lowercase()) {
+                    "char", "line" -> {
+                        val count = a.getOrNull(1)?.trim()?.toIntOrNull()?.takeIf { it > 0 } ?: return
+                        host.clearPart(scope, lines = unit == "line", count, a.getOrNull(2)?.trim()?.toIntOrNull()?.takeIf { it >= 0 })
+                    }
+                    else -> host.clearBalloon(scope)
+                }
                 "w" -> if (!quick) delay((a.firstOrNull()?.toLongOrNull() ?: 1) * unitWaitMs)
                 "_w", "__w" -> if (!quick) delay(a.firstOrNull()?.toLongOrNull() ?: 0)
                 "_q" -> quick = !quick
                 "x" -> {
                     host.waitClick()
+                    // \x[noclear] なら文字も \f の飾りも残す
                     if (a.firstOrNull() != "noclear") {
                         host.clearBalloon(0)
                         host.clearBalloon(1)
+                        for (s in styles.keys.toList()) host.setFont(s, TextStyle.Default)
+                        styles.clear()
                     }
                 }
-                "e" -> ended = true
+                // \z は古い書き方の、選択肢を含むスクリプトの \e
+                "e", "z" -> ended = true
+                "t" -> host.setTimeCritical()
                 "-" -> quit = true
                 "q" -> if (a.size >= 2) {
                     hasChoices = true
@@ -346,11 +419,17 @@ class ScriptPlayer(
                     "zorder", "sticky-window" -> host.setOption(scope, a[1].lowercase(), emptyList())
                     else -> {}
                 }
-                "enter", "leave" -> when (a.getOrNull(1)?.lowercase()) {
+                "enter", "leave" -> when (val mode = a.getOrNull(1)?.lowercase()) {
                     "passivemode" -> host.setPassive(command == "enter")
-                    // onlinemode / nouserbreakmode / inducemode / calmmode などは pono-droid では意味が無い
-                    else -> {}
+                    // selectmode / collisionmode などで、まだ扱えないものは飛ばす
+                    else -> host.setMode(mode.orEmpty(), command == "enter")
                 }
+                // \![lock,balloonrepaint] など。manual が無ければスクリプトの終わりで外れる
+                "lock", "unlock" -> host.lock(
+                    a.getOrNull(1)?.trim()?.lowercase().orEmpty(),
+                    locked = command == "lock",
+                    manual = a.drop(2).any { it.trim().lowercase() == "manual" },
+                )
                 "execute" -> when {
                     a.size < 2 -> host.unknownTag(token)
                     a[1].lowercase() in silentExecutes -> {}
@@ -367,6 +446,8 @@ class ScriptPlayer(
                         val target = a.getOrNull(4)?.trim()?.toIntOrNull() ?: scope
                         if (x != null && y != null && target in 0..MAX_SCOPE) host.setPosition(target, x, y) else host.unknownTag(token)
                     }
+                    // 文字の流れる速さ（このスクリプトの間だけ）
+                    a[1].lowercase() == "balloonwait" -> charWaitOverride = balloonWait(a.getOrNull(2)?.trim()?.lowercase().orEmpty())
                     a[1].lowercase() in silentSetOptions -> {}
                     !host.setOption(scope, a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
                 }
@@ -383,14 +464,53 @@ class ScriptPlayer(
             val current = styles[scope] ?: TextStyle.Default
             fun flag() = arg == "1" || arg == "true"
             val next = when (name) {
-                "default", "disable" -> TextStyle.Default
+                // \_n の折り返しは \f ではないので残す
+                "default" -> TextStyle.Default.copy(noWrap = current.noWrap)
+                "disable" -> current.copy(disabled = true)
                 "bold" -> current.copy(bold = flag())
                 "italic" -> current.copy(italic = flag())
                 "underline" -> current.copy(underline = flag())
                 "strike" -> current.copy(strike = flag())
                 "sub" -> current.copy(sub = flag(), sup = if (flag()) false else current.sup)
                 "sup" -> current.copy(sup = flag(), sub = if (flag()) false else current.sub)
-                "color" -> current.copy(color = parseColor(a.drop(1)))
+                "color" -> if (arg == "disable") {
+                    current.copy(color = null, disabled = true)
+                } else {
+                    current.copy(color = parseColor(a.drop(1)), disabled = false)
+                }
+                // \f[name,メイリオ,meiryo.ttf]。書いた順に、使えるものを選ぶ
+                "name" -> {
+                    val names = a.drop(1).map { it.trim() }.filter { it.isNotEmpty() }
+                    current.copy(font = names.takeUnless { it.isEmpty() || it[0].lowercase() in setOf("default", "disable") })
+                }
+                "shadowcolor" -> when (arg) {
+                    "none" -> current.copy(shadowColor = null, noShadow = true)
+                    null, "", "default", "disable" -> current.copy(shadowColor = null, noShadow = false)
+                    else -> current.copy(shadowColor = parseColor(a.drop(1)), noShadow = false)
+                }
+                "shadowstyle" -> current.copy(
+                    shadowStyle = when (arg) {
+                        "offset" -> TextStyle.ShadowStyle.OFFSET
+                        "outline" -> TextStyle.ShadowStyle.OUTLINE
+                        else -> null
+                    },
+                )
+                "outline" -> current.copy(
+                    outline = when (arg) {
+                        null, "", "default" -> null
+                        "disable" -> false
+                        else -> flag()
+                    },
+                )
+                "valign" -> {
+                    when (arg) {
+                        "top" -> VerticalAlign.TOP
+                        "center" -> VerticalAlign.CENTER
+                        "bottom" -> VerticalAlign.BOTTOM
+                        else -> null
+                    }?.let { host.setVerticalAlign(scope, it) }
+                    return
+                }
                 "height" -> when {
                     arg == null || arg == "default" -> current.copy(height = null)
                     arg.endsWith("%") -> arg.dropLast(1).toFloatOrNull()?.let { current.copy(height = it, heightMode = TextStyle.HeightMode.PERCENT) }
@@ -406,27 +526,40 @@ class ScriptPlayer(
                     }?.let { host.setAlign(scope, it) }
                     return
                 }
-                // name / shadowcolor / outline / valign / anchor.font.color などは見た目の細かい指定なので無視する
+                // cursor* / anchor* などは見た目の細かい指定なので無視する
                 else -> return
             }
-            if (next != current) {
-                styles[scope] = next
-                host.setFont(scope, next)
-            }
+            setStyle(next)
+        }
+
+        private fun setStyle(next: TextStyle) {
+            if (next == (styles[scope] ?: TextStyle.Default)) return
+            styles[scope] = next
+            host.setFont(scope, next)
+        }
+
+        /**
+         * \![set,balloonwait,...] の1文字ごとの待ち時間。数だけなら倍率（0〜100）、% なら百分率（0〜10000）、
+         * ms ならそのまま（0〜10000）。空か 1 ならふつうに戻す（null）
+         */
+        private fun balloonWait(arg: String): Long? = when {
+            arg.isEmpty() -> null
+            arg.endsWith("ms") -> arg.dropLast(2).trim().toLongOrNull()?.coerceIn(0, MAX_CHAR_WAIT_MS)
+            arg.endsWith("%") -> arg.dropLast(1).trim().toLongOrNull()?.coerceIn(0, 10_000)?.let { charWaitMs * it / 100 }
+            else -> arg.toDoubleOrNull()?.takeIf { it != 1.0 }?.coerceIn(0.0, 100.0)?.let { (charWaitMs * it).toLong() }
         }
     }
 
     /**
      * 見た目の細かい調整だけのタグ。バルーンを自前で描いているので、無視しても会話の流れは変わらない。
-     * \_n: 自動改行の切り替え、\t: 割り込み禁止、\* : 選択肢タイムアウト禁止、
-     * \C: 前のバルーンを消さない（先頭にあるかどうかは GhostController が見る）、
-     * \6 / \7 / \z: 時刻合わせや表示、\_s: 両方のバルーンに出す（片方だけに出す）、\__t: 時刻、\_e: 終わり
+     * \* : 選択肢タイムアウト禁止、\C: 前のバルーンを消さない（先頭にあるかどうかは GhostController が見る）、
+     * \6 / \7: 時刻合わせ、\__t: 時刻、\_e: 終わり
      */
-    private val layoutOnlyTags = setOf("_n", "t", "*", "C", "6", "7", "z", "__t", "_e")
+    private val layoutOnlyTags = setOf("*", "C", "6", "7", "__t", "_e")
 
     /** `\![コマンド,...]` のうち、pono-droid に無い仕組み（ウィンドウの重なり・効果・他のゴースト・プラグイン）向けのもの */
     private val silentCommands = setOf(
-        "lock", "unlock", "effect", "effect2", "filter", "updateother",
+        "effect", "effect2", "filter", "updateother",
         "timernotify", "raiseother", "timerraiseother", "notifyother", "timernotifyother",
         "raiseplugin", "timerraiseplugin", "notifyplugin", "timernotifyplugin", "executesntp",
     )
@@ -435,8 +568,8 @@ class ScriptPlayer(
     private val silentSetOptions = setOf(
         "trayicon", "tasktrayicon", "trayballoon", "tasktrayballoon", "wallpaper",
         "otherghosttalk", "othersurfacechange", "alignmentondesktop",
-        "autoscroll", "balloonwait", "balloonmarker", "balloonalign", "balloonoffset", "balloonnum",
-        "serikotalk", "syncobject", "shioridebugmode", "property",
+        "balloonmarker", "balloonalign", "balloonoffset", "balloonnum",
+        "syncobject", "shioridebugmode", "property",
     )
 
     private val silentExecutes = setOf("resetballoonpos")
@@ -466,6 +599,12 @@ class ScriptPlayer(
         /** \p[N] で使えるキャラクターの番号の上限 */
         const val MAX_SCOPE = 15
 
+        /** \n[パーセント] の上限（何十行分も飛ばさない） */
+        const val MAX_LINE_PERCENT = 1000
+
+        /** \![set,balloonwait,Nms] の上限 */
+        const val MAX_CHAR_WAIT_MS = 10_000L
+
         /** "0x22EE" か "8942" を文字コードにする。文字として書けない値は null */
         fun parseCode(s: String): Int? {
             val t = s.trim()
@@ -473,11 +612,16 @@ class ScriptPlayer(
             return code?.takeIf { it in 1..0x10FFFF && it !in 0xD800..0xDFFF }
         }
 
-        /** \f[color,...] の色。"255,0,0" / "#FF0000" / "red" / "default"。わからなければ null（既定の色） */
+        /** \f[color,...] の色。"255,0,0" / "50%,90%,20%" / "#FF0000" / "red" / "default"。わからなければ null（既定の色） */
         fun parseColor(args: List<String>): Int? {
             val parts = args.map { it.trim() }.filter { it.isNotEmpty() }
             if (parts.size >= 3) {
-                val rgb = parts.take(3).map { it.toIntOrNull()?.coerceIn(0, 255) ?: return null }
+                fun channel(s: String) = if (s.endsWith("%")) {
+                    s.dropLast(1).trim().toFloatOrNull()?.let { (it * 255 / 100).toInt() }
+                } else {
+                    s.toIntOrNull()
+                }
+                val rgb = parts.take(3).map { channel(it)?.coerceIn(0, 255) ?: return null }
                 return (rgb[0] shl 16) or (rgb[1] shl 8) or rgb[2]
             }
             val v = parts.firstOrNull()?.lowercase() ?: return null

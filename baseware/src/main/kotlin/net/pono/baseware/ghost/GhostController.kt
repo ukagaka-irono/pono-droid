@@ -25,6 +25,7 @@ import net.pono.baseware.sakura.ScriptPlayer
 import net.pono.baseware.sakura.TextAlign
 import net.pono.baseware.sakura.TextStyle
 import net.pono.baseware.sakura.Token
+import net.pono.baseware.sakura.VerticalAlign
 import net.pono.baseware.shell.Shell
 import net.pono.baseware.shiori.ShioriFactory
 import net.pono.baseware.shiori.ShioriMethod
@@ -361,6 +362,20 @@ class GhostController(
     // ---- ネットワーク更新 ----
 
     private var updating = false
+        set(value) {
+            field = value
+            refreshOnline()
+        }
+
+    /** \![enter,onlinemode] の間 */
+    private var onlineMode = false
+        set(value) {
+            field = value
+            refreshOnline()
+        }
+
+    /** バルーンのオンラインの印は、\![enter,onlinemode] の間とネットワーク更新の間に出す */
+    private fun refreshOnline() = _state.update { it.copy(online = onlineMode || updating) }
 
     /**
      * SSP と同じ流れでネットワーク更新する: OnUpdateBegin → OnUpdateReady → OnUpdateComplete / OnUpdateFailure。
@@ -654,6 +669,19 @@ class GhostController(
         return canonical.takeIf { it.path.startsWith(root.path + File.separator) && it.isFile }
     }
 
+    /**
+     * \f[name,...] の候補の1つ。フォントファイル（.ttf など）ならゴーストの ghost/master か、今のバルーンのフォルダの中で探し、
+     * 見つかればその絶対パスにする。見つからないファイルは空にし、名前（serif など）はそのまま返す
+     */
+    private fun fontCandidate(name: String): String {
+        val n = name.trim()
+        if (n.substringAfterLast('.', "").lowercase() !in FONT_EXTENSIONS) return n
+        ghostFile(n)?.let { return it.path }
+        val dir = balloon?.dir?.canonicalFile ?: return ""
+        val file = runCatching { File(dir, n.replace('\\', '/')).canonicalFile }.getOrNull() ?: return ""
+        return file.takeIf { it.path.startsWith(dir.path + File.separator) && it.isFile }?.path.orEmpty()
+    }
+
     // ---- ユーザー操作 ----
 
     private fun mouseReferences(scopeId: Int, x: Int, y: Int, collision: String?, button: Int) =
@@ -661,6 +689,7 @@ class GhostController(
 
     /** 指が触れた。SSP の OnMouseDown（左ボタン） */
     fun onMouseDown(scopeId: Int, x: Int, y: Int, collision: String?) {
+        if (touchBlocked()) return
         lastUserActivity = System.currentTimeMillis()
         raise("OnMouseDown", mouseReferences(scopeId, x, y, collision, 0), userInitiated = false)
     }
@@ -673,6 +702,7 @@ class GhostController(
      * なでるトークは OnMouseMove を数えて返すゴーストが多いので、動くたびに送る。話している間は返事を出さない
      */
     fun onMouseMove(scopeId: Int, x: Int, y: Int, collision: String?) {
+        if (touchBlocked()) return
         lastUserActivity = System.currentTimeMillis()
         if (mouseMoveInFlight) return
         mouseMoveInFlight = true
@@ -693,6 +723,7 @@ class GhostController(
      * [count] は続けて叩いた回数で、2 なら OnMouseDoubleClick、3 以上なら OnMouseMultipleClick（Reference7 が回数）も送る。
      */
     fun onMouseUp(scopeId: Int, x: Int, y: Int, collision: String?, count: Int) {
+        if (touchBlocked()) return
         lastUserActivity = System.currentTimeMillis()
         scope.launch {
             val script = request("OnMouseUp", mouseReferences(scopeId, x, y, collision, 0))
@@ -712,6 +743,7 @@ class GhostController(
      * 1 なら OnMouseClick、2 なら OnMouseDoubleClick、3 以上なら OnMouseMultipleClick（Reference7 が回数）を送る。
      */
     fun onMouseClick(scopeId: Int, x: Int, y: Int, collision: String?, count: Int) {
+        if (touchBlocked()) return
         lastUserActivity = System.currentTimeMillis()
         val refs = mouseReferences(scopeId, x, y, collision, 0)
         when (count) {
@@ -726,6 +758,7 @@ class GhostController(
      * SSP と同じく OnMouseClick（Reference5 = 1）を送り、ゴーストが何も返さなければ pono-droid のメニューを出す。
      */
     fun onMouseLongPress(scopeId: Int, x: Int, y: Int, collision: String?) {
+        if (touchBlocked()) return
         lastUserActivity = System.currentTimeMillis()
         scope.launch {
             val script = request("OnMouseClick", mouseReferences(scopeId, x, y, collision, 1))
@@ -736,6 +769,9 @@ class GhostController(
 
     // ---- 指の出入り・ドラッグ・ジェスチャー ----
 
+    /** \t の間は、マウス（タッチ）のイベントを送らない */
+    private fun touchBlocked() = _state.value.timeCritical
+
     /** キャラクターごとの、いま指が乗っている当たり判定（OnMouseEnter / OnMouseLeave を出し分ける） */
     private val touchedCollision = HashMap<Int, String?>()
 
@@ -744,6 +780,7 @@ class GhostController(
      * （当たり判定の上なら）OnMouseEnter を送る
      */
     fun onTouchEnter(scopeId: Int, x: Int, y: Int, collision: String?) {
+        if (touchBlocked()) return
         touchedCollision[scopeId] = collision
         raise("OnMouseEnterAll", hoverReferences(scopeId, x, y, collision), userInitiated = false)
         if (collision != null) raise("OnMouseEnter", hoverReferences(scopeId, x, y, collision), userInitiated = false)
@@ -751,6 +788,7 @@ class GhostController(
 
     /** なでている指が別の当たり判定に移った。前の判定の OnMouseLeave と、新しい判定の OnMouseEnter を送る */
     fun onTouchCollision(scopeId: Int, x: Int, y: Int, collision: String?) {
+        if (touchBlocked()) return
         val previous = touchedCollision[scopeId]
         if (previous == collision) return
         touchedCollision[scopeId] = collision
@@ -760,6 +798,7 @@ class GhostController(
 
     /** 指が離れた。乗っていた当たり判定の OnMouseLeave と、OnMouseLeaveAll を送る */
     fun onTouchLeave(scopeId: Int, x: Int, y: Int) {
+        if (touchBlocked()) return
         val previous = touchedCollision.remove(scopeId)
         if (previous != null) raise("OnMouseLeave", hoverReferences(scopeId, x, y, previous), userInitiated = false)
         raise("OnMouseLeaveAll", hoverReferences(scopeId, x, y, previous), userInitiated = false)
@@ -770,11 +809,13 @@ class GhostController(
 
     /** ウィンドウをドラッグで動かし始めた・動かし終えた（OnMouseDragStart / End）。パッシブモードでは送らない（SSP と同じ） */
     fun onMouseDragStart(scopeId: Int, x: Int, y: Int, collision: String?) {
+        if (touchBlocked()) return
         lastUserActivity = System.currentTimeMillis()
         if (!_state.value.passive) raise("OnMouseDragStart", mouseReferences(scopeId, x, y, collision, 0), userInitiated = false)
     }
 
     fun onMouseDragEnd(scopeId: Int, x: Int, y: Int, collision: String?) {
+        if (touchBlocked()) return
         if (!_state.value.passive) raise("OnMouseDragEnd", mouseReferences(scopeId, x, y, collision, 0), userInitiated = false)
     }
 
@@ -787,6 +828,7 @@ class GhostController(
     fun onMouseGesture(
         scopeId: Int, x: Int, y: Int, collision: String?, startX: Int, startY: Int, startCollision: String?, direction: String, angle: Int,
     ) {
+        if (touchBlocked()) return
         lastUserActivity = System.currentTimeMillis()
         fun refs(dir: String) = listOf(
             scopeId.toString(), "$x\u0001$y", collision.orEmpty(), "$startX\u0001$startY", startCollision.orEmpty(), dir, angle.toString(),
@@ -810,6 +852,7 @@ class GhostController(
 
     /** 2本指で上下になぞった（ホイールの代わり）。[amount] は上へなら正。座標はシェル画像の座標 */
     fun onMouseWheel(scopeId: Int, x: Int, y: Int, collision: String?, amount: Int) {
+        if (touchBlocked()) return
         lastUserActivity = System.currentTimeMillis()
         scope.launch {
             val script = request("OnMouseWheel", listOf(x.toString(), y.toString(), amount.toString(), scopeId.toString(), collision.orEmpty(), "0", "touch"))
@@ -825,6 +868,7 @@ class GhostController(
      * 答えが無ければ OnMouseClickEx（middle）、それにも答えが無ければ古いゴースト向けに OnMouseClick（Reference5 = 2）を送る
      */
     fun onMiddleClick(scopeId: Int, x: Int = 0, y: Int = 0, collision: String? = null) {
+        if (touchBlocked()) return
         lastUserActivity = System.currentTimeMillis()
         val refs = listOf(x.toString(), y.toString(), "0", scopeId.toString(), collision.orEmpty(), "middle", "touch")
         raise("OnMouseDownEx", refs, userInitiated = false)
@@ -1085,6 +1129,8 @@ class GhostController(
         val s = _state.value
         when {
             s.waitingChoice -> {}
+            // \![enter,nouserbreakmode] の間は、話している途中で止めさせない
+            s.talking && s.noUserBreak -> {}
             s.talking -> {
                 val script = lastScript
                 cancelScript()
@@ -1345,8 +1391,8 @@ class GhostController(
                 val talking = s.talking || s.waitingChoice
                 val uptimeHours = ((System.currentTimeMillis() - bootTime) / 3_600_000).toString()
                 val idleSec = ((System.currentTimeMillis() - lastUserActivity) / 1000).toString()
-                // Reference3 は「話せるか」。パッシブモードでは常に 0（SSP と同じ）
-                val refs = listOf(uptimeHours, "0", "0", if (talking || s.passive) "0" else "1", idleSec)
+                // Reference3 は「話せるか」。パッシブモードとインダクションモードでは常に 0（SSP と同じ）
+                val refs = listOf(uptimeHours, "0", "0", if (talking || s.passive || s.induction) "0" else "1", idleSec)
                 raise("OnSecondChange", refs, userInitiated = false)
                 val now = Calendar.getInstance()
                 val minute = now.get(Calendar.MINUTE)
@@ -1378,7 +1424,8 @@ class GhostController(
         // talking は launch の前に立てる（呼び出し側が「話し終わるまで待つ」ときに取りこぼさないため）
         // 先頭が \C なら、今出ているバルーンを消さずに続ける
         if (!script.startsWith("\\C")) hideBalloons()
-        _state.update { it.copy(talking = true) }
+        // 前のスクリプトの \t と、manual でない \![lock] はここで外れる
+        _state.update { it.withScriptEnded().copy(talking = true) }
         lastScript = script
         val run = ++scriptRuns
         val job = scope.launch {
@@ -1391,7 +1438,9 @@ class GhostController(
             } finally {
                 // 割り込まれて止まったスクリプトが、後から始まったスクリプトの「話している」を消さないようにする
                 if (run == scriptRuns) {
-                    _state.update { it.copy(talking = false, waitingClick = false, scriptEnds = if (ended) it.scriptEnds + 1 else it.scriptEnds) }
+                    _state.update {
+                        it.withScriptEnded().copy(talking = false, waitingClick = false, scriptEnds = if (ended) it.scriptEnds + 1 else it.scriptEnds)
+                    }
                 }
             }
 
@@ -1440,6 +1489,28 @@ class GhostController(
         }
         scriptJob = job
         return job
+    }
+
+    /** \![lock,balloonrepaint] / \![lock,repaint] で止めているか。manual なら、スクリプトが終わっても外さない */
+    private var balloonLocked = false
+    private var repaintLocked = false
+    private var manualBalloonLock = false
+    private var manualRepaintLock = false
+
+    /**
+     * 止めているものに合わせて、止めたときの見た目を持つ（止め始めたときに取り、外したら捨てる）。
+     * \![lock,repaint] はバルーンも止める
+     */
+    private fun GhostState.withLocks() = copy(
+        balloonSnapshot = if (balloonLocked || repaintLocked) balloonSnapshot ?: characters else null,
+        surfaceSnapshot = if (repaintLocked) surfaceSnapshot ?: characters else null,
+    )
+
+    /** スクリプトが終わった（止められた）ときに外れるもの: \t と、manual でない \![lock] */
+    private fun GhostState.withScriptEnded(): GhostState {
+        if (!manualBalloonLock) balloonLocked = false
+        if (!manualRepaintLock) repaintLocked = false
+        return copy(timeCritical = false).withLocks()
     }
 
     private fun selectChoice(choice: Choice) {
@@ -1505,7 +1576,7 @@ class GhostController(
     /** バルーンを閉じる。\b[n] で選んだ番号もここで戻す（次のスクリプトはまた文字の量で選ぶ） */
     private fun hideBalloons() {
         val shown = _state.value.characters.values.any { it.balloon != null }
-        _state.update { s -> s.copy(characters = s.characters.mapValues { it.value.copy(balloon = null, balloonId = null) }) }
+        _state.update { s -> s.copy(characters = s.characters.mapValues { it.value.copy(balloon = null, balloonId = null, autoScroll = true) }) }
         if (shown) scheduleSurfaceRestore()
     }
 
@@ -1549,8 +1620,11 @@ class GhostController(
                 passive = it.passive,
                 loading = it.loading,
                 scriptEnds = it.scriptEnds,
-                // 重なり順や一緒に動く組はゴーストが終わるまで続く（SSP と同じ）
+                // 重なり順や一緒に動く組、enter で始めたモードはゴーストが終わるまで続く（SSP と同じ）
                 window = it.window,
+                online = it.online,
+                noUserBreak = it.noUserBreak,
+                induction = it.induction,
             )
         }
     }
@@ -1689,6 +1763,11 @@ class GhostController(
             key == "status" -> buildList {
                 if (s.talking) add("talking")
                 if (s.passive) add("passive")
+                if (s.induction) add("induction")
+                if (s.timeCritical) add("timecritical")
+                if (s.noUserBreak) add("nouserbreak")
+                if (s.online) add("online")
+                if (s.window.minimized) add("minimizing")
                 if (s.waitingChoice) add("choosing")
                 s.input?.let { add("opening(" + (if (it.kind == InputRequest.Kind.COMMUNICATE) "communicate" else "input") + ")") }
             }.joinToString(",")
@@ -1747,6 +1826,53 @@ class GhostController(
 
         /** `\![updatebymyself]`。スクリプトが終わってから始める */
         var updateRequested = false
+
+        /** `\![set,serikotalk,false]` の間は口パク（SERIKO の talk）を動かさない。このスクリプトの間だけ */
+        private var serikoTalk = true
+
+        override fun clearPart(scope: Int, lines: Boolean, count: Int, start: Int?) = _state.update {
+            it.update(scope) { c ->
+                val items = c.balloon ?: return@update c
+                c.copy(balloon = if (lines) BalloonEdit.removeLines(items, count, start) else BalloonEdit.removeChars(items, count, start))
+            }
+        }
+
+        override fun newLine(scope: Int, percent: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.LineBreak(percent)) } }
+
+        override fun setVerticalAlign(scope: Int, align: VerticalAlign) =
+            _state.update { it.update(scope) { c -> c.append(BalloonItem.VAlign(align)) } }
+
+        override fun setTimeCritical() = _state.update { it.copy(timeCritical = true) }
+
+        override fun lock(what: String, locked: Boolean, manual: Boolean): Boolean {
+            // 止めたときの見た目を取っておき、外すまでそれを描く（もう止めていれば、最初に止めたときのまま）
+            when (what) {
+                "balloonrepaint" -> {
+                    balloonLocked = locked
+                    manualBalloonLock = locked && manual
+                    _state.update { it.withLocks() }
+                }
+                "repaint" -> {
+                    repaintLocked = locked
+                    manualRepaintLock = locked && manual
+                    _state.update { it.withLocks() }
+                }
+                // バルーンは指で動かせない（いつもキャラクターに付いている）ので、止めるまでもない
+                "balloonmove" -> {}
+                else -> return false
+            }
+            return true
+        }
+
+        override fun setMode(name: String, on: Boolean): Boolean {
+            when (name) {
+                "onlinemode" -> onlineMode = on
+                "nouserbreakmode" -> _state.update { it.copy(noUserBreak = on) }
+                "inductionmode" -> _state.update { it.copy(induction = on) }
+                else -> return false
+            }
+            return true
+        }
 
         /** \f の飾り（キャラクターごと） */
         private val styles = HashMap<Int, TextStyle>()
@@ -1832,6 +1958,21 @@ class GhostController(
                     }
                     _state.update { it.update(scope) { c -> c.copy(alignment = edge) } }
                 }
+                // \![set,autoscroll,disable|enable]
+                "autoscroll" -> {
+                    val on = when (args.firstOrNull()?.trim()?.lowercase()) {
+                        "disable", "false", "0" -> false
+                        "enable", "true", "1" -> true
+                        else -> return false
+                    }
+                    _state.update { it.update(scope) { c -> c.copy(autoScroll = on) } }
+                }
+                // \![set,serikotalk,true|false]
+                "serikotalk" -> serikoTalk = when (args.firstOrNull()?.trim()?.lowercase()) {
+                    "false", "0", "disable" -> false
+                    "true", "1", "enable" -> true
+                    else -> return false
+                }
                 else -> return setOption(name, args)
             }
             return true
@@ -1886,7 +2027,7 @@ class GhostController(
 
         override fun appendText(scope: Int, text: String) {
             talked()
-            _state.update { it.update(scope) { c -> c.appendText(text, styles[scope] ?: TextStyle.Default) } }
+            _state.update { it.update(scope) { c -> c.appendText(text, styles[scope] ?: TextStyle.Default, countTalk = serikoTalk) } }
         }
 
         override fun newLine(scope: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.NewLine) } }
@@ -1921,7 +2062,7 @@ class GhostController(
         override fun setBalloonId(scope: Int, id: Int) = _state.update { it.update(scope) { c -> c.copy(balloonId = id) } }
 
         override fun setFont(scope: Int, style: TextStyle) {
-            styles[scope] = style
+            styles[scope] = style.copy(font = style.font?.map(::fontCandidate))
         }
 
         override fun setAlign(scope: Int, align: TextAlign) = _state.update { it.update(scope) { c -> c.append(BalloonItem.Align(align)) } }
@@ -2049,6 +2190,9 @@ class GhostController(
 
         /** \![set,scaling] の倍率の上限（4 = 400%）。画面より大きなウィンドウを作らせない */
         const val MAX_SCALING = 4f
+
+        /** \f[name,...] でファイルとして扱う拡張子 */
+        val FONT_EXTENSIONS = setOf("ttf", "otf", "ttc")
 
         /** ゴーストを切り替えるとき、前のゴーストが話し終わるのを待つ長さ */
         const val CHANGE_WAIT_MS = 30_000L

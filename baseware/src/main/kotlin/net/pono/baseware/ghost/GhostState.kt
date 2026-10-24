@@ -4,11 +4,18 @@ import net.pono.baseware.sakura.Choice
 import net.pono.baseware.sakura.MoveCommand
 import net.pono.baseware.sakura.TextAlign
 import net.pono.baseware.sakura.TextStyle
+import net.pono.baseware.sakura.VerticalAlign
 
 sealed interface BalloonItem {
     /** [style] は \f で決めた飾り */
     data class Text(val text: String, val style: TextStyle = TextStyle.Default) : BalloonItem
     data object NewLine : BalloonItem
+
+    /** \n[half] / \n[150] など。[percent] はふつうの改行に対する割合（負なら上へ戻る） */
+    data class LineBreak(val percent: Int) : BalloonItem
+
+    /** \f[valign,...]。この行から後の、行の中の縦のそろえ方 */
+    data class VAlign(val align: VerticalAlign) : BalloonItem
 
     /** \q の選択肢と、\_a / \__q のリンク。文の中にそのまま置く */
     data class ChoiceItem(val choice: Choice) : BalloonItem
@@ -72,8 +79,11 @@ data class CharacterState(
     val nudge: Pair<Int, Boolean>? = null,
     /** \![set,alignmenttodesktop]。top / bottom / left / right なら画面のその端に付け、その向きにはドラッグで動かさない。null なら自由 */
     val alignment: String? = null,
+    /** \![set,autoscroll,disable] の間は false。文字が増えてもバルーンを最後までスクロールしない */
+    val autoScroll: Boolean = true,
 ) {
-    fun appendText(text: String, style: TextStyle = TextStyle.Default): CharacterState {
+    /** [countTalk] が false（\![set,serikotalk,false] の間）なら、口パクの文字数に数えない */
+    fun appendText(text: String, style: TextStyle = TextStyle.Default, countTalk: Boolean = true): CharacterState {
         val items = balloon.orEmpty()
         val last = items.lastOrNull()
         return copy(
@@ -82,7 +92,7 @@ data class CharacterState(
             } else {
                 items + BalloonItem.Text(text, style)
             },
-            talkCount = talkCount + text.length,
+            talkCount = if (countTalk) talkCount + text.length else talkCount,
         )
     }
 
@@ -113,6 +123,18 @@ data class GhostState(
     val scriptEnds: Int = 0,
     /** キャラクターのウィンドウ全体にかかること（重なり順・一緒に動く組・最小化など） */
     val window: WindowState = WindowState(),
+    /** \t の間。マウス（タッチ）のイベントを送らない */
+    val timeCritical: Boolean = false,
+    /** \![lock,balloonrepaint] / \![lock,repaint] の間は、止めたときのキャラクターたち。バルーンはこの見た目のまま描く */
+    val balloonSnapshot: Map<Int, CharacterState>? = null,
+    /** \![lock,repaint] の間は、止めたときのキャラクターたち。サーフェスもこの見た目のまま描く */
+    val surfaceSnapshot: Map<Int, CharacterState>? = null,
+    /** \![enter,onlinemode] の間と、ネットワーク更新の間。バルーンにオンラインの印を出す */
+    val online: Boolean = false,
+    /** \![enter,nouserbreakmode] の間。バルーンを叩いてもスクリプトを止めない */
+    val noUserBreak: Boolean = false,
+    /** \![enter,inductionmode] の間。パッシブモードと同じく「話せない」と伝えるが、バルーンや選択肢は時間で消える */
+    val induction: Boolean = false,
 ) {
     fun update(scope: Int, f: (CharacterState) -> CharacterState): GhostState {
         val current = characters[scope] ?: CharacterState(scope, -1)
