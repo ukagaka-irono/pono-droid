@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
+import net.pono.baseware.ghost.SoundStatus
 import net.pono.baseware.sakura.SoundOptions
 import java.io.File
 
@@ -18,8 +19,11 @@ class SoundPlayer(
     private val onLoop: (File) -> Unit = {},
     private val onError: (File, Int, String) -> Unit = { _, _, _ -> },
 ) {
-    private class Sound(val file: File, val player: MediaPlayer) {
+    private class Sound(val file: File, val player: MediaPlayer, val id: Int) {
         var loop = false
+
+        /** play されたことがあるか（無ければ load で先に読んだだけ） */
+        var started = false
         var prepared = false
 
         /** prepare が終わったら鳴らす（load だけなら鳴らさない） */
@@ -32,6 +36,7 @@ class SoundPlayer(
     }
 
     private val sounds = LinkedHashMap<String, Sound>()
+    private var nextId = 1
     private val main = Handler(Looper.getMainLooper())
 
     /** ループでない音がすべて鳴り終わったら完了する（\_V の待ち） */
@@ -40,6 +45,7 @@ class SoundPlayer(
     fun play(file: File, loop: Boolean, options: SoundOptions) {
         val sound = sounds[file.path] ?: open(file) ?: return
         sound.loop = loop
+        sound.started = true
         sound.options = merge(sound.options, options)
         sound.paused = false
         if (sound.prepared) {
@@ -86,6 +92,21 @@ class SoundPlayer(
         forEach(file) { release(it, notify = false) }
     }
 
+    /** 鳴らしている音と、先に読んだ音（プロパティシステムの currentghost.sound.*） */
+    fun statuses(): List<SoundStatus> = sounds.values.map { s ->
+        val ready = s.prepared
+        SoundStatus(
+            file = s.file,
+            id = s.id,
+            positionMs = if (ready) runCatching { s.player.currentPosition.toLong() }.getOrDefault(-1) else -1,
+            durationMs = if (ready) runCatching { s.player.duration.toLong() }.getOrDefault(-1) else -1,
+            playing = s.started && !s.paused,
+            paused = s.paused,
+            loop = s.loop,
+            preload = !s.started,
+        )
+    }
+
     suspend fun await() {
         finished?.await()
     }
@@ -93,7 +114,7 @@ class SoundPlayer(
     private fun open(file: File): Sound? {
         if (sounds.size >= MAX_SOUNDS) sounds.values.firstOrNull()?.let { release(it, notify = false) }
         val player = MediaPlayer()
-        val sound = Sound(file, player)
+        val sound = Sound(file, player, nextId++)
         try {
             player.setDataSource(file.path)
             player.setOnErrorListener { _, what, extra ->

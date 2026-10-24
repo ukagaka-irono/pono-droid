@@ -225,6 +225,9 @@ interface ScriptHost {
     /** `\![vanishbymyself(,ゴースト名)(,--option=query)]` */
     fun vanish(args: List<String>) {}
 
+    /** `\![set,property,名前,値]`。扱えたら true */
+    fun setProperty(name: String, value: String): Boolean = false
+
     /** `\![create,shortcut(,startup)]`。扱えたら true */
     fun createShortcut(args: List<String>): Boolean = false
 
@@ -599,6 +602,7 @@ class ScriptPlayer(
                     // 文字の流れる速さ（このスクリプトの間だけ）
                     a[1].lowercase() == "balloonwait" -> charWaitOverride = balloonWait(a.getOrNull(2)?.trim()?.lowercase().orEmpty())
                     a[1].lowercase() == "syncobject" -> a.getOrNull(2)?.let { host.setSyncObject(it.trim(), true) }
+                    a[1].lowercase() == "property" -> if (a.size < 3 || !host.setProperty(a[2], a.getOrNull(3).orEmpty())) host.unknownTag(token)
                     a[1].lowercase() in silentSetOptions -> {}
                     !host.setOption(scope, a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
                 }
@@ -764,7 +768,7 @@ class ScriptPlayer(
     private val silentSetOptions = setOf(
         "trayicon", "tasktrayicon", "trayballoon", "tasktrayballoon", "wallpaper",
         "otherghosttalk", "othersurfacechange", "alignmentondesktop",
-        "shioridebugmode", "property",
+        "shioridebugmode",
     )
 
     private val silentExecutes = setOf("resetballoonpos")

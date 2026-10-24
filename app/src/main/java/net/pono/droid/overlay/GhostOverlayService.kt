@@ -59,8 +59,11 @@ import net.pono.baseware.ghost.GhostRepository
 import net.pono.baseware.ghost.InputRequest
 import net.pono.baseware.ghost.NetworkStatus
 import net.pono.baseware.ghost.PreviousGhost
+import net.pono.baseware.ghost.DiskInfo
+import net.pono.baseware.ghost.SoundStatus
 import net.pono.baseware.ghost.SurfaceDump
 import net.pono.baseware.ghost.SystemInfo
+import net.pono.baseware.ghost.WindowGeometry
 import net.pono.baseware.ghost.WindowState
 import net.pono.baseware.sakura.SoundOptions
 import net.pono.baseware.shell.Shell
@@ -275,6 +278,25 @@ class GhostOverlayService : LifecycleService() {
                 override fun stopSound() = sound.stop()
 
                 override fun stopSound(file: File?) = sound.stop(file)
+
+                override fun windowGeometry(scope: Int): WindowGeometry? =
+                    windows.firstOrNull { it.scopeId == scope }?.geometry(characterScale.toDouble(), balloonScale.toDouble())
+
+                /** アプリの置き場（内部）と、端末の共有の置き場 */
+                override fun diskInfo(): List<DiskInfo> = listOfNotNull(filesDir, getExternalFilesDir(null)).mapNotNull { dir ->
+                    runCatching {
+                        val stat = android.os.StatFs(dir.path)
+                        val external = dir != filesDir
+                        DiskInfo(
+                            mountpoint = if (external) android.os.Environment.getExternalStorageDirectory().path else android.os.Environment.getDataDirectory().path,
+                            type = if (external && android.os.Environment.isExternalStorageRemovable(dir)) "removable" else "fixed",
+                            totalMb = stat.totalBytes / (1024 * 1024),
+                            freeMb = stat.availableBytes / (1024 * 1024),
+                        )
+                    }.getOrNull()
+                }.distinctBy { it.mountpoint }
+
+                override fun soundStatus(): List<SoundStatus> = sound.statuses()
 
                 override fun speechEnabled(): Boolean = OverlaySettings.speech(OverlaySettings.prefs(this@GhostOverlayService))
 
@@ -700,9 +722,8 @@ class GhostOverlayService : LifecycleService() {
     }
 
     /** 端末の見た目・言語・フォント・更新。言語名と ID は SSP（Windows）と同じ形にする */
-    private fun systemInfo(): SystemInfo {
-        val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        val locale = resources.configuration.locales[0]
+    /** 端末のフォント。入れ替わることはまず無いので、1回だけ調べる */
+    private val systemFonts: List<String> by lazy {
         val fonts = if (Build.VERSION.SDK_INT >= 29) {
             runCatching {
                 android.graphics.fonts.SystemFonts.getAvailableFonts().mapNotNull { it.file?.nameWithoutExtension }.distinct().sorted().take(MAX_FONTS)
@@ -710,14 +731,23 @@ class GhostOverlayService : LifecycleService() {
         } else {
             emptyList()
         }
+        fonts.ifEmpty { listOf("sans-serif", "serif", "monospace") }
+    }
+
+    private fun systemInfo(): SystemInfo {
+        val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        val locale = resources.configuration.locales[0]
+        val filter = getSystemService(NotificationManager::class.java)?.currentInterruptionFilter
         return SystemInfo(
             darkTheme = night,
             languageName = locale.getDisplayLanguage(java.util.Locale.ENGLISH),
             languageId = windowsLanguageId(locale),
-            fonts = fonts.ifEmpty { listOf("sans-serif", "serif", "monospace") },
+            fonts = systemFonts,
             osUpdated = Build.TIME.takeIf { it > 0 },
             osUpdateTitle = "Android ${Build.VERSION.RELEASE} (${Build.VERSION.SECURITY_PATCH})",
             country = locale.country,
+            doNotDisturb = filter != null && filter != NotificationManager.INTERRUPTION_FILTER_ALL &&
+                filter != NotificationManager.INTERRUPTION_FILTER_UNKNOWN,
         )
     }
 

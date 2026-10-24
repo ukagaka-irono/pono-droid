@@ -163,10 +163,10 @@ fun CharacterSurface(
     val activeAnimations = layers.keys.filter { it >= 0 } + character.binds
     fun hit(p: Pair<Int, Int>) = controller.shell.surfaces[baseSurface]?.hitTest(p.first, p.second, activeAnimations)
     // sakura.tooltips などで決めた、当たり判定に触れている間に出す文字
-    val tooltips = controller.shell.surfaces.tooltips[scopeId]
     var tooltip by remember { mutableStateOf<String?>(null) }
     fun showTooltip(collision: String?) {
-        tooltip = collision?.let { tooltips?.get(it) }?.takeIf { it.isNotBlank() }
+        // \![set,property] で変えたものも入る
+        tooltip = collision?.let { controller.tooltip(scopeId, it) }?.takeIf { it.isNotBlank() }
     }
     val selecting = state.selectMode?.takeIf { it.scope == scopeId }
     var selectStart by remember { mutableStateOf<Pair<Int, Int>?>(null) }

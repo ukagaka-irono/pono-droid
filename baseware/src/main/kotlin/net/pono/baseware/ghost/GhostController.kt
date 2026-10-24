@@ -97,6 +97,40 @@ data class SystemInfo(
     val osUpdateTitle: String = "",
     /** 国（祝日に使う）。JP なら日本の祝日を伝える */
     val country: String = "",
+    /** おやすみモード（通知を鳴らさない）にしているか（system.dnd.mode） */
+    val doNotDisturb: Boolean = false,
+)
+
+/** 画面の上の四角（画面の px）。プロパティシステムの rect と同じく 左,上,右,下 で書く */
+data class ScreenRect(val left: Int, val top: Int, val right: Int, val bottom: Int) {
+    override fun toString() = "$left,$top,$right,$bottom"
+}
+
+/**
+ * キャラクターのウィンドウの今の位置（currentghost.scope(ID).x など）。[surface] はサーフェスのウィンドウ、[balloon] は
+ * バルーンのウィンドウ（出していなければ null）。[scale] と [balloonScale] は実際の拡大率（1.0 が等倍）
+ */
+data class WindowGeometry(
+    val surface: ScreenRect?,
+    val balloon: ScreenRect? = null,
+    val scale: Double = 1.0,
+    val balloonScale: Double = 1.0,
+)
+
+/** 端末の記憶領域の1つ（system.disk.index(ID).*）。[type] は fixed / removable など */
+data class DiskInfo(val mountpoint: String, val type: String, val totalMb: Long, val freeMb: Long)
+
+/** 鳴らしている音の1つ（currentghost.sound.*）。位置と長さはミリ秒で、分からなければ -1 */
+data class SoundStatus(
+    val file: File,
+    val id: Int,
+    val positionMs: Long,
+    val durationMs: Long,
+    val playing: Boolean,
+    val paused: Boolean,
+    val loop: Boolean,
+    val preload: Boolean,
+    val error: String = "",
 )
 
 /**
@@ -172,6 +206,15 @@ interface GhostPlatform {
         if (file == null) stopSound()
     }
 
+    /** [scope] のキャラクターのウィンドウの今の位置（出していなければ null） */
+    fun windowGeometry(scope: Int): WindowGeometry? = null
+
+    /** 記憶領域（system.disk.*） */
+    fun diskInfo(): List<DiskInfo> = emptyList()
+
+    /** 鳴らしている音（先に読んだだけのものも） */
+    fun soundStatus(): List<SoundStatus> = emptyList()
+
     /** 話した文字を読み上げるか（アプリの設定。OnSpeechSynthesisStatus で伝える） */
     fun speechEnabled(): Boolean = false
 
@@ -235,7 +278,7 @@ class GhostController(
     shell: Shell,
     private val shioriFactory: ShioriFactory,
     private val scope: CoroutineScope,
-    private val platform: GhostPlatform,
+    platform: GhostPlatform,
     /** 使っているバルーン（null なら pono-droid の簡易バルーン） */
     balloon: Balloon? = null,
     /** 入っているゴーストとバルーンの一覧（プロパティシステムの ghostlist などに使う） */
@@ -258,6 +301,25 @@ class GhostController(
 ) {
     private val _state = MutableStateFlow(GhostState())
     val state: StateFlow<GhostState> = _state.asStateFlow()
+
+    /** 開発のための記録（developer.log.*、\![open,errorlog]） */
+    val developerLog = DeveloperLog()
+
+    /** 使ったゴーストとバルーン（history.*）と使用率（rateofuselist.*）。ゴースト置き場が無ければ記録しない */
+    private val history: UsageHistory? = repository?.let { UsageHistory(File(it.root.parentFile ?: it.root, "pono/history.properties")) }
+
+    /** エラーと「できなかった」記録を、開発のための記録にも残す */
+    private val platform: GhostPlatform = object : GhostPlatform by platform {
+        override fun onError(message: String) {
+            developerLog.add("error", "Error", ghost.name, message)
+            platform.onError(message)
+        }
+
+        override fun log(message: String) {
+            if (" -> " !in message && WARNING_WORDS.any { it in message }) developerLog.add("error", "Warning", ghost.name, message)
+            platform.log(message)
+        }
+    }
 
     /** 使っているシェル。\![change,shell] やメニューで変わる */
     var shell: Shell = shell
@@ -324,6 +386,8 @@ class GhostController(
             val profile = ghost.loadProfile()
             val firstBoot = profile.getProperty("booted") == null
             profile.setProperty("booted", "1")
+            history?.ghostBooted(ghost.dir.name)
+            balloon?.let { history?.balloonUsed(it.dir.name) }
             ghost.saveProfile(profile)
 
             // 切り替わって来たときは OnGhostChanged（前のゴーストが消去されたなら OnVanished）。答えが無ければ OnBoot（SSP と同じ）。
@@ -1746,6 +1810,7 @@ class GhostController(
             else -> balloons.findByName(name) ?: balloons.find(name) ?: return platform.log("バルーンがありません: $name")
         }
         ghost.selectBalloon(next?.dir?.name)
+        next?.let { history?.balloonUsed(it.dir.name) }
         balloon = next
         platform.onBalloonChanged(next)
         val path = next?.let { it.dir.absolutePath + "/" }.orEmpty()
@@ -2215,7 +2280,7 @@ class GhostController(
             sb.append("\\q[${quote(resource("$scopeName.portalbuttoncaption") ?: "ポータル")},pono:sites,portal,$scopeId]\\n")
         }
         sb.append("\\q[ゴーストのメニュー（中クリック）,pono:middle,$scopeId]\\n")
-        if (shell.bindGroups(scopeId).isNotEmpty()) sb.append("\\q[きせかえ,pono:dressup,$scopeId]\\n")
+        if (shell.bindGroups(scopeId).isNotEmpty() && bindMenu(scopeId) != "hidden") sb.append("\\q[きせかえ,pono:dressup,$scopeId]\\n")
         if ((repository?.list()?.size ?: 0) > 1) sb.append("\\q[ゴースト切り替え,pono:ghosts,$scopeId]\\n")
         if (ghost.shellDirs.size > 1) sb.append("\\q[シェル,pono:shells,$scopeId]\\n")
         if (repository != null) sb.append("\\q[バルーン,pono:balloons,$scopeId]\\n")
@@ -2253,6 +2318,8 @@ class GhostController(
     private fun shellsMenu(scopeId: Int): String {
         val sb = StringBuilder("\\p[$scopeId]\\_q")
         for (dir in ghost.shellDirs) {
+            // \![set,property,currentghost.shelllist(名前).menu,hidden] とシェルの descript.txt の menu,hidden
+            if (shellMenu(dir) == "hidden" && dir != shell.dir) continue
             val name = runCatching { Shell(dir).name }.getOrDefault(dir.name)
             sb.append("\\q[${quote((if (dir == shell.dir) "● " else "○ ") + name)},pono:shell,${dir.name}]\\n")
         }
@@ -2670,6 +2737,7 @@ class GhostController(
                 }
                 .getOrNull()?.value
         }
+        logEvent(event, references)
         // 毎秒・毎分のイベントとなでる（OnMouseMove）は多すぎるので、話すときだけ記録する
         if (value != null || event !in timerEvents) {
             if (sensitive) {
@@ -2734,6 +2802,7 @@ class GhostController(
                 if (minute != lastMinute) {
                     lastMinute = minute
                     raise("OnMinuteChange", refs, userInitiated = false)
+                    history?.ghostMinute(ghost.dir.name)
                 }
                 val hour = now.get(Calendar.HOUR_OF_DAY)
                 if (hour != lastHour) {
@@ -2762,6 +2831,7 @@ class GhostController(
         // 前のスクリプトの \t と、manual でない \![lock] はここで外れる
         _state.update { it.withScriptEnded().copy(talking = true) }
         lastScript = script
+        developerLog.add("script", "Ghost", ghost.name, script)
         val run = ++scriptRuns
         val job = scope.launch {
             val raised = mutableListOf<Pair<String, List<String>>>()
@@ -2999,6 +3069,26 @@ class GhostController(
             n == "system.millisecond" -> now.get(Calendar.MILLISECOND).toString()
             n == "system.dayofweek" -> (now.get(Calendar.DAY_OF_WEEK) - 1).toString()
             n == "system.cursor.pos" -> "0,0"
+            // pono-droid の画面はいつも明るい色。端末のほうはダークモードかどうか
+            n == "system.theme.app.mode" -> "light"
+            n == "system.theme.os.mode" -> if (platform.systemInfo()?.darkTheme == true) "dark" else "light"
+            n == "system.dnd.mode" -> if (platform.systemInfo()?.doNotDisturb == true) "quiet" else "normal"
+            n.startsWith("system.network.") -> networkProperty(n.removePrefix("system.network."))
+            n == "system.disk.count" -> platform.diskInfo().size.toString()
+            n.startsWith("system.disk.index(") -> {
+                val d = n.substring(18, n.indexOf(')').takeIf { it > 18 } ?: return null).toIntOrNull()?.let(platform.diskInfo()::getOrNull) ?: return null
+                when (n.substringAfter(").", "")) {
+                    "mountpoint" -> d.mountpoint
+                    "type" -> d.type
+                    "total" -> d.totalMb.toString()
+                    "free" -> d.freeMb.toString()
+                    else -> null
+                }
+            }
+            n.startsWith("history.ghost") -> historyProperty(n.removePrefix("history.ghost"), history?.recentGhosts().orEmpty().mapNotNull { repository?.find(it) }) { g, key, i -> ghostProperty(g, key, i) }
+            n.startsWith("history.balloon") -> historyProperty(n.removePrefix("history.balloon"), history?.recentBalloons().orEmpty().mapNotNull { repository?.balloons?.find(it) }) { b, key, i -> balloonProperty(b, key, i) }
+            n.startsWith("rateofuselist.") -> rateOfUseProperty(n.removePrefix("rateofuselist."))
+            n.startsWith("developer.log.") -> developerLogProperty(n.removePrefix("developer.log."))
             n.startsWith("system.os.") -> osProperty(n.removePrefix("system.os."))
             n.startsWith("system.cpu.") -> when (n.removePrefix("system.cpu.")) {
                 "num" -> (platform.deviceInfo()?.cpuCount ?: 0).toString()
@@ -3128,6 +3218,7 @@ class GhostController(
                     "name" -> runCatching { Shell(dir).name }.getOrDefault(dir.name)
                     "path" -> dir.absolutePath + "/"
                     "index" -> index.toString()
+                    "menu" -> shellMenu(dir)
                     else -> null
                 }
             }
@@ -3135,9 +3226,15 @@ class GhostController(
             key.startsWith("balloon.scope(") -> {
                 val m = Regex("""^balloon\.scope\((\d+)\)\.(.*)$""").find(key) ?: return null
                 val scope = m.groupValues[1].toIntOrNull() ?: return null
+                val g = platform.windowGeometry(scope)
                 when (m.groupValues[2]) {
                     "num" -> (s.characters[scope]?.balloonId ?: 0).toString()
                     "count" -> (balloon?.images(scope)?.size ?: 1).toString()
+                    "x" -> g?.balloon?.left?.toString() ?: "0"
+                    "y" -> g?.balloon?.top?.toString() ?: "0"
+                    "rect" -> (g?.balloon ?: ScreenRect(0, 0, 0, 0)).toString()
+                    "scaling" -> formatNumber((g?.balloonScale ?: 1.0) * 100)
+                    "vertical" -> "0"
                     else -> null
                 }
             }
@@ -3150,16 +3247,272 @@ class GhostController(
                     "surface.num" -> (s.characters[scope]?.surface ?: -1).toString()
                     "seriko.defaultsurface" -> defaultSurface(scope).toString()
                     "name" -> if (scope == 0) ghost.sakuraName else if (scope == 1) ghost.keroName else ghost.descript["char$scope.name"].orEmpty()
-                    "scaling" -> "100"
-                    "x", "y" -> "0"
-                    "rect" -> "0,0,0,0"
+                    "scaling" -> formatNumber((platform.windowGeometry(scope)?.scale ?: 1.0) * 100)
+                    "rect" -> (platform.windowGeometry(scope)?.surface ?: ScreenRect(0, 0, 0, 0)).toString()
+                    // 基準点（ふつうはサーフェスの下の真ん中）
+                    "x" -> platform.windowGeometry(scope)?.surface?.let { (it.left + it.right) / 2 }?.toString() ?: "0"
+                    "y" -> platform.windowGeometry(scope)?.surface?.bottom?.toString() ?: "0"
+                    "surface.x" -> platform.windowGeometry(scope)?.surface?.left?.toString() ?: "0"
+                    "surface.y" -> platform.windowGeometry(scope)?.surface?.top?.toString() ?: "0"
                     "animation.num" -> (shell.surfaces[s.characters[scope]?.surface ?: -1]?.animations?.size ?: 0).toString()
+                    else -> when {
+                        m.groupValues[2].startsWith("currentmonitor.") -> property("system.monitor.index(0)." + m.groupValues[2].removePrefix("currentmonitor."))
+                        m.groupValues[2].startsWith("surface(") -> {
+                            val id = m.groupValues[2].substringAfter('(').substringBefore(')').toIntOrNull() ?: return null
+                            if (m.groupValues[2].substringAfter(").") != "rect") return null
+                            val (w, h) = surfaceSize(id) ?: return null
+                            "0,0,$w,$h"
+                        }
+                        else -> null
+                    }
+                }
+            }
+            key == "seriko.surfacelist.all" -> shell.surfaceIds().joinToString(",")
+            key == "seriko.surfacelist.defined" -> shell.surfaces.definitions.keys.sorted().joinToString(",")
+            key == "seriko.sticky-window" -> s.window.stickyGroups.joinToString(";") { g -> g.sorted().joinToString(",") }
+            key == "seriko.zorder" -> s.window.zorder.joinToString(";") { it.joinToString(",") }
+            key.startsWith("seriko.tooltip.scope(") -> tooltipProperty(key.removePrefix("seriko.tooltip.scope("))
+            key.startsWith("seriko.cursor.") || key.startsWith("mousecursor") || key.startsWith("balloon.mousecursor") -> cursorProperties[key].orEmpty()
+            key == "sound.count" -> platform.soundStatus().size.toString()
+            key.startsWith("sound.index(") -> {
+                val i = key.substring(12, key.indexOf(')').takeIf { it > 12 } ?: return null).toIntOrNull() ?: return null
+                platform.soundStatus().getOrNull(i)?.let { soundProperty(it, key.substringAfter(").", "")) }
+            }
+            key.startsWith("sound(") -> {
+                val name = key.substring(6, key.lastIndexOf(").").takeIf { it > 6 } ?: return null)
+                findSound(name)?.let { soundProperty(it, key.substring(key.lastIndexOf(").") + 2)) }
+            }
+            BIND_MENU.matches(key) -> bindMenu(scopeOfMenuKey(key))
+            else -> ghostProperty(ghost, key, repository?.list()?.indexOfFirst { it.dir == ghost.dir } ?: 0)
+        }
+    }
+
+    private fun formatNumber(v: Double): String = if (v == Math.floor(v)) v.toLong().toString() else "%.2f".format(Locale.ROOT, v).trimEnd('0').trimEnd('.')
+
+    private fun networkProperty(key: String): String? {
+        val n = platform.networkStatus() ?: return null
+        return when (key) {
+            "status" -> if (n.online) "online" else "offline"
+            "ipaddress" -> n.addresses.firstOrNull().orEmpty()
+            "type" -> n.type
+            "cost" -> n.metering
+            "downlink" -> formatNumber(n.maxMbps)
+            "downlink.estimate" -> formatNumber(n.effectiveMbps)
+            else -> null
+        }
+    }
+
+    /** history.ghost(名前) / .index(N) / .count。使ったものから順 */
+    private fun <T> historyProperty(rest: String, items: List<T>, resolve: (T, String, Int) -> String?): String? =
+        if (rest == ".count") items.size.toString() else listProperty(rest, items, null, resolve)
+
+    /** rateofuselist.index(順位).name など。起動していた時間の長い順 */
+    private fun rateOfUseProperty(rest: String): String? {
+        val h = history ?: return null
+        if (!rest.startsWith("index(")) return null
+        val rank = rest.substring(6, rest.indexOf(')').takeIf { it > 6 } ?: return null).toIntOrNull() ?: return null
+        val all = h.usage()
+        val u = all.getOrNull(rank) ?: return null
+        val today = h.today()
+        val g = repository?.find(u.dirName)
+        fun percent(mine: Int, total: Int) = if (total <= 0) "0" else formatNumber(mine * 100.0 / total)
+        return when (rest.substringAfter(").", "")) {
+            "name" -> g?.name ?: u.dirName
+            "sakuraname" -> g?.sakuraName.orEmpty()
+            "keroname" -> g?.keroName.orEmpty()
+            "boottime" -> u.boots.toString()
+            "bootminute" -> u.minutes.toString()
+            "boottimeweekly" -> u.boots(7, today).toString()
+            "bootminuteweekly" -> u.minutes(7, today).toString()
+            "boottimemonthly" -> u.boots(30, today).toString()
+            "bootminutemonthly" -> u.minutes(30, today).toString()
+            "percent" -> percent(u.minutes, all.sumOf { it.minutes })
+            "percentweekly" -> percent(u.minutes(7, today), all.sumOf { it.minutes(7, today) })
+            "percentmonthly" -> percent(u.minutes(30, today), all.sumOf { it.minutes(30, today) })
+            else -> null
+        }
+    }
+
+    /** developer.log.種別.count / .index(ID).項目 / 種別(名前).count / 種別(名前)(.index(ID)).項目。新しいものが 0 */
+    private fun developerLogProperty(rest: String): String? {
+        val kind = DeveloperLog.KINDS.firstOrNull { rest.startsWith("$it.") || rest.startsWith("$it(") } ?: return null
+        var tail = rest.removePrefix(kind)
+        var entries = developerLog.entries(kind)
+        if (tail.startsWith("(")) {
+            val close = tail.indexOf(')').takeIf { it > 0 } ?: return null
+            val name = tail.substring(1, close)
+            entries = entries.filter { it.name.equals(name, ignoreCase = true) }
+            tail = tail.substring(close + 1)
+            if (tail == ".count") return entries.size.toString()
+            if (!tail.startsWith(".index(")) return entries.firstOrNull()?.let { logEntryProperty(it, tail.removePrefix(".")) }
+        }
+        if (tail == ".count") return entries.size.toString()
+        if (!tail.startsWith(".index(")) return null
+        val close = tail.indexOf(')').takeIf { it > 7 } ?: return null
+        val entry = tail.substring(7, close).toIntOrNull()?.let(entries::getOrNull) ?: return null
+        return logEntryProperty(entry, tail.substringAfter(").", ""))
+    }
+
+    private fun logEntryProperty(e: DeveloperLog.Entry, key: String): String? = when (key) {
+        "type" -> e.type
+        "name" -> e.name
+        "value" -> e.value
+        "time" -> java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.ROOT).format(Date(e.time))
+        else -> null
+    }
+
+    /** 通信と更新のイベントを、開発のための記録に残す */
+    private fun logEvent(event: String, references: List<String>) {
+        val kind = when {
+            NETWORK_EVENTS.any { event.startsWith(it) } -> "network"
+            event.startsWith("OnUpdate") && !event.startsWith("OnUpdatedata") -> "update"
+            else -> return
+        }
+        val type = if ("Failure" in event) "Error" else "Info"
+        developerLog.add(kind, type, ghost.name, (listOf(event) + references.take(3)).joinToString(" "))
+    }
+
+    /** サーフェスの画像の大きさ（PNG の頭を読む）。画像が無ければ null */
+    private fun surfaceSize(id: Int): Pair<Int, Int>? {
+        val file = shell.surfaceImage(id) ?: return null
+        return runCatching {
+            file.inputStream().use { input ->
+                val head = ByteArray(24)
+                if (input.read(head) < 24) return null
+                fun int(at: Int) = ((head[at].toInt() and 0xff) shl 24) or ((head[at + 1].toInt() and 0xff) shl 16) or
+                    ((head[at + 2].toInt() and 0xff) shl 8) or (head[at + 3].toInt() and 0xff)
+                int(16) to int(20)
+            }
+        }.getOrNull()
+    }
+
+    // ---- 書き換えられるプロパティ（\![set,property,名前,値]） ----
+
+    /** \![set,property] で変えたツールチップ（キャラクターごとに 当たり判定 → 文字） */
+    private val tooltipOverrides = HashMap<Int, MutableMap<String, String>>()
+
+    /** マウスカーソルのプロパティ。スマートフォンにカーソルは無いので、書いたものを覚えて返すだけ */
+    private val cursorProperties = HashMap<String, String>()
+
+    /** [scope] のキャラクターの、当たり判定 [collision] に触れている間に出す文字（sakura.tooltips と \![set,property]） */
+    fun tooltip(scope: Int, collision: String): String? =
+        tooltipOverrides[scope]?.get(collision) ?: shell.surfaces.tooltips[scope]?.get(collision)
+
+    private fun tooltips(scope: Int): Map<String, String> =
+        LinkedHashMap(shell.surfaces.tooltips[scope].orEmpty()).apply { putAll(tooltipOverrides[scope].orEmpty()) }
+
+    /** "0).textlist.count" / "0).textlist(Head).text" / "0).textlist.index(1).name" */
+    private fun tooltipProperty(rest: String): String? {
+        val scope = rest.substringBefore(')').toIntOrNull() ?: return null
+        val tail = rest.substringAfter(").", "")
+        val list = tooltips(scope)
+        return when {
+            tail == "textlist.count" -> list.size.toString()
+            tail.startsWith("textlist.index(") -> {
+                val i = tail.substring(15, tail.indexOf(')').takeIf { it > 15 } ?: return null).toIntOrNull() ?: return null
+                val (name, text) = list.entries.toList().getOrNull(i)?.toPair() ?: return null
+                when (tail.substringAfter(").", "")) {
+                    "name" -> name
+                    "text" -> text
                     else -> null
                 }
             }
-            key == "seriko.surfacelist.all" || key == "seriko.surfacelist.defined" -> shell.surfaceIds().joinToString(",")
-            else -> ghostProperty(ghost, key, repository?.list()?.indexOfFirst { it.dir == ghost.dir } ?: 0)
+            tail.startsWith("textlist(") -> {
+                val name = tail.substring(9, tail.lastIndexOf(").").takeIf { it > 9 } ?: return null)
+                if (tail.endsWith(").text")) list[name].orEmpty() else null
+            }
+            else -> null
         }
+    }
+
+    /** シェル切り替えのメニューに出すか（hidden なら出さない）。\![set,property] で変えたものか、シェルの descript.txt の menu */
+    private fun shellMenu(dir: File): String =
+        ghost.loadProfile().getProperty("menu.shell.${dir.name}") ?: runCatching { Shell(dir).descript["menu"] }.getOrNull()?.trim().orEmpty()
+
+    /** 着せ替えのメニュー（hidden / auto / none）。\![set,property] で変えたものか、シェルの descript.txt の sakura.menu など */
+    private fun bindMenu(scope: Int): String =
+        ghost.loadProfile().getProperty("menu.bind.${shell.dir.name}.$scope")
+            ?: shell.descript["${Shell.scopeName(scope)}.menu"]?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: "none"
+
+    private fun scopeOfMenuKey(key: String): Int = when (val head = key.substringBefore(".bind.menu")) {
+        "sakura" -> 0
+        "kero" -> 1
+        else -> head.removePrefix("char").toIntOrNull() ?: 0
+    }
+
+    private fun findSound(name: String): SoundStatus? = platform.soundStatus().firstOrNull { st ->
+        soundName(st.file) == name || st.file.path == name || st.file.name == name
+    }
+
+    private fun soundProperty(st: SoundStatus, key: String): String? = when (key) {
+        "name" -> soundName(st.file)
+        "path" -> st.file.absolutePath
+        "id" -> st.id.toString()
+        "position" -> st.positionMs.toString()
+        "duration" -> st.durationMs.toString()
+        "playing" -> if (st.playing || st.paused) "1" else "0"
+        "pause" -> if (st.paused) "1" else "0"
+        "preload" -> if (st.preload) "1" else "0"
+        "loop" -> if (st.loop) "1" else "0"
+        "error" -> st.error
+        else -> null
+    }
+
+    /**
+     * \![set,property,名前,値]。書き換えられるのは SSP で [SET有効] のもののうち pono-droid にあるもの: シェルと着せ替えのメニューの
+     * 出し方、sticky-window と zorder、ツールチップ、音の位置・再生・一時停止、マウスカーソル（覚えるだけ）。扱えたら true
+     */
+    fun setProperty(name: String, value: String): Boolean {
+        val key = name.trim().removePrefix("currentghost.")
+        if (!name.trim().startsWith("currentghost.")) return false
+        when {
+            key.startsWith("shelllist(") && key.endsWith(").menu") -> {
+                val selector = key.substring(10, key.length - 6)
+                val dir = ghost.shellDirs.firstOrNull { it.name == selector || runCatching { Shell(it).name }.getOrNull() == selector } ?: return false
+                ghost.saveProfile(ghost.loadProfile().apply { setProperty("menu.shell.${dir.name}", value.trim().lowercase()) })
+            }
+            BIND_MENU.matches(key) -> {
+                val v = value.trim().lowercase().takeIf { it in setOf("hidden", "auto", "none") } ?: return false
+                ghost.saveProfile(ghost.loadProfile().apply { setProperty("menu.bind.${shell.dir.name}.${scopeOfMenuKey(key)}", v) })
+            }
+            key == "seriko.sticky-window" -> {
+                val used = HashSet<Int>()
+                val groups = value.split(';').mapNotNull { g ->
+                    val ids = g.split(',').mapNotNull { it.trim().toIntOrNull() }.toSet()
+                    ids.takeIf { it.size >= 2 && ids.none { id -> id in used } }?.also { used += it }
+                }
+                _state.update { it.copy(window = it.window.copy(stickyGroups = groups)) }
+            }
+            key == "seriko.zorder" -> {
+                val groups = value.split(';').map { g -> g.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() } }.filter { it.size >= 2 }
+                val explicit = groups.flatten().map { it.first() in "sb" }.distinct()
+                if (explicit.size > 1) return false
+                _state.update { it.copy(window = it.window.copy(zorder = groups)) }
+            }
+            key.startsWith("seriko.tooltip.scope(") -> {
+                val scope = key.substringAfter("scope(").substringBefore(')').toIntOrNull() ?: return false
+                val tail = key.substringAfter(").", "")
+                if (!tail.startsWith("textlist(") || !tail.endsWith(").text")) return false
+                tooltipOverrides.getOrPut(scope) { LinkedHashMap() }[tail.substring(9, tail.length - 6)] = value
+            }
+            key.startsWith("seriko.cursor.") || key.startsWith("mousecursor") || key.startsWith("balloon.mousecursor") -> cursorProperties[key] = value
+            key.startsWith("sound(") || key.startsWith("sound.index(") -> {
+                val st = if (key.startsWith("sound(")) {
+                    findSound(key.substring(6, key.lastIndexOf(").").takeIf { it > 6 } ?: return false))
+                } else {
+                    key.substring(12, key.indexOf(')').takeIf { it > 12 } ?: return false).toIntOrNull()?.let(platform.soundStatus()::getOrNull)
+                } ?: return false
+                val on = value.trim() == "1"
+                when (key.substring(key.lastIndexOf(").") + 2)) {
+                    "position" -> platform.soundControl("option", st.file, SoundOptions(seekMs = SoundOptions.seekTime(value.trim().removePrefix("@"), value.trim().startsWith("@")), seekRelative = value.trim().startsWith("@")))
+                    "playing" -> if (on) platform.playSound(st.file, st.loop, SoundOptions()) else platform.stopSound(st.file)
+                    "pause" -> platform.soundControl(if (on) "pause" else "resume", st.file, SoundOptions())
+                    else -> return false
+                }
+            }
+            else -> return false
+        }
+        return true
     }
 
     /** descript.txt の readme（無ければ readme.txt）の中身 */
@@ -3745,6 +4098,8 @@ class GhostController(
 
         override fun vanish(args: List<String>) = vanishByMyself(args)
 
+        override fun setProperty(name: String, value: String): Boolean = this@GhostController.setProperty(name, value)
+
         override fun createShortcut(args: List<String>): Boolean {
             // Android にはスタートアップのフォルダが無い
             if (args.any { it.trim().lowercase() == "startup" }) return false
@@ -3793,6 +4148,15 @@ class GhostController(
 
         /** 発言履歴に残す数 */
         private const val MAX_BACKLOG = 200
+
+        /** この言葉を含むログは、エラーログ（developer.log.error）にも Warning として残す */
+        private val WARNING_WORDS = listOf("未対応", "できません", "ありません", "見つかりません", "失敗")
+
+        /** 通信のイベント（developer.log.network に残す） */
+        private val NETWORK_EVENTS = listOf("OnExecuteHTTP", "OnExecuteRSS", "OnExecuteICal", "OnExecuteWebSocket", "OnPing", "OnNSLookup", "OnSNTP", "OnURLDrop")
+
+        /** sakura.bind.menu / kero.bind.menu / char2.bind.menu */
+        private val BIND_MENU = Regex("""^(sakura|kero|char\d+)\.bind\.menu$""")
 
         /** アプリから渡されないとき（テストなど）のバージョン */
         const val BASEWARE_VERSION = "0.1.0"

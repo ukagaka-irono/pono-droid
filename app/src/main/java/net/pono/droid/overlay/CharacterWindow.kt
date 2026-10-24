@@ -36,6 +36,8 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import net.pono.baseware.ghost.DefaultPosition
 import net.pono.baseware.ghost.GhostController
+import net.pono.baseware.ghost.ScreenRect
+import net.pono.baseware.ghost.WindowGeometry
 import net.pono.baseware.sakura.MoveCommand
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -99,6 +101,16 @@ class CharacterWindow(
 
     /** ウィンドウが動いた（画面の px、右と下が正）。sticky-window の組の相手を一緒に動かすのに使う */
     var onShift: ((dx: Int, dy: Int) -> Unit)? = null
+
+    /** 画面の上の今の位置（プロパティシステムの currentghost.scope(ID).rect など）。出していないウィンドウは null */
+    fun geometry(scale: Double, balloonScale: Double): WindowGeometry {
+        fun rect(v: View): ScreenRect? {
+            if (v.visibility != View.VISIBLE || v.width <= 0 || !v.isAttachedToWindow) return null
+            val at = IntArray(2).also(v::getLocationOnScreen)
+            return ScreenRect(at[0], at[1], at[0] + v.width, at[1] + v.height)
+        }
+        return WindowGeometry(rect(surfaceView), rect(balloonView), scale, balloonScale)
+    }
 
     /** バルーンの今の絵（\![execute,dumpballoon]）。まだ描いていなければ null */
     fun balloonBitmap(): Bitmap? = balloonView.takeIf { it.width > 0 && it.height > 0 }?.drawToBitmap()

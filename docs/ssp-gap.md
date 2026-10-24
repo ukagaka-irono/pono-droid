@@ -126,7 +126,6 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 ### 🔨 Android で作れる
 - 開く: \![open,dialog,open / save / folder / color]（ファイル選択など）、\![open,ipinput]、
   \![open,ghostexplorer など]（アプリの一覧画面）、\![open,surfacetest / developer / shiorirequest / errorlog / backlogviewer]（開発用の画面）
-- 実行: \![set,property]（書き換えてよいものだけ）
 - 環境変数: %lastghostname %lastobjectname %exh %et %wronghour %selfname2 %ms %mz %ml %mc %mh %mt %me %mp %m? %dms %*2
   （%ms などは SSP 同梱の単語表から選ぶもの。小さな単語表を持つ）
 - 通知: \![set,trayballoon] / \![set,tasktrayicon]（Android の通知で代用）
@@ -155,16 +154,17 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 
 ### ✅ 対応済み
 system.year〜millisecond・dayofweek・cursor.pos・os.*・cpu.*・memory.*・monitor.*・power.*、baseware.*、ghostlist.*、balloonlist.*、
-currentghost の一部（name・status・scope.count・shelllist.current.name など）
+currentghost の一部（name・status・scope.count・shelllist.current.name など）、
+system.theme.app.mode（pono-droid の画面はいつも light）/ theme.os.mode、system.dnd.mode（おやすみモード）、system.network.*、system.disk.*（アプリの置き場と共有の置き場）、
+currentghost.shelllist(…).menu、scope(ID).x / y / rect / surface.x / surface.y / scaling / currentmonitor.* / surface(ID).rect、
+balloon.scope(ID).x / y / rect / scaling / vertical、seriko.surfacelist.all / defined、seriko.sticky-window / zorder、seriko.tooltip.*、
+sound.count / sound.index(ID).* / sound(名前).*、mousecursor・seriko.cursor（カーソルは無いので書いたものを返すだけ）、sakura / kero / char*.bind.menu、
+history.ghost / balloon、rateofuselist.index(順位).*（起動回数・分・週・月・割合）、developer.log.script / error / network / update。
+\![set,property] は [SET有効] のうち shelllist(…).menu・*.bind.menu・sticky-window・zorder・tooltip・sound の position / playing / pause・カーソル
 
 ### 🔨 Android で作れる
-- system.theme.app.mode / theme.os.mode（ダークモード）、system.dnd.mode（おやすみモード）、system.network、system.disk.*
-- currentghost の残り: shelllist(…).* / index / count、scope(ID).surface.num / animation.num / seriko.defaultsurface / x / y / rect / name / scaling / currentmonitor.* / surface(ID).rect、
-  balloon.*（scope(ID).x / y / rect / validwidth / validheight / lines / char_width / scaling など）、seriko.surfacelist.*、seriko.sticky-window / zorder、
-  sound.count / sound.index(ID).* / sound(名前).*（鳴っている音の情報）、mousecursor 系（タッチでは空）、seriko.cursor / tooltip（定義を返す）
-- sakura.bind.menu / kero.bind.menu / char*.bind.menu、shiori.変数名（SHIORI に聞く）
-- history.ghost / balloon（使ったゴースト・バルーンの履歴）、rateofuselist.*（ゴーストごとの起動時間と割合）
-- developer.log.*（スクリプトの記録）
+- balloon.scope(ID).validwidth / validheight / lines / char_width / basepos / background.color（バルーンの描き方を表示する側から聞く）
+- ghostlist(…).shiori.変数名（SHIORI に聞く）
 
 ### 👥 複数ゴーストの同時起動が要る
 activeghostlist.*、ghostlist.current（同時起動の中での「今」）
