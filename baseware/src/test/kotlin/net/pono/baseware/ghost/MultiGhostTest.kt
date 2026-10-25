@@ -11,6 +11,7 @@ import kotlinx.coroutines.withTimeout
 import net.pono.baseware.net.SstpRequest
 import net.pono.baseware.sakura.ScriptPlayer
 import net.pono.baseware.shell.Shell
+import net.pono.baseware.shiori.Shiori
 import net.pono.baseware.update.FetchResult
 import net.pono.baseware.update.HttpFetcher
 import org.junit.Assert.assertEquals
@@ -21,6 +22,8 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** 複数のゴーストを同時に動かす（GhostHub）。ゴーストどうしのイベントと \![raiseother]・\![call,ghost] */
 class MultiGhostTest {
@@ -55,14 +58,21 @@ class MultiGhostTest {
         ghost.saveProfile(ghost.loadProfile().apply { setProperty("booted", "1") })
     }
 
-    private suspend fun boot(dir: String, replies: Map<String, String>, calledBy: PreviousGhost? = null, platform: GhostPlatform = HubPlatform()): Running {
+    /** @param wrap SHIORI に手を加える（答えを待たせるなど） */
+    private suspend fun boot(
+        dir: String,
+        replies: Map<String, String>,
+        calledBy: PreviousGhost? = null,
+        platform: GhostPlatform = HubPlatform(),
+        wrap: (ScriptedShiori) -> Shiori = { it },
+    ): Running {
         val ghost = repository.find(dir)!!
         val shiori = ScriptedShiori(replies)
         val scope = testScope().also { scopes += it }
         val c = GhostController(
             ghost = ghost,
             shell = Shell(ghost.shellDir()!!),
-            shioriFactory = { _, _ -> shiori },
+            shioriFactory = { _, _ -> wrap(shiori) },
             scope = scope,
             platform = platform,
             repository = repository,
@@ -110,13 +120,27 @@ class MultiGhostTest {
     @Test
     fun closingAllTogetherSendsNoOtherGhostClosed() = run {
         val a = boot("a", mapOf("OnCloseAll" to """\0またね\e"""))
-        // B は別れの選択肢を出したまま終わりかけ。A が終わったときに届く OnOtherGhostClosed は受けない
-        val b = boot("b", mapOf("OnCloseAll" to """\0おやすみ\q[はい,x]\e"""))
+        // B の SHIORI は OnCloseAll の答えを待たせる。その間 B は終わりかけで、A が終わったときに届く OnOtherGhostClosed は受けない
+        val asked = CountDownLatch(1)
+        val answer = CountDownLatch(1)
+        val b = boot("b", emptyMap()) { inner ->
+            object : Shiori by inner {
+                override fun request(request: ByteArray): ByteArray {
+                    if ("\r\nID: OnCloseAll\r\n" in request.toString(Charsets.UTF_8)) {
+                        asked.countDown()
+                        answer.await(5, TimeUnit.SECONDS)
+                    }
+                    return inner.request(request)
+                }
+            }
+        }
         b.c.close()
-        withTimeout(5000) { while (b.shiori.count("OnCloseAll") == 0) delay(10) }
+        assertTrue(asked.await(5, TimeUnit.SECONDS))
         a.c.close()
         withTimeout(5000) { while (a.c in hub.running) delay(10) }
         delay(200)
+        answer.countDown()
+        withTimeout(5000) { while (b.c in hub.running) delay(10) }
         assertEquals(0, a.shiori.count("OnOtherGhostClosed"))
         assertEquals(0, b.shiori.count("OnOtherGhostClosed"))
     }
