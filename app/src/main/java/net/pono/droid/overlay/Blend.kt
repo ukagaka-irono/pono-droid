@@ -9,10 +9,12 @@ import kotlin.random.Random
 
 /**
  * SERIKO の blend-* メソッド。重ねる絵 [src] を、下の絵 [dst] の (x, y) に、Photoshop などと同じ合成で重ねる
- * （計算は W3C の Compositing and Blending の式）。-fast は下の絵の不透明な所にだけ重ね、下の絵の透明度を変えない
+ * （計算は W3C の Compositing and Blending の式）。-fast は下の絵の不透明な所にだけ重ね、下の絵の透明度を変えない。
+ * [glow]（-glow。CLIP STUDIO PAINT の「発光」）は、重ねる色に先に不透明度を掛けてから合成し、その結果をそのまま使う
+ * （半透明の所も、混ぜて薄めずに光らせる）
  */
 object Blend {
-    fun apply(dst: Bitmap, src: Bitmap, x: Int, y: Int, name: String, fast: Boolean) {
+    fun apply(dst: Bitmap, src: Bitmap, x: Int, y: Int, name: String, fast: Boolean, glow: Boolean = false) {
         val left = max(0, x)
         val top = max(0, y)
         val right = min(dst.width, x + src.width)
@@ -40,6 +42,8 @@ object Blend {
                 continue
             }
             val cs = doubleArrayOf(((sp shr 16) and 0xFF) / 255.0, ((sp shr 8) and 0xFF) / 255.0, (sp and 0xFF) / 255.0)
+            val straight = cs.copyOf()
+            if (glow) for (c in 0..2) cs[c] *= sa
             val cb = doubleArrayOf(((dp shr 16) and 0xFF) / 255.0, ((dp shr 8) and 0xFF) / 255.0, (dp and 0xFF) / 255.0)
             if (separable != null) {
                 for (c in 0..2) b[c] = separable(cb[c], cs[c]).coerceIn(0.0, 1.0)
@@ -48,7 +52,11 @@ object Blend {
             }
             val ao: Double
             val out = DoubleArray(3)
-            if (fast) {
+            if (glow) {
+                // 下の絵のある所は合成の結果そのまま、無い所は重ねる絵のまま
+                ao = if (fast) da else sa + da * (1 - sa)
+                for (c in 0..2) out[c] = if (ao == 0.0) 0.0 else if (fast) b[c] else (da * b[c] + (1 - da) * sa * straight[c]) / ao
+            } else if (fast) {
                 // 下の絵の透明度のまま、色だけ混ぜる
                 ao = da
                 for (c in 0..2) out[c] = sa * b[c] + (1 - sa) * cb[c]

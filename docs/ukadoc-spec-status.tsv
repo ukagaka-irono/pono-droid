@@ -344,7 +344,7 @@ descript/shell-surfaces/surface-alias-brace/caption_aliastxt.md	DONE	alias.txt	a
 descript/shell-surfaces/surface-alias-brace/index.md	NA	surface.aliasブレス	目次のページ
 descript/shell-surfaces/surface-alias-brace/introduction_surface.aliasbrace.md	DONE	surface.aliasブレス記述例	sakura / kero / charN.surface.alias を読む
 descript/shell-surfaces/surface-alias-brace/star.md	DONE	\*,\[\*\]	候補が複数ならランダムに選ぶ（SurfaceTable.resolve）
-descript/shell-surfaces/surface-brace/animation-star-.collision-star.md	PARTIAL	animation\*.collision\*,当たり判定定義 animation\*.collisionex\*,当たり判定定義(ex)	animation*.collision / collisionex は読むが、collisionex の region が無い
+descript/shell-surfaces/surface-brace/animation-star-.collision-star.md	DONE	animation\*.collision\*,当たり判定定義 animation\*.collisionex\*,当たり判定定義(ex)	animation*.collision / collisionex（region も）を読み、そのコマが出ている間だけ見る
 descript/shell-surfaces/surface-brace/animation-star-.interval.md	DONE	animation\*.interval,インターバル	+ の組み合わせと末尾の引数も読む
 descript/shell-surfaces/surface-brace/animation-star-.name.md	DONE	animation\*.name,定義名	\i・\![anim]・start / stop / alternativestart など・exclusive,(…) で名前を使える
 descript/shell-surfaces/surface-brace/animation-star-.option-2.md	DONE	animation\*.option,background	土台の裏に重ねる
@@ -361,8 +361,8 @@ descript/shell-surfaces/surface-brace/caption_surface.append.md	DONE	surface\*�
 descript/shell-surfaces/surface-brace/caption_surfacebraceid.md	DONE	surface\*ブレスで可能なID指定	列挙・範囲・! の除外を読む（surfaceIds）
 descript/shell-surfaces/surface-brace/caption_z-axis.md	DONE	各要素の上下構造	着せ替えはもとのアニメーション番号の位置に重ね、background のアニメーションの当たり判定は土台の後に見る
 descript/shell-surfaces/surface-brace/collision-star.md	DONE	collision\*,始点X,始点Y,終点X,終点Y,ID	矩形の当たり判定
-descript/shell-surfaces/surface-brace/collisionex-star.md	PARTIAL	collisionex\*,ID,タイプ,座標1,座標2...	rect / ellipse / circle / polygon はある。region（画像の指定色の領域）が無い
-descript/shell-surfaces/surface-brace/element-star.md	PARTIAL	element\*,描画メソッド,ファイル名,X座標,Y座標(,オプション...)	--clipping / --alpha / --source / --scaling と、surface*.png や element の GIF / APNG / WebP を自動で動かすのが無い
+descript/shell-surfaces/surface-brace/collisionex-star.md	DONE	collisionex\*,ID,タイプ,座標1,座標2...	rect / ellipse / circle / polygon / region（画像の指定色の領域。領域反転も）
+descript/shell-surfaces/surface-brace/element-star.md	PARTIAL	element\*,描画メソッド,ファイル名,X座標,Y座標(,オプション...)	--clipping / --alpha / --scaling と、動く surface*.png・element はある。--source（PSD のレイヤー・TIFF のページ・アイコン）は読まない。動く画像は SERIKO のコマより上に出る
 descript/shell-surfaces/surface-brace/h-animationinterval/always.md	DONE	always	実装済み
 descript/shell-surfaces/surface-brace/h-animationinterval/bind.md	DONE	bind	実装済み
 descript/shell-surfaces/surface-brace/h-animationinterval/endtalk.md	DONE	endtalk	実装済み
@@ -385,14 +385,14 @@ descript/shell-surfaces/surface-brace/h-drowmethod/auto.md	PARTIAL	auto	overlay 
 descript/shell-surfaces/surface-brace/h-drowmethod/base.md	DONE	base	土台を替え、当たり判定もそのサーフェスのものを使う
 descript/shell-surfaces/surface-brace/h-drowmethod/bind.md	DONE	bind	実装済み
 descript/shell-surfaces/surface-brace/h-drowmethod/blend-add-fast.md	DONE	blend-add-fast	Blend.apply（W3C の式。-fast は下の絵の透明度を変えない）
-descript/shell-surfaces/surface-brace/h-drowmethod/blend-add-glow-fast.md	PARTIAL	blend-add-glow-fast	-glow を取って読むだけで、発光（半透明の所の足し方）の計算が無い。ふつうの合成と同じになる
-descript/shell-surfaces/surface-brace/h-drowmethod/blend-add-glow.md	PARTIAL	blend-add-glow	-glow を取って読むだけで、発光（半透明の所の足し方）の計算が無い。ふつうの合成と同じになる
+descript/shell-surfaces/surface-brace/h-drowmethod/blend-add-glow-fast.md	DONE	blend-add-glow-fast	重ねる色に先に不透明度を掛けてから合成し、その結果をそのまま使う（Blend の glow）
+descript/shell-surfaces/surface-brace/h-drowmethod/blend-add-glow.md	DONE	blend-add-glow	重ねる色に先に不透明度を掛けてから合成し、その結果をそのまま使う（Blend の glow）
 descript/shell-surfaces/surface-brace/h-drowmethod/blend-add.md	DONE	blend-add	Blend.apply（W3C の式。-fast は下の絵の透明度を変えない）
 descript/shell-surfaces/surface-brace/h-drowmethod/blend-color-burn-fast.md	DONE	blend-color-burn-fast	Blend.apply（W3C の式。-fast は下の絵の透明度を変えない）
 descript/shell-surfaces/surface-brace/h-drowmethod/blend-color-burn.md	DONE	blend-color-burn	Blend.apply（W3C の式。-fast は下の絵の透明度を変えない）
 descript/shell-surfaces/surface-brace/h-drowmethod/blend-color-dodge-fast.md	DONE	blend-color-dodge-fast	Blend.apply（W3C の式。-fast は下の絵の透明度を変えない）
-descript/shell-surfaces/surface-brace/h-drowmethod/blend-color-dodge-glow-fast.md	PARTIAL	blend-color-dodge-glow-fast	-glow を取って読むだけで、発光（半透明の所の足し方）の計算が無い。ふつうの合成と同じになる
-descript/shell-surfaces/surface-brace/h-drowmethod/blend-color-dodge-glow.md	PARTIAL	blend-color-dodge-glow	-glow を取って読むだけで、発光（半透明の所の足し方）の計算が無い。ふつうの合成と同じになる
+descript/shell-surfaces/surface-brace/h-drowmethod/blend-color-dodge-glow-fast.md	DONE	blend-color-dodge-glow-fast	重ねる色に先に不透明度を掛けてから合成し、その結果をそのまま使う（Blend の glow）
+descript/shell-surfaces/surface-brace/h-drowmethod/blend-color-dodge-glow.md	DONE	blend-color-dodge-glow	重ねる色に先に不透明度を掛けてから合成し、その結果をそのまま使う（Blend の glow）
 descript/shell-surfaces/surface-brace/h-drowmethod/blend-color-dodge.md	DONE	blend-color-dodge	Blend.apply（W3C の式。-fast は下の絵の透明度を変えない）
 descript/shell-surfaces/surface-brace/h-drowmethod/blend-color-fast.md	DONE	blend-color-fast	Blend.apply（W3C の式。-fast は下の絵の透明度を変えない）
 descript/shell-surfaces/surface-brace/h-drowmethod/blend-color.md	DONE	blend-color	Blend.apply（W3C の式。-fast は下の絵の透明度を変えない）
@@ -443,7 +443,7 @@ descript/shell-surfaces/surface-brace/h-drowmethod/import.md	DONE	import,ファ�
 descript/shell-surfaces/surface-brace/h-drowmethod/index.md	NA	描画メソッド	目次のページ
 descript/shell-surfaces/surface-brace/h-drowmethod/insert.md	DONE	insert,ID	実装済み
 descript/shell-surfaces/surface-brace/h-drowmethod/interpolate.md	DONE	interpolate	実装済み
-descript/shell-surfaces/surface-brace/h-drowmethod/introduction_drawmethod.md	PARTIAL	描画メソッド	ベースレイヤの外にはみ出したコマで絵を広げない（土台の大きさで切れる。element も負の座標は切れる）
+descript/shell-surfaces/surface-brace/h-drowmethod/introduction_drawmethod.md	DONE	描画メソッド	ベースレイヤの外にはみ出した所はベースウェアに任されている。pono-droid は土台の大きさで切る
 descript/shell-surfaces/surface-brace/h-drowmethod/move.md	DONE	move	土台ごとずらす
 descript/shell-surfaces/surface-brace/h-drowmethod/overlay-fast.md	DONE	overlay-fast	実装済み
 descript/shell-surfaces/surface-brace/h-drowmethod/overlay.md	DONE	overlay	実装済み
@@ -459,7 +459,7 @@ descript/shell-surfaces/surface-brace/h-drowmethod/start.md	DONE	start,ID	実装
 descript/shell-surfaces/surface-brace/h-drowmethod/stop.md	DONE	stop,ID	実装済み
 descript/shell-surfaces/surface-brace/icon.rect.md	DONE	icon.rect,始点X,始点Y,終点X,終点Y	発言履歴の顔の切り出しに使う
 descript/shell-surfaces/surface-brace/index.md	NA	surfaceブレス	目次のページ
-descript/shell-surfaces/surface-brace/introduction_mayuna.md	PARTIAL	着せ替え（MAYUNA）	多重着せ替えが無い（コマに使ったサーフェスの bind アニメーションを重ねない。baseImage は element だけ）
+descript/shell-surfaces/surface-brace/introduction_mayuna.md	DONE	着せ替え（MAYUNA）	多重着せ替え（コマに使ったサーフェスの身に着けている着せ替えも重ねる。循環は止める）もある
 descript/shell-surfaces/surface-brace/introduction_seriko.md	DONE	アニメーション（SERIKO）	説明のページ。SERIKO は SerikoAnimator で動かす
 descript/shell-surfaces/surface-brace/introduction_surfacebrace.md	DONE	surfaceブレス記述例	記述例のページ。書いてある項目は読める
 descript/shell-surfaces/surface-brace/kero.balloon.offsetx.md	IMPOSSIBLE	kero.balloon.offsetx,座標	サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
@@ -1954,7 +1954,7 @@ manual/directory.md	NA	全体の構成	フォルダの構成の説明
 manual/ghost.md	PARTIAL	ゴースト	thumbnail.png（一覧のサムネイル）・*.ico・ai0.png / ai0_dark.png（AI グラフの絵）を使っていない
 manual/install.md	DONE	インストール	.nar（zip）のインストール。lzh・cab・自己解凍 exe は対象外
 manual/owner-draw-menu.md	DONE	オーナードローメニュー	メニューはバルーンに出す。絵の指定は決めたとおり作らない
-manual/shell.md	PARTIAL	シェル	surface*.png や element に APNG / GIF / WebP を直に書いたときのアニメーション（SSP 2.7.38）が無い。今は止まった絵で読む
+manual/shell.md	PARTIAL	シェル	surface*.png や element の APNG / GIF / WebP は動く（Android 9 から）。SERIKO のコマより上に出る
 manual/translator.md	IMPOSSIBLE	トランスレータ	MAKOTO（makoto.dll）は Windows の DLL
 manual/update.md	PARTIAL	ネットワーク更新	delete1.txt など delete[数字].txt を読まない（delete.txt だけ）
 memo/memo.md	NA	メモ	ベースウェアの比較などのメモ

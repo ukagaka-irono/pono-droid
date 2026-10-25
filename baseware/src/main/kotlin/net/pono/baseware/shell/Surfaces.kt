@@ -4,10 +4,104 @@ import kotlin.random.Random
 
 /** surfaces.txt の定義。座標はすべて元画像のピクセル単位。 */
 
-data class SurfaceElement(val id: Int, val method: String, val file: String, val x: Int, val y: Int)
+/**
+ * element*。[clip] は --clipping（その矩形だけ使う）、[alpha] は --alpha（0〜255）、[scaling] は --scaling、
+ * [source] は --source（PSD のレイヤー名など、画像の中のどれを使うか）
+ */
+data class SurfaceElement(
+    val id: Int,
+    val method: String,
+    val file: String,
+    val x: Int,
+    val y: Int,
+    val clip: SurfaceRect? = null,
+    val alpha: Int = 255,
+    val scaling: ElementScaling? = null,
+    val source: String? = null,
+)
 
-/** 当たり判定の形（collisionex の rect / ellipse / circle / polygon。collision は rect） */
-enum class CollisionShape { RECT, ELLIPSE, CIRCLE, POLYGON }
+/**
+ * element の --scaling。横・縦（数字はピクセル、% を付けると元の大きさに対する割合、0 なら縦横比を保つ）か、
+ * サイズと基準辺（long / short に max か min を付けてもよい）
+ */
+sealed class ElementScaling {
+    data class Size(val width: Float, val widthPercent: Boolean, val height: Float, val heightPercent: Boolean) : ElementScaling()
+    data class Edge(val size: Int, val long: Boolean, val onlyShrink: Boolean, val onlyGrow: Boolean) : ElementScaling()
+
+    /** 元の大きさ [w] x [h] を拡大縮小した大きさ。負の数はその向きに裏返す */
+    fun resize(w: Int, h: Int): Pair<Int, Int> {
+        if (w <= 0 || h <= 0) return w to h
+        fun clamp(v: Float): Int {
+            val n = Math.round(kotlin.math.abs(v)).coerceIn(1, MAX)
+            return if (v < 0) -n else n
+        }
+        return when (this) {
+            is Size -> {
+                val tw = if (widthPercent) w * width / 100f else width
+                val th = if (heightPercent) h * height / 100f else height
+                when {
+                    tw == 0f && th == 0f -> w to h
+                    tw == 0f -> clamp(w * kotlin.math.abs(th) / h) to clamp(th)
+                    th == 0f -> clamp(tw) to clamp(h * kotlin.math.abs(tw) / w)
+                    else -> clamp(tw) to clamp(th)
+                }
+            }
+            is Edge -> {
+                val edge = if (long) maxOf(w, h) else minOf(w, h)
+                var factor = kotlin.math.abs(size).toFloat() / edge
+                if (onlyShrink && factor > 1f) factor = 1f
+                if (onlyGrow && factor < 1f) factor = 1f
+                val sign = if (size < 0) -1f else 1f
+                clamp(w * factor * sign) to clamp(h * factor * sign)
+            }
+        }
+    }
+
+    companion object {
+        const val MAX = 4096
+
+        fun parse(a: String, b: String): ElementScaling? {
+            val edge = b.trim().lowercase()
+            Regex("""^(long|short)?(max|min)?$""").matchEntire(edge)?.takeIf { edge.isNotEmpty() }?.let { m ->
+                val size = a.trim().toIntOrNull() ?: return null
+                return Edge(size, m.groupValues[1] != "short", m.groupValues[2] == "max", m.groupValues[2] == "min")
+            }
+            fun dim(s: String): Pair<Float, Boolean>? {
+                val t = s.trim().lowercase()
+                return when {
+                    t.endsWith("%") -> t.dropLast(1).toFloatOrNull()?.let { it to true }
+                    t.endsWith("px") -> t.dropLast(2).toFloatOrNull()?.let { it to false }
+                    else -> t.toFloatOrNull()?.let { it to false }
+                }
+            }
+            val (w, wp) = dim(a) ?: return null
+            val (h, hp) = dim(b) ?: return null
+            return Size(w, wp, h, hp)
+        }
+    }
+}
+
+/** 当たり判定の形（collisionex の rect / ellipse / circle / polygon / region。collision は rect） */
+enum class CollisionShape { RECT, ELLIPSE, CIRCLE, POLYGON, REGION }
+
+/** collisionex の region。画像 [file] の色 [rgb] の所（[invert] なら、その色でない所）が当たり判定 */
+data class CollisionRegion(val file: String, val rgb: Int, val invert: Boolean)
+
+/** region の画像の、指定した色の所の地図（[width] x [height]、横に並べたもの） */
+class RegionMask(val width: Int, val height: Int, private val bits: java.util.BitSet) {
+    operator fun get(x: Int, y: Int): Boolean = x in 0 until width && y in 0 until height && bits[y * width + x]
+
+    companion object {
+        /** 画像の画素（0xAARRGGBB、横に並べたもの）から作る。透明度は見ない */
+        fun of(width: Int, height: Int, pixels: IntArray, region: CollisionRegion): RegionMask {
+            val bits = java.util.BitSet(width * height)
+            for (i in 0 until minOf(pixels.size, width * height)) {
+                if (((pixels[i] and 0xFFFFFF) == region.rgb) != region.invert) bits.set(i)
+            }
+            return RegionMask(width, height, bits)
+        }
+    }
+}
 
 /** サーフェスの中の矩形（右と下は含まない） */
 data class SurfaceRect(val left: Int, val top: Int, val right: Int, val bottom: Int)
@@ -23,11 +117,14 @@ data class Collision(
     val id: String,
     val shape: CollisionShape = CollisionShape.RECT,
     val points: List<Int> = emptyList(),
+    val region: CollisionRegion? = null,
 ) {
-    fun contains(x: Int, y: Int): Boolean {
+    /** @param masks region の画像の地図を返す（まだ読めていなければ null。そのときは当たらない） */
+    fun contains(x: Int, y: Int, masks: (CollisionRegion) -> RegionMask? = { null }): Boolean {
         if (x !in left..right || y !in top..bottom) return false
         return when (shape) {
             CollisionShape.RECT -> true
+            CollisionShape.REGION -> region?.let(masks)?.get(x, y) == true
             CollisionShape.ELLIPSE, CollisionShape.CIRCLE -> {
                 val rx = (right - left) / 2.0
                 val ry = (bottom - top) / 2.0
@@ -267,7 +364,7 @@ class SurfaceDefinition(val id: Int) {
      * 指が触れた当たり判定。[active] はいまコマを出しているアニメーション（着せ替えも）で、その animation*.collision を先に見る。
      * アニメーションは animation-sort（既定は番号の大きいものが手前）の順、その後に土台の当たり判定を見る
      */
-    fun hitTest(x: Int, y: Int, active: Collection<Int> = emptyList()): String? {
+    fun hitTest(x: Int, y: Int, active: Collection<Int> = emptyList(), masks: (CollisionRegion) -> RegionMask? = { null }): String? {
         val shown = active.mapNotNull { animations[it] }.filter { it.collisions.isNotEmpty() }
         val order = when (animationSort) {
             SortOrder.ASCEND -> shown.sortedBy { it.id }
@@ -275,9 +372,9 @@ class SurfaceDefinition(val id: Int) {
         }
         // option,background のアニメーションは土台の裏にあるので、土台の当たり判定の後に見る
         val (back, front) = order.partition { it.background }
-        for (anim in front) anim.collisions.values.firstOrNull { it.contains(x, y) }?.let { return it.id }
-        orderedCollisions().firstOrNull { it.contains(x, y) }?.let { return it.id }
-        for (anim in back) anim.collisions.values.firstOrNull { it.contains(x, y) }?.let { return it.id }
+        for (anim in front) anim.collisions.values.firstOrNull { it.contains(x, y, masks) }?.let { return it.id }
+        orderedCollisions().firstOrNull { it.contains(x, y, masks) }?.let { return it.id }
+        for (anim in back) anim.collisions.values.firstOrNull { it.contains(x, y, masks) }?.let { return it.id }
         return null
     }
 }
@@ -550,7 +647,7 @@ class SurfaceTable(
             element.matchEntire(key)?.let { m ->
                 val id = m.groupValues[1].toIntOrNull() ?: return
                 if (args.size >= 4 && (id in def.elements || def.elements.size < SurfaceDefinition.MAX_PARTS)) {
-                    def.elements[id] = SurfaceElement(id, args[0].lowercase(), args[1], args[2].toIntOrNull() ?: 0, args[3].toIntOrNull() ?: 0)
+                    def.elements[id] = elementOf(id, args)
                 }
                 return
             }
@@ -623,10 +720,16 @@ class SurfaceTable(
             return Collision(minOf(n[0]!!, n[2]!!), minOf(n[1]!!, n[3]!!), maxOf(n[0]!!, n[2]!!), maxOf(n[1]!!, n[3]!!), args[4])
         }
 
-        /** collisionex*,ID,rect|ellipse|circle|polygon,座標... */
+        /** collisionex*,ID,rect|ellipse|circle|polygon,座標... / collisionex*,ID,region,ファイル名,R,G,B(,領域反転) */
         private fun parseCollisionEx(args: List<String>): Collision? {
             if (args.size < 3) return null
             val id = args[0]
+            if (args[1].trim().lowercase() == "region") {
+                if (args.size < 6) return null
+                val c = args.subList(3, 6).map { it.trim().toIntOrNull()?.takeIf { v -> v in 0..255 } ?: return null }
+                val region = CollisionRegion(args[2].trim(), (c[0] shl 16) or (c[1] shl 8) or c[2], args.getOrNull(6)?.trim()?.lowercase() == "true")
+                return Collision(0, 0, Int.MAX_VALUE, Int.MAX_VALUE, id, CollisionShape.REGION, region = region)
+            }
             val coords = args.drop(2).mapNotNull { it.toIntOrNull() }.take(MAX_POLYGON_COORDS)
             return when (args[1].lowercase()) {
                 "circle" -> {
@@ -674,6 +777,30 @@ class SurfaceTable(
             val alpha = alphaOption(args.drop(5))
             if (method == "scaling") return PatternFrame(method, surface, min, max, fx.toInt(), fy.toInt(), scaleX = fx, scaleY = fy, alpha = alpha)
             return PatternFrame(method, surface, min, max, fx.toInt(), fy.toInt(), alpha = alpha, surfaceKey = surfaceKey)
+        }
+
+        /** element*,描画メソッド,ファイル名,X,Y(,--clipping,左,上,右,下,--alpha,値,--scaling,横,縦,--source,値) */
+        private fun elementOf(id: Int, args: List<String>): SurfaceElement {
+            val options = args.drop(4).map { it.trim() }
+            fun after(name: String, n: Int): List<String>? {
+                val i = options.indexOfFirst { it.lowercase() == name }
+                if (i < 0) return null
+                return options.drop(i + 1).take(n).takeIf { it.size == n }
+            }
+            val clip = after("--clipping", 4)?.map { it.toIntOrNull() }?.takeIf { v -> v.all { it != null } }?.let { v ->
+                SurfaceRect(v[0]!!, v[1]!!, v[2]!!, v[3]!!).takeIf { it.right > it.left && it.bottom > it.top }
+            }
+            return SurfaceElement(
+                id,
+                args[0].lowercase(),
+                args[1],
+                args[2].toIntOrNull() ?: 0,
+                args[3].toIntOrNull() ?: 0,
+                clip = clip,
+                alpha = alphaOption(options),
+                scaling = after("--scaling", 2)?.let { ElementScaling.parse(it[0], it[1]) },
+                source = after("--source", 1)?.single()?.takeIf { it.isNotEmpty() },
+            )
         }
 
         /** start / stop などのコマ。相手は数字なら番号、名前なら読み終えてから番号にする */

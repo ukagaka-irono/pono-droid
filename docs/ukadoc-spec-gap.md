@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1073・一部だけ 73・作る 285・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1081・一部だけ 65・作る 285・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -246,19 +246,11 @@
 
 ## surfaces.txt
 
-済み 122 項目。
+済み 130 項目。
 
-### 🔧 一部だけ（10）
-- animation\*.collision\*,当たり判定定義 animation\*.collisionex\*,当たり判定定義(ex) — animation*.collision / collisionex は読むが、collisionex の region が無い
-- collisionex\*,ID,タイプ,座標1,座標2... — rect / ellipse / circle / polygon はある。region（画像の指定色の領域）が無い
-- element\*,描画メソッド,ファイル名,X座標,Y座標(,オプション...) — --clipping / --alpha / --source / --scaling と、surface*.png や element の GIF / APNG / WebP を自動で動かすのが無い
+### 🔧 一部だけ（2）
+- element\*,描画メソッド,ファイル名,X座標,Y座標(,オプション...) — --clipping / --alpha / --scaling と、動く surface*.png・element はある。--source（PSD のレイヤー・TIFF のページ・アイコン）は読まない。動く画像は SERIKO のコマより上に出る
 - auto — overlay として重ねる。--source の PSD などのレイヤーから描画方法を読む部分が無い
-- blend-add-glow-fast — -glow を取って読むだけで、発光（半透明の所の足し方）の計算が無い。ふつうの合成と同じになる
-- blend-add-glow — -glow を取って読むだけで、発光（半透明の所の足し方）の計算が無い。ふつうの合成と同じになる
-- blend-color-dodge-glow-fast — -glow を取って読むだけで、発光（半透明の所の足し方）の計算が無い。ふつうの合成と同じになる
-- blend-color-dodge-glow — -glow を取って読むだけで、発光（半透明の所の足し方）の計算が無い。ふつうの合成と同じになる
-- 描画メソッド — ベースレイヤの外にはみ出したコマで絵を広げない（土台の大きさで切れる。element も負の座標は切れる）
-- 着せ替え（MAYUNA） — 多重着せ替えが無い（コマに使ったサーフェスの bind アニメーションを重ねない。baseImage は element だけ）
 
 ### ⛔ 作れない（23）
 - cursorブレス記述例 — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
@@ -863,7 +855,7 @@
 ### 🔧 一部だけ（4）
 - バルーン — balloons*s.txt / balloonk*s.txt、balloonp*、arrows* / arrowk* / arrowp*、sstp*.png・marker*.png、clickwait*.png、thumbnail.png を使っていない（バルーンの組と重なる）
 - ゴースト — thumbnail.png（一覧のサムネイル）・*.ico・ai0.png / ai0_dark.png（AI グラフの絵）を使っていない
-- シェル — surface*.png や element に APNG / GIF / WebP を直に書いたときのアニメーション（SSP 2.7.38）が無い。今は止まった絵で読む
+- シェル — surface*.png や element の APNG / GIF / WebP は動く（Android 9 から）。SERIKO のコマより上に出る
 - ネットワーク更新 — delete1.txt など delete[数字].txt を読まない（delete.txt だけ）
 
 ### ⛔ 作れない（1）

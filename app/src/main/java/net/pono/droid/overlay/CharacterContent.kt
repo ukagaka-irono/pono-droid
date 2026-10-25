@@ -137,8 +137,8 @@ fun CharacterSurface(
         ends = character.talkEnds
     }
 
-    val bitmap by produceState<Bitmap?>(null, character.surface, layers) {
-        value = withContext(Dispatchers.Default) { renderer.render(character.surface, layers) }
+    val bitmap by produceState<Bitmap?>(null, character.surface, layers, character.binds) {
+        value = withContext(Dispatchers.Default) { renderer.render(character.surface, layers, character.binds) }
     }
 
     val bmp = bitmap ?: return
@@ -161,7 +161,11 @@ fun CharacterSurface(
     // base のコマで土台を替えていれば、そのサーフェスの当たり判定を使う。コマを出しているアニメーションの当たり判定も見る
     val baseSurface = layers.values.lastOrNull { it.method == "base" && it.surface >= 0 }?.surface ?: character.surface
     val activeAnimations = layers.keys.filter { it >= 0 } + character.binds
-    fun hit(p: Pair<Int, Int>) = controller.shell.surfaces[baseSurface]?.hitTest(p.first, p.second, activeAnimations)
+    fun hit(p: Pair<Int, Int>) = controller.shell.surfaces[baseSurface]?.hitTest(p.first, p.second, activeAnimations, renderer::regionMask)
+    // surface*.png と element に書いた動く画像（GIF / APNG / WebP）は、SERIKO を書かなくても動かす
+    val animatedParts by produceState(emptyList<SurfaceRenderer.AnimatedPart>(), baseSurface) {
+        value = withContext(Dispatchers.IO) { renderer.animatedParts(baseSurface) }
+    }
     // sakura.tooltips などで決めた、当たり判定に触れている間に出す文字
     var tooltip by remember { mutableStateOf<String?>(null) }
     fun showTooltip(collision: String?) {
@@ -296,10 +300,13 @@ fun CharacterSurface(
             }
         }
     }
+    for (part in animatedParts) {
+        key(part) { ImportedAnimation(part.file, part.x, part.y, 0, pxPerImagePxX, pxPerImagePxY) }
+    }
     for ((layer, frame) in layers) {
         if (frame.method != "import") continue
         val file = frame.file?.let(controller.shell::file) ?: continue
-        key(layer, frame) { ImportedAnimation(file, frame, pxPerImagePxX, pxPerImagePxY) }
+        key(layer, frame) { ImportedAnimation(file, frame.x, frame.y, frame.waitMinMs, pxPerImagePxX, pxPerImagePxY) }
     }
     // 当たり判定に触れている間はそのツールチップ。無ければ、このキャラクターのバルーンで長押ししている選択肢のツールチップ
     (tooltip ?: state.choiceTooltip?.takeIf { it.first == scopeId }?.second)?.let { SurfaceTooltip(it) }
@@ -387,11 +394,11 @@ private fun BoxScope.SurfaceText(t: AnimationCommand.AddText, pxPerX: Float, pxP
 }
 
 /**
- * surfaces.txt の import,ファイル名,待ち時間,x,y。APNG / GIF / WebP のアニメーション画像を、待ってから流し続ける
- * （元の画像の繰り返し回数は見ない。SSP と同じ）。Android 9 より前では最初のコマだけ出す
+ * surfaces.txt の import,ファイル名,待ち時間,x,y と、動く surface*.png / element。APNG / GIF / WebP のアニメーション画像を、
+ * [waitMs] 待ってから流し続ける（元の画像の繰り返し回数は見ない。SSP と同じ）。Android 9 より前では最初のコマだけ出す
  */
 @Composable
-private fun BoxScope.ImportedAnimation(file: java.io.File, frame: PatternFrame, pxPerX: Float, pxPerY: Float) {
+private fun BoxScope.ImportedAnimation(file: java.io.File, x: Int, y: Int, waitMs: Int, pxPerX: Float, pxPerY: Float) {
     val drawable by produceState<android.graphics.drawable.Drawable?>(null, file) {
         value = withContext(Dispatchers.IO) {
             runCatching {
@@ -412,7 +419,7 @@ private fun BoxScope.ImportedAnimation(file: java.io.File, frame: PatternFrame, 
     }
     val d = drawable ?: return
     LaunchedEffect(d) {
-        delay(frame.waitMinMs.toLong())
+        delay(waitMs.toLong())
         if (Build.VERSION.SDK_INT >= 28 && d is android.graphics.drawable.AnimatedImageDrawable) {
             d.repeatCount = android.graphics.drawable.AnimatedImageDrawable.REPEAT_INFINITE
             d.start()
@@ -427,7 +434,7 @@ private fun BoxScope.ImportedAnimation(file: java.io.File, frame: PatternFrame, 
         update = { it.setImageDrawable(d) },
         modifier = Modifier
             .align(Alignment.TopStart)
-            .offset { IntOffset((frame.x * pxPerX).roundToInt(), (frame.y * pxPerY).roundToInt()) }
+            .offset { IntOffset((x * pxPerX).roundToInt(), (y * pxPerY).roundToInt()) }
             .size(with(density) { (d.intrinsicWidth * pxPerX).toDp() }, with(density) { (d.intrinsicHeight * pxPerY).toDp() }),
     )
 }
@@ -451,6 +458,8 @@ private fun DrawScope.drawCollisions(collisions: List<Collision>, pxPerX: Float,
                 path.close()
                 drawPath(path, color, style = stroke)
             }
+            // region は画像の色で決まるので、枠は描かない（名前だけ左上に出す）
+            CollisionShape.REGION -> {}
         }
         if (names) drawContext.canvas.nativeCanvas.drawText(c.id, topLeft.x + 2, topLeft.y + labelPaint.textSize, labelPaint)
     }

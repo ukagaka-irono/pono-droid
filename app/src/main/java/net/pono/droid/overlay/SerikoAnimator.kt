@@ -286,14 +286,21 @@ class SerikoAnimator(private val scope: CoroutineScope) {
                     "parallelstart" -> frame.targets.forEach(::start)
                     "stop", "alternativestop", "parallelstop" -> frame.targets.forEach(::clear)
                     "insert" -> {} // 着せ替えの中でだけ意味がある（bindFrames で扱う）
-                    else -> if (frame.surface == STOP_OTHERS) {
-                        // サーフェス番号 -2 は、ほかの動いているアニメーションを全部止める（このアニメーションは続ける）
-                        stopOthers(anim.id)
-                    } else {
-                        setRaw(raw + (anim.id to frame))
+                    else -> {
+                        // ウェイトは、そのコマを描くまでの待ち時間
                         val wait = if (frame.waitMaxMs > frame.waitMinMs) Random.nextInt(frame.waitMinMs, frame.waitMaxMs + 1) else frame.waitMinMs
                         delay(maxOf(wait, 16).toLong())
                         drew = true
+                        when (frame.surface) {
+                            // -2 は、ほかの動いているアニメーションを全部止める（このアニメーションは続ける）
+                            STOP_OTHERS -> stopOthers(anim.id)
+                            // -1 は、このアニメーションを止める（出していたコマも消す）
+                            -1 -> {
+                                setRaw(raw - anim.id)
+                                break
+                            }
+                            else -> setRaw(raw + (anim.id to frame))
+                        }
                     }
                 }
             }

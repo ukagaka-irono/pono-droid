@@ -391,14 +391,14 @@ class GhostOverlayService : LifecycleService() {
                             for (id in dump.surfaces) {
                                 val def = shell.surfaces[id]
                                 val binds = SerikoAnimator.bindLayers(def, dump.binds)
-                                if (writePng(r.render(id, binds), File(dump.dir, "${dump.prefix}$id.png"))) count++
+                                if (writePng(r.render(id, binds, dump.binds), File(dump.dir, "${dump.prefix}$id.png"))) count++
                                 // アニメーションのコマを、\i[ID] で動かしたときと同じ順に重ねて連番で
                                 val anim = dump.animation?.let { def?.animations?.get(it) } ?: continue
                                 var n = 0
                                 for (frame in anim.frames) {
                                     if (frame.isControl) continue
                                     if (n >= MAX_DUMP_FRAMES) break
-                                    if (writePng(r.render(id, binds + (anim.id to frame)), File(dump.dir, "%s%d_%04d.png".format(dump.prefix, id, n)))) count++
+                                    if (writePng(r.render(id, binds + (anim.id to frame), dump.binds), File(dump.dir, "%s%d_%04d.png".format(dump.prefix, id, n)))) count++
                                     n++
                                 }
                             }
