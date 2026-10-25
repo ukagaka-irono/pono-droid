@@ -3826,6 +3826,8 @@ class GhostController(
                 return@launch
             }
             host.updateRequest?.let { (types, options) -> networkUpdate(types, options, "script") }
+            // SHIORI に聞く値（ghostlist(…).shiori.変数名）のある \![get,property] は、話し終えてから聞いて送る
+            for ((event, names) in host.deferredProperties) raised += event to names.map { propertyAsking(it).orEmpty() }
             if (raised.isNotEmpty()) {
                 // \![raise] が \![raise] を呼び続けると SHIORI を叩き続けてしまうので、連鎖の長さに上限を置く
                 if (chain >= MAX_RAISE_CHAIN) {
@@ -4144,6 +4146,12 @@ class GhostController(
      * [current] は今使っているもの（無ければ null）
      */
     private fun <T> listProperty(rest: String, items: List<T>, current: T?, resolve: (T, String, Int) -> String?): String? {
+        val (item, key) = listItem(rest, items, current, resolve) ?: return null
+        return resolve(item, key, items.indexOf(item))
+    }
+
+    /** 一覧の (名前)・.index(N)・.current のどれを指しているかと、その後ろの名前 */
+    private fun <T> listItem(rest: String, items: List<T>, current: T?, resolve: (T, String, Int) -> String?): Pair<T, String>? {
         val key = rest.substringAfter(").", rest.substringAfter("current.", ""))
         val item = when {
             rest.startsWith("(") -> {
@@ -4154,8 +4162,42 @@ class GhostController(
             rest.startsWith(".current.") -> current
             else -> null
         } ?: return null
-        return resolve(item, key, items.indexOf(item))
+        return item to key
     }
+
+    /** SHIORI に聞かないと分からない名前（ghostlist / activeghostlist / currentghost の shiori.変数名） */
+    private fun asksShiori(name: String): Boolean =
+        ".shiori." in name && (name.startsWith("ghostlist") || name.startsWith("activeghostlist") || name.startsWith("currentghost.shiori."))
+
+    /** [property] と同じだが、shiori.変数名 はそのゴーストの SHIORI に聞く */
+    private suspend fun propertyAsking(name: String): String? = if (asksShiori(name)) shioriProperty(name) else property(name)
+
+    /**
+     * ghostlist(…).shiori.変数名 など。動いているゴースト（自分か、一緒に動いているもの）の SHIORI に、変数名を ID にして GET で聞く。
+     * 動いていないゴーストのものは分からないので null
+     */
+    private suspend fun shioriProperty(name: String): String? {
+        val target: Ghost
+        val variable: String
+        if (name.startsWith("currentghost.shiori.")) {
+            target = ghost
+            variable = name.removePrefix("currentghost.shiori.")
+        } else {
+            val prefix = if (name.startsWith("activeghostlist")) "activeghostlist" else "ghostlist"
+            val items = if (prefix == "activeghostlist") hub?.running?.map { it.ghost } ?: listOf(ghost) else repository?.list() ?: listOf(ghost)
+            val (g, key) = listItem(name.removePrefix(prefix), items, ghost) { g, k, i -> ghostProperty(g, k, i) } ?: return null
+            if (!key.startsWith("shiori.")) return null
+            target = g
+            variable = key.removePrefix("shiori.")
+        }
+        if (variable.isEmpty()) return null
+        val dir = target.dir.canonicalFile
+        val c = if (dir == ghost.dir.canonicalFile) this else hub?.others(this)?.firstOrNull { it.ghost.dir.canonicalFile == dir } ?: return null
+        return c.shioriValue(variable)
+    }
+
+    /** SHIORI に [id] を GET で聞いた答え（スクリプトとしては使わないので OnTranslate に通さない） */
+    private suspend fun shioriValue(id: String): String? = request(id, emptyList(), translate = false)
 
     private fun ghostProperty(g: Ghost, key: String, index: Int): String? = when (key) {
         "name" -> g.name
@@ -4217,7 +4259,9 @@ class GhostController(
                     "rect" -> (g?.balloon ?: ScreenRect(0, 0, 0, 0)).toString()
                     "scaling" -> formatNumber((g?.balloonScale ?: 1.0) * 100)
                     "vertical" -> "0"
-                    "validwidth", "validheight", "validwidth.initial", "validheight.initial", "lines", "lines.initial", "char_width" ->
+                    "validwidth", "validheight", "validwidth.initial", "validheight.initial", "lines", "lines.initial", "char_width",
+                    "basepos.x", "basepos.y",
+                    ->
                         balloonTextProperty(scope, m.groupValues[2], s.characters[scope]?.balloonId ?: 0)
                     "background.color" -> balloonBackground(scope, s.characters[scope]?.balloonId ?: 0)
                     else -> null
@@ -4360,16 +4404,20 @@ class GhostController(
     /** バルーンの文字の範囲の幅・高さ・行数・半角の幅（initial は最初の画像のもの）。簡易バルーンなら null */
     private fun balloonTextProperty(scope: Int, key: String, balloonId: Int): String? {
         val b = balloon ?: return null
-        val initial = key.endsWith(".initial")
-        val image = (if (initial) b.images(scope).firstOrNull() else b.imageForId(scope, balloonId) ?: b.images(scope).firstOrNull()) ?: return null
+        val image = b.imageForId(scope, balloonId) ?: b.images(scope).firstOrNull() ?: return null
         val (w, h) = pngSize(image.file) ?: return null
-        val area = b.textArea(w, h)
+        // .initial は書き始め（basepos ＝ origin）から、付かないものは書ける範囲の全体（validrect）
+        val start = b.textArea(w, h)
+        val area = if (key.endsWith(".initial")) start else b.validArea(w, h)
         // 1行の高さは、pono-droid のバルーンの描き方と同じく文字の高さの 1.4 倍（BalloonViews の LINE_HEIGHT）
         val lineHeight = maxOf(1, (b.fontHeight * 7 + 4) / 5)
         return when (key.removeSuffix(".initial")) {
             "validwidth" -> (area.right - area.left).toString()
             "validheight" -> (area.bottom - area.top).toString()
             "lines" -> ((area.bottom - area.top) / lineHeight).toString()
+            // 書き始めの点（バルーンの画像の左上から）
+            "basepos.x" -> start.left.toString()
+            "basepos.y" -> start.top.toString()
             // 等幅のフォントの半角の幅（文字の高さの半分。SSP の等幅の決まりと同じ）
             "char_width" -> maxOf(1, b.fontHeight / 2).toString()
             else -> null
@@ -4544,6 +4592,9 @@ class GhostController(
 
         /** `\![updatebymyself]`。スクリプトが終わってから始める */
         var updateRequest: Pair<List<String>, Set<String>>? = null
+
+        /** SHIORI に聞く値のある `\![get,property]`（イベントと名前）。スクリプトが終わってから聞く */
+        val deferredProperties = mutableListOf<Pair<String, List<String>>>()
 
         /** `\![set,serikotalk,false]` の間は口パク（SERIKO の talk）を動かさない。このスクリプトの間だけ */
         private var serikoTalk = true
@@ -5164,7 +5215,7 @@ class GhostController(
         }
 
         override fun getProperty(event: String, names: List<String>) {
-            raised += event to names.map { property(it).orEmpty() }
+            if (names.any(::asksShiori)) deferredProperties += event to names else raised += event to names.map { property(it).orEmpty() }
         }
 
         override fun property(name: String): String? = this@GhostController.property(name)

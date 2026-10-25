@@ -81,11 +81,21 @@ class Balloon(val dir: File) {
      * 文字を書ける範囲。SSP と同じく、書き始めは origin、折り返しは wordwrappoint.x（無ければ validrect）。
      * 右と下は 0 以下なら右端・下端からの距離（validrect.right,0 は右端）。
      */
-    fun textArea(imageWidth: Int, imageHeight: Int): TextArea {
+    fun textArea(imageWidth: Int, imageHeight: Int): TextArea = area(imageWidth, imageHeight, fromOrigin = true)
+
+    /**
+     * 文字を書ける範囲の全体（validrect）。書き始め（origin、[textArea] の左上）は範囲の途中のこともある。
+     * validrect の左・上が無ければ origin から
+     */
+    fun validArea(imageWidth: Int, imageHeight: Int): TextArea = area(imageWidth, imageHeight, fromOrigin = false)
+
+    private fun area(imageWidth: Int, imageHeight: Int, fromOrigin: Boolean): TextArea {
         fun fromRight(v: Int) = if (v <= 0) imageWidth + v else v
         fun fromBottom(v: Int) = if (v <= 0) imageHeight + v else v
-        val left = descript.int("origin.x") ?: descript.int("validrect.left") ?: DEFAULT_MARGIN
-        val top = descript.int("origin.y") ?: descript.int("validrect.top") ?: DEFAULT_MARGIN
+        val originX = descript.int("origin.x")
+        val originY = descript.int("origin.y")
+        val left = (if (fromOrigin) originX ?: descript.int("validrect.left") else descript.int("validrect.left") ?: originX) ?: DEFAULT_MARGIN
+        val top = (if (fromOrigin) originY ?: descript.int("validrect.top") else descript.int("validrect.top") ?: originY) ?: DEFAULT_MARGIN
         val right = (descript.int("wordwrappoint.x") ?: descript.int("validrect.right"))?.let(::fromRight) ?: (imageWidth - DEFAULT_MARGIN)
         val bottom = descript.int("validrect.bottom")?.let(::fromBottom) ?: (imageHeight - DEFAULT_MARGIN)
         // 範囲がおかしいバルーンでも文字が消えないよう、画像の中に最低限の大きさは残す

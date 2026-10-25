@@ -141,6 +141,24 @@ class MultiGhostTest {
     }
 
     @Test
+    fun askShioriOfAGhostThatRuns() = run {
+        val a = boot(
+            "a",
+            mapOf(
+                "OnAsk" to """\![get,property,OnAnswer,ghostlist(ゴーストB).shiori.hp,currentghost.shiori.mp,ghostlist(ゴーストC).shiori.hp,system.year]\e""",
+                "mp" to "7",
+            ),
+        )
+        boot("b", mapOf("hp" to "42"))
+        a.c.raise("OnAsk", emptyList())
+        val answer = a.shiori.awaitEvent("OnAnswer")
+        // C は動いていないので分からない
+        assertEquals(listOf("42", "7", ""), answer.take(3))
+        assertTrue(answer[3].toInt() > 2000)
+        assertEquals(null, a.c.property("ghostlist(ゴーストB).shiori.hp"))
+    }
+
+    @Test
     fun sstpGoesToTheNamedGhost() = run {
         val a = boot("a", emptyMap())
         val b = boot("b", emptyMap())

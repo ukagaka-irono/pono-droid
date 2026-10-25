@@ -80,7 +80,7 @@ class MorePropertiesTest {
             prepare(root)
             val balloon = if (withBalloon) {
                 val dir = File(root.parentFile, "balloon/maid").apply { mkdirs() }
-                File(dir, "descript.txt").writeText("charset,UTF-8\r\nname,maid\r\norigin.x,10\r\norigin.y,10\r\nvalidrect.right,-10\r\nvalidrect.bottom,-10\r\nfont.height,20\r\n")
+                File(dir, "descript.txt").writeText("charset,UTF-8\r\nname,maid\r\norigin.x,10\r\norigin.y,10\r\nvalidrect.left,0\r\nvalidrect.top,0\r\nvalidrect.right,-10\r\nvalidrect.bottom,-10\r\nfont.height,20\r\n")
                 // 幅 200・高さ 100 の PNG の頭
                 File(dir, "balloons0.png").writeBytes(
                     byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, -56, 0, 0, 0, 100, 8, 6, 0, 0, 0),
@@ -142,10 +142,13 @@ class MorePropertiesTest {
 
     @Test
     fun balloonTextAreaAndColour() = run(withBalloon = true) {
-        assertEquals(listOf("180", "80", "180", "80"),
-            listOf("validwidth", "validheight", "validwidth.initial", "validheight.initial").map { c.property("currentghost.balloon.scope(0).$it") })
-        // 1行は文字の高さの 1.4 倍（20 → 28）なので、80 には 2 行
-        assertEquals("2", c.property("currentghost.balloon.scope(0).lines"))
+        // 書ける範囲の全体は validrect（0,0 から 190,90）、.initial は書き始め（origin の 10,10）から
+        assertEquals(listOf("190", "90", "180", "80", "10", "10"),
+            listOf("validwidth", "validheight", "validwidth.initial", "validheight.initial", "basepos.x", "basepos.y")
+                .map { c.property("currentghost.balloon.scope(0).$it") })
+        // 1行は文字の高さの 1.4 倍（20 → 28）なので、90 には 3 行、80 には 2 行
+        assertEquals("3", c.property("currentghost.balloon.scope(0).lines"))
+        assertEquals("2", c.property("currentghost.balloon.scope(0).lines.initial"))
         assertEquals("10", c.property("currentghost.balloon.scope(0).char_width"))
         assertEquals("51,102,153", c.property("currentghost.balloon.scope(0).background.color"))
         assertEquals("yaya.dll", c.property("currentghost.shiori"))

@@ -170,8 +170,11 @@ class SspWindowAndSwitchTest {
             )
             // 後から出したものほど番号が大きい（表示する側はまだ動かしていない番号だけ動かす）
             assertTrue(s[1]!!.move!!.first > s[0]!!.move!!.first)
-            // 他のゴーストを基準にするものは扱えない
-            assertNull(MoveCommand.parse(listOf("--X=1", "--base=さくら/0")))
+            // 一緒に動いているほかのゴーストの \p[ID] を基準にする（本体側の名前/ID。名前の / は最後のもので分ける）
+            assertEquals(MoveCommand.Base.Ghost("さくら", 0), MoveCommand.parse(listOf("--X=1", "--base=さくら/0"))!!.base)
+            assertEquals(MoveCommand.Base.Ghost("A/B", 1), MoveCommand.parse(listOf("1", "2", "0", "A/B/1"))!!.base)
+            assertNull(MoveCommand.parse(listOf("--X=1", "--base=さくら/x")))
+            assertNull(MoveCommand.parse(listOf("--X=1", "--base=/0")))
         } finally {
             scope.cancel()
         }

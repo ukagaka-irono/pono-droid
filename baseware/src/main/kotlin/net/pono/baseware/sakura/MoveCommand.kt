@@ -24,6 +24,9 @@ data class MoveCommand(
 
         /** \p[id] のキャラクター */
         data class Scope(val id: Int) : Base
+
+        /** 一緒に動いているほかのゴースト（本体側の名前が [sakuraName]）の \p[id] のキャラクター */
+        data class Ghost(val sakuraName: String, val id: Int) : Base
     }
 
     /** ウィンドウのどこを基準にするか。BASE は surfaces.txt の point.basepos（無ければ中央・下） */
@@ -69,10 +72,17 @@ data class MoveCommand(
                 listOf("x", "y", "time", "base", "base-offset", "move-offset").zip(args).forEach { (k, v) -> values[k] = v }
             }
             fun coord(name: String) = values[name]?.trim()?.takeIf { it.isNotEmpty() && it.lowercase() != "fix" }?.toIntOrNull()
-            val base = when (val b = values["base"]?.trim()?.lowercase().orEmpty()) {
+            val rawBase = values["base"]?.trim().orEmpty()
+            val base = when (val b = rawBase.lowercase()) {
                 "", "screen", "primaryscreen", "global" -> Base.Screen
                 "me" -> Base.Me
-                else -> Base.Scope(b.toIntOrNull()?.takeIf { it in 0..ScriptPlayer.MAX_SCOPE } ?: return null)
+                // 本体側の名前/ID。名前に / があってもよいように、最後の / で分ける
+                else -> if ('/' in rawBase) {
+                    val id = rawBase.substringAfterLast('/').trim().toIntOrNull()?.takeIf { it in 0..ScriptPlayer.MAX_SCOPE } ?: return null
+                    Base.Ghost(rawBase.substringBeforeLast('/').trim().takeIf { it.isNotEmpty() } ?: return null, id)
+                } else {
+                    Base.Scope(b.toIntOrNull()?.takeIf { it in 0..ScriptPlayer.MAX_SCOPE } ?: return null)
+                }
             }
             return MoveCommand(
                 x = coord("x"),

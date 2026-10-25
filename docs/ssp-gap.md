@@ -107,7 +107,7 @@ OnDeviceArrival / OnDeviceRemove（USB 機器。設定で選んだときだけ�
 %selfname2 %exh %et %wronghour %ms %mz %ml %mc %mh %mt %me %mp %m? %dms（小さな単語表から選ぶ） %lastghostname %lastobjectname（最後にインストールしたもの）
 %*（\![*] と同じ印） \![set,trayballoon]（Android の通知。--text は何個でも） \![set,tasktrayicon]（常駐の通知に文を出す。アイコンは替えられない）
 \![open,browser / inputbox / passwordinput / communicatebox / teachbox / dateinput / timeinput / sliderinput / textareabox / readme / configurationdialog]
-\![close,...] \![set,balloontimeout / choicetimeout / scaling / alpha / position] \![reset,position] \![move] \![moveasync]（--option=ignore-sticky-window も）
+\![close,...] \![set,balloontimeout / choicetimeout / scaling / alpha / position] \![reset,position] \![move] \![moveasync]（--option=ignore-sticky-window も。--base=本体側の名前/ID で一緒に動いているほかのゴーストのキャラクターも基準にできる）
 \![set,zorder] \![reset,zorder] \![set,sticky-window] \![reset,sticky-window] \![set,windowstate,minimize] \![set,alignmenttodesktop]
 \![execute,resetwindowpos] \4 \5 \v
 \c[char,数,開始位置] \c[line,数,開始位置] \n[half] \n[パーセント] \_n \x[noclear]（\x は \f も戻す） \t \z \_? \_!
@@ -176,15 +176,13 @@ system.year〜millisecond・dayofweek・cursor.pos・os.*・cpu.*・memory.*・m
 currentghost の一部（name・status・scope.count・shelllist.current.name など）、
 system.theme.app.mode（pono-droid の画面はいつも light）/ theme.os.mode、system.dnd.mode（おやすみモード）、system.network.*、system.disk.*（アプリの置き場と共有の置き場）、
 currentghost.shelllist(…).menu、scope(ID).x / y / rect / surface.x / surface.y / scaling / currentmonitor.* / surface(ID).rect、
-balloon.scope(ID).x / y / rect / scaling / vertical / validwidth / validheight / lines / char_width（.initial も。1行は文字の高さの 1.4 倍）/ background.color（画像でいちばん多い色）、
-ghostlist(…).shiori（SHIORI の名前）、seriko.surfacelist.all / defined、seriko.sticky-window / zorder、seriko.tooltip.*、
+balloon.scope(ID).x / y / rect / scaling / vertical / validwidth / validheight / lines（書ける範囲の全体 validrect）/ .initial（書き始めの basepos から）/
+basepos.x / y（origin）/ char_width（1行は文字の高さの 1.4 倍）/ background.color（画像でいちばん多い色）、
+ghostlist(…).shiori（SHIORI の名前）、ghostlist / activeghostlist / currentghost の shiori.変数名（動いているゴーストの SHIORI に、変数名を ID にして GET で聞く。
+SHIORI を待つので \![get,property] でだけ使え、%property[] では空）、seriko.surfacelist.all / defined、seriko.sticky-window / zorder、seriko.tooltip.*、
 sound.count / sound.index(ID).* / sound(名前).*、mousecursor・seriko.cursor（カーソルは無いので書いたものを返すだけ）、sakura / kero / char*.bind.menu、
 history.ghost / balloon、rateofuselist.index(順位).*（起動回数・分・週・月・割合）、developer.log.script / error / network / update。
 \![set,property] は [SET有効] のうち shelllist(…).menu・*.bind.menu・sticky-window・zorder・tooltip・sound の position / playing / pause・カーソル
-
-### 🔨 Android で作れる
-- balloon.scope(ID).basepos（いま書いている位置。表示する側から聞く）
-- ghostlist(…).shiori.変数名（SHIORI に聞く）
 
 ### 👥 複数ゴーストの同時起動が要る
 - ✅ activeghostlist.*（count / index / 名前 / current。1体だけなら自分だけ）

@@ -329,19 +329,23 @@ class CharacterWindow(
      * \![move]。[baseRect] は基準にするキャラクターの矩形（無ければ画面を基準にする）。
      * まだ大きさが決まっていなければ、測り終わってから動かす
      */
-    fun move(command: MoveCommand, window: (Int) -> CharacterWindow?) {
+    /** @param window 基準にするキャラクター（このゴーストの \p[ID] か、ほかのゴーストのもの）のウィンドウ。いなければ null */
+    fun move(command: MoveCommand, window: (MoveCommand.Base) -> CharacterWindow?) {
         surfaceView.doOnLayout {
             val own = screenRect()
-            // 基準にするキャラクターの矩形と基準点（画面が基準なら基準点は中央・下）
-            val other = (command.base as? MoveCommand.Base.Scope)?.let { window(it.id) }
+            // 基準にするキャラクターの矩形と基準点（画面が基準なら基準点は中央・下）。見つからなければ画面
+            val other = when (command.base) {
+                is MoveCommand.Base.Scope, is MoveCommand.Base.Ghost -> window(command.base)
+                MoveCommand.Base.Screen, MoveCommand.Base.Me -> null
+            }
             val base = when (command.base) {
                 MoveCommand.Base.Screen -> screenBounds()
                 MoveCommand.Base.Me -> own
-                is MoveCommand.Base.Scope -> other?.screenRect() ?: screenBounds()
+                is MoveCommand.Base.Scope, is MoveCommand.Base.Ghost -> other?.screenRect() ?: screenBounds()
             }
             val basePoint = when (command.base) {
                 MoveCommand.Base.Me -> basePoint()
-                is MoveCommand.Base.Scope -> other?.basePoint()
+                is MoveCommand.Base.Scope, is MoveCommand.Base.Ghost -> other?.basePoint()
                 MoveCommand.Base.Screen -> null
             }
             val left = command.x?.let {

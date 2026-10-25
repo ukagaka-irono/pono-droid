@@ -74,6 +74,7 @@ import net.pono.baseware.ghost.WindowGeometry
 import net.pono.baseware.ghost.WindowState
 import net.pono.baseware.net.SstpResponse
 import net.pono.baseware.net.SstpServer
+import net.pono.baseware.sakura.MoveCommand
 import net.pono.baseware.sakura.SoundOptions
 import net.pono.baseware.shell.Shell
 import net.pono.droid.AppVersion
@@ -177,6 +178,10 @@ class GhostOverlayService : LifecycleService() {
             startSession(ghost, previous = null, calledBy = null, slot = s.slot, index = i)
         }
     }
+
+    /** 一緒に動いているゴースト（本体側の名前が [sakuraName]）の \p[scope] のウィンドウ（\![move] の --base=本体側の名前/ID） */
+    private fun otherGhostWindow(sakuraName: String, scope: Int): CharacterWindow? =
+        sessions.firstOrNull { it.controller?.ghost?.sakuraName == sakuraName }?.window(scope)
 
     /** 使っていない SHIORI のプロセスの番号。どれも使っていれば null */
     private fun freeSlot(): Int? = (0 until ShioriService.SLOTS).firstOrNull { slot -> sessions.none { it.slot == slot } }
@@ -701,7 +706,13 @@ class GhostOverlayService : LifecycleService() {
                 val (serial, move) = ch.move ?: continue
                 if (handledMoves[scope] == serial) continue
                 handledMoves[scope] = serial
-                window.move(move) { id -> windows.firstOrNull { it.scopeId == id } }
+                window.move(move) { base ->
+                    when (base) {
+                        is MoveCommand.Base.Scope -> windows.firstOrNull { it.scopeId == base.id }
+                        is MoveCommand.Base.Ghost -> otherGhostWindow(base.sakuraName, base.id)
+                        else -> null
+                    }
+                }
             }
         }
 
@@ -764,6 +775,8 @@ class GhostOverlayService : LifecycleService() {
         }
 
         fun screenBounds(): Rect? = windows.firstOrNull()?.screenBounds()
+
+        fun window(scope: Int): CharacterWindow? = windows.firstOrNull { it.scopeId == scope }
 
         /** キャラクターの重なりと見切れを調べて、変わっていればゴーストに伝える（OnOverlap / OnOffscreen。ほかのゴーストとのものも） */
         private fun reportLayout() {
