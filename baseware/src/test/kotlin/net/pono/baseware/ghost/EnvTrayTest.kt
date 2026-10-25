@@ -1,6 +1,7 @@
 package net.pono.baseware.ghost
 
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -82,6 +83,8 @@ class EnvTrayTest {
     fun trayBalloonAndIcon() = run(
         """\0\![set,trayballoon,--title=お知らせ,--text=1行目,--text=2行目,--icon=warning]\![set,tasktrayicon,normal.ico,通常モード]\![set,trayballoon,--title=空]\e""",
     ) { c, shiori, platform ->
+        // 話し始める前に「話していない」を見ることがあるので、最後のタグが済むまで待つ
+        withTimeout(5000) { while (platform.inner.logs.none { "--title=空" in it }) delay(10) }
         assertEquals(listOf(Triple("お知らせ", "1行目\n2行目", "warning")), platform.balloons.toList())
         assertEquals(listOf("通常モード"), platform.trayTexts.toList())
         // --text が無いものは出さない

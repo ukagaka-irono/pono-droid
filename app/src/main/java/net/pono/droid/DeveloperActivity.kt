@@ -7,6 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -35,17 +37,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import net.pono.baseware.ghost.BacklogEntry
 import net.pono.baseware.ghost.DeveloperLog
 import net.pono.baseware.ghost.GhostController
 import net.pono.droid.overlay.GhostOverlayService
@@ -146,16 +155,41 @@ private fun BacklogPage(controller: GhostController, modifier: Modifier) {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(entries) { entry ->
                 Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(scopeLabel(controller, entry.scope), style = MaterialTheme.typography.titleMedium)
-                        Text(formatTime(entry.time), style = MaterialTheme.typography.bodySmall)
-                        Text(entry.text, style = MaterialTheme.typography.bodyMedium)
+                    Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        FaceIcon(controller, entry)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(scopeLabel(controller, entry.scope), style = MaterialTheme.typography.titleMedium)
+                            Text(formatTime(entry.time), style = MaterialTheme.typography.bodySmall)
+                            Text(entry.text, style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
                 }
             }
         }
     }
 }
+
+/** 話したときの顔（シェルの icon.rect か、当たり判定の face / head から切り出す）。切り出せなければ何も出さない */
+@Composable
+private fun FaceIcon(controller: GhostController, entry: BacklogEntry) {
+    val sizePx = with(LocalDensity.current) { FACE_SIZE.roundToPx() }
+    val face by produceState<ImageBitmap?>(null, entry.surface, sizePx) {
+        value = GhostOverlayService.faceIcon(entry.surface, sizePx)?.asImageBitmap()
+    }
+    val image = face ?: return
+    // 枠の色はシェルが決める（sakura.icon.frame.color など）。書いていなければ枠は無し
+    val frame = remember(controller, entry.scope) { controller.shell.iconFrameColor(entry.scope) }
+    val shape = MaterialTheme.shapes.small
+    Image(
+        image,
+        // 名前がすぐ横にあるので、読み上げは名前に任せる
+        contentDescription = null,
+        modifier = Modifier.size(FACE_SIZE).clip(shape)
+            .let { if (frame != null) it.border(2.dp, Color(0xFF000000.toInt() or frame), shape) else it },
+    )
+}
+
+private val FACE_SIZE = 48.dp
 
 private val LOG_LABELS = mapOf("script" to "スクリプト", "error" to "エラー", "network" to "通信", "update" to "更新")
 
@@ -313,6 +347,9 @@ private fun SurfaceTestPage(controller: GhostController, modifier: Modifier) {
 private fun DeveloperPage(controller: GhostController, modifier: Modifier, onOpen: (String) -> Unit) {
     val status = remember(controller) { controller.property("currentghost.status") }
     val balloon = remember(controller) { controller.property("currentghost.balloon.name") }
+    val scope = rememberCoroutineScope()
+    var openingLog by remember { mutableStateOf(false) }
+    var logMissing by remember { mutableStateOf(false) }
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -331,6 +368,31 @@ private fun DeveloperPage(controller: GhostController, modifier: Modifier, onOpe
             Button(onClick = { controller.reloadFromDeveloper("shiori") }) { Text("SHIORI") }
             OutlinedButton(onClick = { controller.reloadFromDeveloper("shell") }) { Text("シェル") }
             OutlinedButton(onClick = { controller.reloadFromDeveloper("ghost") }) { Text("ゴースト") }
+        }
+        Text("SHIORI のログ", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    scope.launch {
+                        openingLog = true
+                        logMissing = false
+                        try {
+                            // 開くアプリが無いときは、開こうとした側が知らせる
+                            logMissing = controller.openShioriLog() == null
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logMissing = true
+                        } finally {
+                            openingLog = false
+                        }
+                    }
+                },
+                enabled = !openingLog,
+            ) { Text("開く") }
+        }
+        if (logMissing) {
+            Text("ログが見つかりません（SHIORI がログの場所を返さないか、ファイルがありません）", style = MaterialTheme.typography.bodyMedium)
         }
         Text("ほかの画面", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
         PageLink("発言履歴", "ゴーストが話したことを、新しいものから", onClick = { onOpen(DeveloperActivity.PAGE_BACKLOG) })

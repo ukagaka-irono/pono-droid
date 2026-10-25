@@ -178,7 +178,8 @@ class MorePropertiesTest {
                 """\![set,property,currentghost.mousecursor.text,x.cur]\![set,property,system.year,1999]\e""",
         ),
     ) {
-        withTimeout(5000) { c.state.first { !it.talking } }
+        // 話し始める前に「話していない」を見ることがあるので、最後のタグが済むまで待つ
+        withTimeout(5000) { while (platform.inner.logs.none { "system.year" in it }) delay(10) }
         // カンマはタグの区切りなので、sticky-window は SakuraScript から "0,1" と渡せない（\![set,property] の値は1つだけ）
         assertTrue(c.setProperty("currentghost.seriko.sticky-window", "0,1;2,3;1,4"))
         assertEquals("0,1;2,3", c.property("currentghost.seriko.sticky-window"))

@@ -322,7 +322,7 @@ interface GhostPlatform {
 }
 
 /** 発言履歴の1つ（\![open,backlogviewer]）。[time] は話し終えた時刻（ミリ秒） */
-data class BacklogEntry(val time: Long, val scope: Int, val text: String)
+data class BacklogEntry(val time: Long, val scope: Int, val text: String, val surface: Int = -1)
 
 /**
  * \![execute,dumpsurface] で書き出すもの。ファイル名は [prefix] + サーフェス番号 + .png、[animation] があれば続けて
@@ -976,6 +976,21 @@ class GhostController(
         return script
     }
 
+    /**
+     * 開発用パレットの「開く」。SHIORI にログのファイル（log_path）を聞く。ゴーストのフォルダの外や、無いファイルなら null
+     * （SHIORI が答えなかったときも null）
+     */
+    suspend fun shioriLogFile(): File? {
+        val path = resource("log_path")?.trim() ?: return null
+        return ghostPath(path)?.takeIf { it.isFile }
+    }
+
+    /** SHIORI のログを、テキストを見るアプリで開く。ログが無ければ null、開けなければ false */
+    suspend fun openShioriLog(): Boolean? {
+        val file = shioriLogFile() ?: return null
+        return platform.openFile(file, "text/plain")
+    }
+
     /** サーフェステストの画面から。[scope] のキャラクターに [surface] を出す */
     fun testSurface(scope: Int, surface: Int) {
         cancelScript()
@@ -1303,7 +1318,8 @@ class GhostController(
     val backlog: List<BacklogEntry> get() = synchronized(_backlog) { _backlog.toList() }
 
     private fun addBacklog(scope: Int, text: String) = synchronized(_backlog) {
-        _backlog.addLast(BacklogEntry(System.currentTimeMillis(), scope, text))
+        // 話し終えたときの顔を一緒に覚えておく（発言履歴の顔）
+        _backlog.addLast(BacklogEntry(System.currentTimeMillis(), scope, text, _state.value.characters[scope]?.surface ?: -1))
         while (_backlog.size > MAX_BACKLOG) _backlog.removeFirst()
     }
 

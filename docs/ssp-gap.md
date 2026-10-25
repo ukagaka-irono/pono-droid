@@ -198,10 +198,7 @@ menu.background.font.color.* / menu.foreground.font.color.*（メニューの項
 *button.caption のうち pono-droid のメニューにある項目（ghostroot / shellroot / balloonroot / dressuproot / recommendroot / portalroot / readme / terms /
 aistate / rateofuse / update / hide / vanish / quit / closeballoon。新しい名前を古い名前より先に使う）、getaistate / getaistateex（メニューの
 「AI グラフ」と \![open,aigraph]。グラフの代わりにラベルと値を並べる）、useorigin1、other_homeurl_override、balloon_tooltip / tooltip（選択肢を長押ししている間、
-そのバルーンのキャラクターの上に出す）
-
-### 🔨 Android で作れる
-- log_path（開発用パレットから SHIORI のログを開く。パレットにまだ「開く」が無い）
+そのバルーンのキャラクターの上に出す）、log_path（開発用パレットの「SHIORI のログ」の「開く」。ゴーストのフォルダの中のファイルだけ）
 
 ### ⛔ 作れない（メニュー）
 - menu.*.bitmap.filename、menu.separator.color.*、menu.frame.color.*、menu.disable.font.color.*（pono-droid のメニューはバルーンに出すので、
@@ -230,6 +227,7 @@ SSP 専用のメニュー項目の名前（ヘッドライン・プラグイン�
 - ✅ .nar の type,shell / supplement / package、accept（違うゴーストなら OnInstallRefuse）、refresh / refreshundeletemask、
   balloon0.directory などの複数同梱、\![execute,install,path / url]、\![execute,dropdefault,file / url]
 - ✅ サウンドを同時にいくつも鳴らす（16 個まで）
-- 🔨 icon.rect（発言履歴の顔）
+- ✅ icon.rect と、当たり判定の face / 顔・head / 頭 からの顔の切り出し（発言履歴の顔）、sakura / kero / char*.icon.frame.color.*（顔の枠の色。
+  SSP と違い、明るさは画面の配色に合わせて変えない）
 - ⛔ surfaces.txt の cursor ブレス（マウスカーソルが無い）、sakura.balloon.offsetx / offsety（pono-droid のバルーンはいつもキャラクターの上）、
   オーバーレイの透明な部分のタッチを下に通す（Android では画素単位にはできない）

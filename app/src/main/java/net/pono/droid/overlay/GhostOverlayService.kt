@@ -504,6 +504,7 @@ class GhostOverlayService : LifecycleService() {
      */
     private fun createWindows(c: GhostController) {
         renderer = SurfaceRenderer(c.shell)
+        synchronized(faceIcons) { faceIcons.clear() }
         balloonSkin = c.balloon?.let(::BalloonSkin)
         scopesJob?.cancel()
         scopesJob = lifecycleScope.launch {
@@ -652,6 +653,25 @@ class GhostOverlayService : LifecycleService() {
 
     private fun voiceAllowed(): Boolean = OverlaySettings.voice(OverlaySettings.prefs(this)) &&
         checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /** 発言履歴の顔（サーフェスごと。切り出せなかったものは null）。シェルが替わったら作り直す */
+    private val faceIcons = HashMap<Int, Bitmap?>()
+
+    private suspend fun faceIcon(surfaceId: Int, sizePx: Int): Bitmap? {
+        val r = renderer ?: return null
+        val shell = controller?.shell ?: return null
+        synchronized(faceIcons) { if (surfaceId in faceIcons) return faceIcons[surfaceId] }
+        val icon = withContext(Dispatchers.Default) {
+            runCatching {
+                val full = r.render(surfaceId, emptyMap()) ?: return@runCatching null
+                val f = shell.faceRect(surfaceId, full.width, full.height) ?: return@runCatching null
+                val face = Bitmap.createBitmap(full, f.left, f.top, f.right - f.left, f.bottom - f.top)
+                Bitmap.createScaledBitmap(face, sizePx, sizePx, true)
+            }.getOrNull()
+        }
+        synchronized(faceIcons) { faceIcons[surfaceId] = icon }
+        return icon
+    }
 
     /** つないでいる USB 機器（機器のファイル名ごと）。設定で選んだときだけ、画面がついている間に少しずつ見て変わったら伝える */
     private var usbDevices: Map<String, ConnectedDevice>? = null
@@ -1167,6 +1187,9 @@ class GhostOverlayService : LifecycleService() {
 
         /** 動いているサービス（\![open,dialog,save] の保存先を見張るため） */
         private var instance: GhostOverlayService? = null
+
+        /** 発言履歴の顔。[surfaceId] の絵から顔を切り出し、[sizePx] 四方にしたもの（ゴーストが動いていない・切り出せなければ null） */
+        suspend fun faceIcon(surfaceId: Int, sizePx: Int): Bitmap? = if (surfaceId < 0) null else instance?.faceIcon(surfaceId, sizePx)
 
         /** [file] にゴーストが書いたら [uri] に写す（ゴーストが動いていなければ何もしない） */
         fun watchSave(file: File, uri: Uri) {

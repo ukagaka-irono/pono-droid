@@ -9,6 +9,9 @@ data class SurfaceElement(val id: Int, val method: String, val file: String, val
 /** 当たり判定の形（collisionex の rect / ellipse / circle / polygon。collision は rect） */
 enum class CollisionShape { RECT, ELLIPSE, CIRCLE, POLYGON }
 
+/** サーフェスの中の矩形（右と下は含まない） */
+data class SurfaceRect(val left: Int, val top: Int, val right: Int, val bottom: Int)
+
 /**
  * 当たり判定。[left] から [bottom] は形を囲む矩形。[points] は polygon の頂点（x, y, x, y ...）
  */
@@ -168,6 +171,9 @@ class SurfaceDefinition(val id: Int) {
     var centerY: Int? = null
     var kinokoX: Int? = null
     var kinokoY: Int? = null
+
+    /** icon.rect（発言履歴の顔を切り出す矩形）。null なら当たり判定の face / head から決める */
+    var iconRect: SurfaceRect? = null
 
     /** descript ブレスの collision-sort / animation-sort */
     var collisionSort: SortOrder = SortOrder.NONE
@@ -472,6 +478,10 @@ class SurfaceTable(
                 "point.centery" -> def.centerY = args[0].toIntOrNull()
                 "point.kinoko.centerx" -> def.kinokoX = args[0].toIntOrNull()
                 "point.kinoko.centery" -> def.kinokoY = args[0].toIntOrNull()
+                "icon.rect" -> {
+                    val v = args.take(4).map { it.toIntOrNull() }
+                    if (v.size == 4 && v.all { it != null }) def.iconRect = SurfaceRect(v[0]!!, v[1]!!, v[2]!!, v[3]!!)
+                }
             }
 
             // 番号が桁あふれしていれば（細工された surfaces.txt）その行は無視する。数にも上限を置く

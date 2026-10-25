@@ -27,6 +27,39 @@ class Shell(val dir: File) {
 
     val name: String get() = descript["name"] ?: dir.name
 
+    /**
+     * 発言履歴の顔（正方形）を [surfaceId] の絵（幅 [width]・高さ [height]）から切り出す矩形。SSP と同じく、icon.rect があればそれを、
+     * 無ければ当たり判定の face / 顔、次に head / 頭 を少し広げて使う。長い辺に合わせて中心から正方形にし、絵からはみ出さないようずらす。
+     * どれも無ければ null
+     */
+    fun faceRect(surfaceId: Int, width: Int, height: Int): SurfaceRect? {
+        if (width <= 0 || height <= 0) return null
+        val def = surfaces[surfaceId]
+        val explicit = def?.iconRect
+        val rect = explicit ?: run {
+            val collisions = def?.collisions?.values.orEmpty()
+            val c = collisions.firstOrNull { it.id.lowercase() == "face" || it.id == "顔" }
+                ?: collisions.firstOrNull { it.id.lowercase() == "head" || it.id == "頭" }
+                ?: return null
+            // 当たり判定は顔ぎりぎりのことが多いので、長い辺の 4 分の 1 ずつ余白を足す
+            val margin = maxOf(c.right - c.left, c.bottom - c.top) / 4
+            SurfaceRect(c.left - margin, c.top - margin, c.right + margin, c.bottom + margin)
+        }
+        val side = minOf(maxOf(rect.right - rect.left, rect.bottom - rect.top), width, height)
+        if (side <= 0) return null
+        val left = ((rect.left + rect.right - side) / 2).coerceIn(0, width - side)
+        val top = ((rect.top + rect.bottom - side) / 2).coerceIn(0, height - side)
+        return SurfaceRect(left, top, left + side, top + side)
+    }
+
+    /** 発言履歴の顔の枠の色（[scope] の icon.frame.color.r / g / b、0xRRGGBB）。書いていなければ null */
+    fun iconFrameColor(scope: Int): Int? {
+        val parts = listOf("r", "g", "b").map { c -> descript.int("${scopeName(scope)}.icon.frame.color.$c") }
+        if (parts.all { it == null }) return null
+        val (r, g, b) = parts.map { (it ?: 0).coerceIn(0, 255) }
+        return (r shl 16) or (g shl 8) or b
+    }
+
     /** 1 なら PNG のアルファをそのまま使う。0 なら .pna か左上の色で透過する。 */
     val useSelfAlpha: Boolean get() = descript.int("seriko.use_self_alpha") == 1
 
