@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1065・一部だけ 80・作る 286・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1073・一部だけ 73・作る 285・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -246,20 +246,10 @@
 
 ## surfaces.txt
 
-済み 114 項目。
+済み 122 項目。
 
-### 🔨 作る（1）
-- overlayscreen — blend-screen-fast と同じにする。今は else に落ちて普通の overlay になる（SurfaceRenderer の when に1行）
-
-### 🔧 一部だけ（17）
-- animation-sort,ソート順序 — 当たり判定の順にだけ効く。ascend でも絵の重ね順は変わらない（SurfaceRenderer はいつも番号の大きい方が手前）
-- descriptブレス記述例 — surfaces*.txt をつないで読むので、descript ブレスをファイルごとに違う設定にできない（最後のものが全体に効く）
+### 🔧 一部だけ（10）
 - animation\*.collision\*,当たり判定定義 animation\*.collisionex\*,当たり判定定義(ex) — animation*.collision / collisionex は読むが、collisionex の region が無い
-- animation\*.name,定義名 — \i と \![anim] では名前を使えるが、start / stop / alternativestart などと exclusive,(…) の名前は読まない（数字だけ拾う）
-- animation\*.option,shared-index — \i や start で動かしたものだけ続きから動く。interval（always など）で動いているものは running に無いので最初からになる
-- animation\*.pattern\*,描画メソッド,サーフェス番号,ウェイト,X座標,Y座標(,オプション...) — --alpha、サーフェス番号 -2（ほかのアニメーションを全部止める）、サーフェス番号に別名を書く（SSP 2.8.25）が無い
-- SERIKOの旧定義と新定義について — 旧定義の start / alternativestart / insert などで番号を読まない（parseOldPattern が targets を作らない）
-- 各要素の上下構造 — 着せ替えはいつも普通のアニメーションの下（番号順にならない）。background のアニメーションの当たり判定を土台より先に見る
 - collisionex\*,ID,タイプ,座標1,座標2... — rect / ellipse / circle / polygon はある。region（画像の指定色の領域）が無い
 - element\*,描画メソッド,ファイル名,X座標,Y座標(,オプション...) — --clipping / --alpha / --source / --scaling と、surface*.png や element の GIF / APNG / WebP を自動で動かすのが無い
 - auto — overlay として重ねる。--source の PSD などのレイヤーから描画方法を読む部分が無い

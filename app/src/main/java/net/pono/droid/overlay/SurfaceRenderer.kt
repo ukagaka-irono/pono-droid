@@ -8,6 +8,7 @@ import android.graphics.PorterDuffXfermode
 import android.util.Log
 import net.pono.baseware.shell.PatternFrame
 import net.pono.baseware.shell.Shell
+import net.pono.baseware.shell.SortOrder
 import java.io.File
 
 /**
@@ -29,12 +30,21 @@ class SurfaceRenderer(private val shell: Shell) {
     @Synchronized
     fun render(surfaceId: Int, layers: Map<Int, PatternFrame>): Bitmap? {
         if (surfaceId < 0) return null
-        // レイヤーの番号の小さい順に重ねる（着せ替えは負の番号で、普通のアニメーションより下）
-        val sorted = layers.toSortedMap()
+        val def = shell.surfaces[surfaceId]
+        // アニメーション番号の順に重ねる（animation-sort が descend なら大きい番号が手前、ascend なら小さい番号が手前）。
+        // 着せ替えのコマはもとのアニメーションの番号の位置に、\![anim,add] のものはいちばん上に
+        val descend = def?.animationSort != SortOrder.ASCEND
+        val sorted = layers.entries.sortedWith(
+            compareBy<Map.Entry<Int, PatternFrame>>(
+                { if (it.key >= ADD_LAYER_BASE) 1 else 0 },
+                { (it.value.layerOf ?: it.key).let { id -> if (descend) id else -id } },
+                { it.key },
+            ),
+        ).associate { it.key to it.value }
         // "base" のコマは土台のサーフェスを差し替える
         val baseOverride = sorted.values.lastOrNull { it.method == "base" && it.surface >= 0 }
         val base = baseImage(baseOverride?.surface ?: surfaceId) ?: return null
-        val animations = shell.surfaces[surfaceId]?.animations.orEmpty()
+        val animations = def?.animations.orEmpty()
         // option,background のアニメーションは土台の裏に重ねる
         val (back, front) = sorted.entries.partition { (id, _) -> animations[id]?.background == true }
         // move のコマは、土台ごと絵をずらす
@@ -64,13 +74,16 @@ class SurfaceRenderer(private val shell: Shell) {
             opaqueImage(frame.surface)?.let { canvas.drawBitmap(it, x, y, paint) }
             return
         }
-        val img = baseImage(frame.surface) ?: return
+        // --alpha は、絵の不透明度を下げてから重ねる
+        val img = baseImage(frame.surface)?.let { if (frame.alpha < 255) withAlpha(it, frame.alpha) else it } ?: return
         when {
             method == "replace" -> canvas.drawBitmap(img, x, y, replacePaint)
             method == "overlay-fast" || method == "overlayfast" -> canvas.drawBitmap(img, x, y, atopPaint)
             method == "interpolate" -> canvas.drawBitmap(img, x, y, behindPaint)
             method == "reduce" -> canvas.drawBitmap(img, x, y, reducePaint)
             method == "overlaymultiply" -> Blend.apply(out, img, (x + dx).toInt(), (y + dy).toInt(), "multiply", fast = true)
+            // overlayscreen は blend-screen-fast と同じ
+            method == "overlayscreen" -> Blend.apply(out, img, (x + dx).toInt(), (y + dy).toInt(), "screen", fast = true)
             method.startsWith("blend-") -> {
                 val fast = method.endsWith("-fast")
                 val name = method.removePrefix("blend-").removeSuffix("-fast").removeSuffix("-glow")
@@ -79,6 +92,13 @@ class SurfaceRenderer(private val shell: Shell) {
             // overlay / add / bind / auto など
             else -> canvas.drawBitmap(img, x, y, paint)
         }
+    }
+
+    /** [b] の不透明度を [alpha]（0〜255）倍にしたもの */
+    private fun withAlpha(b: Bitmap, alpha: Int): Bitmap {
+        val out = Bitmap.createBitmap(b.width, b.height, Bitmap.Config.ARGB_8888)
+        Canvas(out).drawBitmap(b, 0f, 0f, Paint().apply { this.alpha = alpha })
+        return out
     }
 
     /** element を重ねた、アニメーションなしのサーフェス。 */
@@ -114,6 +134,7 @@ class SurfaceRenderer(private val shell: Shell) {
                 method == "reduce" -> canvas.drawBitmap(b, x, y, reducePaint)
                 method == "asis" -> canvas.drawBitmap(opaque(b), x, y, paint)
                 method == "overlaymultiply" -> Blend.apply(out, b, e.x, e.y, "multiply", fast = true)
+                method == "overlayscreen" -> Blend.apply(out, b, e.x, e.y, "screen", fast = true)
                 method.startsWith("blend-") -> Blend.apply(
                     out, b, e.x, e.y, method.removePrefix("blend-").removeSuffix("-fast").removeSuffix("-glow"), method.endsWith("-fast"),
                 )
@@ -142,6 +163,9 @@ class SurfaceRenderer(private val shell: Shell) {
     }
 
     private companion object {
+        /** \![anim,add] のレイヤーの番号（SerikoAnimator と同じ）。これより上はいちばん上に重ねる */
+        const val ADD_LAYER_BASE = 1_000_000
+
         /** 絵は重ねないメソッド（move はずらすだけ、scaling はウィンドウの大きさを変えるだけ、import は別に流す） */
         val NOT_DRAWN = setOf("move", "scaling", "base", "import", "start", "stop", "alternativestart", "alternativestop", "parallelstart", "parallelstop", "insert")
     }

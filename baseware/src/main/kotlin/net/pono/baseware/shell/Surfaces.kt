@@ -98,9 +98,12 @@ data class AnimationInterval(val kinds: Set<IntervalKind>, val arg: Int = 0) {
 }
 
 /**
- * パターンの1コマ。[surface] が -1 ならそのレイヤーを消す。
- * start / stop / alternativestart / alternativestop のコマは、操作するアニメーションの番号を [targets] に持つ。
- * [scaleX] / [scaleY] は scaling のコマの倍率（パーセント。小数も書ける）、[file] は import のコマの APNG / GIF / WebP
+ * パターンの1コマ。[surface] が -1 ならそのレイヤーを消し、-2 ならほかの動いているアニメーションを全部止める。
+ * start / stop / alternativestart / alternativestop のコマは、操作するアニメーションの番号を [targets] に持つ
+ * （surfaces.txt に名前で書いたものは [targetKeys] に残し、読み終えてから番号にする）。
+ * [scaleX] / [scaleY] は scaling のコマの倍率（パーセント。小数も書ける）、[file] は import のコマの APNG / GIF / WebP、
+ * [alpha] は --alpha（0〜255）、[surfaceKey] はサーフェス番号の代わりに書いた別名（読み終えてから [surface] にする）、
+ * [layerOf] は着せ替えのコマのもとのアニメーション番号（重ねる順に使う）
  */
 data class PatternFrame(
     val method: String,
@@ -113,6 +116,10 @@ data class PatternFrame(
     val scaleX: Float = 100f,
     val scaleY: Float = 100f,
     val file: String? = null,
+    val alpha: Int = 255,
+    val targetKeys: List<String> = emptyList(),
+    val surfaceKey: String? = null,
+    val layerOf: Int? = null,
 ) {
     val isControl: Boolean get() = method in CONTROL_METHODS
 
@@ -131,6 +138,9 @@ class Animation(val id: Int) {
     /** option,exclusive。動いている間、ほかのアニメーション（[exclusiveOf] があればそれだけ）を止める */
     var exclusive: Boolean = false
     var exclusiveOf: Set<Int> = emptySet()
+
+    /** exclusive,(…) に名前で書いたもの（読み終えてから [exclusiveOf] に足す） */
+    var exclusiveKeys: List<String> = emptyList()
 
     /** option,background。土台のサーフェスの裏に重ねる */
     var background: Boolean = false
@@ -228,7 +238,7 @@ class SurfaceDefinition(val id: Int) {
                     }
                 } else if (!f.isControl) {
                     // 着せ替えの base は最初のコマにしか使えない（それ以外は overlay として重ねる）
-                    out += if (f.method == "base" && i > 0) f.copy(method = "overlay") else f
+                    out += (if (f.method == "base" && i > 0) f.copy(method = "overlay") else f).copy(layerOf = anim.id)
                 }
             }
         }
@@ -263,8 +273,12 @@ class SurfaceDefinition(val id: Int) {
             SortOrder.ASCEND -> shown.sortedBy { it.id }
             else -> shown.sortedByDescending { it.id }
         }
-        for (anim in order) anim.collisions.values.firstOrNull { it.contains(x, y) }?.let { return it.id }
-        return orderedCollisions().firstOrNull { it.contains(x, y) }?.id
+        // option,background のアニメーションは土台の裏にあるので、土台の当たり判定の後に見る
+        val (back, front) = order.partition { it.background }
+        for (anim in front) anim.collisions.values.firstOrNull { it.contains(x, y) }?.let { return it.id }
+        orderedCollisions().firstOrNull { it.contains(x, y) }?.let { return it.id }
+        for (anim in back) anim.collisions.values.firstOrNull { it.contains(x, y) }?.let { return it.id }
+        return null
     }
 }
 
@@ -324,10 +338,27 @@ class SurfaceTable(
             var animationSort = SortOrder.DESCEND
             var header = StringBuilder()
             var block: Block? = null
+            // descript ブレスはファイルごと。そのファイルで書いたサーフェスにだけ効く
+            val touched = HashSet<Int>()
+            // 前のファイルで書いたサーフェスは、そのファイルの descript のまま（surface.append で足しても変えない）
+            val settled = HashSet<Int>()
+            fun endFile() {
+                for (id in touched) defs[id]?.let {
+                    it.collisionSort = collisionSort
+                    it.animationSort = animationSort
+                }
+                settled += touched
+                touched.clear()
+                collisionSort = SortOrder.NONE
+                animationSort = SortOrder.DESCEND
+            }
 
             fun apply(b: Block, line: String) {
                 when (b) {
-                    is Block.Surfaces -> for (id in b.ids) applyLine(defs.getOrPut(id) { SurfaceDefinition(id) }, line)
+                    is Block.Surfaces -> for (id in b.ids) {
+                        if (id !in settled) touched += id
+                        applyLine(defs.getOrPut(id) { SurfaceDefinition(id) }, line)
+                    }
                     is Block.Alias -> addAlias(aliases.getOrPut(b.scope) { LinkedHashMap() }, line)
                     is Block.Tooltips -> {
                         val into = tooltips.getOrPut(b.scope) { LinkedHashMap() }
@@ -353,6 +384,12 @@ class SurfaceTable(
             }
 
             for (raw in text.lineSequence()) {
+                if (raw == FILE_BREAK) {
+                    endFile()
+                    block = null
+                    header = StringBuilder()
+                    continue
+                }
                 var line = raw.substringBefore("//").trim()
                 if (line.isEmpty()) continue
                 if (block == null) {
@@ -382,12 +419,37 @@ class SurfaceTable(
                 if (line.isNotEmpty()) apply(block, line)
                 if (closes) block = null
             }
-            for (def in defs.values) {
-                def.collisionSort = collisionSort
-                def.animationSort = animationSort
-            }
+            endFile()
+            resolveNames(defs, aliases)
             return SurfaceTable(defs, aliases, tooltips)
         }
+
+        /** surfaces*.txt を何個かつないで読むときの、ファイルの境目の行（descript ブレスをファイルごとにする） */
+        const val FILE_BREAK = "\u0000surfaces-file-break"
+
+        /**
+         * 名前で書いたものを番号にする。start / stop などの相手（animation*.name）、exclusive,(…)、コマのサーフェス番号の別名
+         * （name,定義名 か、どれかのキャラクターの surface.alias）
+         */
+        private fun resolveNames(defs: Map<Int, SurfaceDefinition>, aliases: Map<Int, Map<String, List<Int>>>) {
+            fun surfaceOf(key: String): Int? =
+                defs.values.firstOrNull { it.name == key }?.id ?: aliases.values.firstNotNullOfOrNull { it[key]?.firstOrNull() }
+            for (def in defs.values) {
+                for (anim in def.animations.values) {
+                    if (anim.exclusiveKeys.isNotEmpty()) anim.exclusiveOf = anim.exclusiveOf + anim.exclusiveKeys.mapNotNull(def::animationId)
+                    for ((i, f) in anim.patterns.toList()) {
+                        var g = f
+                        if (f.targetKeys.isNotEmpty()) g = g.copy(targets = f.targetKeys.mapNotNull(def::animationId))
+                        f.surfaceKey?.let { key -> g = g.copy(surface = surfaceOf(key) ?: -1) }
+                        if (g !== f) anim.patterns[i] = g
+                    }
+                }
+            }
+        }
+
+        /** start,3 / alternativestart,[3.5.7] / alternativestart,(3,5) / start,名前 の相手（数字か名前） */
+        private fun targetKeys(args: List<String>): List<String> =
+            args.joinToString(",").split(',', '.', '[', ']', '(', ')').map { it.trim() }.filter { it.isNotEmpty() }
 
         private val scopedHeader = Regex("""^(sakura|kero|char(\d+))\.(surface\.alias|tooltips)$""", RegexOption.IGNORE_CASE)
 
@@ -544,7 +606,9 @@ class SurfaceTable(
                 when (name) {
                     "exclusive" -> {
                         anim.exclusive = true
-                        anim.exclusiveOf = Regex("""\d+""").findAll(args.drop(1).joinToString(",")).mapNotNull { it.value.toIntOrNull() }.toSet()
+                        val keys = targetKeys(args.drop(1))
+                        anim.exclusiveOf = keys.mapNotNull { it.toIntOrNull() }.toSet()
+                        anim.exclusiveKeys = keys.filter { it.toIntOrNull() == null }
                     }
                     "background" -> anim.background = true
                     "shared-index" -> anim.sharedIndex = true
@@ -592,32 +656,47 @@ class SurfaceTable(
         private fun parseNewPattern(args: List<String>): PatternFrame? {
             if (args.isEmpty()) return null
             val method = args[0].lowercase()
-            if (method in PatternFrame.CONTROL_METHODS) {
-                // start,3 / alternativestart,[3.5.7] / alternativestart,(3,5) など。数字をすべて拾う
-                val targets = Regex("""\d+""").findAll(args.drop(1).joinToString(",")).mapNotNull { it.value.toIntOrNull() }.toList()
-                return PatternFrame(method, -1, 0, 0, 0, 0, targets)
-            }
+            if (method in PatternFrame.CONTROL_METHODS) return controlFrame(method, args.drop(1))
             // import,ファイル名,待ち時間,x,y（APNG などのアニメーション画像を、待ってから流す）
             if (method == "import") {
                 val file = args.getOrNull(1)?.takeIf { it.isNotEmpty() } ?: return null
                 val (min, max) = parseWait(args.getOrNull(2), 1)
                 return PatternFrame(method, -1, min, max, args.getOrNull(3)?.toIntOrNull() ?: 0, args.getOrNull(4)?.toIntOrNull() ?: 0, file = file)
             }
-            val surface = args.getOrNull(1)?.toIntOrNull() ?: -1
+            // サーフェス番号の代わりに別名も書ける（SSP 2.8.25）
+            val surfaceArg = args.getOrNull(1)?.trim().orEmpty()
+            val surface = surfaceArg.toIntOrNull() ?: -1
+            val surfaceKey = surfaceArg.takeIf { it.isNotEmpty() && it.toIntOrNull() == null }
             val (min, max) = parseWait(args.getOrNull(2), 1)
             // scaling のコマだけ、倍率に小数を書ける
             val fx = args.getOrNull(3)?.toFloatOrNull() ?: 0f
             val fy = args.getOrNull(4)?.toFloatOrNull() ?: fx
-            if (method == "scaling") return PatternFrame(method, surface, min, max, fx.toInt(), fy.toInt(), scaleX = fx, scaleY = fy)
-            return PatternFrame(method, surface, min, max, fx.toInt(), fy.toInt())
+            val alpha = alphaOption(args.drop(5))
+            if (method == "scaling") return PatternFrame(method, surface, min, max, fx.toInt(), fy.toInt(), scaleX = fx, scaleY = fy, alpha = alpha)
+            return PatternFrame(method, surface, min, max, fx.toInt(), fy.toInt(), alpha = alpha, surfaceKey = surfaceKey)
+        }
+
+        /** start / stop などのコマ。相手は数字なら番号、名前なら読み終えてから番号にする */
+        private fun controlFrame(method: String, args: List<String>): PatternFrame {
+            val keys = targetKeys(args)
+            return PatternFrame(method, -1, 0, 0, 0, 0, keys.mapNotNull { it.toIntOrNull() }, targetKeys = keys.takeIf { k -> k.any { it.toIntOrNull() == null } }.orEmpty())
+        }
+
+        /** --alpha,値（0〜255）。無ければ 255 */
+        private fun alphaOption(options: List<String>): Int {
+            val i = options.indexOfFirst { it.trim().lowercase() == "--alpha" }
+            return options.getOrNull(i + 1)?.trim()?.toIntOrNull()?.coerceIn(0, 255)?.takeIf { i >= 0 } ?: 255
         }
 
         /** 旧形式: surfaceID,wait,method,x,y（wait は 10 ミリ秒単位） */
         private fun parseOldPattern(args: List<String>): PatternFrame? {
             if (args.size < 3) return null
+            val method = args[2].lowercase()
+            // 0pattern0,0,0,alternativestart,[1,2] のように、相手は描画メソッドの後ろ
+            if (method in PatternFrame.CONTROL_METHODS) return controlFrame(method, args.drop(3))
             val surface = args[0].toIntOrNull() ?: return null
             val (min, max) = parseWait(args[1], 10)
-            return PatternFrame(args[2].lowercase(), surface, min, max, args.getOrNull(3)?.toIntOrNull() ?: 0, args.getOrNull(4)?.toIntOrNull() ?: 0)
+            return PatternFrame(method, surface, min, max, args.getOrNull(3)?.toIntOrNull() ?: 0, args.getOrNull(4)?.toIntOrNull() ?: 0, alpha = alphaOption(args.drop(5)))
         }
 
         private fun parseWait(s: String?, unit: Int): Pair<Int, Int> {

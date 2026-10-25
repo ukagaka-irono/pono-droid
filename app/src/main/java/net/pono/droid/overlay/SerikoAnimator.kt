@@ -49,8 +49,9 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         if (def === current && binds == currentBinds) return
         // shared-index のアニメーションは、替えた先にも同じ番号の shared-index があれば続きのコマから動かす
         val previous = current
+        // \i や start で動かしたものだけでなく、always などで動いているものも続ける
         val carried = previous?.animations?.values
-            ?.filter { it.sharedIndex && positions[it.id] != null && it.id in running }
+            ?.filter { it.sharedIndex && positions[it.id] != null && it.id in _playing.value }
             ?.associate { it.id to positions[it.id]!! }
             .orEmpty()
         stop()
@@ -64,20 +65,31 @@ class SerikoAnimator(private val scope: CoroutineScope) {
             val interval = anim.interval
             // bind+always などは、その着せ替えを身に着けているときだけ動く
             if (IntervalKind.BIND in interval && (interval.isStaticBind || anim.id !in binds)) continue
-            carried[anim.id]?.takeIf { anim.sharedIndex && it < anim.patterns.size }?.let { from ->
-                running[anim.id] = scope.launch { playOnce(anim, from) }
-            }
+            val from = carried[anim.id]?.takeIf { anim.sharedIndex && it < anim.patterns.size }
+            // always なら、その続きから回し始める。ほかは続きを1回流してから、いつもの間隔で
+            if (from != null && IntervalKind.ALWAYS !in interval) running[anim.id] = scope.launch { playOnce(anim, from) }
             for (kind in interval.kinds) {
                 jobs += when (kind) {
-                    IntervalKind.ALWAYS -> scope.launch { while (isActive) playOnce(anim) }
-                    IntervalKind.RUNONCE -> scope.launch { playOnce(anim) }
+                    IntervalKind.ALWAYS -> scope.launch {
+                        var start = from ?: 0
+                        while (isActive) {
+                            // stop や -2 で止めたら、また start するまで回さない
+                            if (anim.id in halted) {
+                                delay(50)
+                                continue
+                            }
+                            playTimed(anim, start)
+                            start = 0
+                        }
+                    }
+                    IntervalKind.RUNONCE -> scope.launch { playTimed(anim) }
                     IntervalKind.SOMETIMES -> everySecond(anim, 1.0 / 2)
                     IntervalKind.RARELY -> everySecond(anim, 1.0 / 4)
                     IntervalKind.RANDOM -> everySecond(anim, 1.0 / maxOf(interval.arg, 1))
                     IntervalKind.PERIODIC -> scope.launch {
                         while (isActive) {
                             delay(maxOf(interval.arg, 1) * 1000L)
-                            playOnce(anim)
+                            playTimed(anim)
                         }
                     }
                     else -> continue
@@ -90,6 +102,8 @@ class SerikoAnimator(private val scope: CoroutineScope) {
     fun start(id: Int) {
         val anim = current?.animations?.get(id) ?: return
         if (blocked(anim)) return
+        // 止めていた always は、いつもの回し方に戻す
+        if (halted.remove(id) && IntervalKind.ALWAYS in anim.interval) return
         running[id]?.cancel()
         running[id] = scope.launch { playOnce(anim) }
     }
@@ -122,6 +136,8 @@ class SerikoAnimator(private val scope: CoroutineScope) {
     /** `\![anim,clear,ID]` とパターンの stop。そのアニメーションを止めて、出していたコマを消す */
     fun clear(id: Int) {
         running.remove(id)?.cancel()
+        timedPlays.remove(id)?.cancel()
+        halted += id
         markStopped(id)
         setRaw(raw - id)
     }
@@ -171,12 +187,20 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         jobs.clear()
         running.values.forEach { it.cancel() }
         running.clear()
+        timedPlays.clear()
+        halted.clear()
         offsets.clear()
         positions.clear()
         paused.clear()
         exclusive = null
         _playing.value = emptySet()
         setRaw(emptyMap())
+    }
+
+    /** [except] 以外の、動いているアニメーションを止めてコマを消す（着せ替えと \![anim,add] のものは残す） */
+    private fun stopOthers(except: Int) {
+        val others = (running.keys + timedPlays.keys + _playing.value + raw.keys.filter { it in 0 until ADD_LAYER_BASE }).filter { it != except }.toSet()
+        for (id in others) clear(id)
     }
 
     /** exclusive のアニメーションが動いている間、[anim] を動かさないか */
@@ -206,7 +230,24 @@ class SerikoAnimator(private val scope: CoroutineScope) {
     private fun everySecond(anim: Animation, chance: Double) = scope.launch {
         while (isActive) {
             delay(1000)
-            if (Random.nextDouble() < chance) playOnce(anim)
+            if (Random.nextDouble() < chance) playTimed(anim)
+        }
+    }
+
+    /** interval で回している1回分の再生。stop や -2 で、その回だけ止められる（interval はそのまま続く） */
+    private val timedPlays = HashMap<Int, Job>()
+
+    /** stop・\![anim,clear]・-2 で止めた always のアニメーション（start するかサーフェスを替えるまで回さない） */
+    private val halted = HashSet<Int>()
+
+    private suspend fun playTimed(anim: Animation, from: Int = 0) {
+        val job = scope.launch { playOnce(anim, from) }
+        timedPlays[anim.id] = job
+        try {
+            job.join()
+        } finally {
+            job.cancel()
+            if (timedPlays[anim.id] === job) timedPlays.remove(anim.id)
         }
     }
 
@@ -245,7 +286,10 @@ class SerikoAnimator(private val scope: CoroutineScope) {
                     "parallelstart" -> frame.targets.forEach(::start)
                     "stop", "alternativestop", "parallelstop" -> frame.targets.forEach(::clear)
                     "insert" -> {} // 着せ替えの中でだけ意味がある（bindFrames で扱う）
-                    else -> {
+                    else -> if (frame.surface == STOP_OTHERS) {
+                        // サーフェス番号 -2 は、ほかの動いているアニメーションを全部止める（このアニメーションは続ける）
+                        stopOthers(anim.id)
+                    } else {
                         setRaw(raw + (anim.id to frame))
                         val wait = if (frame.waitMaxMs > frame.waitMinMs) Random.nextInt(frame.waitMinMs, frame.waitMaxMs + 1) else frame.waitMinMs
                         delay(maxOf(wait, 16).toLong())
@@ -274,5 +318,8 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         private const val MAX_ADD_LAYERS = 64
 
         private val STARTERS = setOf("start", "alternativestart", "parallelstart")
+
+        /** パターンのサーフェス番号 -2 */
+        private const val STOP_OTHERS = -2
     }
 }

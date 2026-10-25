@@ -330,10 +330,10 @@ descript/shell-surfaces/cursor-brace/system-cursor/system-move.md	IMPOSSIBLE	sys
 descript/shell-surfaces/cursor-brace/system-cursor/system-no.md	IMPOSSIBLE	system:no	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
 descript/shell-surfaces/cursor-brace/system-cursor/system-text.md	IMPOSSIBLE	system:text	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
 descript/shell-surfaces/cursor-brace/system-cursor/system-wait.md	IMPOSSIBLE	system:wait	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/descript-brace/animation-sort.md	PARTIAL	animation-sort,ソート順序	当たり判定の順にだけ効く。ascend でも絵の重ね順は変わらない（SurfaceRenderer はいつも番号の大きい方が手前）
+descript/shell-surfaces/descript-brace/animation-sort.md	DONE	animation-sort,ソート順序	当たり判定と絵の重ね順の両方に効く（SurfaceRenderer がアニメーション番号の順に重ねる）
 descript/shell-surfaces/descript-brace/collision-sort.md	DONE	collision-sort,ソート順序	none / ascend / descend を orderedCollisions で使う
 descript/shell-surfaces/descript-brace/index.md	NA	descriptブレス	目次のページ
-descript/shell-surfaces/descript-brace/introduction_descriptbrace.md	PARTIAL	descriptブレス記述例	surfaces*.txt をつないで読むので、descript ブレスをファイルごとに違う設定にできない（最後のものが全体に効く）
+descript/shell-surfaces/descript-brace/introduction_descriptbrace.md	DONE	descriptブレス記述例	surfaces*.txt はファイルごとに descript を読み、そのファイルで書いたサーフェスにだけ効かせる（SurfaceTable.FILE_BREAK）
 descript/shell-surfaces/descript-brace/maxwidth.md	NA	maxwidth,ピクセル	SSP も使わない（実際の大きさから決める）
 descript/shell-surfaces/descript-brace/version.md	DONE	version,\*	旧定義と新定義は行の形で見分けるので version は読まなくてよい
 descript/shell-surfaces/file/charset.md	DONE	charset,文字コード	TextCharsets.decode がファイルごとに charset 行を見る
@@ -346,20 +346,20 @@ descript/shell-surfaces/surface-alias-brace/introduction_surface.aliasbrace.md	D
 descript/shell-surfaces/surface-alias-brace/star.md	DONE	\*,\[\*\]	候補が複数ならランダムに選ぶ（SurfaceTable.resolve）
 descript/shell-surfaces/surface-brace/animation-star-.collision-star.md	PARTIAL	animation\*.collision\*,当たり判定定義 animation\*.collisionex\*,当たり判定定義(ex)	animation*.collision / collisionex は読むが、collisionex の region が無い
 descript/shell-surfaces/surface-brace/animation-star-.interval.md	DONE	animation\*.interval,インターバル	+ の組み合わせと末尾の引数も読む
-descript/shell-surfaces/surface-brace/animation-star-.name.md	PARTIAL	animation\*.name,定義名	\i と \![anim] では名前を使えるが、start / stop / alternativestart などと exclusive,(…) の名前は読まない（数字だけ拾う）
+descript/shell-surfaces/surface-brace/animation-star-.name.md	DONE	animation\*.name,定義名	\i・\![anim]・start / stop / alternativestart など・exclusive,(…) で名前を使える
 descript/shell-surfaces/surface-brace/animation-star-.option-2.md	DONE	animation\*.option,background	土台の裏に重ねる
-descript/shell-surfaces/surface-brace/animation-star-.option-3.md	PARTIAL	animation\*.option,shared-index	\i や start で動かしたものだけ続きから動く。interval（always など）で動いているものは running に無いので最初からになる
+descript/shell-surfaces/surface-brace/animation-star-.option-3.md	DONE	animation\*.option,shared-index	interval（always など）で動いているものも、替えた先で続きのコマから動く
 descript/shell-surfaces/surface-brace/animation-star-.option-4.md	DONE	animation\*.option,オプション	+ でつないだ指定と、exclusive だけに効く (1,3,5) を読む
 descript/shell-surfaces/surface-brace/animation-star-.option.md	DONE	animation\*.option,exclusive	exclusive と exclusive,(1,3,5) を扱う
-descript/shell-surfaces/surface-brace/animation-star-.pattern-star.md	PARTIAL	animation\*.pattern\*,描画メソッド,サーフェス番号,ウェイト,X座標,Y座標(,オプション...)	--alpha、サーフェス番号 -2（ほかのアニメーションを全部止める）、サーフェス番号に別名を書く（SSP 2.8.25）が無い
+descript/shell-surfaces/surface-brace/animation-star-.pattern-star.md	DONE	animation\*.pattern\*,描画メソッド,サーフェス番号,ウェイト,X座標,Y座標(,オプション...)	--alpha、サーフェス番号 -2（ほかのアニメーションを止める）、サーフェス番号の別名（name / surface.alias）を読む
 descript/shell-surfaces/surface-brace/balloon.offsetx.md	IMPOSSIBLE	balloon.offsetx,座標	サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
 descript/shell-surfaces/surface-brace/balloon.offsety.md	IMPOSSIBLE	balloon.offsety,座標	サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
 descript/shell-surfaces/surface-brace/caption_basesurface.md	DONE	ベースサーフェス	element0 があれば surfaceN.png を使わない
-descript/shell-surfaces/surface-brace/caption_seriko-redefine.md	PARTIAL	SERIKOの旧定義と新定義について	旧定義の start / alternativestart / insert などで番号を読まない（parseOldPattern が targets を作らない）
+descript/shell-surfaces/surface-brace/caption_seriko-redefine.md	DONE	SERIKOの旧定義と新定義について	旧定義の start / alternativestart なども、描画メソッドの後ろの相手を読む
 descript/shell-surfaces/surface-brace/caption_standarddef.md	DONE	サーフェスIDの割り振り	\0 は 0、\1 は 10、descript の defaultsurface も見る
 descript/shell-surfaces/surface-brace/caption_surface.append.md	DONE	surface\*ブレスとsurface.append\*ブレス	surface.append は画像か先の定義があるサーフェスにだけ足す
 descript/shell-surfaces/surface-brace/caption_surfacebraceid.md	DONE	surface\*ブレスで可能なID指定	列挙・範囲・! の除外を読む（surfaceIds）
-descript/shell-surfaces/surface-brace/caption_z-axis.md	PARTIAL	各要素の上下構造	着せ替えはいつも普通のアニメーションの下（番号順にならない）。background のアニメーションの当たり判定を土台より先に見る
+descript/shell-surfaces/surface-brace/caption_z-axis.md	DONE	各要素の上下構造	着せ替えはもとのアニメーション番号の位置に重ね、background のアニメーションの当たり判定は土台の後に見る
 descript/shell-surfaces/surface-brace/collision-star.md	DONE	collision\*,始点X,始点Y,終点X,終点Y,ID	矩形の当たり判定
 descript/shell-surfaces/surface-brace/collisionex-star.md	PARTIAL	collisionex\*,ID,タイプ,座標1,座標2...	rect / ellipse / circle / polygon はある。region（画像の指定色の領域）が無い
 descript/shell-surfaces/surface-brace/element-star.md	PARTIAL	element\*,描画メソッド,ファイル名,X座標,Y座標(,オプション...)	--clipping / --alpha / --source / --scaling と、surface*.png や element の GIF / APNG / WebP を自動で動かすのが無い
@@ -449,7 +449,7 @@ descript/shell-surfaces/surface-brace/h-drowmethod/overlay-fast.md	DONE	overlay-
 descript/shell-surfaces/surface-brace/h-drowmethod/overlay.md	DONE	overlay	実装済み
 descript/shell-surfaces/surface-brace/h-drowmethod/overlayfast.md	DONE	overlayfast	実装済み
 descript/shell-surfaces/surface-brace/h-drowmethod/overlaymultiply.md	DONE	overlaymultiply	実装済み
-descript/shell-surfaces/surface-brace/h-drowmethod/overlayscreen.md	BUILD	overlayscreen	blend-screen-fast と同じにする。今は else に落ちて普通の overlay になる（SurfaceRenderer の when に1行）
+descript/shell-surfaces/surface-brace/h-drowmethod/overlayscreen.md	DONE	overlayscreen	blend-screen-fast と同じに重ねる
 descript/shell-surfaces/surface-brace/h-drowmethod/parallelstart.md	DONE	parallelstart,(ID1,ID2...)	実装済み
 descript/shell-surfaces/surface-brace/h-drowmethod/parallelstop.md	DONE	parallelstop,(ID1,ID2...)	実装済み
 descript/shell-surfaces/surface-brace/h-drowmethod/reduce.md	DONE	reduce	実装済み

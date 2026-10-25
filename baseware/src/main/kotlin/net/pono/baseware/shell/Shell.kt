@@ -17,7 +17,8 @@ class Shell(val dir: File) {
     val surfaces: SurfaceTable = dir.listFiles { f -> f.isFile && DEFINITION_FILE.matches(f.name.lowercase()) }
         ?.sortedWith(compareBy({ it.name.lowercase() != "surfaces.txt" }, { it.name.lowercase() }))
         ?.takeIf { it.isNotEmpty() }
-        ?.joinToString("\n") { TextCharsets.decode(it.readBytes()) }
+        // ファイルの境目に印を入れる（descript ブレスはファイルごと）
+        ?.joinToString("\n" + SurfaceTable.FILE_BREAK + "\n") { TextCharsets.decode(it.readBytes()) }
         ?.let { text ->
             // surface.append は、画像があるサーフェスにも足せる
             val pngs = dir.listFiles()?.mapNotNull { SURFACE_FILE.matchEntire(it.name.lowercase())?.groupValues?.get(1)?.toIntOrNull() }.orEmpty()
