@@ -319,6 +319,12 @@ interface GhostPlatform {
      * [dirName] のゴーストを、[previous] を伝えて起動する（OnGhostChanged）。既定では終了するだけ
      */
     fun switchGhost(dirName: String, previous: PreviousGhost) = onQuit()
+
+    /**
+     * ゴーストを呼ぶ（\![call,ghost] とメニューの「ほかのゴーストを呼ぶ」）。このゴーストは動いたまま、[dirName] のゴーストを
+     * 一緒に起動する（そのゴーストには [caller] を伝えて OnGhostCalled）。呼べなければ false
+     */
+    fun callGhost(dirName: String, caller: PreviousGhost): Boolean = false
 }
 
 /** 発言履歴の1つ（\![open,backlogviewer]）。[time] は話し終えた時刻（ミリ秒） */
@@ -348,6 +354,8 @@ data class PreviousGhost(
     val path: String,
     val vanished: Boolean = false,
     val reload: Boolean = false,
+    /** 前のゴーストのシェルの名前（ほかのゴーストへの OnOtherGhostChanged / Vanished で伝える） */
+    val shellName: String = "",
 )
 
 /**
@@ -381,7 +389,19 @@ class GhostController(
     private val mailChecker: MailChecker = TlsMailChecker(),
     /** 別のゴーストから切り替わって起動したとき、その前のゴースト（OnGhostChanged を送る） */
     private val previous: PreviousGhost? = null,
+    /** 同時に動かしているゴースト。null なら1体だけで動く */
+    private val hub: GhostHub? = null,
+    /** ほかのゴーストに呼ばれて起動したとき、呼んだゴースト（OnGhostCalled を送る） */
+    private val calledBy: PreviousGhost? = null,
 ) {
+    /** \![set,otherghosttalk]（false / before / after）と \![set,othersurfacechange] */
+    @Volatile private var otherGhostTalk = "false"
+
+    @Volatile private var otherSurfaceChange = false
+
+    /** いま話しているスクリプトのもとになったイベントと Reference（OnOtherGhostTalk で伝える） */
+    private var lastEvent: Pair<String, List<String>> = "" to emptyList()
+
     private val _state = MutableStateFlow(GhostState())
     val state: StateFlow<GhostState> = _state.asStateFlow()
 
@@ -483,14 +503,171 @@ class GhostController(
             } else {
                 null
             }
-            when {
-                previous?.reload == true -> {}
-                firstBoot -> raise("OnFirstBoot", listOf("0"))
-                changed != null -> runScript(changed)
-                else -> raise("OnBoot", listOf(shell.name, "", "", "", "", "", "", ""))
+            hub?.join(this@GhostController)
+            // ほかのゴーストに呼ばれたなら OnGhostCalled（答えが無ければ OnBoot。SSP と同じ）
+            val called = if (!firstBoot && changed == null && previous == null && calledBy != null) {
+                request("OnGhostCalled", listOf(calledBy.sakuraName, calledBy.script, calledBy.name, calledBy.path, "", "", "", shell.name))
+            } else {
+                null
+            }
+            val bootScript = when {
+                previous?.reload == true -> null
+                firstBoot -> request("OnFirstBoot", listOf("0"))
+                changed != null -> changed
+                called != null -> called
+                else -> request("OnBoot", listOf(shell.name, "", "", "", "", "", "", ""))
             }
             startTimer()
+            if (bootScript != null) {
+                cancelScript()
+                runScript(bootScript)
+                withTimeoutOrNull(CHANGE_WAIT_MS) { _state.first { !it.talking } }
+            }
+            if (previous?.reload != true) announceBoot(bootScript.orEmpty())
+            _state.update { it.copy(booted = true) }
         }
+    }
+
+    // ---- 同時に動かしているほかのゴースト ----
+
+    /** 起動のスクリプトを話し終えたら、ほかのゴーストに伝える（呼んだゴーストには OnGhostCallComplete） */
+    private fun announceBoot(script: String) {
+        val h = hub ?: return
+        val me = listOf(ghost.sakuraName, script, ghost.name, "", "", "", "", shell.name)
+        for (o in h.others(this)) {
+            when {
+                previous != null && previous.vanished ->
+                    o.fromOther("OnOtherGhostVanished", listOf(previous.sakuraName, previous.script, previous.name, "", "", "", "", previous.shellName))
+                previous != null -> o.fromOther(
+                    "OnOtherGhostChanged",
+                    listOf(previous.sakuraName, ghost.sakuraName, previous.script, script, previous.name, ghost.name) + List(8) { "" } +
+                        listOf(previous.shellName, shell.name),
+                )
+                calledBy != null && o.ghost.name == calledBy.name -> o.fromOther("OnGhostCallComplete", me)
+                else -> o.fromOther("OnOtherGhostBooted", me)
+            }
+        }
+    }
+
+    /** ほかのゴーストから届いたイベント。話している最中なら、そのイベントでは話さない */
+    private fun fromOther(event: String, references: List<String>) = raise(event, references, userInitiated = false)
+
+    /**
+     * \![raiseother] / \![notifyother] を受ける。受けられなければ理由（timecritical / passivemode / inductionmode / minimized）
+     */
+    private fun receiveOther(event: String, references: List<String>, notify: Boolean): String? {
+        val s = _state.value
+        val reason = when {
+            closing -> "notfound"
+            s.timeCritical -> "timecritical"
+            s.passive -> "passivemode"
+            s.induction -> "inductionmode"
+            s.window.minimized -> "minimized"
+            else -> null
+        }
+        if (reason != null) return reason
+        if (notify) notify(event, references) else raise(event, references, userInitiated = false)
+        return null
+    }
+
+    /** \![raiseother] / \![notifyother]。[ghosts] はゴースト名か本体側の名前を 0x01 でつないだものか、__SYSTEM_ALL_GHOST__ */
+    private fun raiseOther(ghosts: String, event: String, references: List<String>, notify: Boolean) {
+        val others = hub?.others(this).orEmpty()
+        val names = ghosts.split('\u0001').map { it.trim() }.filter { it.isNotEmpty() }
+        val failures = mutableListOf<Pair<String, String>>()
+        val receivers = if (names.any { it == ALL_GHOSTS }) {
+            if (others.isEmpty()) failures += "notfound" to ALL_GHOSTS
+            others
+        } else {
+            names.mapNotNull { n ->
+                val found = others.firstOrNull { it.ghost.name == n || it.ghost.sakuraName == n }
+                if (found == null) failures += "notfound" to n
+                found
+            }.distinct()
+        }
+        for (o in receivers) o.receiveOther(event, references, notify)?.let { failures += it to o.ghost.name }
+        if (failures.isEmpty()) return
+        raise(
+            if (notify) "OnNotifyOtherFailure" else "OnRaiseOtherFailure",
+            listOf(failures.joinToString("\u0001") { it.first }, failures.joinToString("\u0001") { it.second }, event) + references,
+            userInitiated = false,
+        )
+    }
+
+    /** 話し始め（before）か話し終わり（after）に、otherghosttalk を入れているほかのゴーストへ OnOtherGhostTalk */
+    private fun announceTalk(timing: String, script: String, source: Pair<String, List<String>>, flags: List<String>) {
+        val h = hub ?: return
+        // メニューなど、イベントから来たのでもほかのアプリから届いたのでもないスクリプトは話したうちに入れない
+        if (source.first.isEmpty() && "sstp-send" !in flags) return
+        // OnOtherGhostTalk への答えをまた伝えると、2体が互いに答え続けるので伝えない
+        if (source.first == "OnOtherGhostTalk") return
+        for (o in h.others(this)) {
+            val want = o.otherGhostTalk
+            if (want == "false" || (if (want == "before") "before" else "after") != timing) continue
+            o.fromOther(
+                "OnOtherGhostTalk",
+                listOf(ghost.name, ghost.sakuraName, flags.joinToString(","), source.first, script, source.second.joinToString("\u0001")),
+            )
+        }
+    }
+
+    /** サーフェスが変わったら、othersurfacechange を入れているほかのゴーストへ OnOtherSurfaceChange */
+    private fun announceSurface(scopeId: Int, surface: Int, old: Int) {
+        val h = hub ?: return
+        val size = surfaceSize(surface)
+        val rect = "0,0,${size?.first ?: 0},${size?.second ?: 0}"
+        for (o in h.others(this)) {
+            if (o.otherSurfaceChange) {
+                o.fromOther("OnOtherSurfaceChange", listOf(ghost.name, ghost.sakuraName, scopeId.toString(), surface.toString(), old.toString(), rect))
+            }
+        }
+    }
+
+    /**
+     * \![call,ghost] とメニューの「ほかのゴーストを呼ぶ」。[name] はゴースト名・本体側の名前・ディレクトリ名か random / lastinstalled。
+     * 動いているゴーストは呼べない。[raiseEvent]（メニューか --option=raise-event）なら先に OnGhostCalling を送る
+     */
+    fun callGhost(name: String, raiseEvent: Boolean = false, byUser: Boolean = false): Boolean {
+        if (closing || hub == null) return false
+        val candidates = callableGhosts()
+        val target = when (name.lowercase()) {
+            "random" -> candidates.randomOrNull()
+            "lastinstalled" -> candidates.maxByOrNull { it.dir.lastModified() }
+            else -> candidates.firstOrNull { it.name == name || it.sakuraName == name || it.dir.name == name }
+        } ?: run {
+            platform.log("呼べるゴーストがありません: $name")
+            return false
+        }
+        scope.launch {
+            val script = if (raiseEvent) {
+                request("OnGhostCalling", listOf(target.sakuraName, if (byUser) "manual" else "automatic", target.name, target.dir.absolutePath + "/"))
+                    ?.also {
+                        cancelScript()
+                        runScript(it)
+                    }
+            } else {
+                null
+            }
+            val caller = PreviousGhost(ghost.sakuraName, script ?: lastScript, ghost.name, ghost.dir.absolutePath + "/", shellName = shell.name)
+            if (!platform.callGhost(target.dir.name, caller)) platform.log("${target.name} を呼べませんでした")
+        }
+        return true
+    }
+
+    /** 呼べるゴースト（入っていて、まだ動いていないもの） */
+    private fun callableGhosts(): List<Ghost> {
+        val h = hub ?: return emptyList()
+        // 自分は、hub に入る前でも並べない
+        val running = h.running.map { it.ghost.dir.canonicalFile }.toSet() + ghost.dir.canonicalFile
+        return repository?.list().orEmpty().filter { it.dir.canonicalFile !in running }
+    }
+
+    /** メニューの「ほかのゴーストを呼ぶ」の一覧 */
+    private fun callGhostsMenu(scopeId: Int): String {
+        val sb = StringBuilder("\\p[$scopeId]\\_q")
+        for (g in callableGhosts()) sb.append("\\q[${quote(g.name)},pono:callghost,${quote(g.dir.name)}]\\n")
+        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        return sb.toString()
     }
 
     /** SHIORI を読み込み、起動時の NOTIFY を送る。 */
@@ -2155,12 +2332,15 @@ class GhostController(
      * 終わる。SSP でただ1体のゴーストを終えるときと同じく OnCloseAll を送り（答えが無ければ OnClose）、そのスクリプトが終わったら
      * SHIORI を閉じる。[reason] は user（メニューや通知から）か system（端末の電源を切るとき）、[scopeId] はメニューを開いたキャラクター
      */
-    fun close(reason: String = "user", scopeId: Int = 0) {
+    fun close(reason: String = "user", scopeId: Int = 0, all: Boolean = true) {
         if (closing) return
         closing = true
         timerJob?.cancel()
         scope.launch {
-            val script = request("OnCloseAll", listOf(reason, scopeId.toString(), scopeId.toString())) ?: request("OnClose", listOf(reason))
+            // ほかのゴーストを残してこのゴーストだけ終えるときは OnClose だけ（SSP と同じ）
+            val closesAll = all || hub?.others(this@GhostController).isNullOrEmpty()
+            val script = (if (closesAll) request("OnCloseAll", listOf(reason, scopeId.toString(), scopeId.toString())) else null)
+                ?: request("OnClose", listOf(reason))
             if (script != null) {
                 cancelScript()
                 runScript(script).join()
@@ -2182,6 +2362,13 @@ class GhostController(
         session?.unload()
         session = null
         if (uninstall && repository?.uninstall(ghost) != true) platform.log("${ghost.name} を消去できませんでした")
+        hub?.let { h ->
+            h.leave(this)
+            // 切り替えや消去なら、次のゴーストが起動したときに OnOtherGhostChanged / Vanished で伝える
+            if (switchTo == null) {
+                for (o in h.running) o.fromOther("OnOtherGhostClosed", listOf(ghost.sakuraName, lastScript, ghost.name, "", "", "", "", shell.name))
+            }
+        }
         if (switchTo != null) platform.switchGhost(switchTo.first.dir.name, switchTo.second) else platform.onQuit()
     }
 
@@ -2196,7 +2383,9 @@ class GhostController(
         if (closing) return false
         val ghosts = repository?.list() ?: return false
         val self = ghost.dir.canonicalFile
-        val others = ghosts.filter { it.dir.canonicalFile != self }
+        // 一緒に動いているゴーストには切り替えない
+        val running = hub?.others(this)?.map { it.ghost.dir.canonicalFile }.orEmpty().toSet()
+        val others = ghosts.filter { it.dir.canonicalFile != self && it.dir.canonicalFile !in running }
         val target = when (name.lowercase()) {
             "random" -> others.randomOrNull()
             "sequential" -> ghosts.getOrNull((ghosts.indexOfFirst { it.dir.canonicalFile == self } + 1) % ghosts.size.coerceAtLeast(1))
@@ -2223,7 +2412,7 @@ class GhostController(
             }
             // 話し終わるのを待つ（スクリプトからの切り替えなら、そのスクリプトの残りを話し終えてから）
             withTimeoutOrNull(CHANGE_WAIT_MS) { _state.first { !it.talking } }
-            shutdown(target to PreviousGhost(ghost.sakuraName, farewell, ghost.name, ghost.dir.absolutePath + "/"))
+            shutdown(target to PreviousGhost(ghost.sakuraName, farewell, ghost.name, ghost.dir.absolutePath + "/", shellName = shell.name))
         }
         return true
     }
@@ -2256,7 +2445,8 @@ class GhostController(
      */
     private fun ghostAfterVanish(): Ghost? {
         val self = ghost.dir.canonicalFile
-        val ghosts = repository?.list().orEmpty()
+        val running = hub?.others(this)?.map { it.ghost.dir.canonicalFile }.orEmpty().toSet()
+        val ghosts = repository?.list().orEmpty().filter { it.dir.canonicalFile !in running }
         vanishNext?.let { name ->
             ghosts.firstOrNull { it.dir.canonicalFile != self && (it.name == name || it.sakuraName == name || it.dir.name == name) }?.let { return it }
         }
@@ -2312,7 +2502,10 @@ class GhostController(
                 lastScript
             }
             withTimeoutOrNull(CHANGE_WAIT_MS) { _state.first { !it.talking } }
-            shutdown(next to PreviousGhost(ghost.sakuraName, script, ghost.name, ghost.dir.absolutePath + "/", vanished = true), uninstall = true)
+            shutdown(
+                next to PreviousGhost(ghost.sakuraName, script, ghost.name, ghost.dir.absolutePath + "/", vanished = true, shellName = shell.name),
+                uninstall = true,
+            )
         }
     }
 
@@ -2919,6 +3112,7 @@ class GhostController(
         }
         if (!short) {
             if ((repository?.list()?.size ?: 0) > 1) sb.append("\\q[${caption("ゴースト切り替え", "ghostrootbutton.caption")},pono:ghosts,$scopeId]\\n")
+            if (callableGhosts().isNotEmpty()) sb.append("\\q[${caption("ほかのゴーストを呼ぶ", "callghostrootbutton.caption")},pono:callghosts,$scopeId]\\n")
             if (ghost.shellDirs.size > 1) sb.append("\\q[${caption("シェル", "shellrootbutton.caption")},pono:shells,$scopeId]\\n")
             if (repository != null) sb.append("\\q[${caption("バルーン", "balloonrootbutton.caption")},pono:balloons,$scopeId]\\n")
             if (readmeFile() != null) sb.append("\\q[${caption("Read Me", "readmebutton.caption", "readmebuttoncaption")},pono:readme]\\n")
@@ -3422,7 +3616,11 @@ class GhostController(
     fun raise(event: String, references: List<String>, userInitiated: Boolean = true, sensitive: Boolean = false, chain: Int = 0) {
         scope.launch {
             val script = request(event, references, sensitive) ?: return@launch
-            if (!userInitiated && (_state.value.talking || _state.value.waitingChoice)) return@launch
+            if (!userInitiated && (_state.value.talking || _state.value.waitingChoice)) {
+                // 話さなかったイベントを、次のスクリプトのもとと取り違えないように
+                lastEvent = "" to emptyList()
+                return@launch
+            }
             cancelScript()
             runScript(script, chain)
         }
@@ -3462,6 +3660,7 @@ class GhostController(
             }
         }
         if (value == null || !translate) return value
+        lastEvent = event to references
         return translateScript(s, value, event, references)
     }
 
@@ -3552,6 +3751,10 @@ class GhostController(
         lastScript = script
         developerLog.add("script", "Ghost", ghost.name, script)
         val run = ++scriptRuns
+        val source = lastEvent
+        lastEvent = "" to emptyList()
+        val talkFlags = listOfNotNull(if (untrusted) "sstp-send" else null)
+        announceTalk("before", script, source, talkFlags)
         val job = scope.launch {
             val raised = mutableListOf<Pair<String, List<String>>>()
             val host = Host(raised, untrusted)
@@ -3568,6 +3771,7 @@ class GhostController(
                         it.withScriptEnded().copy(talking = false, waitingClick = false, scriptEnds = if (ended) it.scriptEnds + 1 else it.scriptEnds)
                     }
                 }
+                announceTalk("after", script, source, (if (ended) emptyList() else listOf("break")) + talkFlags)
             }
 
             // 終了中（OnClose のスクリプト）なら、話し終えた時点で close() に戻す
@@ -3656,7 +3860,8 @@ class GhostController(
                     "pono:hide" -> minimize("user")
                     "pono:resetpos" -> requestResetWindowPos()
                     "pono:update" -> networkUpdate()
-                    "pono:close" -> close("user", scopeId)
+                    // ほかのゴーストも動いていれば、このゴーストだけ終える
+                    "pono:close" -> close("user", scopeId, all = false)
                     "pono:vanish" -> requestVanish(scopeId)
                     "pono:vanish-yes" -> vanish(farewell = true)
                     "pono:vanish-no" -> raise("OnVanishCancel", emptyList())
@@ -3680,6 +3885,8 @@ class GhostController(
                     "pono:balloons" -> runScript(balloonsMenu(scopeId))
                     "pono:ghosts" -> runScript(ghostsMenu(scopeId))
                     "pono:ghost" -> refs.firstOrNull()?.let { changeGhost(it, byUser = true) }
+                    "pono:callghosts" -> runScript(callGhostsMenu(scopeId))
+                    "pono:callghost" -> refs.firstOrNull()?.let { callGhost(it, raiseEvent = true, byUser = true) }
                     "pono:balloon" -> refs.firstOrNull()?.let { changeBalloon(it) }
                     "pono:readme" -> readmeFile()?.let { platform.showText(ghost.name, readmeText()) }
                 }
@@ -3852,6 +4059,11 @@ class GhostController(
             n == "baseware.name" -> ShioriSession.SENDER
             n == "baseware.windowmode" -> "normal"
             n == "ghostlist.count" -> (repository?.list()?.size ?: 1).toString()
+            n == "activeghostlist.count" -> (hub?.running?.size ?: 1).toString()
+            n.startsWith("activeghostlist") -> {
+                val active = hub?.running?.map { it.ghost } ?: listOf(ghost)
+                listProperty(n.removePrefix("activeghostlist"), active, ghost) { g, key, index -> ghostProperty(g, key, index) }
+            }
             n.startsWith("ghostlist") -> listProperty(n.removePrefix("ghostlist"), repository?.list() ?: listOf(ghost), ghost) { g, key, index -> ghostProperty(g, key, index) }
             n == "balloonlist.count" -> (repository?.balloons?.list()?.size ?: 0).toString()
             n.startsWith("balloonlist") -> listProperty(n.removePrefix("balloonlist"), repository?.balloons?.list().orEmpty(), balloon) { b, key, index -> balloonProperty(b, key, index) }
@@ -4601,6 +4813,19 @@ class GhostController(
         override fun setOption(name: String, args: List<String>): Boolean {
             when (name) {
                 "wallpaper" -> return platform.setWallpaper(wallpaperRequest(args) ?: return false)
+                // true は after と同じ
+                "otherghosttalk" -> {
+                    otherGhostTalk = when (args.firstOrNull()?.trim()?.lowercase()) {
+                        "true", "after", "1" -> "after"
+                        "before" -> "before"
+                        else -> "false"
+                    }
+                    return true
+                }
+                "othersurfacechange" -> {
+                    otherSurfaceChange = args.firstOrNull()?.trim()?.lowercase() in setOf("true", "1")
+                    return true
+                }
                 // 開発用パレットの SHIORI デバッグモード（enable_debug）。引数が無ければ入れる
                 "shioridebugmode" -> {
                     val on = args.firstOrNull()?.trim()?.lowercase()?.let { it == "true" || it == "1" } ?: true
@@ -4635,9 +4860,11 @@ class GhostController(
         }
 
         override fun setSurface(scope: Int, surface: Int) {
-            val changed = _state.value.characters[scope]?.surface != surface
+            val old = _state.value.characters[scope]?.surface ?: -1
+            val changed = old != surface
             _state.update { it.update(scope) { c -> c.copy(surface = surface) } }
             if (changed) {
+                announceSurface(scope, surface, old)
                 val chars = _state.value.characters
                 notify(
                     "OnSurfaceChange",
@@ -4863,6 +5090,35 @@ class GhostController(
             }
         }
 
+        override fun timerNotify(delayMs: Long, once: Boolean, event: String, references: List<String>) =
+            timer("notify\u0001$event", delayMs, once) { this@GhostController.notify(event, references) }
+
+        override fun raiseOther(ghosts: String, event: String, references: List<String>, notify: Boolean) =
+            this@GhostController.raiseOther(ghosts, event, references, notify)
+
+        override fun timerRaiseOther(delayMs: Long, once: Boolean, ghosts: String, event: String, references: List<String>, notify: Boolean) =
+            timer("other\u0001$notify\u0001$ghosts\u0001$event", delayMs, once) { this@GhostController.raiseOther(ghosts, event, references, notify) }
+
+        override fun callGhost(name: String, raiseEvent: Boolean): Boolean = this@GhostController.callGhost(name, raiseEvent)
+
+        /** \![timernotify] などの予約。[key] ごとに1つで、時間が 0 なら取り消し */
+        private fun timer(key: String, delayMs: Long, once: Boolean, fire: () -> Unit) {
+            timers.remove(key)?.cancel()
+            if (delayMs <= 0 || closing) return
+            if (timers.size >= MAX_TIMERS) {
+                platform.log("\\![timerraise] が多すぎます: $key")
+                return
+            }
+            val interval = if (once) delayMs else delayMs.coerceAtLeast(1000)
+            timers[key] = scope.launch {
+                do {
+                    delay(interval)
+                    fire()
+                } while (!once && isActive)
+                timers.remove(key)
+            }
+        }
+
         override fun getProperty(event: String, names: List<String>) {
             raised += event to names.map { property(it).orEmpty() }
         }
@@ -5020,6 +5276,9 @@ class GhostController(
 
         /** 時刻合わせで時刻を聞くサーバー */
         const val SNTP_SERVER = "pool.ntp.org"
+
+        /** \![raiseother] で、動いているほかのゴーストすべて */
+        const val ALL_GHOSTS = "__SYSTEM_ALL_GHOST__"
 
         /** `\![timerraise]` で同時に予約できる数 */
         const val MAX_TIMERS = 32

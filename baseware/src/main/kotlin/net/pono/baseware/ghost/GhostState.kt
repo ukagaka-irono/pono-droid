@@ -166,6 +166,8 @@ data class GhostState(
     val loading: String? = null,
     /** 最後まで話し終えた（\e まで来た）スクリプトの数。SERIKO の yen-e（話し終わりに動く）に使う */
     val scriptEnds: Int = 0,
+    /** 起動し終えた（起動のスクリプトを話し終え、ほかのゴーストにも伝えた） */
+    val booted: Boolean = false,
     /** キャラクターのウィンドウ全体にかかること（重なり順・一緒に動く組・最小化など） */
     val window: WindowState = WindowState(),
     /** \t の間。マウス（タッチ）のイベントを送らない */

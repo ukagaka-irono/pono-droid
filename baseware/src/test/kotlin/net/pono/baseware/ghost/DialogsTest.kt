@@ -54,8 +54,8 @@ class DialogsTest {
             val platform = DialogPlatform(dev = dev)
             val c = testController(tmp.newTestGhost(), shiori, scope, platform)
             c.start()
-            shiori.awaitEvent("OnFirstBoot")
-            withTimeout(5000) { c.state.first { !it.talking } }
+            // 起動のスクリプトを話し終えるまで（話し始める前に「話していない」を見ないように）
+            withTimeout(5000) { c.state.first { it.booted } }
             block(c, shiori, platform)
         } finally {
             scope.cancel()

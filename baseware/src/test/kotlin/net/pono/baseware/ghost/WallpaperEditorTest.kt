@@ -49,8 +49,8 @@ class WallpaperEditorTest {
             val platform = Platform()
             val c = testController(ghost, shiori, scope, platform)
             c.start()
-            shiori.awaitEvent("OnFirstBoot")
-            withTimeout(5000) { c.state.first { !it.talking } }
+            // 起動のスクリプトを話し終えるまで（話し始める前に「話していない」を見ないように）
+            withTimeout(5000) { c.state.first { it.booted } }
             block(c, shiori, platform, ghost)
         } finally {
             scope.cancel()

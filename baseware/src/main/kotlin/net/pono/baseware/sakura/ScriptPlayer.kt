@@ -210,6 +210,18 @@ interface ScriptHost {
     /** `\![timerraise,時間,一回だけか,イベント,...]`。[delayMs] が 0 なら取り消し */
     fun timerRaise(delayMs: Long, once: Boolean, event: String, references: List<String>) {}
 
+    /** `\![timernotify,時間,一回だけか,イベント,...]`。timerraise と同じで、答えは使わない */
+    fun timerNotify(delayMs: Long, once: Boolean, event: String, references: List<String>) {}
+
+    /** `\![raiseother,ゴースト名,イベント,...]` / `\![notifyother]`（[notify]）。[ghosts] は 0x01 区切りか __SYSTEM_ALL_GHOST__ */
+    fun raiseOther(ghosts: String, event: String, references: List<String>, notify: Boolean) {}
+
+    /** `\![timerraiseother,時間,一回だけか,ゴースト名,イベント,...]` / `\![timernotifyother]` */
+    fun timerRaiseOther(delayMs: Long, once: Boolean, ghosts: String, event: String, references: List<String>, notify: Boolean) {}
+
+    /** `\![call,ghost,名前(,--option=raise-event)]`。同時に動かすゴーストを呼ぶ。呼べなければ false */
+    fun callGhost(name: String, raiseEvent: Boolean): Boolean = false
+
     /** `\![get,property,イベント,名前...]`。名前ごとの値を Reference に入れてイベントを送る */
     fun getProperty(event: String, names: List<String>) {}
 
@@ -512,11 +524,23 @@ class ScriptPlayer(
                     val embedded = host.embed(a[1], a.drop(2))
                     if (embedded != null && depth < MAX_EMBED_DEPTH) run(embedded, depth + 1)
                 }
-                "timerraise" -> if (a.size >= 4) {
+                "timerraise", "timernotify" -> if (a.size >= 4) {
                     val ms = a[1].trim().toLongOrNull() ?: return
                     // 「繰り返すか否か」は 0 で繰り返し、1 以上で一回だけ
                     val once = (a[2].trim().toIntOrNull() ?: 1) >= 1
-                    host.timerRaise(ms, once, a[3], a.drop(4))
+                    if (command == "timerraise") host.timerRaise(ms, once, a[3], a.drop(4)) else host.timerNotify(ms, once, a[3], a.drop(4))
+                }
+                "raiseother", "notifyother" -> if (a.size >= 3) host.raiseOther(a[1], a[2], a.drop(3), notify = command == "notifyother")
+                "timerraiseother", "timernotifyother" -> if (a.size >= 5) {
+                    val ms = a[1].trim().toLongOrNull() ?: return
+                    val once = (a[2].trim().toIntOrNull() ?: 1) >= 1
+                    host.timerRaiseOther(ms, once, a[3], a[4], a.drop(5), notify = command == "timernotifyother")
+                }
+                // \![call,ghost,名前(,--option=raise-event)]
+                "call" -> if (a.size < 3 || a[1].lowercase() != "ghost" ||
+                    !host.callGhost(a[2].trim(), a.drop(3).any { it.trim().lowercase() == "--option=raise-event" })
+                ) {
+                    host.unknownTag(token)
                 }
                 "get" -> if (a.getOrNull(1)?.lowercase() == "property" && a.size >= 3) host.getProperty(a[2], a.drop(3)) else host.unknownTag(token)
                 "open" -> when {
@@ -782,13 +806,12 @@ class ScriptPlayer(
     /** `\![コマンド,...]` のうち、pono-droid に無い仕組み（ウィンドウの重なり・効果・他のゴースト・プラグイン）向けのもの */
     private val silentCommands = setOf(
         "effect", "effect2", "filter",
-        "timernotify", "raiseother", "timerraiseother", "notifyother", "timernotifyother",
         "raiseplugin", "timerraiseplugin", "notifyplugin", "timernotifyplugin",
     )
 
     /** `\![set,名前,...]` のうち、Windows のウィンドウやトレイ向けで、pono-droid では意味が無いもの */
     private val silentSetOptions = setOf(
-        "otherghosttalk", "othersurfacechange", "alignmentondesktop",
+        "alignmentondesktop",
     )
 
     private val silentExecutes = setOf("resetballoonpos")

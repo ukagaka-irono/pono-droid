@@ -111,7 +111,7 @@ class GhostLifecycleTest {
         shiori.awaitEvent("OnVanishSelected")
         val (dir, previous) = platform.awaitSwitch()
         assertEquals("next", dir)
-        assertEquals(PreviousGhost("わたしさくら", """\0ばいばい\e""", "わたし", ghost.dir.absolutePath + "/", vanished = true), previous)
+        assertEquals(PreviousGhost("わたしさくら", """\0ばいばい\e""", "わたし", ghost.dir.absolutePath + "/", vanished = true, shellName = c.shell.name), previous)
         assertFalse(ghost.dir.exists())
         assertTrue(other!!.dir.exists())
     }

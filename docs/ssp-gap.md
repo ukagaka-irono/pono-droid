@@ -78,8 +78,11 @@ OnDeviceArrival / OnDeviceRemove（USB 機器。設定で選んだときだけ�
 - ⛔ OnRecycleBin*（Android にはごみ箱が無い。写真などのアプリのごみ箱を空にするのは、ユーザーのデータを消すことになるので作らない）
 
 ### 👥 複数ゴーストの同時起動が要る
-OnGhostCalling / Called / CallComplete、OnOtherGhostBooted / Changed / Closed / Vanished / Talk、OnOtherSurfaceChange、
-OnOtherOverlap / Offscreen、OnRaiseOtherFailure / OnNotifyOtherFailure、OnOtherObjectDropping / Dropped
+- 🔨 ゴーストの側はできた（下の 10a）。アプリで2体目を起動する仕組み（10b）がまだなので、今はどれも届かない:
+  OnGhostCalling / Called / CallComplete、OnOtherGhostBooted / Changed / Closed / Vanished / Talk（OnOtherGhostTalk への答えは
+  ほかのゴーストに伝えない。2体が互いに答え続けないように）、OnOtherSurfaceChange、OnRaiseOtherFailure / OnNotifyOtherFailure
+- OnOtherOverlap / Offscreen（アプリでウィンドウの重なりを見る。10b）
+- ⛔ OnOtherObjectDropping / Dropped（Windows の「PC」や「ごみ箱」など、ファイルでないものを落としたとき。Android には無い）
 
 ### ⛔ 作れない
 - プラグイン・ヘッドライン・SAORI・MAKOTO（Windows の DLL）: OnRaisePluginFailure / OnNotifyPluginFailure、OnHeadlinesense*、
@@ -153,7 +156,9 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 - ✅ \![set,shioridebugmode(,true/false)]（NOTIFY enable_debug）
 
 ### 👥 複数ゴーストの同時起動が要る
-\![call,ghost]、\![raiseother] \![notifyother] \![timerraiseother] \![timernotifyother]、\![set,otherghosttalk] \![set,othersurfacechange]、\![updateother]
+- 🔨 ゴーストの側はできた（10a。アプリの 10b を待つ）: \![call,ghost]（メニューの「ほかのゴーストを呼ぶ」も）、\![raiseother] \![notifyother]
+  \![timerraiseother] \![timernotifyother]（__SYSTEM_ALL_GHOST__ も。自分には送らない）、\![set,otherghosttalk] \![set,othersurfacechange]
+- ✅ \![timernotify]（1体でも使える）
 
 ### ⛔ 作れない
 \![effect] \![effect2] \![filter]（DLL のプラグイン）、\![raiseplugin] など（プラグイン）、\![execute,headline]、\![execute,calendarplugin]、
@@ -181,7 +186,7 @@ history.ghost / balloon、rateofuselist.index(順位).*（起動回数・分・�
 - ghostlist(…).shiori.変数名（SHIORI に聞く）
 
 ### 👥 複数ゴーストの同時起動が要る
-activeghostlist.*、ghostlist.current（同時起動の中での「今」）
+- 🔨 activeghostlist.*（count / index / 名前 / current。1体だけなら自分だけ。アプリの 10b を待つ）
 
 ### ⛔ 作れない
 headlinelist.* / history.headline.*、pluginlist.* / history.plugin.*

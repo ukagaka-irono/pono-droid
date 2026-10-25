@@ -1,0 +1,28 @@
+package net.pono.baseware.ghost
+
+import java.util.concurrent.CopyOnWriteArrayList
+
+/**
+ * 同時に動かしているゴースト（複数起動）。アプリが1つ持ち、どのゴーストにも同じものを渡す。
+ * ゴーストは SHIORI を読み込んだら入り、終わるときに抜ける。ゴーストどうしのイベント（\![raiseother]、OnOtherGhost* など）はここを通して届ける
+ */
+class GhostHub {
+    private val ghosts = CopyOnWriteArrayList<GhostController>()
+
+    /** 動いているゴースト（入った順） */
+    val running: List<GhostController> get() = ghosts.toList()
+
+    internal fun join(c: GhostController) {
+        ghosts.addIfAbsent(c)
+    }
+
+    internal fun leave(c: GhostController) {
+        ghosts.remove(c)
+    }
+
+    /** [c] 以外の、動いているゴースト */
+    internal fun others(c: GhostController): List<GhostController> = ghosts.filter { it !== c }
+
+    /** [dirName] のゴーストが動いているか */
+    fun isRunning(dirName: String): Boolean = ghosts.any { it.ghost.dir.name == dirName }
+}
