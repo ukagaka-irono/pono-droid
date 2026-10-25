@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1058・一部だけ 87・作る 286・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1065・一部だけ 80・作る 286・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -473,7 +473,7 @@
 
 ## プロパティシステム
 
-済み 147 項目。
+済み 149 項目。
 
 ### 🔨 作る（27）
 - activeghostlist(ゴースト名/本体側名/パス).ext.拡張プロパティ名 — ext.名前 を相手の SHIORI に property.get / property.set で聞く・書く（shiori.変数名 と同じ道筋で作れる）
@@ -504,14 +504,12 @@
 - meta.track — meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
 - meta.year — meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
 
-### 🔧 一部だけ（8）
+### 🔧 一部だけ（6）
 - currentghost.scope(ID).animation.num — 動いているアニメーションの ID の一覧でなく、そのサーフェスの定義の数を返している。SET（\i と同じに動かす）も無い
-- currentghost.status — opening(teach / textarea / dialog) とスラッシュ区切り、表示中のバルーンの balloon(キャラID=バルーンID/…) を足す
 - craftmanurl — ゴーストだけ。バルーンとシェルの descript.txt の craftmanurl を返さない
 - craftmanw — ゴーストとバルーンだけ。シェルの craftmanw を返さない
 - homeurl — ゴーストだけ。バルーンとシェルの homeurl を返さない
 - username — %username はあるが、currentghost.username と activeghostlist(…).username を返さない（一緒に動いているゴーストの userName を聞く）
-- 補足 — Status の opening(…) は communicate / input だけ（teach・textarea・dialog と / 区切りが無い）、balloon(0=2/1=0) が無い
 - system.cpu.(キー) — load と clock がいつも 0、vendor と features が空。load は OnCPULoadHigh で測る /proc/stat の値を使える
 
 ### ⛔ 作れない（14）
@@ -786,7 +784,7 @@
 
 ## 仕様（SSTP・SHIORI/3.0・SAORI・更新ファイルなど）
 
-済み 12 項目。
+済み 17 項目。
 
 ### 🔨 作る（52）
 - 非同期の呼び出し — --async で 204 を返し、あとで OnInternalSaoriComplete / Failure（または識別子）を送る。ssp-gap.md の ⛔ を直す
@@ -842,13 +840,8 @@
 - ゾーン（--tz=） — ZoneId で作れる（端末のタイムゾーンの一覧）
 - 送信側の手順 — YAYA の FUNCTIONEX と里々の（internal_…）がそのまま本体に届くようにする
 
-### 🔧 一部だけ（12）
-- request — SenderType がいつも internal（SSTP・raise・embed・communicate を区別しない）。Status・BaseID・SecurityOrigin・X-SSTP-PassThru-* を送らない
-- response — Value しか見ていない。ValueNotify・SecurityLevel・Marker・ErrorLevel / ErrorDescription・BalloonOffset・Reference0 のコミュニケート（Age・MarkerSend）・X-SSTP-PassThru-* が無い
-- メソッド：COMMUNICATE — Surface ヘッダを OnCommunicate に渡していない
-- メソッド：EXECUTE — GetFMO が無い（501）。動いているゴーストの一覧を FMO の形で返せば作れる
-- メソッド：SEND — Sender: First が無い。SHIORI の答えのヘッダを SSTP の答えに透過しない。Entry は SHIORI/2 用で要らない
-- request/response — X-SSTP-PassThru-* を SHIORI に渡さず答えにも返さない。SecurityOrigin を渡さない。Option strict が無い
+### 🔧 一部だけ（7）
+- response — ValueNotify・SecurityLevel・ErrorLevel / ErrorDescription・BalloonOffset・Reference0 のコミュニケート（Age）・X-SSTP-PassThru-* は扱う。Marker と MarkerSend はバルーンの印がまだ無いので出さない
 - 概要 — 9801 だけで待つ。SSP の 9821 では待たない
 - 生成処理 — 作る一覧が UTF-8 なのに charset を書かない（dau の先頭の charset=、txt の charset, 行）。SSP は Shift_JIS と読む。date= も無い
 - パスの扱い — 全部の行がパーセントエンコード済みのときに戻していない（ファイル名に %XX が残り、URL は二重にエンコードされる）。MD5 なし・/ で終わる・.. は済み

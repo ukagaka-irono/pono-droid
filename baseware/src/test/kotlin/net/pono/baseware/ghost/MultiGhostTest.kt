@@ -65,9 +65,10 @@ class MultiGhostTest {
         calledBy: PreviousGhost? = null,
         platform: GhostPlatform = HubPlatform(),
         wrap: (ScriptedShiori) -> Shiori = { it },
+        headers: Map<String, Map<String, String>> = emptyMap(),
     ): Running {
         val ghost = repository.find(dir)!!
-        val shiori = ScriptedShiori(replies)
+        val shiori = ScriptedShiori(replies, headers)
         val scope = testScope().also { scopes += it }
         val c = GhostController(
             ghost = ghost,
@@ -123,7 +124,7 @@ class MultiGhostTest {
         // B の SHIORI は OnCloseAll の答えを待たせる。その間 B は終わりかけで、A が終わったときに届く OnOtherGhostClosed は受けない
         val asked = CountDownLatch(1)
         val answer = CountDownLatch(1)
-        val b = boot("b", emptyMap()) { inner ->
+        val b = boot("b", emptyMap(), wrap = { inner ->
             object : Shiori by inner {
                 override fun request(request: ByteArray): ByteArray {
                     if ("\r\nID: OnCloseAll\r\n" in request.toString(Charsets.UTF_8)) {
@@ -133,7 +134,7 @@ class MultiGhostTest {
                     return inner.request(request)
                 }
             }
-        }
+        })
         b.c.close()
         assertTrue(asked.await(5, TimeUnit.SECONDS))
         a.c.close()
@@ -143,6 +144,19 @@ class MultiGhostTest {
         withTimeout(5000) { while (b.c in hub.running) delay(10) }
         assertEquals(0, a.shiori.count("OnOtherGhostClosed"))
         assertEquals(0, b.shiori.count("OnOtherGhostClosed"))
+    }
+
+    @Test
+    fun responseReference0TalksToTheOtherGhost() = run {
+        // A の答えの Reference0 が B の本体側の名前なら、B に OnCommunicate が届く
+        val a = boot("a", mapOf("OnTalk" to """\0\s[5]Bさん元気？\e"""), headers = mapOf("OnTalk" to mapOf("Reference0" to "びい", "Reference1" to "おまけ")))
+        val b = boot("b", mapOf("OnCommunicate" to """\0元気だよ\e"""))
+        a.c.raise("OnTalk", emptyList())
+        assertEquals(listOf("あい", """\0\s[5]Bさん元気？\e""", "おまけ"), b.shiori.awaitEvent("OnCommunicate"))
+        val sent = b.shiori.requestHeaders["OnCommunicate"].orEmpty()
+        assertEquals("0", sent["Age"])
+        assertEquals("internal,communicate", sent["SenderType"])
+        assertTrue(sent["Surface"].orEmpty().isNotEmpty())
     }
 
     @Test

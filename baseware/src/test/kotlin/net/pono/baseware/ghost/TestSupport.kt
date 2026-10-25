@@ -16,9 +16,15 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.util.Collections
 
-/** 送られたイベントを覚えておき、決めておいたスクリプトを返す SHIORI */
-class ScriptedShiori(val replies: Map<String, String>) : Shiori {
+/**
+ * 送られたイベントを覚えておき、決めておいたスクリプトを返す SHIORI。
+ * [headerReplies] は、そのイベントの答えに足すヘッダ（ValueNotify・ErrorLevel など）
+ */
+class ScriptedShiori(val replies: Map<String, String>, val headerReplies: Map<String, Map<String, String>> = emptyMap()) : Shiori {
     val events: MutableList<Pair<String, List<String>>> = Collections.synchronizedList(mutableListOf())
+
+    /** 届いたリクエストのヘッダ（ID ごとに最後のもの） */
+    val requestHeaders: MutableMap<String, Map<String, String>> = Collections.synchronizedMap(mutableMapOf())
 
     override fun load(dir: File) = true
 
@@ -27,9 +33,11 @@ class ScriptedShiori(val replies: Map<String, String>) : Shiori {
             .mapNotNull { line -> line.split(": ", limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
             .toMap()
         val id = headers["ID"].orEmpty()
+        requestHeaders[id] = headers
         events += id to generateSequence(0) { it + 1 }.map { headers["Reference$it"] }.takeWhile { it != null }.filterNotNull().toList()
         val value = replies[id]?.let { "Value: $it\r\n" }.orEmpty()
-        return "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\n$value\r\n".toByteArray()
+        val extra = headerReplies[id].orEmpty().entries.joinToString("") { (k, v) -> "$k: $v\r\n" }
+        return "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\n$value$extra\r\n".toByteArray()
     }
 
     override fun unload() {}

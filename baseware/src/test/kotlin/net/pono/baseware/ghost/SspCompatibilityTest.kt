@@ -319,7 +319,9 @@ class SspCompatibilityTest {
             assertEquals("テスト", controller.property("ghostlist.index(0).name"))
             assertEquals("2", controller.property("currentghost.scope.count"))
             assertEquals("master", controller.property("currentghost.shelllist.current.name"))
-            assertEquals("talking,passive".takeIf { controller.state.value.talking } ?: "passive", controller.property("currentghost.status"))
+            // 出ているバルーンは balloon(キャラクター=バルーン) で
+            val expected = (if (controller.state.value.talking) "talking,passive" else "passive") + ",balloon(0=0)"
+            assertEquals(expected, controller.property("currentghost.status"))
             assertEquals(java.util.Calendar.getInstance().get(java.util.Calendar.YEAR).toString(), controller.property("system.year"))
             assertFalse(controller.property("system.os.locale").isNullOrEmpty())
         } finally {

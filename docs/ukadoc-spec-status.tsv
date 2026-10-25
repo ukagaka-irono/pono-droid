@@ -698,7 +698,7 @@ list/propertysystem/property-system/currentghost.shelllist.md	DONE	currentghost.
 list/propertysystem/property-system/currentghost.sound.count.md	DONE	currentghost.sound.count	実装済み
 list/propertysystem/property-system/currentghost.sound.index-ID.md	DONE	currentghost.sound.index(ID).サウンドプロパティ名	鳴っている音の並びから選ぶ
 list/propertysystem/property-system/currentghost.sound.md	DONE	currentghost.sound(要素名).サウンドプロパティ名	要素名・パス・ファイル名で鳴っている音を選ぶ
-list/propertysystem/property-system/currentghost.status.md	PARTIAL	currentghost.status	opening(teach / textarea / dialog) とスラッシュ区切り、表示中のバルーンの balloon(キャラID=バルーンID/…) を足す
+list/propertysystem/property-system/currentghost.status.md	DONE	currentghost.status	talking・choosing・minimizing・induction・passive・timecritical・nouserbreak・online・opening(communicate/input/teach/textarea/dialog)・balloon(0=0/1=0)
 list/propertysystem/property-system/developer.log.-.count-2.md	DONE	developer.log.ログ種別(名前).count	実装済み
 list/propertysystem/property-system/developer.log.-.count.md	DONE	developer.log.ログ種別.count	実装済み
 list/propertysystem/property-system/developer.log.-.index-ID-2.md	DONE	developer.log.ログ種別(名前).index(ID).ログプロパティ名	名前で絞り、index を省けば最新
@@ -743,7 +743,7 @@ list/propertysystem/property-system/history.plugin.count.md	IMPOSSIBLE	history.p
 list/propertysystem/property-system/history.plugin.index-ID.md	IMPOSSIBLE	history.plugin.index(ID).汎用プロパティ名	プラグインは作らない（決めたこと）
 list/propertysystem/property-system/index.md	NA	プロパティシステム	目次のページ
 list/propertysystem/property-system/introduction_propertysystem.md	NA	プロパティシステム	説明のページ（%property と get/set,property は別の行で扱う）
-list/propertysystem/property-system/note-1.md	PARTIAL	補足	Status の opening(…) は communicate / input だけ（teach・textarea・dialog と / 区切りが無い）、balloon(0=2/1=0) が無い
+list/propertysystem/property-system/note-1.md	DONE	補足	talking・choosing・minimizing・induction・passive・timecritical・nouserbreak・online・opening(communicate/input/teach/textarea/dialog)・balloon(0=0/1=0)
 list/propertysystem/property-system/pluginlist-ID-.ext.md	IMPOSSIBLE	pluginlist(プラグイン名/パス/ID).ext.拡張プロパティ名	プラグインは作らない（決めたこと）
 list/propertysystem/property-system/pluginlist-ID.md	IMPOSSIBLE	pluginlist(プラグイン名/パス/ID).汎用プロパティ名	プラグインは作らない（決めたこと）
 list/propertysystem/property-system/pluginlist.count.md	IMPOSSIBLE	pluginlist.count	プラグインは作らない（決めたこと）
@@ -2024,19 +2024,19 @@ spec/saori-ex/sender.md	BUILD	送信側の手順	YAYA の FUNCTIONEX と里々�
 spec/shiori3/capability.md	NA	実装対応状況の検知	NOTIFY capability のページへの案内。中身はイベントの組で見る
 spec/shiori3/chapter0.md	DONE	SHIORI/3.0	SHIORI/3.0 の GET / NOTIFY でやりとりしている
 spec/shiori3/index.md	DONE	SHIORI/3.0	SHIORI/3.0 の GET / NOTIFY でやりとりしている
-spec/shiori3/request.md	PARTIAL	request	SenderType がいつも internal（SSTP・raise・embed・communicate を区別しない）。Status・BaseID・SecurityOrigin・X-SSTP-PassThru-* を送らない
-spec/shiori3/response.md	PARTIAL	response	Value しか見ていない。ValueNotify・SecurityLevel・Marker・ErrorLevel / ErrorDescription・BalloonOffset・Reference0 のコミュニケート（Age・MarkerSend）・X-SSTP-PassThru-* が無い
+spec/shiori3/request.md	DONE	request	SenderType（internal / external と raise・embed・property・sstp・communicate）・SecurityLevel・SecurityOrigin・Status・BaseID・Age・X-SSTP-PassThru-*
+spec/shiori3/response.md	PARTIAL	response	ValueNotify・SecurityLevel・ErrorLevel / ErrorDescription・BalloonOffset・Reference0 のコミュニケート（Age）・X-SSTP-PassThru-* は扱う。Marker と MarkerSend はバルーンの印がまだ無いので出さない
 spec/sstp/chapter0.md	DONE	SSTP/1.x	SSTP サーバーがある（設定で選んだとき、端末の中だけ）
 spec/sstp/direct.md	IMPOSSIBLE	Direct SSTP	Windows の WM_COPYDATA。Android には同じものが無い
 spec/sstp/http.md	DONE	SSTP over HTTP	POST /api/sstp/v1 と keep-alive。localhost でない Origin は制限付きで受けるのでなく 403 で断る
 spec/sstp/index.md	DONE	SSTP/1.x	目次
 spec/sstp/keepalive.md	DONE	keep-alive	Connection: keep-alive、Keep-Alive: timeout、Content-Length
-spec/sstp/method_communicate.md	PARTIAL	メソッド：COMMUNICATE	Surface ヘッダを OnCommunicate に渡していない
-spec/sstp/method_execute.md	PARTIAL	メソッド：EXECUTE	GetFMO が無い（501）。動いているゴーストの一覧を FMO の形で返せば作れる
+spec/sstp/method_communicate.md	DONE	メソッド：COMMUNICATE	Surface ヘッダも OnCommunicate に渡す
+spec/sstp/method_execute.md	DONE	メソッド：EXECUTE	GetFMO も（一緒に動いているゴーストを FMO の形で。ウィンドウハンドルは 0）
 spec/sstp/method_give.md	DONE	メソッド：GIVE	Document は OnCommunicate、Song は OnMusicPlay
 spec/sstp/method_notify.md	DONE	メソッド：NOTIFY	Event・Reference・IfGhost の保険・Option notify・答えの Script
-spec/sstp/method_send.md	PARTIAL	メソッド：SEND	Sender: First が無い。SHIORI の答えのヘッダを SSTP の答えに透過しない。Entry は SHIORI/2 用で要らない
-spec/sstp/req_res.md	PARTIAL	request/response	X-SSTP-PassThru-* を SHIORI に渡さず答えにも返さない。SecurityOrigin を渡さない。Option strict が無い
+spec/sstp/method_send.md	DONE	メソッド：SEND	Sender: First と、SHIORI の答えの X-SSTP-PassThru-* を SSTP の答えに付ける
+spec/sstp/req_res.md	DONE	request/response	X-SSTP-PassThru-* と SecurityOrigin を SHIORI に渡し、Option strict は読めなかったタグとサーフェスを開発用の記録にエラーで残す
 spec/sstp/sstp.md	PARTIAL	概要	9801 だけで待つ。SSP の 9821 では待たない
 spec/update-file/fields.md	DONE	フィールド詳細	パスと MD5 を使う。size / date は読み飛ばしてよい
 spec/update-file/generation.md	PARTIAL	生成処理	作る一覧が UTF-8 なのに charset を書かない（dau の先頭の charset=、txt の charset, 行）。SSP は Shift_JIS と読む。date= も無い

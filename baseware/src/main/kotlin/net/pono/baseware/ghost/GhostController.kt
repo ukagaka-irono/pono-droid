@@ -40,6 +40,7 @@ import net.pono.baseware.net.UrlConnectionHttpClient
 import net.pono.baseware.sakura.Choice
 import net.pono.baseware.sakura.ChoiceLooks
 import net.pono.baseware.sakura.MoveCommand
+import net.pono.baseware.sakura.SakuraScript
 import net.pono.baseware.sakura.ScriptHost
 import net.pono.baseware.sakura.ScriptPlayer
 import net.pono.baseware.sakura.SoundOptions
@@ -53,6 +54,7 @@ import net.pono.baseware.shell.SurfaceDefinition
 import net.pono.baseware.shiori.ShioriFactory
 import net.pono.baseware.shiori.ShioriMethod
 import net.pono.baseware.shiori.ShioriRequest
+import net.pono.baseware.shiori.ShioriResponse
 import net.pono.baseware.shiori.ShioriSession
 import net.pono.baseware.shiori.ShioriTimeoutException
 import net.pono.baseware.text.TextCharsets
@@ -342,6 +344,22 @@ data class SurfaceDump(
     val binds: Set<Int>,
     val animation: Int? = null,
 )
+
+/**
+ * SHIORI へのリクエストの出どころ。[senderType] は SenderType（internal / external と raise・embed・property・sstp・communicate を
+ * カンマで）、[securityOrigin] は SSTP の送り元（無ければ書かない）、[age] はコミュニケートの回数、
+ * [extraHeaders] はそのまま足すヘッダ（SSTP の X-SSTP-PassThru-*、コミュニケートの Surface など）
+ */
+internal data class RequestOrigin(
+    val senderType: String,
+    val securityOrigin: String? = null,
+    val age: Int? = null,
+    val extraHeaders: List<Pair<String, String>> = emptyList(),
+) {
+    companion object {
+        val INTERNAL = RequestOrigin("internal")
+    }
+}
 
 /**
  * ゴーストの切り替えで、次のゴーストに伝える前のゴーストのこと（OnGhostChanged の Reference）。
@@ -1261,33 +1279,66 @@ class GhostController(
         if (s.window.minimized) return SstpResponse(512)
         if (!owned && (s.timeCritical || s.passive)) return SstpResponse(409)
         val refs = req.references
+        // SHIORI には、ほかのアプリから届いたことと送り元（SecurityOrigin。無ければ null）、X-SSTP-PassThru-* をそのまま渡す
+        val passThru = req.headers.filter { it.first.startsWith("X-SSTP-PassThru-", ignoreCase = true) }
+        fun origin(vararg types: String, extra: List<Pair<String, String>> = emptyList()) = RequestOrigin(
+            (listOf(if (owned) "internal" else "external", "sstp") + types).joinToString(","),
+            securityOrigin = req["SecurityOrigin"] ?: "null",
+            extraHeaders = passThru + extra,
+        )
+        // SHIORI の答えの X-SSTP-PassThru-* は SSTP の答えに付ける
+        var replyHeaders = emptyList<Pair<String, String>>()
+        val keep: (ShioriResponse) -> Unit = { r -> replyHeaders = r.headers.filterKeys { it.startsWith("X-SSTP-PassThru-", ignoreCase = true) }.toList() }
         val script = when (req.method) {
             "SEND", "NOTIFY" -> {
                 val event = req["Event"]?.trim()?.takeIf { it.isNotEmpty() }
                 val answered = when {
                     event == null -> null
                     "notify" in req.options -> {
-                        notify(event, refs)
+                        notify(event, refs, origin())
                         null
                     }
-                    else -> request(event, refs, translate = "notranslate" !in req.options)
+                    else -> request(event, refs, translate = "notranslate" !in req.options, origin = origin(), onResponse = keep)
                 }
                 answered ?: sstpScript(req)
             }
-            "COMMUNICATE" -> request("OnCommunicate", listOf(sender, req["Sentence"].orEmpty()) + refs)
+            // COMMUNICATE の Surface（送り主の \0 と \1 のサーフェス）は OnCommunicate にそのまま渡す
+            "COMMUNICATE" -> request(
+                "OnCommunicate", listOf(sender, req["Sentence"].orEmpty()) + refs,
+                origin = origin("communicate", extra = listOfNotNull(req["Surface"]?.let { "Surface" to it })), onResponse = keep,
+            )
             "GIVE" -> when {
-                req["Document"] != null -> request("OnCommunicate", listOf(sender, req["Document"].orEmpty()))
-                req["Song"] != null -> request("OnMusicPlay", listOf(req["Song"].orEmpty()))
+                req["Document"] != null -> request("OnCommunicate", listOf(sender, req["Document"].orEmpty()), origin = origin("communicate"), onResponse = keep)
+                req["Song"] != null -> request("OnMusicPlay", listOf(req["Song"].orEmpty()), origin = origin(), onResponse = keep)
                 else -> return SstpResponse(400)
             }
             else -> return SstpResponse(501)
-        } ?: return SstpResponse(204)
+        } ?: return SstpResponse(204, replyHeaders)
         if ("nobreak" in req.options) withTimeoutOrNull(SSTP_NOBREAK_WAIT_MS) { _state.first { !it.talking && !it.waitingChoice } }
         cancelScript()
-        runScript(script, untrusted = !owned)
+        runScript(script, untrustedScript = !owned, strict = "strict" in req.options)
         sstpRun = scriptRuns
         if (!owned) lastSstpSender = sender
-        return SstpResponse(200, listOf("Script" to script))
+        return SstpResponse(200, listOf("Script" to script) + replyHeaders)
+    }
+
+    /** FMO の1ゴースト分（識別ID.キー[1]値 の行） */
+    private fun fmoEntry(): String {
+        val chars = _state.value.characters
+        val values = listOf(
+            "path" to (repository?.root?.parentFile?.absolutePath?.let { "$it/" } ?: ""),
+            "hwnd" to "0",
+            "name" to ghost.sakuraName,
+            "keroname" to ghost.keroName,
+            "sakura.surface" to (chars[0]?.surface ?: -1).toString(),
+            "kero.surface" to (chars[1]?.surface ?: -1).toString(),
+            "kerohwnd" to "0",
+            "hwndlist" to "0",
+            "ghostpath" to ghost.dir.absolutePath + "/",
+            "fullname" to ghost.name,
+            "modulestate" to if (session != null) "shiori:running" else "",
+        )
+        return values.joinToString("") { (k, v) -> "$uniqueId.$k\u0001$v\r\n" }
     }
 
     /** IfGhost の後の Script はそのゴーストだけ、IfGhost より前の Script はほかのゴースト向け（さくら・エミリ宛てもほかのゴースト向け） */
@@ -1333,6 +1384,8 @@ class GhostController(
             "getballoonnamelist" -> lines(repository?.balloons?.list()?.map { it.name }.orEmpty())
             "getheadlinenamelist", "getpluginnamelist" -> SstpResponse(204)
             "getstatus" -> data(property("currentghost.status"))
+            // 一緒に動いているゴーストを FMO の形で（ウィンドウハンドルは Android に無いので 0）
+            "getfmo" -> data((hub?.running ?: listOf(this@GhostController)).joinToString("") { it.fmoEntry() } + "\r\n")
             "quiet" -> {
                 quietUntil = System.currentTimeMillis() + SSTP_QUIET_MS
                 SstpResponse(204)
@@ -3692,9 +3745,12 @@ class GhostController(
      * [sensitive] ならユーザーの入力を含むので、ログに残さない。
      * [chain] は `\![raise]` で続けて起こされた回数（スクリプトが自分を起こし続けるのを止めるため）。
      */
-    fun raise(event: String, references: List<String>, userInitiated: Boolean = true, sensitive: Boolean = false, chain: Int = 0) {
+    fun raise(event: String, references: List<String>, userInitiated: Boolean = true, sensitive: Boolean = false, chain: Int = 0) =
+        raise(event, references, userInitiated, sensitive, chain, RequestOrigin.INTERNAL)
+
+    private fun raise(event: String, references: List<String>, userInitiated: Boolean, sensitive: Boolean, chain: Int, origin: RequestOrigin) {
         scope.launch {
-            val script = request(event, references, sensitive) ?: return@launch
+            val script = request(event, references, sensitive, origin = origin) ?: return@launch
             if (!userInitiated && (_state.value.talking || _state.value.waitingChoice)) {
                 // 話さなかったイベントを、次のスクリプトのもとと取り違えないように
                 lastEvent = "" to emptyList()
@@ -3706,29 +3762,28 @@ class GhostController(
     }
 
     /** NOTIFY（応答を使わない） */
-    private fun notify(event: String, references: List<String>) {
-        scope.launch {
-            val s = session ?: return@launch
-            requestLock.withLock {
-                runCatching { s.notify(event, *references.toTypedArray()) }
-                    .onFailure { platform.log("$event (notify): ${it.message}") }
-            }
-        }
+    private fun notify(event: String, references: List<String>, origin: RequestOrigin = RequestOrigin.INTERNAL) {
+        scope.launch { requestResponse(event, references, ShioriMethod.NOTIFY, origin) }
     }
 
     /**
      * GET。返ってきたスクリプトは、SSP と同じく OnTranslate に通してから使う
      * （[translate] が false なら通さない。OnTranslate 自身やリソースの問い合わせ）
      */
-    private suspend fun request(event: String, references: List<String>, sensitive: Boolean = false, translate: Boolean = true): String? {
+    private suspend fun request(
+        event: String,
+        references: List<String>,
+        sensitive: Boolean = false,
+        translate: Boolean = true,
+        origin: RequestOrigin = RequestOrigin.INTERNAL,
+        onResponse: ((ShioriResponse) -> Unit)? = null,
+    ): String? {
         val s = session ?: return null
-        val value = requestLock.withLock {
-            runCatching { s.get(event, *references.toTypedArray()) }
-                .onFailure {
-                    if (it is ShioriTimeoutException) platform.onError("${ghost.name}: SHIORI が応答しません") else platform.log("$event: ${it.message}")
-                }
-                .getOrNull()?.value
-        }
+        val response = requestResponse(event, references, ShioriMethod.GET, origin)
+        response?.let { onResponse?.invoke(it) }
+        val value = response?.value
+        // SecurityLevel: external のスクリプトは、ほかのアプリから届いたものと同じく危ないタグを使わせない
+        if (value != null && response.headers["SecurityLevel"]?.trim()?.lowercase() == "external") rememberExternal(value)
         logEvent(event, references)
         // 毎秒・毎分のイベントとなでる（OnMouseMove）は多すぎるので、話すときだけ記録する
         if (value != null || event !in timerEvents) {
@@ -3740,17 +3795,163 @@ class GhostController(
         }
         if (value == null || !translate) return value
         lastEvent = event to references
-        return translateScript(s, value, event, references)
+        return translateScript(s, value, event, references, origin)
+    }
+
+    /**
+     * SHIORI に送って、答えのヘッダを丸ごと返す（[origin] は SenderType などの出どころ）。答えの ValueNotify・ErrorLevel・
+     * BalloonOffset・コミュニケート（Reference0）もここで扱う
+     */
+    private suspend fun requestResponse(event: String, references: List<String>, method: ShioriMethod, origin: RequestOrigin): ShioriResponse? {
+        val s = session ?: return null
+        val headers = LinkedHashMap<String, String>()
+        headers["SenderType"] = origin.senderType
+        origin.securityOrigin?.let { headers["SecurityOrigin"] = it }
+        headers["Status"] = statusText()
+        BASE_IDS[event]?.let { headers["BaseID"] = it }
+        origin.age?.let { headers["Age"] = it.toString() }
+        origin.extraHeaders.forEach { (k, v) -> headers[k] = v }
+        val response = requestLock.withLock {
+            runCatching { s.request(ShioriRequest(method, event, references, headers)) }
+                .onFailure {
+                    if (it is ShioriTimeoutException) platform.onError("${ghost.name}: SHIORI が応答しません") else platform.log("$event: ${it.message}")
+                }
+                .getOrNull()
+        } ?: return null
+        responseExtras(event, response, method, origin)
+        return response
+    }
+
+    /** SHIORI の答えの、Value 以外のもの */
+    private fun responseExtras(event: String, r: ShioriResponse, method: ShioriMethod, origin: RequestOrigin) {
+        // ErrorLevel / ErrorDescription（0x01 で並ぶ）は開発用の記録に残し、error と critical は知らせる
+        r.headers["ErrorLevel"]?.let { levels ->
+            val descriptions = r.headers["ErrorDescription"].orEmpty().split('\u0001')
+            levels.split('\u0001').forEachIndexed { i, level ->
+                val text = descriptions.getOrNull(i).orEmpty()
+                developerLog.add("error", level.trim().replaceFirstChar { it.uppercase() }, ghost.name, "$event: $text")
+                if (level.trim().lowercase() in setOf("error", "critical")) platform.onError("${ghost.name}: $text")
+            }
+        }
+        // ValueNotify は決まったタグだけ、すぐに動かす（NOTIFY でも）
+        r.headers["ValueNotify"]?.takeIf { it.isNotBlank() }?.let { runValueNotify(it) }
+        // BalloonOffset: 本体側のバルーンをずらす
+        r.headers["BalloonOffset"]?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.size >= 2 }?.let { (x, y) ->
+            _state.update { it.update(0) { c -> c.copy(balloonOffset = x.coerceIn(-MAX_BALLOON_OFFSET, MAX_BALLOON_OFFSET) to y.coerceIn(-MAX_BALLOON_OFFSET, MAX_BALLOON_OFFSET)) } }
+        }
+        // Reference0 があれば、そのゴースト（本体側の名前）に話しかける（コミュニケート）。リソースや OnTranslate では送らない
+        val target = r.reference(0)?.trim()
+        val value = r.value
+        if (method == ShioriMethod.GET && event != "OnTranslate" && !target.isNullOrEmpty() && value != null) {
+            communicate(target, value, r.references.drop(1), (origin.age ?: -1) + 1, r.headers["MarkerSend"])
+        }
+    }
+
+    /** ValueNotify で動かせるタグ（\![sound]・\![set,trayicon / trayballoon / property]・\![raise] 系・\![notify] 系・\![get,property]） */
+    private fun runValueNotify(script: String) {
+        val allowed = SakuraScript.tokenize(script).filterIsInstance<Token.Tag>().filter { t ->
+            t.name == "!" && when (t.args.firstOrNull()?.trim()?.lowercase()) {
+                "sound", "raise", "raiseother", "timerraiseother", "notify", "notifyother" -> true
+                "set" -> t.args.getOrNull(1)?.trim()?.lowercase() in setOf("trayicon", "tasktrayicon", "trayballoon", "tasktrayballoon", "property")
+                "get" -> t.args.getOrNull(1)?.trim()?.lowercase() == "property"
+                else -> false
+            }
+        }
+        if (allowed.isEmpty()) return
+        val filtered = allowed.joinToString("") { t -> "\\![" + t.args.joinToString(",") { quoteArg(it) } + "]" }
+        scope.launch {
+            val raised = mutableListOf<RaisedEvent>()
+            runCatching { player.play(filtered, Host(raised)) }.onFailure { platform.log("ValueNotify: ${it.message}") }
+            for ((event, refs, type) in raised) raise(event, refs, userInitiated = false, sensitive = false, chain = 1, origin = RequestOrigin(type))
+        }
+    }
+
+    /** さくらスクリプトの引数（カンマや " や ] を含めば "..." で囲む） */
+    private fun quoteArg(s: String): String =
+        if (s.any { it == ',' || it == '"' || it == ']' }) "\"" + s.replace("\"", "\"\"").replace("]", "\\]") + "\"" else s
+
+    /** SecurityLevel: external で返ってきたスクリプト（runScript で untrusted にする）。数が増えすぎないよう古いものから捨てる */
+    private val externalScripts = java.util.LinkedHashSet<String>()
+
+    private fun rememberExternal(script: String) = synchronized(externalScripts) {
+        externalScripts += script
+        while (externalScripts.size > 32) externalScripts.remove(externalScripts.first())
+    }
+
+    private fun takeExternal(script: String): Boolean = synchronized(externalScripts) { externalScripts.remove(script) }
+
+    /**
+     * 答えの Reference0 のゴースト（一緒に動いているもの）に、話した [script] を OnCommunicate で伝える。[age] はやりとりの回数。
+     * 互いに答え続けないよう、[MAX_COMMUNICATE_AGE] で止める
+     */
+    private fun communicate(target: String, script: String, extra: List<String>, age: Int, marker: String?) {
+        if (age > MAX_COMMUNICATE_AGE) return
+        val other = hub?.others(this)?.firstOrNull { it.ghost.sakuraName == target || it.ghost.name == target }
+            ?: return platform.log("コミュニケートの相手がいません: $target")
+        val chars = _state.value.characters
+        val surfaces = "${chars[0]?.surface ?: -1},${chars[1]?.surface ?: -1}"
+        other.receiveCommunicate(ghost.sakuraName, script, extra, age, marker, surfaces)
+    }
+
+    /**
+     * ほかのゴーストからのコミュニケート。OnCommunicate（Reference0 は送り主、Reference1 は話したこと、Reference2 から追加情報）。
+     * [surfaces] は送り主の \0 と \1 のサーフェス（Surface ヘッダ）
+     */
+    private fun receiveCommunicate(sender: String, script: String, extra: List<String>, age: Int, marker: String?, surfaces: String) {
+        if (closing) return
+        scope.launch {
+            val origin = RequestOrigin("internal,communicate", age = age, extraHeaders = listOf("Surface" to surfaces))
+            val reply = request("OnCommunicate", listOf(sender, script) + extra, origin = origin) ?: return@launch
+            if (_state.value.talking || _state.value.waitingChoice) return@launch
+            marker?.let { platform.log("Marker: $it") }
+            cancelScript()
+            runScript(reply)
+        }
+    }
+
+    /**
+     * いまの様子（SHIORI の Status ヘッダと currentghost.status）。talking・choosing・minimizing・induction・passive・
+     * timecritical・nouserbreak・online・opening(…)・balloon(キャラクター=バルーン/…) をカンマでつなぐ
+     */
+    private fun statusText(): String {
+        val s = _state.value
+        return buildList {
+            if (s.talking) add("talking")
+            if (s.waitingChoice) add("choosing")
+            if (s.window.minimized) add("minimizing")
+            if (s.induction) add("induction")
+            if (s.passive) add("passive")
+            if (s.timeCritical) add("timecritical")
+            if (s.noUserBreak) add("nouserbreak")
+            if (s.online) add("online")
+            val opening = buildList {
+                s.input?.let { input ->
+                    add(
+                        when (input.kind) {
+                            InputRequest.Kind.COMMUNICATE -> "communicate"
+                            InputRequest.Kind.TEACH -> "teach"
+                            InputRequest.Kind.TEXTAREA -> "textarea"
+                            else -> "input"
+                        },
+                    )
+                }
+                if (openDialogs.isNotEmpty()) add("dialog")
+            }
+            if (opening.isNotEmpty()) add("opening(" + opening.joinToString("/") + ")")
+            val balloons = s.characters.filter { (_, c) -> !c.balloon.isNullOrEmpty() }.toSortedMap().map { (id, c) -> "$id=${c.balloonId ?: 0}" }
+            if (balloons.isNotEmpty()) add("balloon(" + balloons.joinToString("/") + ")")
+        }.joinToString(",")
     }
 
     /** OnTranslate: Reference0 = スクリプト、Reference2 = 元のイベント、Reference3 = その Reference（0x01 区切り） */
-    private suspend fun translateScript(s: ShioriSession, script: String, event: String, references: List<String>): String {
+    private suspend fun translateScript(s: ShioriSession, script: String, event: String, references: List<String>, origin: RequestOrigin): String {
         val translated = requestLock.withLock {
             runCatching {
                 s.request(
                     ShioriRequest(
                         ShioriMethod.GET, "OnTranslate", listOf(script),
-                        mapOf("Reference2" to event, "Reference3" to references.joinToString("\u0001")),
+                        // OnTranslate は元のイベントの出どころを引き継ぐ
+                        mapOf("SenderType" to origin.senderType, "Reference2" to event, "Reference3" to references.joinToString("\u0001")),
                     ),
                 )
             }.onFailure { platform.log("OnTranslate: ${it.message}") }.getOrNull()?.value
@@ -3821,7 +4022,10 @@ class GhostController(
         choiceWaiter = null
     }
 
-    private fun runScript(script: String, chain: Int = 0, untrusted: Boolean = false): Job {
+    /** [strict] は SSTP の Option: strict。読めなかったタグやサーフェスを、開発用の記録にエラーとして残す */
+    private fun runScript(script: String, chain: Int = 0, untrustedScript: Boolean = false, strict: Boolean = false): Job {
+        // SHIORI が SecurityLevel: external で返したスクリプトも、ほかのアプリから届いたものと同じに扱う
+        val untrusted = untrustedScript || takeExternal(script)
         // talking は launch の前に立てる（呼び出し側が「話し終わるまで待つ」ときに取りこぼさないため）
         // 先頭が \C なら、今出ているバルーンを消さずに続ける
         if (!script.startsWith("\\C")) hideBalloons()
@@ -3835,8 +4039,8 @@ class GhostController(
         val talkFlags = listOfNotNull(if (untrusted) "sstp-send" else null)
         announceTalk("before", script, source, talkFlags)
         val job = scope.launch {
-            val raised = mutableListOf<Pair<String, List<String>>>()
-            val host = Host(raised, untrusted)
+            val raised = mutableListOf<RaisedEvent>()
+            val host = Host(raised, untrusted, strict)
             // 割り込まれずに最後まで話したかどうか（話し終わりの SERIKO、yen-e を動かす）
             var ended = false
             val result = try {
@@ -3862,13 +4066,13 @@ class GhostController(
             }
             host.updateRequest?.let { (types, options) -> networkUpdate(types, options, "script") }
             // SHIORI に聞く値（ghostlist(…).shiori.変数名）のある \![get,property] は、話し終えてから聞いて送る
-            for ((event, names) in host.deferredProperties) raised += event to names.map { propertyAsking(it).orEmpty() }
+            for ((event, names) in host.deferredProperties) raised += RaisedEvent(event, names.map { propertyAsking(it).orEmpty() }, "internal,property")
             if (raised.isNotEmpty()) {
                 // \![raise] が \![raise] を呼び続けると SHIORI を叩き続けてしまうので、連鎖の長さに上限を置く
                 if (chain >= MAX_RAISE_CHAIN) {
-                    platform.log("\\![raise] の連鎖が $MAX_RAISE_CHAIN 回を超えたので止めました: ${raised.map { it.first }}")
+                    platform.log("\\![raise] の連鎖が $MAX_RAISE_CHAIN 回を超えたので止めました: ${raised.map { it.event }}")
                 } else {
-                    for ((event, refs) in raised) raise(event, refs, chain = chain + 1)
+                    for ((event, refs, type) in raised) raise(event, refs, userInitiated = true, sensitive = false, chain = chain + 1, origin = RequestOrigin(type))
                 }
                 return@launch
             }
@@ -4260,17 +4464,7 @@ class GhostController(
         val s = _state.value
         val scopeNumber = Regex("""^scope\((\d+)\)\.(.*)$""")
         return when {
-            key == "status" -> buildList {
-                if (s.talking) add("talking")
-                if (s.passive) add("passive")
-                if (s.induction) add("induction")
-                if (s.timeCritical) add("timecritical")
-                if (s.noUserBreak) add("nouserbreak")
-                if (s.online) add("online")
-                if (s.window.minimized) add("minimizing")
-                if (s.waitingChoice) add("choosing")
-                s.input?.let { add("opening(" + (if (it.kind == InputRequest.Kind.COMMUNICATE) "communicate" else "input") + ")") }
-            }.joinToString(",")
+            key == "status" -> statusText()
             key == "shelllist.count" -> ghost.shellDirs.size.toString()
             key.startsWith("shelllist") -> listProperty(key.removePrefix("shelllist"), ghost.shellDirs, shell.dir) { dir, k, index ->
                 when (k) {
@@ -4620,7 +4814,14 @@ class GhostController(
         return runCatching { TextCharsets.decode(file.readBytes()) }.getOrDefault("$name を読めませんでした")
     }
 
-    private inner class Host(private val raised: MutableList<Pair<String, List<String>>>, override val untrusted: Boolean = false) : ScriptHost {
+    /** スクリプトが終わってから送るイベント（\![raise] か、\![get,property] の答え） */
+    private data class RaisedEvent(val event: String, val references: List<String>, val senderType: String = "internal,raise")
+
+    private inner class Host(
+        private val raised: MutableList<RaisedEvent>,
+        override val untrusted: Boolean = false,
+        private val strict: Boolean = false,
+    ) : ScriptHost {
         /** このスクリプトのあいだだけ有効。0 以下なら消さない／待ち続ける */
         var balloonTimeoutMs = this@GhostController.balloonTimeoutMs
         var choiceTimeoutMs = this@GhostController.choiceTimeoutMs
@@ -5003,7 +5204,10 @@ class GhostController(
 
         /** \s[...]。シェルの surface.alias（と surfaces.txt の name）の別名なら、その番号（候補が複数ならランダムに1つ）にする */
         override fun setSurface(scope: Int, surface: String) {
-            val id = shell.surfaces.resolve(scope, surface) ?: return platform.log("知らないサーフェスです: \\s[$surface]")
+            val id = shell.surfaces.resolve(scope, surface) ?: run {
+                if (strict) developerLog.add("error", "Error", ghost.name, "strict: \\s[$surface]")
+                return platform.log("知らないサーフェスです: \\s[$surface]")
+            }
             setSurface(scope, id)
         }
 
@@ -5228,12 +5432,13 @@ class GhostController(
         }
 
         override fun raise(event: String, references: List<String>) {
-            raised += event to references
+            raised += RaisedEvent(event, references)
         }
 
         override fun notify(event: String, references: List<String>) = this@GhostController.notify(event, references)
 
-        override suspend fun embed(event: String, references: List<String>): String? = request(event, references, translate = false)
+        override suspend fun embed(event: String, references: List<String>): String? =
+            request(event, references, translate = false, origin = RequestOrigin("internal,embed"))
 
         override fun timerRaise(delayMs: Long, once: Boolean, event: String, references: List<String>) {
             timers.remove(event)?.cancel()
@@ -5283,7 +5488,11 @@ class GhostController(
         }
 
         override fun getProperty(event: String, names: List<String>) {
-            if (names.any(::asksShiori)) deferredProperties += event to names else raised += event to names.map { property(it).orEmpty() }
+            if (names.any(::asksShiori)) {
+                deferredProperties += event to names
+            } else {
+                raised += RaisedEvent(event, names.map { property(it).orEmpty() }, "internal,property")
+            }
         }
 
         override fun property(name: String): String? = this@GhostController.property(name)
@@ -5361,7 +5570,10 @@ class GhostController(
             }
         }
 
-        override fun unknownTag(tag: Token.Tag) = platform.log("未対応のタグ: \\${tag.name}${tag.args}")
+        override fun unknownTag(tag: Token.Tag) {
+            platform.log("未対応のタグ: \\${tag.name}${tag.args}")
+            if (strict) developerLog.add("error", "Error", ghost.name, "strict: \\${tag.name}${tag.args}")
+        }
 
         override fun refused(tag: Token.Tag) = platform.log("SSTP のスクリプトでは使えないタグ: \\${tag.name}${tag.args}")
     }
@@ -5455,6 +5667,18 @@ class GhostController(
 
         /** \![set,balloonoffset] でずらせる量の上限（シェル画像のピクセル） */
         const val MAX_BALLOON_OFFSET = 2000
+
+        /** コミュニケート（答えの Reference0）でやりとりを続ける回数の上限（2体が答え続けないように） */
+        const val MAX_COMMUNICATE_AGE = 10
+
+        /** BaseID（互換のある基本のイベント）。答えが無ければこちらを送るものなど */
+        private val BASE_IDS = mapOf(
+            "OnFirstBoot" to "OnBoot", "OnGhostChanged" to "OnBoot", "OnGhostCalled" to "OnBoot", "OnVanished" to "OnBoot",
+            "OnCloseAll" to "OnClose", "OnGhostChanging" to "OnClose", "OnGhostCalling" to "OnClose",
+            "OnChoiceSelectEx" to "OnChoiceSelect", "OnAnchorSelectEx" to "OnAnchorSelect", "OnInstallCompleteEx" to "OnInstallComplete",
+            "OnSNTPCompareEx" to "OnSNTPCompare", "OnUpdateResultEx" to "OnUpdateResult", "OnUpdateCheckResultEx" to "OnUpdateCheckResult",
+            "OnFileDrop2" to "OnFileDrop", "OnFileDropEx" to "OnFileDrop",
+        )
 
         /** 共有で受け取る文字の長さの上限 */
         const val MAX_SHARED_TEXT = 64 * 1024

@@ -33,6 +33,8 @@ class GhostHub {
      */
     fun sstpTarget(req: SstpRequest): GhostController? {
         val all = running.ifEmpty { return null }
+        // Sender: First は最初に起動したゴースト
+        if (req["Sender"].equals("First", ignoreCase = true)) return all.first()
         val named = req["ReceiverGhostName"] ?: req["Ghost"]
         if (named != null) return all.firstOrNull { it.ghost.sakuraName == named || it.ghost.name == named }
         req["ID"]?.let { id -> all.firstOrNull { it.uniqueId == id }?.let { return it } }
