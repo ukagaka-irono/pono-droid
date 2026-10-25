@@ -97,6 +97,7 @@ import net.pono.baseware.balloon.TextArea
 import net.pono.baseware.ghost.BalloonItem
 import net.pono.baseware.ghost.BalloonLayout
 import net.pono.baseware.sakura.Choice
+import net.pono.baseware.sakura.ChoiceLooks
 
 /**
  * バルーンの中の文の色と大きさと、バルーンの descript.txt の既定の飾り（font.name・影・白抜きなど）。
@@ -117,6 +118,8 @@ data class BalloonTextStyle(
     val strike: Boolean = false,
     val outline: Boolean = false,
     val disabledColor: Color = Color(0xFF9E9E9E),
+    /** 無効表示の飾り（disable.font.bold / italic / underline / strike）。無いものは null（ふつうの文字と同じ） */
+    val disabledFlags: Map<String, Boolean?> = emptyMap(),
     val links: LinkDefaults = LinkDefaults(choiceColor),
 ) {
     /** 文全体に付ける既定の飾り */
@@ -128,6 +131,19 @@ data class BalloonTextStyle(
         shadow = shadowColor?.let { shadow(it, shadowOutline) },
         drawStyle = if (outline) outlineStroke() else null,
     )
+
+    /** \f[color,default.anchor] などの、バルーンの決めた色 */
+    private fun refColor(ref: String): Color {
+        val none = ChoiceLooks.Default
+        return when (ref) {
+            "anchor" -> links.resolve(none, isAnchor = true, selected = true, visited = false).font
+            "anchornotselect" -> links.resolve(none, isAnchor = true, selected = false, visited = false).font
+            "anchorvisited" -> links.resolve(none, isAnchor = true, selected = false, visited = true).font
+            "cursor" -> links.resolve(none, isAnchor = false, selected = true, visited = false).font
+            "cursornotselect" -> links.resolve(none, isAnchor = false, selected = false, visited = false).font
+            else -> Color.Unspecified
+        }
+    }
 
     /** \f[shadowstyle,outline] は縁取り（ずらさずにぼかす）、それ以外は右下にずらす */
     private fun shadow(color: Color, outline: Boolean) =
@@ -149,7 +165,7 @@ data class BalloonTextStyle(
             TextStyle.HeightMode.RELATIVE -> style.height?.let { base + it * spPerPx }
             TextStyle.HeightMode.PERCENT -> style.height?.let { base * it / 100f }
         }?.coerceIn(6f, 72f) ?: base
-        return if (style.sub || style.sup) size * 0.75f else size
+        return if (style.sub == true || style.sup == true) size * 0.75f else size
     }
 
     /** \f の飾りを Compose の文字飾りにする。指定していないもの（null）はバルーンの既定のまま */
@@ -161,21 +177,31 @@ data class BalloonTextStyle(
                     ?.let { shadow(it, style.shadowStyle?.let { s -> s == TextStyle.ShadowStyle.OUTLINE } ?: shadowOutline) }
             else -> null
         }
+        // \f[bold,disable] などは無効表示の飾り（バルーンに無ければ、ふつうの文字と同じ）
+        fun flag(name: String, value: Boolean?, base: Boolean): Boolean? =
+            if (name in style.disabledFlags) disabledFlags[name] ?: base else value
+        val bold = flag("bold", style.bold, this.bold)
+        val italic = flag("italic", style.italic, this.italic)
+        val underline = flag("underline", style.underline, this.underline)
+        val strike = flag("strike", style.strike, this.strike)
         return SpanStyle(
             color = when {
                 style.disabled -> disabledColor
+                style.colorRef != null -> refColor(style.colorRef.orEmpty())
                 else -> style.color?.let { Color(it or 0xFF000000.toInt()) } ?: Color.Unspecified
             },
-            fontWeight = if (style.bold) FontWeight.Bold else null,
-            fontStyle = if (style.italic) FontStyle.Italic else null,
+            // false は外す（バルーンが太字でも細くする）。null はバルーンの既定のまま
+            fontWeight = bold?.let { if (it) FontWeight.Bold else FontWeight.Normal },
+            fontStyle = italic?.let { if (it) FontStyle.Italic else FontStyle.Normal },
             fontSize = size(style).sp,
             fontFamily = style.font?.let(BalloonFonts::family),
             baselineShift = when {
-                style.sub -> BaselineShift.Subscript
-                style.sup -> BaselineShift.Superscript
+                style.sub == true -> BaselineShift.Subscript
+                style.sup == true -> BaselineShift.Superscript
                 else -> baselineShift
             },
-            textDecoration = decoration(style.underline, style.strike),
+            textDecoration = if (underline == null && strike == null) null else decoration(underline ?: this.underline, strike ?: this.strike)
+                ?: TextDecoration.None,
             shadow = shadow,
             drawStyle = style.outline?.let { if (it) outlineStroke() else Fill },
         )
@@ -740,6 +766,7 @@ class BalloonSkin(val balloon: Balloon) {
             strike = balloon.strike,
             outline = balloon.outline,
             disabledColor = balloon.disabledColor?.toColor() ?: simple.disabledColor,
+            disabledFlags = listOf("bold", "italic", "underline", "strike").associateWith(balloon::disabledFlag),
         )
     }
 }

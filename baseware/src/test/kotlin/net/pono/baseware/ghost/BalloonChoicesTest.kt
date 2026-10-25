@@ -10,6 +10,7 @@ import net.pono.baseware.sakura.ChoiceLooks
 import net.pono.baseware.sakura.LinkLook
 import net.pono.baseware.sakura.ScriptPlayer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -92,7 +93,9 @@ class BalloonChoicesTest {
     @Test
     fun visitedAnchorsAreRemembered() = run(mapOf("OnTest" to """\0\_a[OnLink]リンク\_a\e""")) { c, shiori ->
         c.raise("OnTest", emptyList())
-        val s = c.awaitState { it.waitingChoice }
+        // リンクだけのスクリプトは選択肢を待たない（話し終えても、出ているリンクは選べる）
+        val s = c.awaitState { it.choices(0).isNotEmpty() && !it.talking }
+        assertFalse(s.waitingChoice)
         c.onChoice(s.choices(0).single().choice.copy(title = "リンク"))
         shiori.awaitEvent("OnAnchorSelect")
         c.awaitState { "OnLink" in it.visitedAnchors }

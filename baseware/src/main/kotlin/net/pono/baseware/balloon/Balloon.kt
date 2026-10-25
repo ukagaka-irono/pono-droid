@@ -187,6 +187,9 @@ class Balloon(val dir: File) {
     /** \f[disable] の薄い文字の色（disable.font.color） */
     val disabledColor: BalloonColor? get() = color("disable.font.color")
 
+    /** 無効表示の飾り（disable.font.bold など）。書いていなければ null（ふつうの文字と同じ） */
+    fun disabledFlag(name: String): Boolean? = descript.int("disable.font.$name")?.let { it == 1 }
+
     /**
      * 選択肢やリンクのある状態の見た目。[prefix] は cursor / cursor.notselect / anchor / anchor.notselect / anchor.visited で、
      * その .style（square / underline / square+underline / none）と .brush.color / .pen.color / .font.color

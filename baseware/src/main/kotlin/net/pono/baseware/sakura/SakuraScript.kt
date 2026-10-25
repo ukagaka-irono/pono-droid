@@ -74,6 +74,23 @@ object SakuraScript {
                 continue
             }
 
+            // 古い選択肢 \q[ID][タイトル] / \q0[ID][タイトル]（番号は通し番号で使わない）。今の \q[タイトル,ID] にして、後ろで改行する
+            if (name == "q") {
+                var o = p
+                while (o < script.length && script[o].isDigit()) o++
+                if (o < script.length && script[o] == '[') {
+                    val idEnd = findBracketEnd(script, o)
+                    if (idEnd + 1 < script.length && script[idEnd + 1] == '[' && (o > p || ',' !in script.substring(o + 1, idEnd))) {
+                        val titleEnd = findBracketEnd(script, idEnd + 1)
+                        flush()
+                        tokens += Token.Tag("q", listOf(script.substring(idEnd + 2, titleEnd), script.substring(o + 1, idEnd)))
+                        tokens += Token.Tag("n", emptyList())
+                        i = minOf(titleEnd + 1, script.length)
+                        continue
+                    }
+                }
+            }
+
             val args: List<String>
             if (p < script.length && script[p] == '[') {
                 val end = findBracketEnd(script, p)

@@ -2632,6 +2632,8 @@ class GhostController(
                     val dirs = ghost.shellDirs
                     val dir = when (name) {
                         "random" -> dirs.randomOrNull()
+                        // 最後に入れたもの（フォルダの更新時刻がいちばん新しいもの）
+                        "lastinstalled" -> dirs.maxByOrNull { it.lastModified() }
                         else -> dirs.firstOrNull { it.name == name } ?: dirs.firstOrNull { Shell.nameOf(it) == name }
                     }
                     dir?.let { it to Shell(it) }
@@ -2659,6 +2661,7 @@ class GhostController(
         val next: Balloon? = when (name) {
             SIMPLE_BALLOON -> null
             "random" -> balloons.list().randomOrNull()
+            "lastinstalled" -> balloons.list().maxByOrNull { it.dir.lastModified() }
             else -> balloons.findByName(name) ?: balloons.find(name) ?: return platform.log("バルーンがありません: $name")
         }
         ghost.selectBalloon(next?.dir?.name)
@@ -2674,7 +2677,7 @@ class GhostController(
     }
 
     /** 着せ替えを付け外しする。[on] が null なら切り替え。[byUser] はメニューから */
-    private fun applyBind(scopeId: Int, group: net.pono.baseware.shell.BindGroup, on: Boolean?, byUser: Boolean) {
+    private fun applyBind(scopeId: Int, group: net.pono.baseware.shell.BindGroup, on: Boolean?, byUser: Boolean, events: Boolean = true) {
         var enabled = false
         _state.update {
             it.update(scopeId) { c ->
@@ -2684,6 +2687,8 @@ class GhostController(
                 c.copy(binds = if (enabled) c.binds - others + group.id else c.binds - group.id)
             }
         }
+        // \![bind-noevent] は知らせない
+        if (!events) return
         raise("OnDressupChanged", listOf(scopeId.toString(), group.part, if (enabled) "1" else "0", group.category, if (byUser) "user" else "script"), userInitiated = false)
         dressupInfo().takeIf { it.isNotEmpty() }?.let { notify("OnNotifyDressupInfo", it) }
     }
@@ -4775,9 +4780,22 @@ class GhostController(
             _state.update { it.copy(window = it.window.copy(frontRequests = it.window.frontRequests + 1)) }
         }
 
-        override fun bind(scope: Int, category: String, part: String, on: Boolean?) {
-            val group = shell.bindGroups(scope).firstOrNull { it.category == category && it.part == part } ?: return
-            applyBind(scope, group, on, byUser = false)
+        override fun bind(scope: Int, category: String, part: String, on: Boolean?) = bind(scope, category, part, on, noEvent = false)
+
+        override fun bind(scope: Int, category: String, part: String, on: Boolean?, noEvent: Boolean) {
+            val groups = shell.bindGroups(scope).filter { it.category == category }
+            if (part.isNotEmpty()) {
+                val group = groups.firstOrNull { it.part == part } ?: return
+                applyBind(scope, group, on, byUser = false, events = !noEvent)
+                return
+            }
+            // パーツ名が空ならカテゴリごと。外すときは全部、付けるときは既定のパーツ（無ければ最初のもの）
+            val worn = _state.value.characters[scope]?.binds.orEmpty()
+            val wearing = groups.filter { it.id in worn }
+            when {
+                on == false || (on == null && wearing.isNotEmpty()) -> wearing.forEach { applyBind(scope, it, false, byUser = false, events = !noEvent) }
+                else -> (groups.firstOrNull { it.default } ?: groups.firstOrNull())?.let { applyBind(scope, it, true, byUser = false, events = !noEvent) }
+            }
         }
 
         override fun playSound(file: String, loop: Boolean, volume: Int?) = playSound(file, loop, SoundOptions(volume = volume))
@@ -4821,9 +4839,12 @@ class GhostController(
 
         override fun changeGhost(name: String, raiseEvent: Boolean): Boolean = this@GhostController.changeGhost(name, raiseEvent)
 
-        override fun change(kind: String, name: String): Boolean {
+        override fun change(kind: String, name: String): Boolean = change(kind, name, raiseEvent = false)
+
+        /** [raiseEvent]（--option=raise-event）なら、メニューから替えたときと同じく OnShellChanging を先に送る */
+        override fun change(kind: String, name: String, raiseEvent: Boolean): Boolean {
             when (kind) {
-                "shell" -> changeShell(name)
+                "shell" -> changeShell(name, byUser = raiseEvent)
                 "balloon" -> changeBalloon(name)
                 else -> return false
             }
@@ -4856,8 +4877,8 @@ class GhostController(
                 "zorder" -> setZorder(args)
                 // \![set,sticky-window,1,0]。\![reset,sticky-window] は引数なしで来る
                 "sticky-window" -> setSticky(args)
-                // \![set,alignmenttodesktop,top|bottom|left|right|free|default]
-                "alignmenttodesktop" -> {
+                // \![set,alignmenttodesktop,top|bottom|left|right|free|default]。古い alignmentondesktop も同じ
+                "alignmenttodesktop", "alignmentondesktop" -> {
                     val edge = when (val a = args.firstOrNull()?.trim()?.lowercase()) {
                         "top", "bottom", "left", "right" -> a
                         "free", "default" -> null
@@ -4969,10 +4990,12 @@ class GhostController(
                     return true
                 }
             }
-            val ms = args.firstOrNull()?.trim()?.toLongOrNull() ?: return false
+            // 時間を省くと既定に戻す
+            val raw = args.firstOrNull()?.trim().orEmpty()
+            val ms = if (raw.isEmpty()) null else raw.toLongOrNull() ?: return false
             when (name) {
-                "balloontimeout" -> balloonTimeoutMs = ms
-                "choicetimeout" -> choiceTimeoutMs = ms
+                "balloontimeout" -> balloonTimeoutMs = ms ?: this@GhostController.balloonTimeoutMs
+                "choicetimeout" -> choiceTimeoutMs = ms ?: this@GhostController.choiceTimeoutMs
                 else -> return false
             }
             return true
@@ -5120,6 +5143,21 @@ class GhostController(
         override fun moveCursor(scope: Int, x: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.Column) } }
 
         override fun setBalloonId(scope: Int, id: Int) = _state.update { it.update(scope) { c -> c.copy(balloonId = id) } }
+
+        override fun setBalloonIds(scope: Int, candidates: List<Int>) {
+            val b = balloon
+            // 簡易バルーンや -1（消す）は最初の番号のまま
+            val id = if (b == null || candidates.first() < 0) candidates.first() else candidates.firstOrNull { b.imageForId(scope, it) != null } ?: candidates.first()
+            setBalloonId(scope, id)
+        }
+
+        override fun disableChoiceTimeout() {
+            choiceTimeoutMs = 0
+        }
+
+        override fun clearAllBalloons() {
+            for (s in _state.value.characters.keys) clearBalloon(s)
+        }
 
         override fun setFont(scope: Int, style: TextStyle) {
             styles[scope] = style.copy(font = style.font?.map(::fontCandidate))
@@ -5292,7 +5330,8 @@ class GhostController(
         /** 開くのはウェブのページだけ。tel: や他のアプリのスキームをゴーストに開かせない */
         override fun openUrl(url: String) {
             val lower = url.lowercase()
-            if (lower.startsWith("http://") || lower.startsWith("https://")) platform.openUrl(url) else platform.log("開けない URL: $url")
+            // ウェブのページと、新しいメールを作る mailto: だけ
+            if (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("mailto:")) platform.openUrl(url) else platform.log("開けない URL: $url")
         }
 
         override fun envVariable(name: String): String? {

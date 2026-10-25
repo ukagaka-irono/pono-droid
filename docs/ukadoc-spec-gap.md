@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1031・一部だけ 109・作る 291・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1058・一部だけ 87・作る 286・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -67,7 +67,7 @@
 
 ### 🔧 一部だけ（9）
 - balloons\*s.txt/balloonk\*s.txt — balloonc*s.txt の communicatebox だけ読む。balloons*s.txt/balloonk*s.txt の origin・validrect・font・arrow などの上書きと windowposition は無い。balloonc5s.txt が descript.txt を引き継いでしまう
-- disable.font.(フォント定義),(指定) — disable.font.color だけ。disable.font.name / height / bold などの他の font.* は読まない。色が無いときも画像の色と混ぜない
+- disable.font.(フォント定義),(指定) — disable.font.color と bold / italic / underline / strike は読む。disable.font.name と height は読まない
 - origin.x,座標 — 読むが、負の値（右端から）を 0 にしてしまう。縦書きの意味も無い
 - origin.y,座標 — 読むが、負の値（下端から）を 0 にしてしまう
 - use_self_alpha,値 — 画像のアルファと .pna はいつも使う（1 相当）。full（アルファの無い画像もキー色で抜かない）と 0 を読まない
@@ -381,42 +381,20 @@
 
 ## さくらスクリプト
 
-済み 282 項目。
+済み 309 項目。
 
-### 🔨 作る（9）
-- \q[ID][タイトル]または\q*[ID][タイトル] — 古い \q[ID][タイトル] / \q0[ID][タイトル] を読まない（tokenize で2つ目の [] を読む）
-- \* — \* を読み飛ばしていて、選択肢がタイムアウトする。Host の choiceTimeoutMs を 0 にすればよい
-- \__c — \__c が未対応のタグになる。\![open,communicatebox] と同じにする
-- \__t — \__t を見た目だけのタグとして読み飛ばしている（コメントも「時刻」と誤り）。\![open,teachbox] と同じにする
+### 🔨 作る（4）
 - \![open,addressbar] — URL を打つ箱を出して、共有で URL を渡したのと同じ処理（onTextShared）に回せる。docs では ⛔ だが PC 専用ではない
 - \![open,archiveviewer,(ファイル名)] — ファイルを指定されたら、ほかのアプリで開く（\![open,file] と同じ）。ビューア自体は持たない
 - \![open,pictureviewer,(ファイル名)] — 画像をほかのアプリで開く（\![open,file] と同じ道筋。OnPictureViewerOpen はもうある）
 - sound の --spectrum= で通知される帯域とレベル \[2.9.18\] — MediaCodec で波形を取り出して FFT し OnSoundSpectrum を送る（Visualizer はマイクの許可が要るので使わない）
-- \![set,alignmentondesktop,bottomまたはtop] — 黙って飛ばしている。alignmenttodesktop の top / bottom と同じにすればよい（SSP も同じ扱い）
 
-### 🔧 一部だけ（52）
+### 🔧 一部だけ（30）
 - \_b\,オプション...\] — --option=… と --clipping / --scaling を読まない（opaque は位置引数のときだけ）
 - \_b\,オプション...\] — --option=foreground・fixed、--clipping / --scaling を読まない。画像はいつも文字の下
 - \_l[x,y] — x が数のときに次の列にするだけ。y・centerx / centery・em / lh / %・@ の相対を扱わない
-- \b[ID番号] — \b[ID,--fallback=ID2] の代わりの番号を読まない
-- \![set,balloontimeout,時間] — 時間を省くと既定に戻す、が無い（未対応のタグとして飛ばす）
 - 補足 — \_b の --option=opaque / use_self_alpha / fixed / foreground / background、--clipping、--scaling、--source と base64・URL の画像を読まない
-- 補足 — 色の default.anchor / default.anchornotselect / default.anchorvisited / default.cursor / default.plain が無く、CSS の色名は 25 個だけ
-- \_a[ID,r2,r3...] — ジャンパだけのスクリプトも選択肢として待ち、OnChoiceTimeout になる（SSP は選択肢タイムアウトせず、バルーンのタイムアウト）
-- \_a[ID] — ジャンパだけのスクリプトも選択肢として待ち、OnChoiceTimeout になる（SSP は選択肢タイムアウトせず、バルーンのタイムアウト）
-- \_a[OnID,r0,r1...] — ジャンパだけのスクリプトも選択肢として待ち、OnChoiceTimeout になる（SSP は選択肢タイムアウトせず、バルーンのタイムアウト）
-- \![set,choicetimeout,時間] — 時間を省くと既定に戻す、が無い
-- \![change,balloon,バルーン名] — lastinstalled を読まない（random はある）
-- \![change,shell,シェル名(,--option=raise-event)] — --option=raise-event（OnShellChanging）と lastinstalled を読まない
 - \![set,wallpaper,ファイル名,オプション] — 配置の stretch-x / stretch-y / span を読まない（center・tile・stretch・fit・fill と --color はある）
-- \f[bold,パラメータ] — default が off になる（バルーンが太字などのとき消せない）、disable が無効表示の飾りにならない
-- \f[color,色指定] — default.anchor などの default.* と、CSS の色名の多くを読まない
-- \f[height,数値] — 数・%・+/- はある。スタイルシートの大きさ（xx-small〜xx-large など）を読まない
-- \f[italic,パラメータ] — default が off になる（バルーンが太字などのとき消せない）、disable が無効表示の飾りにならない
-- \f[strike,パラメータ] — default が off になる（バルーンが太字などのとき消せない）、disable が無効表示の飾りにならない
-- \f[sub,パラメータ] — default が off になる（バルーンが太字などのとき消せない）、disable が無効表示の飾りにならない
-- \f[sup,パラメータ] — default が off になる（バルーンが太字などのとき消せない）、disable が無効表示の飾りにならない
-- \f[underline,パラメータ] — default が off になる（バルーンが太字などのとき消せない）、disable が無効表示の飾りにならない
 - \![enter,inductionmode] — 上の InductionMode と同じ
 - \![enter,passivemode] — 上の PassiveMode の制限の多くが無い
 - \![execute,dumpballoon,ディレクトリ,スコープID,prefix,イベントID] — --hide=balloonmarker,balloonnum を読まない
@@ -432,7 +410,6 @@
 - \![open,sliderinput,ID,表示時間,現在値,最小,最大,オプション] — 位置引数だけ。--timeout= と --text="…" の書き方と、ほかのオプションを読まない
 - \![open,textareabox,ID,表示時間,テキスト,オプション,...] — --timeout= / --text= / --limit= / --placeholder= などを読まない
 - \![open,timeinput,ID,表示時間,時,分,秒,オプション] — 位置引数だけ。--timeout= と --text="…" の書き方と、ほかのオプションを読まない
-- \j[ID] — http / https だけ。file:///（ghost/master からのファイルを開く）と mailto: が無い
 - InputBoxのID — On で始まる ID はある。--reference= の追加情報を Reference に足さない
 - InputBoxオプション — --text / --timeout は ipinput だけ。noclose / noclear・--placeholder・--balloon・--limit・--reference が無い
 - \!\...\] — --sound-only（動画の音だけ）と --spectrum 系が無い
@@ -440,13 +417,9 @@
 - \!\...\] — --volume / --balance / --rate / --seektime はある。--window と --spectrum 系が無い
 - sound play/load/option のオプション — --window・--sound-only・--spectrum / --spectrum-bands / --spectrum-hold が無い
 - \![anim,add,overlay,ID] — 最後のアニメーションタイミング runonce / always を読まない
-- \![bind-noevent,カテゴリ名,パーツ名,数値] — \![bind] と同じに扱い、OnDressupChanged と OnNotifyDressupInfo を送ってしまう
-- \![bind,カテゴリ名,パーツ名,数値] — パーツ名を空にしたカテゴリごとの着脱が無い（category と part が両方合うものだけ）
 - \![moveasync] — \![moveasync,cancel] で動いている途中を止める、が無い
 - \![set,alpha,数値,オプション] — --time=（だんだん変える）と --wait を読まず、すぐ変える
 - \![set,scaling,横倍率,縦倍率,オプション] — --time= と --wait を読まず、すぐ変える
-- \__w[時間] — 再生の始め（か \x）から数えず、そこから待つだけ。\__w[clear] も無い
-- \x — クリックのあと \0 に戻さない。消すのは \0 と \1 のバルーンだけ
 
 ### ⛔ 作れない（31）
 - \f[anchormethod,描画方法] — Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）

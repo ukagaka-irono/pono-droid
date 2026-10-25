@@ -34,17 +34,25 @@ data class ChoiceLooks(
 
 /** \f で決める文字の飾り。 */
 data class TextStyle(
-    val bold: Boolean = false,
-    val italic: Boolean = false,
-    val underline: Boolean = false,
-    val strike: Boolean = false,
+    /** \f[bold] など。true で付ける、false で外す、null ならバルーンの既定のまま */
+    val bold: Boolean? = null,
+    val italic: Boolean? = null,
+    val underline: Boolean? = null,
+    val strike: Boolean? = null,
     /** 0xRRGGBB。null なら既定の色 */
     val color: Int? = null,
+    /**
+     * \f[color,default.anchor] など。バルーンの決めた色を名前で指す（anchor / anchornotselect / anchorvisited / cursor /
+     * cursornotselect / plain）。null なら [color]
+     */
+    val colorRef: String? = null,
+    /** \f[bold,disable] などで、無効表示の飾り（バルーンの disable.font.*）にしたもの（bold / italic / underline / strike） */
+    val disabledFlags: Set<String> = emptySet(),
     /** 文字の高さ。null なら既定。[heightMode] で意味が変わる */
     val height: Float? = null,
     val heightMode: HeightMode = HeightMode.ABSOLUTE,
-    val sub: Boolean = false,
-    val sup: Boolean = false,
+    val sub: Boolean? = null,
+    val sup: Boolean? = null,
     /** \f[name,...]。フォントの候補（ゴーストやバルーンのフォルダのフォントファイルか、フォントの名前）。null ならバルーンの既定 */
     val font: List<String>? = null,
     /** \f[shadowcolor,...]。0xRRGGBB。null ならバルーンの既定 */
@@ -144,6 +152,18 @@ interface ScriptHost {
     /** `\b[n]`。バルーンの番号を選ぶ（-1 ならバルーンを隠す） */
     fun setBalloonId(scope: Int, id: Int) {}
 
+    /** \b[ID,--fallback=ID2,...]。バルーンにある最初の番号にする（どれも無ければ最初の番号） */
+    fun setBalloonIds(scope: Int, candidates: List<Int>) = setBalloonId(scope, candidates.first())
+
+    /** \*。このスクリプトの選択肢はタイムアウトしない */
+    fun disableChoiceTimeout() {}
+
+    /** \x のクリックのあと、出ているバルーンをすべて消す */
+    fun clearAllBalloons() {
+        clearBalloon(0)
+        clearBalloon(1)
+    }
+
     /** `\f[...]`。これ以降の文字の飾り */
     fun setFont(scope: Int, style: TextStyle) {}
 
@@ -194,6 +214,9 @@ interface ScriptHost {
 
     /** `\![bind,カテゴリ,パーツ,1/0]`（着せ替え）。 */
     fun bind(scope: Int, category: String, part: String, on: Boolean?) {}
+
+    /** \![bind-noevent,...]（[noEvent]）。OnDressupChanged などを送らない。[part] が空ならカテゴリごと */
+    fun bind(scope: Int, category: String, part: String, on: Boolean?, noEvent: Boolean) = bind(scope, category, part, on)
 
     /** `\x`。クリックされるまで戻らない。 */
     suspend fun waitClick()
@@ -270,6 +293,9 @@ interface ScriptHost {
     /** `\![change,shell|balloon,名前]`。扱えたら true */
     fun change(kind: String, name: String): Boolean = false
 
+    /** \![change,shell,名前,--option=raise-event]（[raiseEvent] なら OnShellChanging を先に送る） */
+    fun change(kind: String, name: String, raiseEvent: Boolean): Boolean = change(kind, name)
+
     /** `\![change,ghost,名前]`。[raiseEvent] なら先に OnGhostChanging を送る。扱えたら true */
     fun changeGhost(name: String, raiseEvent: Boolean): Boolean = false
 
@@ -341,6 +367,9 @@ class ScriptPlayer(
 
         /** 文字や改行を出す先 */
         private fun targets(): List<Int> = sync ?: listOf(scope)
+
+        /** \__w[時間] を数え始めた時刻（再生の始めか、\x のクリックか \__w[clear]） */
+        private var waitMark = System.currentTimeMillis()
 
         /** \![set,balloonwait,...] で変えた、1文字ごとの待ち時間。null ならふつう（このスクリプトの間だけ） */
         private var charWaitOverride: Long? = null
@@ -441,19 +470,24 @@ class ScriptPlayer(
                 }
                 "w" -> if (!quick) delay((a.firstOrNull()?.toLongOrNull() ?: 1) * unitWaitMs)
                 // \__w[animation,ID] はそのアニメーションが終わるまで待つ
-                "__w" -> if (a.firstOrNull()?.trim()?.lowercase() == "animation") {
-                    if (!quick) a.getOrNull(1)?.let { host.waitAnimation(scope, it) }
-                } else if (!quick) {
-                    delay(a.firstOrNull()?.toLongOrNull() ?: 0)
+                // \__w[時間] は再生の始め（か \x のクリック）から数えてその時間まで待つ。\__w[clear] で数え直す
+                "__w" -> when (a.firstOrNull()?.trim()?.lowercase()) {
+                    "animation" -> if (!quick) a.getOrNull(1)?.let { host.waitAnimation(scope, it) }
+                    "clear" -> waitMark = System.currentTimeMillis()
+                    else -> if (!quick) {
+                        val until = a.firstOrNull()?.trim()?.toLongOrNull() ?: 0
+                        delay((until - (System.currentTimeMillis() - waitMark)).coerceAtLeast(0))
+                    }
                 }
                 "_w" -> if (!quick) delay(a.firstOrNull()?.toLongOrNull() ?: 0)
                 "_q" -> quick = !quick
                 "x" -> {
                     host.waitClick()
-                    // \x[noclear] なら文字も \f の飾りも残す
+                    // クリックのあとは \0 から。\x[noclear] なら文字も \f の飾りも残す
+                    scope = 0
+                    waitMark = System.currentTimeMillis()
                     if (a.firstOrNull() != "noclear") {
-                        host.clearBalloon(0)
-                        host.clearBalloon(1)
+                        host.clearAllBalloons()
                         for (s in styles.keys.toList()) host.setFont(s, TextStyle.Default)
                         styles.clear()
                         looks.clear()
@@ -472,7 +506,8 @@ class ScriptPlayer(
                     if (open == null && a.isNotEmpty()) {
                         anchor = Choice("", a[0], a.drop(1), anchor = token.name == "_a")
                     } else if (open != null) {
-                        hasChoices = true
+                        // \_a のリンクだけなら選択肢を待たない（バルーンのタイムアウトで消える。SSP と同じ）
+                        if (!open.anchor) hasChoices = true
                         host.addChoice(scope, open.copy(title = anchorTitle.toString()), looks[scope] ?: ChoiceLooks.Default)
                         anchor = null
                         anchorTitle.clear()
@@ -486,10 +521,22 @@ class ScriptPlayer(
                 "_V" -> host.waitSound()
                 "f" -> font(a)
                 "!" -> bang(token, depth)
-                "j" -> a.firstOrNull()?.takeIf { it.startsWith("http://") || it.startsWith("https://") }?.let(host::openUrl)
+                // \j[http(s)://...] / \j[mailto:...] は開き、\j[file:///...] は ghost/master からのファイルをほかのアプリで開く
+                "j" -> a.firstOrNull()?.trim()?.let { target ->
+                    val lower = target.lowercase()
+                    when {
+                        lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("mailto:") -> host.openUrl(target)
+                        lower.startsWith("file:///") -> host.open("file", listOf(target.substring(8)))
+                        else -> {}
+                    }
+                }
                 // 横の位置が数で書かれているときだけ（@ 付きの相対指定や縦だけの指定は無視する）
                 "_l" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { host.moveCursor(scope, it) }
-                "b" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { host.setBalloonId(scope, it) }
+                // \b[ID,--fallback=ID2,--fallback=ID3]
+                "b" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { id ->
+                    val fallbacks = a.drop(1).map { it.trim() }.filter { it.lowercase().startsWith("--fallback=") }.mapNotNull { it.substringAfter('=').trim().toIntOrNull() }
+                    host.setBalloonIds(scope, listOf(id) + fallbacks)
+                }
                 "4", "5" -> host.nudge(scope, away = token.name == "4")
                 "6" -> host.correctClock()
                 "7" -> host.adjustClock()
@@ -506,6 +553,10 @@ class ScriptPlayer(
                 }
                 // \a はランダムトーク（OnAITalk）。\+ はほかのゴーストのどれか、\_+ は並びで次のゴーストに切り替える（OnGhostChanging は送らない）
                 "a" -> host.raise("OnAITalk", emptyList())
+                // \* はこのスクリプトの選択肢をタイムアウトさせない。\__t は教える箱、\__c はコミュニケートの箱を開く
+                "*" -> host.disableChoiceTimeout()
+                "__t" -> host.open("teachbox", emptyList())
+                "__c" -> host.open("communicatebox", emptyList())
                 "+" -> host.changeGhost("random", false)
                 "_+" -> host.changeGhost("sequential", false)
                 in layoutOnlyTags -> {}
@@ -587,7 +638,8 @@ class ScriptPlayer(
                     else -> host.unknownTag(token)
                 }
                 "change" -> when {
-                    a.size >= 3 && a[1].lowercase() in setOf("shell", "balloon") && host.change(a[1].lowercase(), a[2]) -> {}
+                    a.size >= 3 && a[1].lowercase() in setOf("shell", "balloon") &&
+                        host.change(a[1].lowercase(), a[2], a.drop(3).any { it.trim().lowercase() == "--option=raise-event" }) -> {}
                     // \![change,ghost,名前(,--option=raise-event)]
                     a.size >= 3 && a[1].lowercase() == "ghost" &&
                         host.changeGhost(a[2].trim(), a.drop(3).any { it.trim().lowercase() == "--option=raise-event" }) -> {}
@@ -635,7 +687,11 @@ class ScriptPlayer(
                 "send" -> if (a.size < 2 || !host.send(a[1].trim().lowercase(), a.drop(2))) host.unknownTag(token)
                 "executesntp" -> host.adjustClock()
                 // \![bind,カテゴリ,パーツ,1|0]（3つ目が無ければ切り替え）
-                "bind", "bind-noevent" -> if (a.size >= 3) host.bind(scope, a[1], a[2], a.getOrNull(3)?.let { it == "1" || it.lowercase() == "true" })
+                // パーツ名が空ならカテゴリごと。bind-noevent はイベントを送らない
+                "bind", "bind-noevent" -> if (a.size >= 3) {
+                    val on = a.getOrNull(3)?.trim()?.takeIf { it.isNotEmpty() }?.let { it == "1" || it.lowercase() == "true" }
+                    host.bind(scope, a[1].trim(), a[2].trim(), on, noEvent = command == "bind-noevent")
+                }
                 "set" -> when {
                     a.size < 2 -> host.unknownTag(token)
                     // \![set,position,x,y,スコープ]（スコープを省くと今のキャラクター）
@@ -649,7 +705,6 @@ class ScriptPlayer(
                     a[1].lowercase() == "balloonwait" -> charWaitOverride = balloonWait(a.getOrNull(2)?.trim()?.lowercase().orEmpty())
                     a[1].lowercase() == "syncobject" -> a.getOrNull(2)?.let { host.setSyncObject(it.trim(), true) }
                     a[1].lowercase() == "property" -> if (a.size < 3 || !host.setProperty(a[2], a.getOrNull(3).orEmpty())) host.unknownTag(token)
-                    a[1].lowercase() in silentSetOptions -> {}
                     !host.setOption(scope, a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
                 }
                 // ウィンドウの重なりや他のゴースト・プラグインなど、pono-droid に無いものは黙って飛ばす
@@ -666,21 +721,31 @@ class ScriptPlayer(
             // \f[default] は選択肢とリンクの見た目も戻す
             if (name == "default") looks.remove(scope)
             val current = styles[scope] ?: TextStyle.Default
-            fun flag() = arg == "1" || arg == "true"
+            // true / 1 で付け、false / 0 で外す。default はバルーンの既定、disable は無効表示の飾り（バルーンの disable.font.*）
+            val flag: Boolean? = when (arg) {
+                "1", "true" -> true
+                "0", "false" -> false
+                else -> null
+            }
+            fun disabledFlags(key: String) = if (arg == "disable") current.disabledFlags + key else current.disabledFlags - key
             val next = when (name) {
                 // \_n の折り返しは \f ではないので残す
                 "default" -> TextStyle.Default.copy(noWrap = current.noWrap)
                 "disable" -> current.copy(disabled = true)
-                "bold" -> current.copy(bold = flag())
-                "italic" -> current.copy(italic = flag())
-                "underline" -> current.copy(underline = flag())
-                "strike" -> current.copy(strike = flag())
-                "sub" -> current.copy(sub = flag(), sup = if (flag()) false else current.sup)
-                "sup" -> current.copy(sup = flag(), sub = if (flag()) false else current.sub)
-                "color" -> if (arg == "disable") {
-                    current.copy(color = null, disabled = true)
-                } else {
-                    current.copy(color = parseColor(a.drop(1)), disabled = false)
+                "bold" -> current.copy(bold = flag, disabledFlags = disabledFlags("bold"))
+                "italic" -> current.copy(italic = flag, disabledFlags = disabledFlags("italic"))
+                "underline" -> current.copy(underline = flag, disabledFlags = disabledFlags("underline"))
+                "strike" -> current.copy(strike = flag, disabledFlags = disabledFlags("strike"))
+                "sub" -> current.copy(sub = flag, sup = if (flag == true) false else current.sup)
+                "sup" -> current.copy(sup = flag, sub = if (flag == true) false else current.sub)
+                "color" -> when {
+                    arg == "disable" -> current.copy(color = null, colorRef = null, disabled = true)
+                    arg == "default" -> current.copy(color = null, colorRef = null, disabled = false)
+                    // default.anchor などは、バルーンの決めたアンカーなどの色
+                    arg != null && arg.startsWith("default.") ->
+                        current.copy(color = null, colorRef = arg.removePrefix("default.").takeIf { it in COLOR_REFS }, disabled = false)
+                    // 読めない色は無視する（2.8.93 から）
+                    else -> parseColor(a.drop(1))?.let { current.copy(color = it, colorRef = null, disabled = false) } ?: current
                 }
                 // \f[name,メイリオ,meiryo.ttf]。書いた順に、使えるものを選ぶ
                 "name" -> {
@@ -703,7 +768,7 @@ class ScriptPlayer(
                     outline = when (arg) {
                         null, "", "default" -> null
                         "disable" -> false
-                        else -> flag()
+                        else -> flag
                     },
                 )
                 "valign" -> {
@@ -717,6 +782,8 @@ class ScriptPlayer(
                 }
                 "height" -> when {
                     arg == null || arg == "default" -> current.copy(height = null)
+                    // スタイルシートの大きさ（medium がバルーンの既定）
+                    arg in CSS_SIZES -> current.copy(height = CSS_SIZES.getValue(arg), heightMode = TextStyle.HeightMode.PERCENT)
                     arg.endsWith("%") -> arg.dropLast(1).toFloatOrNull()?.let { current.copy(height = it, heightMode = TextStyle.HeightMode.PERCENT) }
                     arg.startsWith("+") || arg.startsWith("-") -> arg.toFloatOrNull()?.let { current.copy(height = it, heightMode = TextStyle.HeightMode.RELATIVE) }
                     else -> arg.toFloatOrNull()?.let { current.copy(height = it, heightMode = TextStyle.HeightMode.ABSOLUTE) }
@@ -798,10 +865,9 @@ class ScriptPlayer(
 
     /**
      * 見た目の細かい調整だけのタグ。バルーンを自前で描いているので、無視しても会話の流れは変わらない。
-     * \* : 選択肢タイムアウト禁止、\C: 前のバルーンを消さない（先頭にあるかどうかは GhostController が見る）、
-     * \__t: 時刻、\_e: 終わり
+     * \C: 前のバルーンを消さない（先頭にあるかどうかは GhostController が見る）、\_e: 終わり
      */
-    private val layoutOnlyTags = setOf("*", "C", "__t", "_e")
+    private val layoutOnlyTags = setOf("C", "_e")
 
     /** `\![コマンド,...]` のうち、pono-droid に無い仕組み（ウィンドウの重なり・効果・他のゴースト・プラグイン）向けのもの */
     private val silentCommands = setOf(
@@ -809,10 +875,6 @@ class ScriptPlayer(
         "raiseplugin", "timerraiseplugin", "notifyplugin", "timernotifyplugin",
     )
 
-    /** `\![set,名前,...]` のうち、Windows のウィンドウやトレイ向けで、pono-droid では意味が無いもの */
-    private val silentSetOptions = setOf(
-        "alignmentondesktop",
-    )
 
     private val silentExecutes = setOf("resetballoonpos")
 
@@ -892,12 +954,16 @@ class ScriptPlayer(
             return namedColors[v]
         }
 
-        private val namedColors = mapOf(
-            "black" to 0x000000, "white" to 0xFFFFFF, "red" to 0xFF0000, "green" to 0x008000, "blue" to 0x0000FF,
-            "yellow" to 0xFFFF00, "cyan" to 0x00FFFF, "aqua" to 0x00FFFF, "magenta" to 0xFF00FF, "fuchsia" to 0xFF00FF,
-            "gray" to 0x808080, "grey" to 0x808080, "silver" to 0xC0C0C0, "maroon" to 0x800000, "olive" to 0x808000,
-            "lime" to 0x00FF00, "teal" to 0x008080, "navy" to 0x000080, "purple" to 0x800080, "orange" to 0xFFA500,
-            "pink" to 0xFFC0CB, "brown" to 0xA52A2A, "gold" to 0xFFD700, "violet" to 0xEE82EE, "indigo" to 0x4B0082,
+        /** CSS Color Module Level 3 の色の名前（W3C の定義） */
+        private val namedColors: Map<String, Int> = CssColors.NAMES
+
+        /** \f[color,default.○○] で指せるバルーンの色 */
+        val COLOR_REFS = setOf("anchor", "anchornotselect", "anchorvisited", "cursor", "cursornotselect", "plain")
+
+        /** \f[height,xx-small〜xx-large]。medium（バルーンの既定）に対する割合 */
+        private val CSS_SIZES = mapOf(
+            "xx-small" to 60f, "x-small" to 75f, "small" to 89f, "medium" to 100f, "large" to 120f, "x-large" to 150f, "xx-large" to 200f,
+            "smaller" to 83f, "larger" to 120f,
         )
 
         /** \&[amp] の実体参照。&#123; と &#x7B; の数値も読む */
