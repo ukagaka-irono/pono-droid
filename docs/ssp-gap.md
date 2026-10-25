@@ -3,6 +3,10 @@
 ukadoc（SSP の仕様書）のイベント・さくらスクリプト・プロパティシステム・SHIORI リソース・surfaces.txt の項目を全部取り出し、
 pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 
+2026-10-26 からは、Markdown 版の ukadoc-spec の全項目と突き合わせた [ukadoc-spec-gap.md](ukadoc-spec-gap.md) を使う。
+この一覧で ⛔ にしたもののうち、あちらで作れると分かったもの（balloon.offsetx / offsety、OnInitialize / OnDestroy、OnBasewareUpdated、
+OnInternalSaori*、OnSoundSpectrum、\![open,addressbar] など）は、あちらが正しい。
+
 印の意味:
 
 - ✅ 対応済み
