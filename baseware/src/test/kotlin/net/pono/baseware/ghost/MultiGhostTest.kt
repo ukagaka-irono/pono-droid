@@ -108,6 +108,20 @@ class MultiGhostTest {
     }
 
     @Test
+    fun closingAllTogetherSendsNoOtherGhostClosed() = run {
+        val a = boot("a", mapOf("OnCloseAll" to """\0またね\e"""))
+        // B は別れの選択肢を出したまま終わりかけ。A が終わったときに届く OnOtherGhostClosed は受けない
+        val b = boot("b", mapOf("OnCloseAll" to """\0おやすみ\q[はい,x]\e"""))
+        b.c.close()
+        withTimeout(5000) { while (b.shiori.count("OnCloseAll") == 0) delay(10) }
+        a.c.close()
+        withTimeout(5000) { while (a.c in hub.running) delay(10) }
+        delay(200)
+        assertEquals(0, a.shiori.count("OnOtherGhostClosed"))
+        assertEquals(0, b.shiori.count("OnOtherGhostClosed"))
+    }
+
+    @Test
     fun raiseOtherReachesTheNamedGhostOrFails() = run {
         val a = boot(
             "a",

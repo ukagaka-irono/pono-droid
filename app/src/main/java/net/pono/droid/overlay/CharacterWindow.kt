@@ -58,6 +58,12 @@ class CharacterWindow(
     private val renderer: SurfaceRenderer,
     private val balloonSkin: BalloonSkin?,
     private val prefs: SharedPreferences,
+    /**
+     * 位置を覚えるときの、ゴーストの名前（ディレクトリ名）。一緒に動くゴーストが同じ場所に重ならないよう、ゴーストごとに覚える。
+     * [sharedPositionFallback] なら、ゴーストごとの位置がまだ無いときに、ゴーストを分けずに覚えていた前の位置を使う
+     */
+    private val ghostDir: String,
+    private val sharedPositionFallback: Boolean,
 ) {
     private val windowManager = context.getSystemService(WindowManager::class.java)
     private val owner = OverlayOwner()
@@ -81,8 +87,8 @@ class CharacterWindow(
 
     private val params = overlayParams().apply {
         val density = context.resources.displayMetrics.density
-        x = prefs.getInt(key("x"), defaultX(density))
-        y = prefs.getInt(key("y"), defaultY(density))
+        x = savedPosition("x") ?: defaultX(density)
+        y = savedPosition("y") ?: defaultY(density)
     }
     private val balloonParams = overlayParams()
 
@@ -401,7 +407,7 @@ class CharacterWindow(
 
     /** 位置を覚えていなければ、ゴーストの決めた最初の位置に置く */
     fun applyDefault(position: DefaultPosition?) {
-        if (position == null || position.isEmpty || prefs.contains(key("x"))) return
+        if (position == null || position.isEmpty || savedPosition("x") != null) return
         whenSized {
             val own = screenRect()
             val bounds = screenBounds()
@@ -415,7 +421,9 @@ class CharacterWindow(
     /** \![execute,resetwindowpos]。覚えていた位置を忘れて、最初の位置に戻す */
     fun resetPosition(position: DefaultPosition?) {
         moveAnimator?.cancel()
-        prefs.edit().remove(key("x")).remove(key("y")).apply()
+        val editor = prefs.edit().remove(key("x")).remove(key("y"))
+        if (sharedPositionFallback) editor.remove(sharedKey("x")).remove(sharedKey("y"))
+        editor.apply()
         val density = context.resources.displayMetrics.density
         setWindowPosition(defaultX(density), defaultY(density), propagate = false)
         applyDefault(position)
@@ -534,7 +542,16 @@ class CharacterWindow(
         }
     }
 
-    private fun key(name: String) = "window.$scopeId.$name"
+    private fun key(name: String) = "window.$ghostDir.$scopeId.$name"
+
+    /** ゴーストを分けずに覚えていたころの名前 */
+    private fun sharedKey(name: String) = "window.$scopeId.$name"
+
+    private fun savedPosition(name: String): Int? = when {
+        prefs.contains(key(name)) -> prefs.getInt(key(name), 0)
+        sharedPositionFallback && prefs.contains(sharedKey(name)) -> prefs.getInt(sharedKey(name), 0)
+        else -> null
+    }
 
     /** 3人目以降の最初の位置。画面の右から 1/4 ずつずらし、3人ごとに一段上げる */
     private fun defaultX(density: Float): Int {

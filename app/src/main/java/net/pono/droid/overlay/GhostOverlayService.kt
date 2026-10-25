@@ -804,7 +804,8 @@ class GhostOverlayService : LifecycleService() {
             val prefs = OverlaySettings.prefs(this@GhostOverlayService)
             val w = c.state.value.window
             for (scope in order) {
-                windows += CharacterWindow(this@GhostOverlayService, scope, c, renderer ?: return, balloonSkin, prefs).also {
+                // 前の版で覚えた位置（ゴーストを分けていない）は、最初の SHIORI のプロセスで動くゴーストだけが使う
+                windows += CharacterWindow(this@GhostOverlayService, scope, c, renderer ?: return, balloonSkin, prefs, dirName, sharedPositionFallback = slot == 0).also {
                     it.onShift = { dx, dy -> stickyPartners(scope).forEach { p -> p.shiftBy(dx, dy) } }
                     it.onSettled = {
                         stickyPartners(scope).forEach(CharacterWindow::savePosition)

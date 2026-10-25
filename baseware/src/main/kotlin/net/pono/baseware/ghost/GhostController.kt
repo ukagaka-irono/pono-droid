@@ -554,8 +554,10 @@ class GhostController(
         }
     }
 
-    /** ほかのゴーストから届いたイベント。話している最中なら、そのイベントでは話さない */
-    private fun fromOther(event: String, references: List<String>) = raise(event, references, userInitiated = false)
+    /** ほかのゴーストから届いたイベント。話している最中なら、そのイベントでは話さない。終わろうとしているなら受けない */
+    private fun fromOther(event: String, references: List<String>) {
+        if (!closing) raise(event, references, userInitiated = false)
+    }
 
     /**
      * \![raiseother] / \![notifyother] を受ける。受けられなければ理由（timecritical / passivemode / inductionmode / minimized）
