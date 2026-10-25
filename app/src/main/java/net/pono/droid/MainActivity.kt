@@ -206,6 +206,10 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                         loading = loading == dirName,
                         enabled = canOverlay,
                         onStart = { GhostOverlayService.start(context, dirName) },
+                        // ほかのゴーストが動いているときだけ。同時に動かせる数を超えるなら押せない
+                        canStartBeside = running.isNotEmpty() && !isRunning,
+                        besideEnabled = canOverlay && running.size < GhostOverlayService.MAX_GHOSTS,
+                        onStartBeside = { GhostOverlayService.startBeside(context, dirName) },
                         onSelectShell = { shell ->
                             scope.launch {
                                 withContext(Dispatchers.IO) { item.ghost.selectShell(shell) }
@@ -553,6 +557,9 @@ private fun GhostRow(
     loading: Boolean,
     enabled: Boolean,
     onStart: () -> Unit,
+    canStartBeside: Boolean,
+    besideEnabled: Boolean,
+    onStartBeside: () -> Unit,
     onSelectShell: (String) -> Unit,
     onSelectBalloon: (String?) -> Unit,
     onUninstall: () -> Unit,
@@ -581,7 +588,11 @@ private fun GhostRow(
                     // 読み込んでいる間は起動し直させない（押しても最初からやり直しになるだけ）
                     CircularProgressIndicator(Modifier.padding(horizontal = 24.dp).size(24.dp), strokeWidth = 2.dp)
                 } else {
-                    Button(onClick = onStart, enabled = enabled) { Text(if (running) "再起動" else "起動") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // 「起動」はこのゴーストだけにする（動いているほかのゴーストは止まる）
+                        Button(onClick = onStart, enabled = enabled) { Text(if (running) "再起動" else "起動") }
+                        if (canStartBeside) OutlinedButton(onClick = onStartBeside, enabled = besideEnabled) { Text("一緒に起動") }
+                    }
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {

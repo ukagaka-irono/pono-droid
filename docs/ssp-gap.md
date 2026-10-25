@@ -78,11 +78,11 @@ OnDeviceArrival / OnDeviceRemove（USB 機器。設定で選んだときだけ�
 - ⛔ OnRecycleBin*（Android にはごみ箱が無い。写真などのアプリのごみ箱を空にするのは、ユーザーのデータを消すことになるので作らない）
 
 ### 👥 複数ゴーストの同時起動が要る
-- ✅ 3 体まで同時に動かせる（1体ずつ別の SHIORI のプロセス。2体目からは \![call,ghost] とメニューの「ほかのゴーストを呼ぶ」で起動する）:
+- ✅ 3 体まで同時に動かせる（1体ずつ別の SHIORI のプロセス。2体目からは \![call,ghost]・メニューの「ほかのゴーストを呼ぶ」・アプリの一覧の「一緒に起動」で起動する）:
   OnGhostCalling / Called / CallComplete、OnOtherGhostBooted / Changed / Closed / Vanished / Talk（OnOtherGhostTalk への答えは
   ほかのゴーストに伝えない。2体が互いに答え続けないように）、OnOtherSurfaceChange、OnRaiseOtherFailure / OnNotifyOtherFailure
 - ✅ OnOtherOverlap / Offscreen（キャラクターは「本体側の名前/番号」）
-- 🔨 アプリの一覧から2体目を起動する・動いているゴーストを一覧に出す（10c。今は一覧から起動すると、そのゴーストだけになる）
+- ✅ アプリの一覧の「一緒に起動」（ほかのゴーストが動いているときだけ出る。「起動」はそのゴーストだけにする）。動いているゴーストはどれも「起動中」
 - ⛔ OnOtherObjectDropping / Dropped（Windows の「PC」や「ごみ箱」など、ファイルでないものを落としたとき。Android には無い）
 
 ### ⛔ 作れない

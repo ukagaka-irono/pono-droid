@@ -137,6 +137,13 @@ class GhostOverlayService : LifecycleService() {
                     else -> startOnly(ghost)
                 }
             }
+            // 一覧の「一緒に起動」。動いているゴーストはそのままにして、もう1体起動する
+            ACTION_START_BESIDE -> {
+                startInForeground()
+                val ghost = intent.getStringExtra(EXTRA_GHOST)?.let { GhostStore.repository(this).find(it) }
+                if (ghost != null && Settings.canDrawOverlays(this)) startBeside(ghost, calledBy = null)
+                if (sessions.isEmpty()) stopSelf() else refreshForeground()
+            }
         }
         return START_NOT_STICKY
     }
@@ -176,13 +183,18 @@ class GhostOverlayService : LifecycleService() {
 
     /** ゴーストに呼ばれた（\![call,ghost]）。[dirName] のゴーストを一緒に起動する */
     private fun callGhost(dirName: String, caller: PreviousGhost): Boolean {
-        if (sessions.any { it.dirName == dirName }) return false
+        val ghost = GhostStore.repository(this).find(dirName) ?: return false
+        return startBeside(ghost, calledBy = caller)
+    }
+
+    /** 動いているゴーストはそのままにして、[ghost] も起動する（[calledBy] は呼んだゴースト。一覧からなら null） */
+    private fun startBeside(ghost: Ghost, calledBy: PreviousGhost?): Boolean {
+        if (sessions.any { it.dirName == ghost.dir.name }) return false
         val slot = freeSlot() ?: run {
             toast("同時に動かせるゴーストは ${ShioriService.SLOTS} 体までです")
             return false
         }
-        val ghost = GhostStore.repository(this).find(dirName) ?: return false
-        startSession(ghost, previous = null, calledBy = caller, slot = slot)
+        startSession(ghost, previous = null, calledBy = calledBy, slot = slot)
         return true
     }
 
@@ -1354,6 +1366,7 @@ class GhostOverlayService : LifecycleService() {
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_TEXT = "text"
         private const val ACTION_START = "net.pono.droid.START"
+        private const val ACTION_START_BESIDE = "net.pono.droid.START_BESIDE"
         private const val ACTION_STOP = "net.pono.droid.STOP"
         private const val ACTION_UPDATE = "net.pono.droid.UPDATE"
         private const val ACTION_SHOW = "net.pono.droid.SHOW"
@@ -1432,6 +1445,16 @@ class GhostOverlayService : LifecycleService() {
                 Intent(context, GhostOverlayService::class.java).setAction(ACTION_START).putExtra(EXTRA_GHOST, ghostDirName),
             )
         }
+
+        /** 動いているゴーストはそのままにして、もう1体起動する（[ShioriService.SLOTS] 体まで） */
+        fun startBeside(context: Context, ghostDirName: String) {
+            context.startForegroundService(
+                Intent(context, GhostOverlayService::class.java).setAction(ACTION_START_BESIDE).putExtra(EXTRA_GHOST, ghostDirName),
+            )
+        }
+
+        /** 同時に動かせるゴーストの数 */
+        const val MAX_GHOSTS = ShioriService.SLOTS
 
         fun stop(context: Context) {
             context.startService(Intent(context, GhostOverlayService::class.java).setAction(ACTION_STOP))
