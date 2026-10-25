@@ -32,10 +32,12 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.ghost.SystemDialogRequest
 import net.pono.droid.overlay.GhostOverlayService
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 
 /**
@@ -44,6 +46,7 @@ import kotlin.math.roundToInt
  * 答えはどの場合も1回だけ返し、返したら閉じる（やめたときや選べるアプリが無いときは null）
  */
 class SystemDialogActivity : ComponentActivity() {
+    /** この画面の番号（ゴーストごとの通し番号は重なることがあるので、アプリの中で振り直したもの） */
     private var serial = 0
     private lateinit var request: SystemDialogRequest
 
@@ -69,7 +72,7 @@ class SystemDialogActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         serial = intent.getIntExtra(EXTRA_SERIAL, 0)
         // もう答えた（close された・アプリが作り直された）ものは何もせず閉じる
-        val request = requests[serial] ?: return finish()
+        val request = requests[serial]?.first ?: return finish()
         this.request = request
         opened += this
         if (savedInstanceState?.getBoolean(STATE_COPYING) == true) return done(null)
@@ -143,27 +146,29 @@ class SystemDialogActivity : ComponentActivity() {
         private const val EXTRA_SERIAL = "serial"
         private const val STATE_COPYING = "copying"
 
-        /** まだ答えていないもの。答えたら消すので、ここに無ければ答え済み */
-        private val requests = ConcurrentHashMap<Int, SystemDialogRequest>()
+        /** まだ答えていないものと、頼んだゴースト。答えたら消すので、ここに無ければ答え済み */
+        private val requests = ConcurrentHashMap<Int, Pair<SystemDialogRequest, GhostController>>()
+        private val nextSerial = AtomicInteger()
 
         /** 出ている画面。メインスレッドからだけ触る */
         private val opened = mutableListOf<SystemDialogActivity>()
 
         private val main = Handler(Looper.getMainLooper())
 
-        fun start(context: Context, request: SystemDialogRequest) {
-            requests[request.serial] = request
+        fun start(context: Context, request: SystemDialogRequest, controller: GhostController) {
+            val serial = nextSerial.incrementAndGet()
+            requests[serial] = request to controller
             context.startActivity(
                 Intent(context, SystemDialogActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    .putExtra(EXTRA_SERIAL, request.serial),
+                    .putExtra(EXTRA_SERIAL, serial),
             )
         }
 
-        /** id が同じダイアログを閉じる（null ならすべて）。閉じたものは「やめた」と答える */
-        fun close(id: String?) {
+        /** [controller] が出した、id が同じダイアログを閉じる（null ならすべて）。閉じたものは「やめた」と答える */
+        fun close(id: String?, controller: GhostController) {
             main.post {
-                val serials = requests.values.filter { id == null || it.id == id }.map { it.serial }
+                val serials = requests.filterValues { (r, c) -> c === controller && (id == null || r.id == id) }.keys
                 for (serial in serials) answer(serial, null)
                 opened.filter { it.serial in serials }.forEach { it.finish() }
             }
@@ -171,8 +176,8 @@ class SystemDialogActivity : ComponentActivity() {
 
         /** 答えはメインスレッドで、1つにつき1回だけ */
         private fun answer(serial: Int, value: String?) {
-            requests.remove(serial) ?: return
-            GhostOverlayService.controller.value?.onSystemDialogResult(serial, value)
+            val (request, controller) = requests.remove(serial) ?: return
+            controller.onSystemDialogResult(request.serial, value)
         }
     }
 }

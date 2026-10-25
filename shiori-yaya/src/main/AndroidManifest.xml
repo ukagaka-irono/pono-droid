@@ -2,10 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
-        <!-- SHIORI（YAYA・里々・華和梨・Kagari）は別プロセスで動かす。SHIORI の中で落ちても、アプリ本体は巻き込まれない -->
+        <!-- SHIORI（YAYA・里々・華和梨・Kagari）は別プロセスで動かす。SHIORI の中で落ちても、アプリ本体は巻き込まれない。
+             同時に動かすゴーストは1体ずつ別のプロセスにする（ゴーストどうしがファイルや SHIORI の中身を触れないように） -->
         <service
             android:name=".ShioriService"
             android:exported="false"
             android:process=":shiori" />
+        <service
+            android:name=".ShioriService2"
+            android:exported="false"
+            android:process=":shiori2" />
+        <service
+            android:name=".ShioriService3"
+            android:exported="false"
+            android:process=":shiori3" />
     </application>
 </manifest>

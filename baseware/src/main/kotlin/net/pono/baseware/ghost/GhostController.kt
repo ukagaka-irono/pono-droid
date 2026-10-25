@@ -482,6 +482,11 @@ class GhostController(
                 platform.onQuit()
                 return@launch
             }
+            // 読み込んでいる間に止められた（dispose）
+            if (closing) {
+                release()
+                return@launch
+            }
             // 位置を覚えていないキャラクターは、ゴーストの決めた位置に出す
             val defaults = loadDefaultPositions()
             if (defaults.isNotEmpty()) _state.update { it.copy(window = it.window.copy(defaultPositions = defaults)) }
@@ -2351,6 +2356,20 @@ class GhostController(
 
     /** SHIORI を閉じて終わる。[switchTo] があれば、そのゴーストに切り替える。[uninstall] ならこのゴーストを消してから */
     private suspend fun shutdown(switchTo: Pair<Ghost, PreviousGhost>? = null, uninstall: Boolean = false) {
+        release()
+        if (uninstall && repository?.uninstall(ghost) != true) platform.log("${ghost.name} を消去できませんでした")
+        hub?.let { h ->
+            h.leave(this)
+            // 切り替えや消去なら、次のゴーストが起動したときに OnOtherGhostChanged / Vanished で伝える
+            if (switchTo == null) {
+                for (o in h.running) o.fromOther("OnOtherGhostClosed", listOf(ghost.sakuraName, lastScript, ghost.name, "", "", "", "", shell.name))
+            }
+        }
+        if (switchTo != null) platform.switchGhost(switchTo.first.dir.name, switchTo.second) else platform.onQuit()
+    }
+
+    /** タイマー・WebSocket・ファイルの見張り・音・SHIORI をすべて片付ける */
+    private suspend fun release() {
         timerJob?.cancel()
         // WebSocket とファイルの見張りはゴーストが終わるときにすべてやめる
         for (url in sockets.keys.toList()) cancelWebSocket(url)
@@ -2361,15 +2380,19 @@ class GhostController(
         platform.stopSound()
         session?.unload()
         session = null
-        if (uninstall && repository?.uninstall(ghost) != true) platform.log("${ghost.name} を消去できませんでした")
-        hub?.let { h ->
-            h.leave(this)
-            // 切り替えや消去なら、次のゴーストが起動したときに OnOtherGhostChanged / Vanished で伝える
-            if (switchTo == null) {
-                for (o in h.running) o.fromOther("OnOtherGhostClosed", listOf(ghost.sakuraName, lastScript, ghost.name, "", "", "", "", shell.name))
-            }
+    }
+
+    /**
+     * 何も送らずに止める（アプリがゴーストを起動し直すときや、ほかのゴーストを起動するとき）。ほかのゴーストにも伝えない。
+     * 起動の途中なら、SHIORI を読み終えたところで止まる。片付け終わると、返した Job が終わる
+     */
+    fun dispose(): Job {
+        closing = true
+        hub?.leave(this)
+        return scope.launch {
+            cancelScript()
+            release()
         }
-        if (switchTo != null) platform.switchGhost(switchTo.first.dir.name, switchTo.second) else platform.onQuit()
     }
 
     // ---- ゴーストの切り替え ----
@@ -2916,6 +2939,27 @@ class GhostController(
         if (f != lastOffscreen) {
             raise("OnOffscreen", listOf(f, lastOffscreen), userInitiated = false)
             lastOffscreen = f
+        }
+    }
+
+    private var lastOtherOverlaps = ""
+    private var lastOtherOffscreen = ""
+
+    /**
+     * 動いているゴーストすべての（自分も入れた）キャラクターの重なりと見切れ。変わったときだけ OnOtherOverlap / OnOtherOffscreen を送る。
+     * キャラクターは「本体側の名前/番号」で、[overlaps] は重なっている組、[offscreen] は画面からはみ出しているもの
+     */
+    fun onOtherWindowLayout(overlaps: Collection<Pair<String, String>>, offscreen: Collection<String>) {
+        val o = overlaps.map { (a, b) -> if (a <= b) a to b else b to a }.distinct().sortedWith(compareBy({ it.first }, { it.second }))
+            .joinToString("\u0001") { "${it.first}-${it.second}" }
+        val f = offscreen.distinct().sorted().joinToString("\u0001")
+        if (o != lastOtherOverlaps) {
+            raise("OnOtherOverlap", listOf(o, lastOtherOverlaps), userInitiated = false)
+            lastOtherOverlaps = o
+        }
+        if (f != lastOtherOffscreen) {
+            raise("OnOtherOffscreen", listOf(f, lastOtherOffscreen), userInitiated = false)
+            lastOtherOffscreen = f
         }
     }
 

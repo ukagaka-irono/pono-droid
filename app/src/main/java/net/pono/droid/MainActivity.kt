@@ -106,7 +106,8 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     var ghosts by remember { mutableStateOf<List<GhostItem>>(emptyList()) }
     var balloons by remember { mutableStateOf<List<Balloon>>(emptyList()) }
     var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
-    val running by GhostOverlayService.running.collectAsState()
+    // 動いているゴーストすべて（ほかのゴーストに呼ばれて起動したものも）
+    val running by GhostOverlayService.runningGhosts.collectAsState()
     val loading by GhostOverlayService.loading.collectAsState()
     // 一覧を読み終わるまでは「ゴーストがありません」と言わない
     var listed by remember { mutableStateOf(false) }
@@ -198,7 +199,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(ghosts, key = { it.ghost.dir.name }) { item ->
                     val dirName = item.ghost.dir.name
-                    val isRunning = running == dirName
+                    val isRunning = dirName in running
                     GhostRow(
                         item = item,
                         running = isRunning,
@@ -235,11 +236,11 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                     }
                 }
                 // 起動中のゴーストが使っているバルーンは、画像を読んでいる途中かもしれないので消させない
-                val inUse = ghosts.firstOrNull { it.ghost.dir.name == running }?.selectedBalloon
+                val inUse = ghosts.filter { it.ghost.dir.name in running }.mapNotNull { it.selectedBalloon }.toSet()
                 items(balloons, key = { "balloon:" + it.dir.name }) { balloon ->
                     BalloonRow(
                         balloon = balloon,
-                        inUse = balloon.dir.name == inUse,
+                        inUse = balloon.dir.name in inUse,
                         onUninstall = {
                             scope.launch {
                                 val ok = withContext(Dispatchers.IO) { GhostStore.repository(context).balloons.uninstall(balloon) }

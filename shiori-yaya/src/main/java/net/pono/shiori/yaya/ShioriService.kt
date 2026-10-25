@@ -9,8 +9,9 @@ import java.io.File
 /**
  * 別プロセス（:shiori）で SHIORI を動かすサービス。[RemoteShiori] が bind して使う。
  * SHIORI はスレッドセーフではないので、Binder のスレッドから来る呼び出しを1つずつ処理する。
+ * 同時に動かす2体目・3体目のゴーストは [ShioriService2] / [ShioriService3]（:shiori2 / :shiori3）を使う
  */
-class ShioriService : Service() {
+open class ShioriService : Service() {
     private val lock = Any()
     private val shioris = HashMap<Long, NativeShiori>()
     private var nextHandle = 1L
@@ -48,4 +49,22 @@ class ShioriService : Service() {
         }
         super.onDestroy()
     }
+
+    companion object {
+        /** 同時に動かせるゴーストの数（SHIORI のプロセスの数） */
+        const val SLOTS = 3
+
+        /** [slot] 番目（0 から）のプロセスのサービス */
+        fun forSlot(slot: Int): Class<out ShioriService> = when (slot) {
+            1 -> ShioriService2::class.java
+            2 -> ShioriService3::class.java
+            else -> ShioriService::class.java
+        }
+    }
 }
+
+/** 2体目のゴーストの SHIORI（:shiori2） */
+class ShioriService2 : ShioriService()
+
+/** 3体目のゴーストの SHIORI（:shiori3） */
+class ShioriService3 : ShioriService()

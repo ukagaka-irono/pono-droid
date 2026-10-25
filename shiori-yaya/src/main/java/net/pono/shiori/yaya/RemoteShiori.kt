@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
  * 別プロセス（:shiori）の [ShioriService] で動く SHIORI（[engine]）。SHIORI の中で落ちてもアプリ本体は落ちず、[setOnCrash] で知らせる。
  * bind の完了はメインスレッドで届くので、[load] はメインスレッド以外から呼ぶこと（ShioriSession は専用のスレッドで呼ぶ）。
  */
-class RemoteShiori(context: Context, private val engine: ShioriEngine) : Shiori {
+class RemoteShiori(context: Context, private val engine: ShioriEngine, private val slot: Int = 0) : Shiori {
     private val context = context.applicationContext
     @Volatile private var service: IShioriService? = null
     private var binder: IBinder? = null
@@ -51,7 +51,7 @@ class RemoteShiori(context: Context, private val engine: ShioriEngine) : Shiori 
 
     override fun load(dir: File): Boolean {
         check(Looper.myLooper() != Looper.getMainLooper()) { "load() must not be called on the main thread" }
-        if (!context.bindService(Intent(context, ShioriService::class.java), connection, Context.BIND_AUTO_CREATE)) return false
+        if (!context.bindService(Intent(context, ShioriService.forSlot(slot)), connection, Context.BIND_AUTO_CREATE)) return false
         if (!connected.await(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) return false
         pid = call { it.pid } ?: 0
         handle = call { it.load(engine.name, dir.absolutePath) } ?: 0
@@ -98,9 +98,12 @@ class RemoteShiori(context: Context, private val engine: ShioriEngine) : Shiori 
         private const val TAG = "pono"
         private const val BIND_TIMEOUT_SECONDS = 10L
 
-        /** ゴーストの descript.txt の `shiori` と辞書のファイルから、動かせる SHIORI を選ぶ。未対応なら null */
-        fun factory(context: Context) = ShioriFactory { shioriName, masterDir ->
-            ShioriEngine.forGhost(shioriName, masterDir)?.let { RemoteShiori(context, it) }
+        /**
+         * ゴーストの descript.txt の `shiori` と辞書のファイルから、動かせる SHIORI を選ぶ。未対応なら null。
+         * [slot] は同時に動かすゴーストの何体目か（0 から [ShioriService.SLOTS] まで。プロセスを分ける）
+         */
+        fun factory(context: Context, slot: Int = 0) = ShioriFactory { shioriName, masterDir ->
+            ShioriEngine.forGhost(shioriName, masterDir)?.let { RemoteShiori(context, it, slot) }
         }
     }
 }

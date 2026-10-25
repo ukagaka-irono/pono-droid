@@ -40,6 +40,8 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +56,7 @@ import net.pono.baseware.ghost.BatteryInfo
 import net.pono.baseware.ghost.DeviceInfo
 import net.pono.baseware.ghost.Ghost
 import net.pono.baseware.ghost.GhostController
+import net.pono.baseware.ghost.GhostHub
 import net.pono.baseware.ghost.GhostPlatform
 import net.pono.baseware.ghost.GhostRepository
 import net.pono.baseware.ghost.InputRequest
@@ -84,568 +87,766 @@ import net.pono.droid.TextViewerActivity
 import java.io.File
 import kotlin.math.roundToInt
 import net.pono.shiori.yaya.RemoteShiori
+import net.pono.shiori.yaya.ShioriService
 
-/** ゴーストを常駐させる。キャラクターごとのオーバーレイウィンドウを持つ。 */
+/**
+ * ゴーストを常駐させる。同時に動かすゴースト（[ShioriService.SLOTS] 体まで）ごとに [GhostSession] を持ち、
+ * キャラクターごとのオーバーレイウィンドウを作る。画面・電池・ネットワークなど端末のことは、動いているゴーストすべてに伝える
+ */
 class GhostOverlayService : LifecycleService() {
-    private var controller: GhostController? = null
     private val debuggable by lazy { (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0 }
-    private var touchJob: Job? = null
-    private var inputJob: Job? = null
-    private var startJob: Job? = null
-    private var loadingJob: Job? = null
-    private var scopesJob: Job? = null
-    private var positionsJob: Job? = null
-    private var windowJob: Job? = null
     private var loadJob: Job? = null
-
-    /** 動かし終えた \![move] と \4 / \5 の通し番号（キャラクターごと） */
-    private val handledMoves = HashMap<Int, Int>()
-    private val handledNudges = HashMap<Int, Int>()
-    private var passThrough = false
-    private val sound = SoundPlayer(
-        onStop = { controller?.onSoundStopped(it) },
-        onLoop = { controller?.onSoundLooped(it) },
-        onError = { file, code, message -> controller?.onSoundError(file, code, message) },
-    )
     private val speech by lazy { SpeechOutput(this) }
-    private val windows = mutableListOf<CharacterWindow>()
+
+    /** 動いているゴースト（起動した順。先頭が今のゴースト） */
+    private val sessions = mutableListOf<GhostSession>()
+
+    /** ゴーストどうしをつなぐ（\![raiseother] や OnOtherGhost*） */
+    private val hub = GhostHub()
+
+    /** 動いているゴーストすべて */
+    private val controllers: List<GhostController> get() = sessions.mapNotNull { it.controller }
+
+    /** 今のゴースト（最初に起動したもの） */
+    private val mainController: GhostController? get() = sessions.firstOrNull()?.controller
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
-            ACTION_STOP -> controller?.close() ?: stopSelf()
-            ACTION_UPDATE -> controller?.networkUpdate() ?: toast("ゴーストが起動していません")
-            ACTION_SHOW -> controller?.restoreWindows("user")
+            // 動いているゴーストをすべて終える（それぞれに OnCloseAll）
+            ACTION_STOP -> if (controllers.isEmpty()) stopSelf() else controllers.forEach { it.close() }
+            ACTION_UPDATE -> mainController?.networkUpdate() ?: toast("ゴーストが起動していません")
+            ACTION_SHOW -> controllers.forEach { it.restoreWindows("user") }
             ACTION_TRAY_CLICK, ACTION_TRAY_DISMISS -> {
                 val title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
                 val text = intent.getStringExtra(EXTRA_TEXT).orEmpty()
-                if (intent.action == ACTION_TRAY_CLICK) controller?.onTrayBalloonClick(title, text) else controller?.onTrayBalloonTimeout(title, text)
+                // お知らせを出したゴーストに伝える（もういなければ今のゴースト）
+                val dir = intent.getStringExtra(EXTRA_GHOST)
+                val c = sessions.firstOrNull { it.dirName == dir }?.controller ?: mainController
+                if (intent.action == ACTION_TRAY_CLICK) c?.onTrayBalloonClick(title, text) else c?.onTrayBalloonTimeout(title, text)
             }
             ACTION_START -> {
                 startInForeground()
                 val dirName = intent.getStringExtra(EXTRA_GHOST)
                 val ghost = dirName?.let { GhostStore.repository(this).find(it) }
-                if (ghost == null || !Settings.canDrawOverlays(this)) {
-                    stopSelf()
-                } else {
-                    startGhost(ghost)
+                val running = sessions.firstOrNull { it.dirName == dirName }
+                when {
+                    ghost == null || !Settings.canDrawOverlays(this) -> if (sessions.isEmpty()) stopSelf()
+                    // 動いているゴーストの「再起動」やシェル・バルーンの切り替えは、ほかのゴーストを止めずにその場で
+                    running != null -> restartInPlace(running, ghost)
+                    else -> startOnly(ghost)
                 }
             }
         }
         return START_NOT_STICKY
     }
 
-    /** @param previous 切り替える前のゴースト（OnGhostChanged で渡す）。ふつうの起動なら null */
-    private fun startGhost(ghost: Ghost, previous: PreviousGhost? = null) {
-        teardown()
+    /** 一覧から起動したゴースト。止めたゴーストの SHIORI を下ろし終えるまで待ってから起動する */
+    private var pendingStart: Job? = null
+
+    /**
+     * アプリの一覧から起動した。[ghost] だけを動かす（動いているゴーストは、何も送らずに止める）。
+     * 同じ SHIORI のプロセスに前のゴーストが残らないよう、下ろし終えてから読み込む
+     */
+    private fun startOnly(ghost: Ghost) {
+        val stopping = teardown()
+        pendingStart?.cancel()
         _loading.value = ghost.dir.name
-        startJob = lifecycleScope.launch {
-            // シェルの定義（surfaces*.txt）は大きいこともあるので、画面を描くスレッドの外で読む
-            val loaded = withContext(Dispatchers.Default) {
-                val shellDir = ghost.shellDir() ?: return@withContext null
-                val repo = GhostStore.repository(this@GhostOverlayService)
-                // 選んだバルーン（無ければゴーストの指定）。どちらも無ければ簡易バルーン
-                Triple(Shell(shellDir), repo, ghost.balloon(repo.balloons))
-            }
-            if (loaded == null) {
-                _loading.value = null
-                toast("${ghost.name}: シェルがありません")
-                stopSelf()
-                return@launch
-            }
-            val (shell, repo, balloon) = loaded
-            runGhost(ghost, previous, shell, repo, balloon)
+        pendingStart = lifecycleScope.launch {
+            withTimeoutOrNull(STOP_WAIT_MS) { stopping.joinAll() }
+            startSession(ghost, previous = null, calledBy = null, slot = 0)
         }
     }
 
-    private fun runGhost(ghost: Ghost, previous: PreviousGhost?, shell: Shell, repo: GhostRepository, balloon: Balloon?) {
-        val c = GhostController(
-            ghost = ghost,
-            shell = shell,
-            balloon = balloon,
-            repository = repo,
-            basewareVersion = AppVersion.of(this).name,
-            previous = previous,
-            shioriFactory = RemoteShiori.factory(this),
-            scope = lifecycleScope,
-            platform = object : GhostPlatform {
-                override fun deviceInfo(): DeviceInfo {
-                    val memory = ActivityManager.MemoryInfo().also { getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
-                    val metrics = resources.displayMetrics
-                    return DeviceInfo(
-                        osName = "Android",
-                        osVersion = Build.VERSION.RELEASE.orEmpty(),
-                        osBuild = Build.VERSION.SDK_INT.toString(),
-                        arch = Build.SUPPORTED_ABIS.firstOrNull().orEmpty(),
-                        cpuCount = Runtime.getRuntime().availableProcessors(),
-                        memoryTotalMb = memory.totalMem / (1024 * 1024),
-                        memoryFreeMb = memory.availMem / (1024 * 1024),
-                        uptimeSeconds = SystemClock.elapsedRealtime() / 1000,
-                        screenWidth = metrics.widthPixels,
-                        screenHeight = metrics.heightPixels,
-                        dpi = metrics.densityDpi,
-                    )
-                }
+    /** 動いているゴースト [s] を、同じ場所（同じ SHIORI のプロセス）で起動し直す。何も送らずに止めてから */
+    private fun restartInPlace(s: GhostSession, ghost: Ghost) {
+        val i = sessions.indexOf(s)
+        sessions.removeAt(i)
+        val stopping = s.teardown()
+        publish()
+        _loading.value = ghost.dir.name
+        lifecycleScope.launch {
+            withTimeoutOrNull(STOP_WAIT_MS) { stopping?.join() }
+            startSession(ghost, previous = null, calledBy = null, slot = s.slot, index = i)
+        }
+    }
 
-                override fun batteryInfo(): BatteryInfo? =
-                    registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let(::batteryInfo)
+    /** 使っていない SHIORI のプロセスの番号。どれも使っていれば null */
+    private fun freeSlot(): Int? = (0 until ShioriService.SLOTS).firstOrNull { slot -> sessions.none { it.slot == slot } }
 
-                override fun systemInfo(): SystemInfo = this@GhostOverlayService.systemInfo()
+    /** ゴーストに呼ばれた（\![call,ghost]）。[dirName] のゴーストを一緒に起動する */
+    private fun callGhost(dirName: String, caller: PreviousGhost): Boolean {
+        if (sessions.any { it.dirName == dirName }) return false
+        val slot = freeSlot() ?: run {
+            toast("同時に動かせるゴーストは ${ShioriService.SLOTS} 体までです")
+            return false
+        }
+        val ghost = GhostStore.repository(this).find(dirName) ?: return false
+        startSession(ghost, previous = null, calledBy = caller, slot = slot)
+        return true
+    }
 
-                /** 作った .nar などを「共有」で渡す。読む許可はそのファイル1つだけ */
-                override fun shareFile(file: File, mimeType: String) {
-                    val uri = runCatching { FileProvider.getUriForFile(this@GhostOverlayService, "$packageName.files", file) }.getOrNull() ?: return
-                    val send = Intent(Intent.ACTION_SEND).setType(mimeType).putExtra(Intent.EXTRA_STREAM, uri)
-                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    send.clipData = ClipData.newRawUri(file.name, uri)
-                    try {
-                        startActivity(Intent.createChooser(send, file.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
-                    } catch (e: ActivityNotFoundException) {
-                        toast("渡せるアプリが見つかりません")
-                    }
-                }
+    private fun startSession(ghost: Ghost, previous: PreviousGhost?, calledBy: PreviousGhost?, slot: Int, index: Int = sessions.size) {
+        val s = GhostSession(ghost.dir.name, slot)
+        sessions.add(index.coerceIn(0, sessions.size), s)
+        publish()
+        s.start(ghost, previous, calledBy)
+    }
 
-                /** ホーム画面にショートカットを置くよう頼む。置くかどうかは Android がユーザーに確かめる */
-                override fun createShortcut(dirName: String, label: String): Boolean {
-                    val context = this@GhostOverlayService
-                    if (!ShortcutManagerCompat.isRequestPinShortcutSupported(context)) return false
-                    val intent = Intent(context, GhostShortcutActivity::class.java).setAction(Intent.ACTION_VIEW)
-                        .putExtra(GhostShortcutActivity.EXTRA_GHOST, dirName)
-                    val info = ShortcutInfoCompat.Builder(context, "ghost:$dirName")
-                        .setShortLabel(label.ifBlank { dirName })
-                        .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
-                        .setIntent(intent)
-                        .build()
-                    return ShortcutManagerCompat.requestPinShortcut(context, info, null)
-                }
+    /** ゴーストが終わった。最後の1体ならサービスも止める */
+    private fun endSession(s: GhostSession) {
+        if (!sessions.remove(s)) return
+        s.teardown()
+        publish()
+        if (sessions.isEmpty()) {
+            teardown()
+            stopSelf()
+        } else {
+            afterSessionsChanged()
+        }
+    }
 
-                override suspend fun dumpSurfaces(dump: SurfaceDump): Int {
-                    val r = renderer ?: return 0
-                    val shell = controller?.shell ?: return 0
-                    return withContext(Dispatchers.Default) {
-                        var count = 0
-                        for (id in dump.surfaces) {
-                            val def = shell.surfaces[id]
-                            val binds = SerikoAnimator.bindLayers(def, dump.binds)
-                            if (writePng(r.render(id, binds), File(dump.dir, "${dump.prefix}$id.png"))) count++
-                            // アニメーションのコマを、\i[ID] で動かしたときと同じ順に重ねて連番で
-                            val anim = dump.animation?.let { def?.animations?.get(it) } ?: continue
-                            var n = 0
-                            for (frame in anim.frames) {
-                                if (frame.isControl) continue
-                                if (n >= MAX_DUMP_FRAMES) break
-                                if (writePng(r.render(id, binds + (anim.id to frame)), File(dump.dir, "%s%d_%04d.png".format(dump.prefix, id, n)))) count++
-                                n++
-                            }
-                        }
-                        count
-                    }
-                }
+    /** [s] のゴーストが閉じ終えたので、同じ場所（同じ SHIORI のプロセス）で次のゴーストを起こす */
+    private fun replaceSession(s: GhostSession, next: Ghost, previous: PreviousGhost) {
+        val i = sessions.indexOf(s)
+        if (i < 0) return
+        sessions.removeAt(i)
+        s.teardown()
+        startSession(next, previous, calledBy = null, slot = s.slot, index = i)
+    }
 
-                override suspend fun dumpBalloon(scope: Int, file: File): Boolean {
-                    val bitmap = withContext(Dispatchers.Main) { windows.firstOrNull { it.scopeId == scope }?.balloonBitmap() } ?: return false
-                    return withContext(Dispatchers.IO) { writePng(bitmap, file) }
-                }
+    /** 動いているゴーストを、アプリの画面に知らせる */
+    private fun publish() {
+        _controllers.value = controllers
+        _controller.value = mainController
+        _running.value = sessions.firstOrNull()?.dirName
+        _runningGhosts.value = sessions.map { it.dirName }
+    }
 
-                /** ゴーストのフォルダのファイルだけ、その1つを読む許可を付けて渡す */
-                override fun openFile(file: File, mimeType: String): Boolean {
-                    val uri = runCatching {
-                        androidx.core.content.FileProvider.getUriForFile(this@GhostOverlayService, "$packageName.files", file)
-                    }.getOrNull() ?: return false
-                    val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mimeType)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    return try {
-                        startActivity(intent)
-                        true
-                    } catch (e: ActivityNotFoundException) {
-                        toast("開けるアプリが見つかりません")
-                        false
-                    }
-                }
-
-                override fun networkStatus(): NetworkStatus {
-                    val cm = getSystemService(ConnectivityManager::class.java)
-                    val network = cm.activeNetwork
-                    return networkStatus(network?.let(cm::getNetworkCapabilities), network?.let(cm::getLinkProperties))
-                }
-
-                override fun showText(title: String, text: String) = TextViewerActivity.start(this@GhostOverlayService, title, text)
-
-                override fun openSystemDialog(request: SystemDialogRequest): Boolean {
-                    SystemDialogActivity.start(this@GhostOverlayService, request)
-                    return true
-                }
-
-                override fun closeSystemDialog(id: String?) = SystemDialogActivity.close(id)
-
-                override fun developerMode(): Boolean = OverlaySettings.developer(OverlaySettings.prefs(this@GhostOverlayService))
-
-                override fun openDeveloperScreen(page: String) = DeveloperActivity.start(this@GhostOverlayService, page)
-
-                override fun openSettings() {
-                    startActivity(Intent(this@GhostOverlayService, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }
-
-                override fun playSound(file: File, loop: Boolean, volume: Int?) = sound.play(file, loop, SoundOptions(volume = volume))
-
-                override fun playSound(file: File, loop: Boolean, options: SoundOptions) = sound.play(file, loop, options)
-
-                override fun soundControl(command: String, file: File?, options: SoundOptions) {
-                    when (command) {
-                        "load" -> file?.let { sound.load(it, options) }
-                        "option" -> file?.let { sound.option(it, options) }
-                        "pause" -> sound.pause(file)
-                        "resume" -> sound.resume(file)
-                    }
-                }
-
-                override fun stopSound() = sound.stop()
-
-                override fun stopSound(file: File?) = sound.stop(file)
-
-                override fun showTrayBalloon(title: String, text: String, icon: String) = showGhostMessage(title, text)
-
-                /** 端末のカレンダーの [day] の予定。設定で許し、読む許可もあるときだけ */
-                override fun deviceSchedule(day: java.time.LocalDate): List<DeviceEvent> {
-                    val context = this@GhostOverlayService
-                    if (!OverlaySettings.calendar(OverlaySettings.prefs(context))) return emptyList()
-                    if (checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != android.content.pm.PackageManager.PERMISSION_GRANTED) return emptyList()
-                    val zone = java.time.ZoneId.systemDefault()
-                    val from = day.atStartOfDay(zone).toInstant().toEpochMilli()
-                    val to = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-                    val uri = android.provider.CalendarContract.Instances.CONTENT_URI.buildUpon().also {
-                        android.content.ContentUris.appendId(it, from)
-                        android.content.ContentUris.appendId(it, to)
-                    }.build()
-                    val columns = arrayOf(
-                        android.provider.CalendarContract.Instances.TITLE, android.provider.CalendarContract.Instances.DESCRIPTION,
-                        android.provider.CalendarContract.Instances.BEGIN, android.provider.CalendarContract.Instances.END,
-                        android.provider.CalendarContract.Instances.ALL_DAY,
-                    )
-                    return runCatching {
-                        contentResolver.query(uri, columns, null, null, android.provider.CalendarContract.Instances.BEGIN + " ASC")?.use { c ->
-                            buildList {
-                                while (c.moveToNext() && size < MAX_DEVICE_EVENTS) {
-                                    val allDay = c.getInt(4) == 1
-                                    // 終日の予定は UTC の 0 時で入っている
-                                    val tz = if (allDay) java.time.ZoneOffset.UTC else zone
-                                    fun time(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(tz).toLocalDateTime()
-                                    add(DeviceEvent(c.getString(0).orEmpty(), c.getString(1).orEmpty(), time(c.getLong(2)), time(c.getLong(3)), allDay))
-                                }
-                            }
-                        }.orEmpty()
-                    }.getOrDefault(emptyList())
-                }
-
-                override fun setWallpaper(request: WallpaperRequest): Boolean {
-                    if (!OverlaySettings.wallpaper(OverlaySettings.prefs(this@GhostOverlayService))) {
-                        Log.i(TAG, "壁紙の変更はアプリの設定で許していません")
-                        return false
-                    }
-                    lifecycleScope.launch {
-                        val ok = withContext(Dispatchers.Default) {
-                            runCatching {
-                                val metrics = resources.displayMetrics
-                                val bitmap = Wallpapers.compose(request, metrics.widthPixels, metrics.heightPixels) ?: return@runCatching false
-                                android.app.WallpaperManager.getInstance(this@GhostOverlayService)
-                                    .setBitmap(bitmap, null, true, android.app.WallpaperManager.FLAG_SYSTEM)
-                                true
-                            }.getOrDefault(false)
-                        }
-                        if (!ok) toast("壁紙を変えられませんでした")
-                    }
-                    return true
-                }
-
-                /** 書き換えてよいという許可を付けて、そのファイル1つだけ渡す */
-                override fun editFile(file: File, line: Int?): Boolean {
-                    if (!OverlaySettings.developer(OverlaySettings.prefs(this@GhostOverlayService))) return false
-                    val uri = runCatching { FileProvider.getUriForFile(this@GhostOverlayService, "$packageName.files", file) }.getOrNull() ?: return false
-                    val intent = Intent(Intent.ACTION_EDIT).setDataAndType(uri, "text/plain")
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                    if (line != null) intent.putExtra("line", line)
-                    return try {
-                        startActivity(intent)
-                        true
-                    } catch (e: ActivityNotFoundException) {
-                        toast("書き換えられるアプリが見つかりません")
-                        false
-                    }
-                }
-
-                override fun setTrayText(text: String) {
-                    trayText = text.takeIf { it.isNotBlank() }
-                    startInForeground(minimized = controller?.state?.value?.window?.minimized == true)
-                }
-
-                override fun windowGeometry(scope: Int): WindowGeometry? =
-                    windows.firstOrNull { it.scopeId == scope }?.geometry(characterScale.toDouble(), balloonScale.toDouble())
-
-                /** アプリの置き場（内部）と、端末の共有の置き場 */
-                override fun diskInfo(): List<DiskInfo> = listOfNotNull(filesDir, getExternalFilesDir(null)).mapNotNull { dir ->
-                    runCatching {
-                        val stat = android.os.StatFs(dir.path)
-                        val external = dir != filesDir
-                        DiskInfo(
-                            mountpoint = if (external) android.os.Environment.getExternalStorageDirectory().path else android.os.Environment.getDataDirectory().path,
-                            type = if (external && android.os.Environment.isExternalStorageRemovable(dir)) "removable" else "fixed",
-                            totalMb = stat.totalBytes / (1024 * 1024),
-                            freeMb = stat.availableBytes / (1024 * 1024),
-                        )
-                    }.getOrNull()
-                }.distinctBy { it.mountpoint }
-
-                override fun soundStatus(): List<SoundStatus> = sound.statuses()
-
-                override fun imageMainColor(file: File): Int? = BalloonColors.mainColor(file)
-
-                override fun voiceRecognitionEnabled(): Boolean = voiceAllowed()
-
-                override fun mailAccounts(): List<net.pono.baseware.net.MailAccount> = runCatching { MailAccounts.load(this@GhostOverlayService) }.getOrDefault(emptyList())
-
-                override fun mailCheckMinutes(): Int = MailAccounts.intervalMinutes(this@GhostOverlayService)
-
-                override fun speechEnabled(): Boolean = OverlaySettings.speech(OverlaySettings.prefs(this@GhostOverlayService))
-
-                override fun speak(scope: Int, text: String) = speech.speak(scope, text)
-
-                override suspend fun waitSound() = sound.await()
-
-                override fun onShellChanged(shell: Shell) {
-                    controller?.let { rebuildWindows(it) }
-                }
-
-                override fun onBalloonChanged(balloon: Balloon?) {
-                    controller?.let { rebuildWindows(it) }
-                }
-
-                /** ウェブのページだけ開く。ゴーストのスクリプトに他のアプリ（電話や決済など）を起動させない */
-                override fun openUrl(url: String) {
-                    val uri = Uri.parse(url)
-                    if (uri.scheme?.lowercase() !in setOf("http", "https")) {
-                        Log.w(TAG, "unsupported url scheme: $url")
-                        return
-                    }
-                    try {
-                        startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    } catch (e: ActivityNotFoundException) {
-                        toast("ブラウザが見つかりません")
-                    }
-                }
-
-                override fun onQuit() {
-                    teardown()
-                    stopSelf()
-                }
-
-                /** いまのゴーストを閉じて、サービスは止めずに次のゴーストを起こす */
-                override fun switchGhost(dirName: String, previous: PreviousGhost) {
-                    val next = GhostStore.repository(this@GhostOverlayService).find(dirName)
-                    if (next == null) {
-                        onQuit()
-                        return
-                    }
-                    // 閉じる処理の途中で呼ばれるので、落ち着いてから入れ替える
-                    lifecycleScope.launch { startGhost(next, previous) }
-                }
-
-                // ゴーストとのやりとり（ユーザーの操作も含む）はデバッグビルドでだけ残す
-                override fun log(message: String) {
-                    if (debuggable) Log.i(TAG, message)
-                }
-
-                override fun onError(message: String) {
-                    Log.w(TAG, message)
-                    toast(message)
-                }
-            },
-        )
-        controller = c
-        _controller.value = c
+    /** ゴーストが増えたり減ったりしたら、SSTP・声・通知を合わせる */
+    private fun afterSessionsChanged() {
         updateSstp()
         updateVoice()
-        usbDevices = null
-        watchUsb()
-        _running.value = ghost.dir.name
-        c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
-        createWindows(c)
-        watchPositions(c)
-        watchWindowState(c)
-        watchLoad(c)
-        // pono-droid の画面が前にある間は、キャラクターがボタンに重なっても押せるようにタッチを通す。
-        // ただし入力の箱を出している間は、箱に触れられるように通さない
-        touchJob = lifecycleScope.launch {
-            combine(appInFront, c.state.map { it.input != null }) { inFront, typing -> inFront && !typing }
-                .distinctUntilChanged()
-                .collect { pass ->
-                    passThrough = pass
-                    windows.forEach { it.setTouchable(!pass) }
-                }
-        }
-        // 入力の箱は \0 のバルーンに出す。開いている間だけ、そのウィンドウがキーボードの入力を受ける
-        inputJob = lifecycleScope.launch {
-            c.state.map { it.input?.kind }.distinctUntilChanged().collect { applyInput(c) }
-        }
-        c.start()
-        // SHIORI を読み終わるまで、アプリの一覧にも読み込み中と出す（start で読み込み中になる）
-        loadingJob = lifecycleScope.launch {
-            c.state.first { it.loading == null }
-            _loading.value = null
-        }
+        refreshForeground()
     }
 
-    /** いまのシェルとバルーン（キャラクターのウィンドウで共有する） */
-    private var renderer: SurfaceRenderer? = null
-    private var balloonSkin: BalloonSkin? = null
-
-    /**
-     * キャラクターのウィンドウを、いまのシェルとバルーンで作る。\0 と \1 のほか、3人目以降のキャラクター（\p[2] など）にも作り、
-     * スクリプトが新しい \p[N] に話しかけたら、そのときに足す
-     */
-    private fun createWindows(c: GhostController) {
-        renderer = SurfaceRenderer(c.shell)
-        synchronized(faceIcons) { faceIcons.clear() }
-        balloonSkin = c.balloon?.let(::BalloonSkin)
-        scopesJob?.cancel()
-        scopesJob = lifecycleScope.launch {
-            c.state.map { it.characters.keys }.distinctUntilChanged().collect { scopes -> ensureWindows(c, scopes) }
-        }
-    }
-
-    /** \![move]・\![set,position]・\4 / \5・\![set,alignmenttodesktop] を、キャラクターのウィンドウに伝える */
-    private fun watchPositions(c: GhostController) {
-        handledMoves.clear()
-        handledNudges.clear()
-        positionsJob?.cancel()
-        positionsJob = lifecycleScope.launch {
-            c.state.map { s ->
-                s.characters.mapValues { (_, ch) -> listOf(ch.move?.first, ch.pinned, ch.nudge?.first, ch.alignment, ch.balloonAlign, ch.balloonOffset) }
-            }
-                .distinctUntilChanged()
-                .collect { applyPositions(c) }
-        }
-    }
-
-    private fun applyPositions(c: GhostController) {
-        for ((scope, ch) in c.state.value.characters) {
-            val window = windows.firstOrNull { it.scopeId == scope } ?: continue
-            window.setPinned(ch.pinned)
-            window.setAlignment(ch.alignment)
-            window.refreshBalloon()
-            ch.nudge?.let { (serial, away) ->
-                if (handledNudges[scope] == serial) return@let
-                handledNudges[scope] = serial
-                // 相手は、\0 なら \1、ほかのキャラクターなら \0
-                val partner = windows.firstOrNull { it.scopeId == if (scope == 0) 1 else 0 } ?: return@let
-                window.nudge(away, partner.screenRect())
-            }
-            val (serial, move) = ch.move ?: continue
-            if (handledMoves[scope] == serial) continue
-            handledMoves[scope] = serial
-            window.move(move) { id -> windows.firstOrNull { it.scopeId == id } }
-        }
-    }
-
-    /** 最小化・重なり順・位置の初期化・最初の位置を、キャラクターのウィンドウに伝える */
-    private fun watchWindowState(c: GhostController) {
-        windowJob?.cancel()
-        windowJob = lifecycleScope.launch {
-            var previous: WindowState? = null
-            c.state.map { it.window }.distinctUntilChanged().collect { w ->
-                val before = previous
-                previous = w
-                if (w.minimized != before?.minimized) {
-                    windows.forEach { it.setHidden(w.minimized) }
-                    // 隠している間は、通知から出し直せるようにする
-                    if (before != null) startInForeground(minimized = w.minimized)
-                }
-                if (before != null && (w.zorder != before.zorder || w.frontRequests != before.frontRequests)) restack(w)
-                if (before != null && w.resetRequests != before.resetRequests) {
-                    windows.forEach { it.resetPosition(w.defaultPositions[it.scopeId]) }
-                }
-                if (w.defaultPositions != before?.defaultPositions) {
-                    windows.forEach { it.applyDefault(w.defaultPositions[it.scopeId]) }
-                }
-            }
-        }
+    /** 常駐の通知を、今の様子で出し直す（ゴーストがみな隠れていれば「表示」を出す） */
+    private fun refreshForeground() {
+        val all = controllers
+        startInForeground(minimized = all.isNotEmpty() && all.all { it.state.value.window.minimized })
     }
 
     /**
-     * ウィンドウを付け直して重なり順を決める（後から付けたものほど上）。いつもの順は \1 → 3人目以降 → \0 で、
-     * それぞれサーフェスの上にバルーン。\![set,zorder] の組があれば、組の中だけその順に並べ替える
+     * 動いているゴーストすべてのキャラクターの重なりと見切れを、どのゴーストにも伝える（OnOtherOverlap / OnOtherOffscreen）。
+     * キャラクターは「本体側の名前/番号」
      */
-    private fun restack(w: WindowState) {
-        val order = windows.map { it.scopeId }.sortedBy { if (it == 0) Int.MAX_VALUE else it }
-            .flatMap { listOf("s$it", "b$it") }.toMutableList()
-        for (group in w.zorder) {
-            val slots = order.indices.filter { order[it] in group }
-            // 組は手前から並べてあるので、下（先に付ける方）から埋める
-            val members = group.filter { it in order }.reversed()
-            slots.zip(members).forEach { (i, token) -> order[i] = token }
+    private fun reportOtherLayout() {
+        val shown = sessions.flatMap { s ->
+            val name = s.controller?.ghost?.sakuraName ?: return@flatMap emptyList()
+            s.shownRects().map { (scope, r) -> "$name/$scope" to r }
         }
-        windows.forEach { it.detach() }
-        for (token in order) {
-            windows.firstOrNull { it.scopeId == token.drop(1).toInt() }?.attach(balloon = token[0] == 'b')
-        }
-        applyInput(controller ?: return)
-    }
-
-    /** sticky-window の組で、[scope] と一緒に動くキャラクターのウィンドウ */
-    private fun stickyPartners(scope: Int): List<CharacterWindow> {
-        val group = controller?.state?.value?.window?.stickyGroups?.firstOrNull { scope in it } ?: return emptyList()
-        return windows.filter { it.scopeId != scope && it.scopeId in group }
-    }
-
-    /** キャラクターの重なりと見切れを調べて、変わっていればゴーストに伝える（OnOverlap / OnOffscreen） */
-    private fun reportLayout() {
-        val c = controller ?: return
-        val shown = windows.filter { (c.state.value.characters[it.scopeId]?.surface ?: -1) >= 0 }
-            .map { it.scopeId to it.screenRect() }
-            .filter { (_, r) -> !r.isEmpty }
-        val screen = windows.firstOrNull()?.screenBounds() ?: return
+        val screen = sessions.firstNotNullOfOrNull { it.screenBounds() } ?: return
         val overlaps = shown.flatMapIndexed { i, (a, ra) ->
             shown.drop(i + 1).filter { (_, rb) -> Rect.intersects(ra, rb) }.map { (b, _) -> a to b }
         }
         val offscreen = shown.filter { (_, r) -> !screen.contains(r) }.map { it.first }
-        c.onWindowLayout(overlaps, offscreen)
+        controllers.forEach { it.onOtherWindowLayout(overlaps, offscreen) }
     }
 
-    /** 入力の箱を開いているかを \0 のウィンドウに伝える（作り直したウィンドウにも） */
-    private fun applyInput(c: GhostController) {
-        val kind = c.state.value.input?.kind
-        windows.firstOrNull { it.scopeId == 0 }?.setInputOpen(kind != null, secure = kind == InputRequest.Kind.PASSWORD)
-    }
+    /** 動いているゴースト1体ぶん（キャラクターのウィンドウ・音・SHIORI のプロセス）。[slot] は SHIORI のプロセスの番号 */
+    private inner class GhostSession(val dirName: String, val slot: Int) {
+        var controller: GhostController? = null
 
-    private fun ensureWindows(c: GhostController, scopes: Set<Int>) {
-        val shown = windows.map { it.scopeId }.toSet()
-        // 後から足したウィンドウほど上に重なるので、\1 → 3人目以降 → \0 の順に作る（\0 がいちばん上）
-        val order = scopes.filter { it !in shown }.sortedBy { if (it == 0) Int.MAX_VALUE else it }
-        val prefs = OverlaySettings.prefs(this)
-        val w = c.state.value.window
-        for (scope in order) {
-            windows += CharacterWindow(this, scope, c, renderer ?: return, balloonSkin, prefs).also {
-                it.onShift = { dx, dy -> stickyPartners(scope).forEach { p -> p.shiftBy(dx, dy) } }
-                it.onSettled = {
-                    stickyPartners(scope).forEach(CharacterWindow::savePosition)
-                    reportLayout()
+        private var touchJob: Job? = null
+        private var inputJob: Job? = null
+        private var startJob: Job? = null
+        private var loadingJob: Job? = null
+        private var scopesJob: Job? = null
+        private var positionsJob: Job? = null
+        private var windowJob: Job? = null
+
+        /** 動かし終えた \![move] と \4 / \5 の通し番号（キャラクターごと） */
+        private val handledMoves = HashMap<Int, Int>()
+        private val handledNudges = HashMap<Int, Int>()
+        private var passThrough = false
+        private val sound = SoundPlayer(
+            onStop = { controller?.onSoundStopped(it) },
+            onLoop = { controller?.onSoundLooped(it) },
+            onError = { file, code, message -> controller?.onSoundError(file, code, message) },
+        )
+        private val windows = mutableListOf<CharacterWindow>()
+
+        /**
+         * @param previous 切り替える前のゴースト（OnGhostChanged で渡す）。ふつうの起動なら null
+         * @param calledBy このゴーストを呼んだゴースト（OnGhostCalled で渡す）
+         */
+        fun start(ghost: Ghost, previous: PreviousGhost?, calledBy: PreviousGhost?) {
+            _loading.value = ghost.dir.name
+            startJob = lifecycleScope.launch {
+                // シェルの定義（surfaces*.txt）は大きいこともあるので、画面を描くスレッドの外で読む
+                val loaded = withContext(Dispatchers.Default) {
+                    val shellDir = ghost.shellDir() ?: return@withContext null
+                    val repo = GhostStore.repository(this@GhostOverlayService)
+                    // 選んだバルーン（無ければゴーストの指定）。どちらも無ければ簡易バルーン
+                    Triple(Shell(shellDir), repo, ghost.balloon(repo.balloons))
                 }
-                it.show()
-                it.setTouchable(!passThrough)
-                it.setHidden(w.minimized)
-                it.applyDefault(w.defaultPositions[scope])
+                if (loaded == null) {
+                    _loading.value = null
+                    toast("${ghost.name}: シェルがありません")
+                    endSession(this@GhostSession)
+                    return@launch
+                }
+                val (shell, repo, balloon) = loaded
+                runGhost(ghost, previous, calledBy, shell, repo, balloon)
             }
         }
-        if (order.isEmpty()) return
-        if (w.zorder.isNotEmpty()) restack(w)
-        // 後から出てきたキャラクターへの \![move] も、ウィンドウができてから動かす
-        applyPositions(c)
-    }
 
-    /** シェルやバルーンが切り替わったら、ウィンドウを作り直す */
-    private fun rebuildWindows(c: GhostController) {
-        windows.forEach { it.dismiss() }
-        windows.clear()
-        createWindows(c)
+
+        private fun runGhost(ghost: Ghost, previous: PreviousGhost?, calledBy: PreviousGhost?, shell: Shell, repo: GhostRepository, balloon: Balloon?) {
+            val c = GhostController(
+                ghost = ghost,
+                shell = shell,
+                balloon = balloon,
+                repository = repo,
+                basewareVersion = AppVersion.of(this@GhostOverlayService).name,
+                previous = previous,
+                hub = hub,
+                calledBy = calledBy,
+                // 同時に動かすゴーストは、1体ずつ別の SHIORI のプロセスで
+                shioriFactory = RemoteShiori.factory(this@GhostOverlayService, slot),
+                scope = lifecycleScope,
+                platform = object : GhostPlatform {
+                    override fun deviceInfo(): DeviceInfo {
+                        val memory = ActivityManager.MemoryInfo().also { getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
+                        val metrics = resources.displayMetrics
+                        return DeviceInfo(
+                            osName = "Android",
+                            osVersion = Build.VERSION.RELEASE.orEmpty(),
+                            osBuild = Build.VERSION.SDK_INT.toString(),
+                            arch = Build.SUPPORTED_ABIS.firstOrNull().orEmpty(),
+                            cpuCount = Runtime.getRuntime().availableProcessors(),
+                            memoryTotalMb = memory.totalMem / (1024 * 1024),
+                            memoryFreeMb = memory.availMem / (1024 * 1024),
+                            uptimeSeconds = SystemClock.elapsedRealtime() / 1000,
+                            screenWidth = metrics.widthPixels,
+                            screenHeight = metrics.heightPixels,
+                            dpi = metrics.densityDpi,
+                        )
+                    }
+
+                    override fun batteryInfo(): BatteryInfo? =
+                        registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let(::batteryInfo)
+
+                    override fun systemInfo(): SystemInfo = this@GhostOverlayService.systemInfo()
+
+                    /** 作った .nar などを「共有」で渡す。読む許可はそのファイル1つだけ */
+                    override fun shareFile(file: File, mimeType: String) {
+                        val uri = runCatching { FileProvider.getUriForFile(this@GhostOverlayService, "$packageName.files", file) }.getOrNull() ?: return
+                        val send = Intent(Intent.ACTION_SEND).setType(mimeType).putExtra(Intent.EXTRA_STREAM, uri)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        send.clipData = ClipData.newRawUri(file.name, uri)
+                        try {
+                            startActivity(Intent.createChooser(send, file.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                        } catch (e: ActivityNotFoundException) {
+                            toast("渡せるアプリが見つかりません")
+                        }
+                    }
+
+                    /** ホーム画面にショートカットを置くよう頼む。置くかどうかは Android がユーザーに確かめる */
+                    override fun createShortcut(dirName: String, label: String): Boolean {
+                        val context = this@GhostOverlayService
+                        if (!ShortcutManagerCompat.isRequestPinShortcutSupported(context)) return false
+                        val intent = Intent(context, GhostShortcutActivity::class.java).setAction(Intent.ACTION_VIEW)
+                            .putExtra(GhostShortcutActivity.EXTRA_GHOST, dirName)
+                        val info = ShortcutInfoCompat.Builder(context, "ghost:$dirName")
+                            .setShortLabel(label.ifBlank { dirName })
+                            .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
+                            .setIntent(intent)
+                            .build()
+                        return ShortcutManagerCompat.requestPinShortcut(context, info, null)
+                    }
+
+                    override suspend fun dumpSurfaces(dump: SurfaceDump): Int {
+                        val r = renderer ?: return 0
+                        val shell = controller?.shell ?: return 0
+                        return withContext(Dispatchers.Default) {
+                            var count = 0
+                            for (id in dump.surfaces) {
+                                val def = shell.surfaces[id]
+                                val binds = SerikoAnimator.bindLayers(def, dump.binds)
+                                if (writePng(r.render(id, binds), File(dump.dir, "${dump.prefix}$id.png"))) count++
+                                // アニメーションのコマを、\i[ID] で動かしたときと同じ順に重ねて連番で
+                                val anim = dump.animation?.let { def?.animations?.get(it) } ?: continue
+                                var n = 0
+                                for (frame in anim.frames) {
+                                    if (frame.isControl) continue
+                                    if (n >= MAX_DUMP_FRAMES) break
+                                    if (writePng(r.render(id, binds + (anim.id to frame)), File(dump.dir, "%s%d_%04d.png".format(dump.prefix, id, n)))) count++
+                                    n++
+                                }
+                            }
+                            count
+                        }
+                    }
+
+                    override suspend fun dumpBalloon(scope: Int, file: File): Boolean {
+                        val bitmap = withContext(Dispatchers.Main) { windows.firstOrNull { it.scopeId == scope }?.balloonBitmap() } ?: return false
+                        return withContext(Dispatchers.IO) { writePng(bitmap, file) }
+                    }
+
+                    /** ゴーストのフォルダのファイルだけ、その1つを読む許可を付けて渡す */
+                    override fun openFile(file: File, mimeType: String): Boolean {
+                        val uri = runCatching {
+                            androidx.core.content.FileProvider.getUriForFile(this@GhostOverlayService, "$packageName.files", file)
+                        }.getOrNull() ?: return false
+                        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mimeType)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        return try {
+                            startActivity(intent)
+                            true
+                        } catch (e: ActivityNotFoundException) {
+                            toast("開けるアプリが見つかりません")
+                            false
+                        }
+                    }
+
+                    override fun networkStatus(): NetworkStatus {
+                        val cm = getSystemService(ConnectivityManager::class.java)
+                        val network = cm.activeNetwork
+                        return networkStatus(network?.let(cm::getNetworkCapabilities), network?.let(cm::getLinkProperties))
+                    }
+
+                    override fun showText(title: String, text: String) = TextViewerActivity.start(this@GhostOverlayService, title, text)
+
+                    override fun openSystemDialog(request: SystemDialogRequest): Boolean {
+                        SystemDialogActivity.start(this@GhostOverlayService, request, controller ?: return false)
+                        return true
+                    }
+
+                    override fun closeSystemDialog(id: String?) {
+                        controller?.let { SystemDialogActivity.close(id, it) }
+                    }
+
+                    override fun developerMode(): Boolean = OverlaySettings.developer(OverlaySettings.prefs(this@GhostOverlayService))
+
+                    override fun openDeveloperScreen(page: String) = DeveloperActivity.start(this@GhostOverlayService, page, dirName)
+
+                    override fun openSettings() {
+                        startActivity(Intent(this@GhostOverlayService, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+
+                    override fun playSound(file: File, loop: Boolean, volume: Int?) = sound.play(file, loop, SoundOptions(volume = volume))
+
+                    override fun playSound(file: File, loop: Boolean, options: SoundOptions) = sound.play(file, loop, options)
+
+                    override fun soundControl(command: String, file: File?, options: SoundOptions) {
+                        when (command) {
+                            "load" -> file?.let { sound.load(it, options) }
+                            "option" -> file?.let { sound.option(it, options) }
+                            "pause" -> sound.pause(file)
+                            "resume" -> sound.resume(file)
+                        }
+                    }
+
+                    override fun stopSound() = sound.stop()
+
+                    override fun stopSound(file: File?) = sound.stop(file)
+
+                    override fun showTrayBalloon(title: String, text: String, icon: String) = showGhostMessage(title, text, dirName)
+
+                    /** 端末のカレンダーの [day] の予定。設定で許し、読む許可もあるときだけ */
+                    override fun deviceSchedule(day: java.time.LocalDate): List<DeviceEvent> {
+                        val context = this@GhostOverlayService
+                        if (!OverlaySettings.calendar(OverlaySettings.prefs(context))) return emptyList()
+                        if (checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != android.content.pm.PackageManager.PERMISSION_GRANTED) return emptyList()
+                        val zone = java.time.ZoneId.systemDefault()
+                        val from = day.atStartOfDay(zone).toInstant().toEpochMilli()
+                        val to = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                        val uri = android.provider.CalendarContract.Instances.CONTENT_URI.buildUpon().also {
+                            android.content.ContentUris.appendId(it, from)
+                            android.content.ContentUris.appendId(it, to)
+                        }.build()
+                        val columns = arrayOf(
+                            android.provider.CalendarContract.Instances.TITLE, android.provider.CalendarContract.Instances.DESCRIPTION,
+                            android.provider.CalendarContract.Instances.BEGIN, android.provider.CalendarContract.Instances.END,
+                            android.provider.CalendarContract.Instances.ALL_DAY,
+                        )
+                        return runCatching {
+                            contentResolver.query(uri, columns, null, null, android.provider.CalendarContract.Instances.BEGIN + " ASC")?.use { c ->
+                                buildList {
+                                    while (c.moveToNext() && size < MAX_DEVICE_EVENTS) {
+                                        val allDay = c.getInt(4) == 1
+                                        // 終日の予定は UTC の 0 時で入っている
+                                        val tz = if (allDay) java.time.ZoneOffset.UTC else zone
+                                        fun time(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(tz).toLocalDateTime()
+                                        add(DeviceEvent(c.getString(0).orEmpty(), c.getString(1).orEmpty(), time(c.getLong(2)), time(c.getLong(3)), allDay))
+                                    }
+                                }
+                            }.orEmpty()
+                        }.getOrDefault(emptyList())
+                    }
+
+                    override fun setWallpaper(request: WallpaperRequest): Boolean {
+                        if (!OverlaySettings.wallpaper(OverlaySettings.prefs(this@GhostOverlayService))) {
+                            Log.i(TAG, "壁紙の変更はアプリの設定で許していません")
+                            return false
+                        }
+                        lifecycleScope.launch {
+                            val ok = withContext(Dispatchers.Default) {
+                                runCatching {
+                                    val metrics = resources.displayMetrics
+                                    val bitmap = Wallpapers.compose(request, metrics.widthPixels, metrics.heightPixels) ?: return@runCatching false
+                                    android.app.WallpaperManager.getInstance(this@GhostOverlayService)
+                                        .setBitmap(bitmap, null, true, android.app.WallpaperManager.FLAG_SYSTEM)
+                                    true
+                                }.getOrDefault(false)
+                            }
+                            if (!ok) toast("壁紙を変えられませんでした")
+                        }
+                        return true
+                    }
+
+                    /** 書き換えてよいという許可を付けて、そのファイル1つだけ渡す */
+                    override fun editFile(file: File, line: Int?): Boolean {
+                        if (!OverlaySettings.developer(OverlaySettings.prefs(this@GhostOverlayService))) return false
+                        val uri = runCatching { FileProvider.getUriForFile(this@GhostOverlayService, "$packageName.files", file) }.getOrNull() ?: return false
+                        val intent = Intent(Intent.ACTION_EDIT).setDataAndType(uri, "text/plain")
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                        if (line != null) intent.putExtra("line", line)
+                        return try {
+                            startActivity(intent)
+                            true
+                        } catch (e: ActivityNotFoundException) {
+                            toast("書き換えられるアプリが見つかりません")
+                            false
+                        }
+                    }
+
+                    override fun setTrayText(text: String) {
+                        trayText = text.takeIf { it.isNotBlank() }
+                        refreshForeground()
+                    }
+
+                    override fun windowGeometry(scope: Int): WindowGeometry? =
+                        windows.firstOrNull { it.scopeId == scope }?.geometry(characterScale.toDouble(), balloonScale.toDouble())
+
+                    /** アプリの置き場（内部）と、端末の共有の置き場 */
+                    override fun diskInfo(): List<DiskInfo> = listOfNotNull(filesDir, getExternalFilesDir(null)).mapNotNull { dir ->
+                        runCatching {
+                            val stat = android.os.StatFs(dir.path)
+                            val external = dir != filesDir
+                            DiskInfo(
+                                mountpoint = if (external) android.os.Environment.getExternalStorageDirectory().path else android.os.Environment.getDataDirectory().path,
+                                type = if (external && android.os.Environment.isExternalStorageRemovable(dir)) "removable" else "fixed",
+                                totalMb = stat.totalBytes / (1024 * 1024),
+                                freeMb = stat.availableBytes / (1024 * 1024),
+                            )
+                        }.getOrNull()
+                    }.distinctBy { it.mountpoint }
+
+                    override fun soundStatus(): List<SoundStatus> = sound.statuses()
+
+                    override fun imageMainColor(file: File): Int? = BalloonColors.mainColor(file)
+
+                    override fun voiceRecognitionEnabled(): Boolean = voiceAllowed()
+
+                    override fun mailAccounts(): List<net.pono.baseware.net.MailAccount> = runCatching { MailAccounts.load(this@GhostOverlayService) }.getOrDefault(emptyList())
+
+                    override fun mailCheckMinutes(): Int = MailAccounts.intervalMinutes(this@GhostOverlayService)
+
+                    override fun speechEnabled(): Boolean = OverlaySettings.speech(OverlaySettings.prefs(this@GhostOverlayService))
+
+                    override fun speak(scope: Int, text: String) = speech.speak(scope, text)
+
+                    override suspend fun waitSound() = sound.await()
+
+                    override fun onShellChanged(shell: Shell) {
+                        controller?.let { rebuildWindows(it) }
+                    }
+
+                    override fun onBalloonChanged(balloon: Balloon?) {
+                        controller?.let { rebuildWindows(it) }
+                    }
+
+                    /** ウェブのページだけ開く。ゴーストのスクリプトに他のアプリ（電話や決済など）を起動させない */
+                    override fun openUrl(url: String) {
+                        val uri = Uri.parse(url)
+                        if (uri.scheme?.lowercase() !in setOf("http", "https")) {
+                            Log.w(TAG, "unsupported url scheme: $url")
+                            return
+                        }
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        } catch (e: ActivityNotFoundException) {
+                            toast("ブラウザが見つかりません")
+                        }
+                    }
+
+                    /** このゴーストが終わった。ほかに動いているゴーストが無ければサービスも止める */
+                    override fun onQuit() = endSession(this@GhostSession)
+
+                    /** いまのゴーストを閉じて、サービスは止めずに次のゴーストを（同じ SHIORI のプロセスで）起こす */
+                    override fun switchGhost(dirName: String, previous: PreviousGhost) {
+                        val next = GhostStore.repository(this@GhostOverlayService).find(dirName)
+                        if (next == null) {
+                            onQuit()
+                            return
+                        }
+                        // 閉じる処理の途中で呼ばれるので、落ち着いてから入れ替える
+                        lifecycleScope.launch { replaceSession(this@GhostSession, next, previous) }
+                    }
+
+                    /** ほかのゴーストを、このゴーストと一緒に起動する */
+                    override fun callGhost(dirName: String, caller: PreviousGhost): Boolean = this@GhostOverlayService.callGhost(dirName, caller)
+
+                    // ゴーストとのやりとり（ユーザーの操作も含む）はデバッグビルドでだけ残す
+                    override fun log(message: String) {
+                        if (debuggable) Log.i(TAG, message)
+                    }
+
+                    override fun onError(message: String) {
+                        Log.w(TAG, message)
+                        toast(message)
+                    }
+                },
+            )
+            controller = c
+            publish()
+            afterSessionsChanged()
+            watchUsb()
+            watchLoad()
+            c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
+            createWindows(c)
+            watchPositions(c)
+            watchWindowState(c)
+            // pono-droid の画面が前にある間は、キャラクターがボタンに重なっても押せるようにタッチを通す。
+            // ただし入力の箱を出している間は、箱に触れられるように通さない
+            touchJob = lifecycleScope.launch {
+                combine(appInFront, c.state.map { it.input != null }) { inFront, typing -> inFront && !typing }
+                    .distinctUntilChanged()
+                    .collect { pass ->
+                        passThrough = pass
+                        windows.forEach { it.setTouchable(!pass) }
+                    }
+            }
+            // 入力の箱は \0 のバルーンに出す。開いている間だけ、そのウィンドウがキーボードの入力を受ける
+            inputJob = lifecycleScope.launch {
+                c.state.map { it.input?.kind }.distinctUntilChanged().collect { applyInput(c) }
+            }
+            c.start()
+            // SHIORI を読み終わるまで、アプリの一覧にも読み込み中と出す（start で読み込み中になる）
+            loadingJob = lifecycleScope.launch {
+                c.state.first { it.loading == null }
+                _loading.value = null
+            }
+        }
+
+        /** いまのシェルとバルーン（キャラクターのウィンドウで共有する） */
+        private var renderer: SurfaceRenderer? = null
+        private var balloonSkin: BalloonSkin? = null
+
+        /**
+         * キャラクターのウィンドウを、いまのシェルとバルーンで作る。\0 と \1 のほか、3人目以降のキャラクター（\p[2] など）にも作り、
+         * スクリプトが新しい \p[N] に話しかけたら、そのときに足す
+         */
+        private fun createWindows(c: GhostController) {
+            renderer = SurfaceRenderer(c.shell)
+            synchronized(faceIcons) { faceIcons.clear() }
+            balloonSkin = c.balloon?.let(::BalloonSkin)
+            scopesJob?.cancel()
+            scopesJob = lifecycleScope.launch {
+                c.state.map { it.characters.keys }.distinctUntilChanged().collect { scopes -> ensureWindows(c, scopes) }
+            }
+        }
+
+        /** \![move]・\![set,position]・\4 / \5・\![set,alignmenttodesktop] を、キャラクターのウィンドウに伝える */
+        private fun watchPositions(c: GhostController) {
+            handledMoves.clear()
+            handledNudges.clear()
+            positionsJob?.cancel()
+            positionsJob = lifecycleScope.launch {
+                c.state.map { s ->
+                    s.characters.mapValues { (_, ch) -> listOf(ch.move?.first, ch.pinned, ch.nudge?.first, ch.alignment, ch.balloonAlign, ch.balloonOffset) }
+                }
+                    .distinctUntilChanged()
+                    .collect { applyPositions(c) }
+            }
+        }
+
+        private fun applyPositions(c: GhostController) {
+            for ((scope, ch) in c.state.value.characters) {
+                val window = windows.firstOrNull { it.scopeId == scope } ?: continue
+                window.setPinned(ch.pinned)
+                window.setAlignment(ch.alignment)
+                window.refreshBalloon()
+                ch.nudge?.let { (serial, away) ->
+                    if (handledNudges[scope] == serial) return@let
+                    handledNudges[scope] = serial
+                    // 相手は、\0 なら \1、ほかのキャラクターなら \0
+                    val partner = windows.firstOrNull { it.scopeId == if (scope == 0) 1 else 0 } ?: return@let
+                    window.nudge(away, partner.screenRect())
+                }
+                val (serial, move) = ch.move ?: continue
+                if (handledMoves[scope] == serial) continue
+                handledMoves[scope] = serial
+                window.move(move) { id -> windows.firstOrNull { it.scopeId == id } }
+            }
+        }
+
+        /** 最小化・重なり順・位置の初期化・最初の位置を、キャラクターのウィンドウに伝える */
+        private fun watchWindowState(c: GhostController) {
+            windowJob?.cancel()
+            windowJob = lifecycleScope.launch {
+                var previous: WindowState? = null
+                c.state.map { it.window }.distinctUntilChanged().collect { w ->
+                    val before = previous
+                    previous = w
+                    if (w.minimized != before?.minimized) {
+                        windows.forEach { it.setHidden(w.minimized) }
+                        // 隠している間は、通知から出し直せるようにする
+                        if (before != null) refreshForeground()
+                    }
+                    if (before != null && (w.zorder != before.zorder || w.frontRequests != before.frontRequests)) restack(w)
+                    if (before != null && w.resetRequests != before.resetRequests) {
+                        windows.forEach { it.resetPosition(w.defaultPositions[it.scopeId]) }
+                    }
+                    if (w.defaultPositions != before?.defaultPositions) {
+                        windows.forEach { it.applyDefault(w.defaultPositions[it.scopeId]) }
+                    }
+                }
+            }
+        }
+
+        /**
+         * ウィンドウを付け直して重なり順を決める（後から付けたものほど上）。いつもの順は \1 → 3人目以降 → \0 で、
+         * それぞれサーフェスの上にバルーン。\![set,zorder] の組があれば、組の中だけその順に並べ替える
+         */
+        private fun restack(w: WindowState) {
+            val order = windows.map { it.scopeId }.sortedBy { if (it == 0) Int.MAX_VALUE else it }
+                .flatMap { listOf("s$it", "b$it") }.toMutableList()
+            for (group in w.zorder) {
+                val slots = order.indices.filter { order[it] in group }
+                // 組は手前から並べてあるので、下（先に付ける方）から埋める
+                val members = group.filter { it in order }.reversed()
+                slots.zip(members).forEach { (i, token) -> order[i] = token }
+            }
+            windows.forEach { it.detach() }
+            for (token in order) {
+                windows.firstOrNull { it.scopeId == token.drop(1).toInt() }?.attach(balloon = token[0] == 'b')
+            }
+            applyInput(controller ?: return)
+        }
+
+        /** sticky-window の組で、[scope] と一緒に動くキャラクターのウィンドウ */
+        private fun stickyPartners(scope: Int): List<CharacterWindow> {
+            val group = controller?.state?.value?.window?.stickyGroups?.firstOrNull { scope in it } ?: return emptyList()
+            return windows.filter { it.scopeId != scope && it.scopeId in group }
+        }
+
+        /** 出ているキャラクター（サーフェスのあるもの）と、その画面の上の矩形 */
+        fun shownRects(): List<Pair<Int, Rect>> {
+            val c = controller ?: return emptyList()
+            return windows.filter { (c.state.value.characters[it.scopeId]?.surface ?: -1) >= 0 }
+                .map { it.scopeId to it.screenRect() }
+                .filter { (_, r) -> !r.isEmpty }
+        }
+
+        fun screenBounds(): Rect? = windows.firstOrNull()?.screenBounds()
+
+        /** キャラクターの重なりと見切れを調べて、変わっていればゴーストに伝える（OnOverlap / OnOffscreen。ほかのゴーストとのものも） */
+        private fun reportLayout() {
+            val c = controller ?: return
+            val shown = shownRects()
+            val screen = screenBounds() ?: return
+            val overlaps = shown.flatMapIndexed { i, (a, ra) ->
+                shown.drop(i + 1).filter { (_, rb) -> Rect.intersects(ra, rb) }.map { (b, _) -> a to b }
+            }
+            val offscreen = shown.filter { (_, r) -> !screen.contains(r) }.map { it.first }
+            c.onWindowLayout(overlaps, offscreen)
+            reportOtherLayout()
+        }
+
+        /** 入力の箱を開いているかを \0 のウィンドウに伝える（作り直したウィンドウにも） */
+        private fun applyInput(c: GhostController) {
+            val kind = c.state.value.input?.kind
+            windows.firstOrNull { it.scopeId == 0 }?.setInputOpen(kind != null, secure = kind == InputRequest.Kind.PASSWORD)
+        }
+
+        private fun ensureWindows(c: GhostController, scopes: Set<Int>) {
+            val shown = windows.map { it.scopeId }.toSet()
+            // 後から足したウィンドウほど上に重なるので、\1 → 3人目以降 → \0 の順に作る（\0 がいちばん上）
+            val order = scopes.filter { it !in shown }.sortedBy { if (it == 0) Int.MAX_VALUE else it }
+            val prefs = OverlaySettings.prefs(this@GhostOverlayService)
+            val w = c.state.value.window
+            for (scope in order) {
+                windows += CharacterWindow(this@GhostOverlayService, scope, c, renderer ?: return, balloonSkin, prefs).also {
+                    it.onShift = { dx, dy -> stickyPartners(scope).forEach { p -> p.shiftBy(dx, dy) } }
+                    it.onSettled = {
+                        stickyPartners(scope).forEach(CharacterWindow::savePosition)
+                        reportLayout()
+                    }
+                    it.show()
+                    it.setTouchable(!passThrough)
+                    it.setHidden(w.minimized)
+                    it.applyDefault(w.defaultPositions[scope])
+                }
+            }
+            if (order.isEmpty()) return
+            if (w.zorder.isNotEmpty()) restack(w)
+            // 後から出てきたキャラクターへの \![move] も、ウィンドウができてから動かす
+            applyPositions(c)
+        }
+
+        /** シェルやバルーンが切り替わったら、ウィンドウを作り直す */
+        private fun rebuildWindows(c: GhostController) {
+            windows.forEach { it.dismiss() }
+            windows.clear()
+            createWindows(c)
+        }
+
+        /** 発言履歴の顔（サーフェスごと。切り出せなかったものは null）。シェルが替わったら作り直す */
+        private val faceIcons = HashMap<Int, Bitmap?>()
+
+        suspend fun faceIcon(surfaceId: Int, sizePx: Int): Bitmap? {
+            val r = renderer ?: return null
+            val shell = controller?.shell ?: return null
+            synchronized(faceIcons) { if (surfaceId in faceIcons) return faceIcons[surfaceId] }
+            val icon = withContext(Dispatchers.Default) {
+                runCatching {
+                    val full = r.render(surfaceId, emptyMap()) ?: return@runCatching null
+                    val f = shell.faceRect(surfaceId, full.width, full.height) ?: return@runCatching null
+                    val face = Bitmap.createBitmap(full, f.left, f.top, f.right - f.left, f.bottom - f.top)
+                    Bitmap.createScaledBitmap(face, sizePx, sizePx, true)
+                }.getOrNull()
+            }
+            synchronized(faceIcons) { faceIcons[surfaceId] = icon }
+            return icon
+        }
+
+        /** このゴーストのウィンドウと見張りを片付ける。ゴーストがまだ動いていれば、何も送らずに止める（その片付けの Job を返す） */
+        fun teardown(): Job? {
+            startJob?.cancel()
+            startJob = null
+            loadingJob?.cancel()
+            loadingJob = null
+            if (_loading.value == dirName) _loading.value = null
+            sound.stop()
+            touchJob?.cancel()
+            touchJob = null
+            inputJob?.cancel()
+            inputJob = null
+            scopesJob?.cancel()
+            scopesJob = null
+            positionsJob?.cancel()
+            positionsJob = null
+            windowJob?.cancel()
+            windowJob = null
+            windows.forEach { it.dismiss() }
+            windows.clear()
+            val stopping = controller?.dispose()
+            controller = null
+            return stopping
+        }
     }
 
     /** 声を聞く（設定で選び、マイクを許可したときだけ。画面が消えている間は聞かない） */
@@ -654,38 +855,19 @@ class GhostOverlayService : LifecycleService() {
     private fun voiceAllowed(): Boolean = OverlaySettings.voice(OverlaySettings.prefs(this)) &&
         checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
-    /** 発言履歴の顔（サーフェスごと。切り出せなかったものは null）。シェルが替わったら作り直す */
-    private val faceIcons = HashMap<Int, Bitmap?>()
-
-    private suspend fun faceIcon(surfaceId: Int, sizePx: Int): Bitmap? {
-        val r = renderer ?: return null
-        val shell = controller?.shell ?: return null
-        synchronized(faceIcons) { if (surfaceId in faceIcons) return faceIcons[surfaceId] }
-        val icon = withContext(Dispatchers.Default) {
-            runCatching {
-                val full = r.render(surfaceId, emptyMap()) ?: return@runCatching null
-                val f = shell.faceRect(surfaceId, full.width, full.height) ?: return@runCatching null
-                val face = Bitmap.createBitmap(full, f.left, f.top, f.right - f.left, f.bottom - f.top)
-                Bitmap.createScaledBitmap(face, sizePx, sizePx, true)
-            }.getOrNull()
-        }
-        synchronized(faceIcons) { faceIcons[surfaceId] = icon }
-        return icon
-    }
-
     /** つないでいる USB 機器（機器のファイル名ごと）。設定で選んだときだけ、画面がついている間に少しずつ見て変わったら伝える */
     private var usbDevices: Map<String, ConnectedDevice>? = null
     private var usbJob: Job? = null
 
     private fun watchUsb() {
-        usbJob?.cancel()
+        if (usbJob != null) return
         usbJob = lifecycleScope.launch {
             while (true) {
-                val c = controller
+                val all = controllers
                 if (!OverlaySettings.usb(OverlaySettings.prefs(this@GhostOverlayService))) {
                     // 選び直したときに、そのときつないであったものを知らせないよう、覚えていたものは捨てる
                     usbDevices = null
-                } else if (c != null && getSystemService(PowerManager::class.java)?.isInteractive != false) {
+                } else if (all.isNotEmpty() && getSystemService(PowerManager::class.java)?.isInteractive != false) {
                     val now = runCatching {
                         getSystemService(android.hardware.usb.UsbManager::class.java)?.deviceList?.values?.associate { d ->
                             // 名前や会社は、機器を使ってよいと言われるまで読めない端末がある
@@ -697,8 +879,12 @@ class GhostOverlayService : LifecycleService() {
                     val before = usbDevices
                     // 起動したときにつないであったものは知らせない
                     if (before != null) {
-                        c.onDevicesArrived(now.filterKeys { it !in before }.values.toList())
-                        c.onDevicesRemoved(before.filterKeys { it !in now }.values.toList())
+                        val arrived = now.filterKeys { it !in before }.values.toList()
+                        val removed = before.filterKeys { it !in now }.values.toList()
+                        all.forEach {
+                            it.onDevicesArrived(arrived)
+                            it.onDevicesRemoved(removed)
+                        }
                     }
                     usbDevices = now
                 }
@@ -708,20 +894,21 @@ class GhostOverlayService : LifecycleService() {
     }
 
     private fun updateVoice() {
-        val c = controller
+        val any = controllers.isNotEmpty()
         val screenOn = getSystemService(PowerManager::class.java)?.isInteractive != false
-        if (c == null || !voiceAllowed() || !screenOn) {
+        if (!any || !voiceAllowed() || !screenOn) {
             val wasListening = voice != null
             voice?.stop()
             voice = null
             // 聞くのをやめたら、通知の種類からマイクを外す
-            if (wasListening && c != null && !voiceAllowed()) startInForeground(minimized = c.state.value.window.minimized)
+            if (wasListening && any && !voiceAllowed()) refreshForeground()
             return
         }
         if (voice != null) return
         // マイクを使う常駐の通知にし直してから聞く（Android 14 からは、通知の種類にマイクが要る）
-        startInForeground(minimized = c.state.value.window.minimized)
-        voice = VoiceListener(this) { text -> controller?.onVoiceRecognized(text) }.also { it.start() }
+        refreshForeground()
+        // 名前を呼ばれたかどうかは、それぞれのゴーストが見る
+        voice = VoiceListener(this) { text -> controllers.forEach { it.onVoiceRecognized(text) } }.also { it.start() }
     }
 
     /**
@@ -752,83 +939,85 @@ class GhostOverlayService : LifecycleService() {
 
     /** 設定とゴーストの起動に合わせて、SSTP サーバーを始める・やめる */
     private fun updateSstp() {
-        val c = controller
-        val want = c != null && OverlaySettings.sstp(OverlaySettings.prefs(this))
+        val want = sessions.isNotEmpty() && OverlaySettings.sstp(OverlaySettings.prefs(this))
         if (!want) {
             sstp?.stop()
             sstp = null
             return
         }
         if (sstp != null) return
-        val server = SstpServer(lifecycleScope, { req -> withContext(Dispatchers.Main) { controller?.handleSstp(req) ?: SstpResponse(503) } }, log = { Log.w(TAG, it) })
+        // 宛先（ReceiverGhostName・IfGhost など）のゴーストに渡す。名指しのゴーストが動いていなければ 404
+        val server = SstpServer(
+            lifecycleScope,
+            { req ->
+                withContext(Dispatchers.Main) {
+                    if (hub.running.isEmpty()) SstpResponse(503) else hub.sstpTarget(req)?.handleSstp(req) ?: SstpResponse(404)
+                }
+            },
+            log = { Log.w(TAG, it) },
+        )
         if (server.start()) sstp = server else toast("SSTP のポート ${SstpServer.DEFAULT_PORT} がほかのアプリに使われています")
     }
 
-    private fun teardown() {
+    /** 動いているゴーストをすべて、何も送らずに止める。それぞれの片付けの Job を返す */
+    private fun teardown(): List<Job> {
+        pendingStart?.cancel()
+        pendingStart = null
         usbJob?.cancel()
         usbJob = null
+        usbDevices = null
+        loadJob?.cancel()
+        loadJob = null
         sstp?.stop()
         sstp = null
         voice?.stop()
         voice = null
-        startJob?.cancel()
-        startJob = null
-        loadingJob?.cancel()
-        loadingJob = null
+        val all = sessions.toList()
+        sessions.clear()
+        val stopping = all.mapNotNull { it.teardown() }
         _loading.value = null
-        sound.stop()
-        touchJob?.cancel()
-        touchJob = null
-        inputJob?.cancel()
-        inputJob = null
-        scopesJob?.cancel()
-        scopesJob = null
-        positionsJob?.cancel()
-        positionsJob = null
-        windowJob?.cancel()
-        windowJob = null
-        loadJob?.cancel()
-        loadJob = null
-        windows.forEach { it.dismiss() }
-        windows.clear()
-        controller = null
-        _controller.value = null
-        _running.value = null
+        publish()
+        return stopping
     }
 
     /** 画面が消えている間は、ゴーストのタイマーとアニメーションを止める。端末の電源を切るときは終わる */
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            val c = controller ?: return
+            val all = controllers.ifEmpty { return }
             when (intent.action) {
                 // 端末の電源を切る（OnCloseAll の Reference0 は system）
-                Intent.ACTION_SHUTDOWN -> c.close("system")
+                Intent.ACTION_SHUTDOWN -> all.forEach { it.close("system") }
                 // Android にはパソコンのような「休止」が無いので、画面が消えたら休んだことにする（OnSysSuspend）
                 Intent.ACTION_SCREEN_OFF -> {
-                    c.setScreenOn(false)
-                    c.onDisplayPower(false)
-                    // 画面が消えたら、次につけたときはロック画面から（OnSessionLock）
-                    c.onSessionLock()
-                    c.onSystemSuspend()
+                    for (c in all) {
+                        c.setScreenOn(false)
+                        c.onDisplayPower(false)
+                        // 画面が消えたら、次につけたときはロック画面から（OnSessionLock）
+                        c.onSessionLock()
+                        c.onSystemSuspend()
+                    }
                     updateVoice()
                 }
                 Intent.ACTION_SCREEN_ON -> {
-                    c.setScreenOn(true)
-                    c.onDisplayPower(true)
-                    updateVoice()
                     // ロック画面の上にはキャラクターが出ないので、ロックがあれば解いてから OnSysResume
-                    if (!getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
-                        c.onSessionUnlock()
-                        c.onSystemResume()
+                    val unlocked = !getSystemService(KeyguardManager::class.java).isKeyguardLocked
+                    for (c in all) {
+                        c.setScreenOn(true)
+                        c.onDisplayPower(true)
+                        if (unlocked) {
+                            c.onSessionUnlock()
+                            c.onSystemResume()
+                        }
                     }
+                    updateVoice()
                 }
-                Intent.ACTION_USER_PRESENT -> {
-                    c.onSessionUnlock()
-                    c.onSystemResume()
+                Intent.ACTION_USER_PRESENT -> all.forEach {
+                    it.onSessionUnlock()
+                    it.onSystemResume()
                 }
                 // Android のスクリーンセーバー
-                Intent.ACTION_DREAMING_STARTED -> c.onScreenSaver(true)
-                Intent.ACTION_DREAMING_STOPPED -> c.onScreenSaver(false)
+                Intent.ACTION_DREAMING_STARTED -> all.forEach { it.onScreenSaver(true) }
+                Intent.ACTION_DREAMING_STOPPED -> all.forEach { it.onScreenSaver(false) }
             }
         }
     }
@@ -858,7 +1047,7 @@ class GhostOverlayService : LifecycleService() {
         // コールバックは別のスレッドで来るので、ゴーストには画面のスレッドから伝える
         private fun pushNetwork() {
             val status = networkStatus(networkCaps, networkLink)
-            lifecycleScope.launch { controller?.onNetworkChanged(status) }
+            lifecycleScope.launch { controllers.forEach { it.onNetworkChanged(status) } }
         }
     }
 
@@ -888,7 +1077,8 @@ class GhostOverlayService : LifecycleService() {
     /** 電池の状態はゴーストに伝える（OnBatteryNotify。変わったときだけ送るかは controller が見る） */
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            controller?.onBatteryChanged(batteryInfo(intent))
+            val info = batteryInfo(intent)
+            controllers.forEach { it.onBatteryChanged(info) }
         }
     }
 
@@ -912,22 +1102,22 @@ class GhostOverlayService : LifecycleService() {
             OverlaySettings.KEY_CHARACTER_SCALE -> {
                 val old = characterScale
                 characterScale = OverlaySettings.characterScale(p)
-                controller?.onShellScaling((characterScale * 100).roundToInt(), (old * 100).roundToInt())
+                controllers.forEach { it.onShellScaling((characterScale * 100).roundToInt(), (old * 100).roundToInt()) }
             }
             OverlaySettings.KEY_BALLOON_SCALE -> {
                 val old = balloonScale
                 balloonScale = OverlaySettings.balloonScale(p)
-                controller?.onBalloonScaling((balloonScale * 100).roundToInt(), (old * 100).roundToInt())
+                controllers.forEach { it.onBalloonScaling((balloonScale * 100).roundToInt(), (old * 100).roundToInt()) }
             }
             OverlaySettings.KEY_SSTP -> updateSstp()
             OverlaySettings.KEY_VOICE -> {
                 updateVoice()
-                controller?.onVoiceRecognitionChanged(voiceAllowed())
+                controllers.forEach { it.onVoiceRecognitionChanged(voiceAllowed()) }
             }
             OverlaySettings.KEY_SPEECH -> {
                 val on = OverlaySettings.speech(p)
                 if (!on) speech.stop()
-                controller?.onSpeechSettingChanged(on)
+                controllers.forEach { it.onSpeechSettingChanged(on) }
             }
         }
     }
@@ -959,8 +1149,11 @@ class GhostOverlayService : LifecycleService() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         val metrics = resources.displayMetrics
-        controller?.onDisplayChanged(metrics.widthPixels, metrics.heightPixels)
-        controller?.onSystemInfoChanged(systemInfo())
+        val info = systemInfo()
+        controllers.forEach {
+            it.onDisplayChanged(metrics.widthPixels, metrics.heightPixels)
+            it.onSystemInfoChanged(info)
+        }
     }
 
     /** 端末の見た目・言語・フォント・更新。言語名と ID は SSP（Windows）と同じ形にする */
@@ -1012,8 +1205,8 @@ class GhostOverlayService : LifecycleService() {
      * 端末の負荷を 5 秒ごとに測って、ゴーストに伝える（OnCPULoadHigh / OnMemoryLoadHigh など）。
      * Android 8 からはほかのアプリの CPU の使い方は読めないので、読める端末だけ /proc/stat（だめなら /proc/loadavg）から求める
      */
-    private fun watchLoad(c: GhostController) {
-        loadJob?.cancel()
+    private fun watchLoad() {
+        if (loadJob != null) return
         loadJob = lifecycleScope.launch {
             var previous: Pair<Long, Long>? = null
             while (true) {
@@ -1023,7 +1216,7 @@ class GhostOverlayService : LifecycleService() {
                 previous = sample
                 val memory = ActivityManager.MemoryInfo().also { getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
                 val used = if (memory.totalMem > 0) ((memory.totalMem - memory.availMem) * 100 / memory.totalMem).toInt() else null
-                c.onLoad(cpu, used)
+                controllers.forEach { it.onLoad(cpu, used) }
             }
         }
     }
@@ -1063,15 +1256,16 @@ class GhostOverlayService : LifecycleService() {
      * \![set,trayballoon]。常駐の通知とは別の通知で、ゴーストからのお知らせを出す。触れたら OnTrayBalloonClick、
      * 消したら OnTrayBalloonTimeout（次のお知らせは前のものを置き換える）
      */
-    private fun showGhostMessage(title: String, text: String) {
+    private fun showGhostMessage(title: String, text: String, dirName: String) {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel(MESSAGE_CHANNEL, "ゴーストからのお知らせ", NotificationManager.IMPORTANCE_DEFAULT))
         fun action(action: String, code: Int) = PendingIntent.getService(
             this, code,
-            Intent(this, GhostOverlayService::class.java).setAction(action).putExtra(EXTRA_TITLE, title).putExtra(EXTRA_TEXT, text),
+            Intent(this, GhostOverlayService::class.java).setAction(action).putExtra(EXTRA_TITLE, title).putExtra(EXTRA_TEXT, text)
+                .putExtra(EXTRA_GHOST, dirName),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val name = controller?.ghost?.name.orEmpty()
+        val name = sessions.firstOrNull { it.dirName == dirName }?.controller?.ghost?.name.orEmpty()
         val notification = NotificationCompat.Builder(this, MESSAGE_CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title.ifEmpty { name })
@@ -1188,8 +1382,14 @@ class GhostOverlayService : LifecycleService() {
         /** 動いているサービス（\![open,dialog,save] の保存先を見張るため） */
         private var instance: GhostOverlayService? = null
 
-        /** 発言履歴の顔。[surfaceId] の絵から顔を切り出し、[sizePx] 四方にしたもの（ゴーストが動いていない・切り出せなければ null） */
-        suspend fun faceIcon(surfaceId: Int, sizePx: Int): Bitmap? = if (surfaceId < 0) null else instance?.faceIcon(surfaceId, sizePx)
+        /**
+         * 発言履歴の顔。[controller] のゴーストの [surfaceId] の絵から顔を切り出し、[sizePx] 四方にしたもの
+         * （ゴーストが動いていない・切り出せなければ null）
+         */
+        suspend fun faceIcon(controller: GhostController?, surfaceId: Int, sizePx: Int): Bitmap? {
+            if (surfaceId < 0 || controller == null) return null
+            return instance?.sessions?.firstOrNull { it.controller === controller }?.faceIcon(surfaceId, sizePx)
+        }
 
         /** [file] にゴーストが書いたら [uri] に写す（ゴーストが動いていなければ何もしない） */
         fun watchSave(file: File, uri: Uri) {
@@ -1199,14 +1399,27 @@ class GhostOverlayService : LifecycleService() {
         private const val SAVE_WAIT_MS = 120_000L
         private const val USB_POLL_MS = 10_000L
 
+        /** 起動し直すとき、前のゴーストの SHIORI を下ろし終えるのを待つ長さ */
+        private const val STOP_WAIT_MS = 5_000L
+
         private val _controller = MutableStateFlow<GhostController?>(null)
 
-        /** 起動中のゴースト */
+        /** 起動中のゴースト（いくつか動いていれば、最初に起動したもの） */
         val controller: StateFlow<GhostController?> = _controller.asStateFlow()
+
+        private val _controllers = MutableStateFlow<List<GhostController>>(emptyList())
+
+        /** 動いているゴーストすべて（起動した順） */
+        val controllers: StateFlow<List<GhostController>> = _controllers.asStateFlow()
+
+        private val _runningGhosts = MutableStateFlow<List<String>>(emptyList())
+
+        /** 動いているゴーストのディレクトリ名すべて（起動した順） */
+        val runningGhosts: StateFlow<List<String>> = _runningGhosts.asStateFlow()
 
         private val _running = MutableStateFlow<String?>(null)
 
-        /** 起動中のゴーストのディレクトリ名（起動していなければ null） */
+        /** 起動中のゴーストのディレクトリ名（いくつか動いていれば最初のもの。起動していなければ null） */
         val running: StateFlow<String?> = _running.asStateFlow()
 
         private val _loading = MutableStateFlow<String?>(null)
@@ -1224,7 +1437,7 @@ class GhostOverlayService : LifecycleService() {
             context.startService(Intent(context, GhostOverlayService::class.java).setAction(ACTION_STOP))
         }
 
-        /** 起動中のゴーストのネットワーク更新 */
+        /** 起動中のゴースト（最初に起動したもの）のネットワーク更新 */
         fun update(context: Context) {
             context.startService(Intent(context, GhostOverlayService::class.java).setAction(ACTION_UPDATE))
         }

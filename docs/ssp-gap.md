@@ -78,10 +78,11 @@ OnDeviceArrival / OnDeviceRemove（USB 機器。設定で選んだときだけ�
 - ⛔ OnRecycleBin*（Android にはごみ箱が無い。写真などのアプリのごみ箱を空にするのは、ユーザーのデータを消すことになるので作らない）
 
 ### 👥 複数ゴーストの同時起動が要る
-- 🔨 ゴーストの側はできた（下の 10a）。アプリで2体目を起動する仕組み（10b）がまだなので、今はどれも届かない:
+- ✅ 3 体まで同時に動かせる（1体ずつ別の SHIORI のプロセス。2体目からは \![call,ghost] とメニューの「ほかのゴーストを呼ぶ」で起動する）:
   OnGhostCalling / Called / CallComplete、OnOtherGhostBooted / Changed / Closed / Vanished / Talk（OnOtherGhostTalk への答えは
   ほかのゴーストに伝えない。2体が互いに答え続けないように）、OnOtherSurfaceChange、OnRaiseOtherFailure / OnNotifyOtherFailure
-- OnOtherOverlap / Offscreen（アプリでウィンドウの重なりを見る。10b）
+- ✅ OnOtherOverlap / Offscreen（キャラクターは「本体側の名前/番号」）
+- 🔨 アプリの一覧から2体目を起動する・動いているゴーストを一覧に出す（10c。今は一覧から起動すると、そのゴーストだけになる）
 - ⛔ OnOtherObjectDropping / Dropped（Windows の「PC」や「ごみ箱」など、ファイルでないものを落としたとき。Android には無い）
 
 ### ⛔ 作れない
@@ -156,7 +157,7 @@ method は読み飛ばす）とバルーンの cursor.* / anchor.*、\![set,ball
 - ✅ \![set,shioridebugmode(,true/false)]（NOTIFY enable_debug）
 
 ### 👥 複数ゴーストの同時起動が要る
-- 🔨 ゴーストの側はできた（10a。アプリの 10b を待つ）: \![call,ghost]（メニューの「ほかのゴーストを呼ぶ」も）、\![raiseother] \![notifyother]
+- ✅ \![call,ghost]（メニューの「ほかのゴーストを呼ぶ」も）、\![raiseother] \![notifyother]
   \![timerraiseother] \![timernotifyother]（__SYSTEM_ALL_GHOST__ も。自分には送らない）、\![set,otherghosttalk] \![set,othersurfacechange]
 - ✅ \![timernotify]（1体でも使える）
 
@@ -186,7 +187,7 @@ history.ghost / balloon、rateofuselist.index(順位).*（起動回数・分・�
 - ghostlist(…).shiori.変数名（SHIORI に聞く）
 
 ### 👥 複数ゴーストの同時起動が要る
-- 🔨 activeghostlist.*（count / index / 名前 / current。1体だけなら自分だけ。アプリの 10b を待つ）
+- ✅ activeghostlist.*（count / index / 名前 / current。1体だけなら自分だけ）
 
 ### ⛔ 作れない
 headlinelist.* / history.headline.*、pluginlist.* / history.plugin.*
@@ -221,7 +222,7 @@ SSP 専用のメニュー項目の名前（ヘッドライン・プラグイン�
   GetShortVersion / Get*NameList / GetStatus / Quiet / Restore / GetProperty / SetCookie / GetCookie / SetTrayIcon / SetTrayBalloon。SetProperty・MoveAsync・
   DumpSurface・CompressArchive・ExtractArchive は Owned SSTP だけ）、keep-alive、SSTP over HTTP（localhost のページからだけ）、ReceiverGhostName / Ghost。
   ほかのアプリから届いたスクリプトは \![execute] \![open,browser / file] \![change] \![vanishbymyself] \- \j などを使えない（uniqueid を付けた Owned SSTP は使える）
-- 👥 複数ゴーストの同時起動（上の 👥 はすべてこれが前提）
+- ✅ 複数ゴーストの同時起動（3 体まで）。SSTP は ReceiverGhostName / IfGhost / uniqueid の ID で宛先のゴーストに渡し、どれでもなければ最初に起動したゴーストへ
 - ⛔ SHIORI の美坂・偽林檎など（Windows の DLL。ソースが公開されていて Android 用にビルドできるものだけ作れる）
 - ⛔ SAORI・YAYA の EXECUTE・プラグイン（安全のために止めている。ゴーストに端末でプログラムを動かさせることになる）
 - ✅ surfaces.txt: collisionex の rect / ellipse / circle / polygon、descript ブレスの collision-sort / animation-sort、animation*.collision(ex)、

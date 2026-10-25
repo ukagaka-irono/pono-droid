@@ -69,12 +69,15 @@ class DeveloperActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val first = intent.getStringExtra(EXTRA_PAGE)?.takeIf { it in TITLES } ?: PAGE_DEVELOPER
+        // 開いたゴースト（いくつか動いているときのため）。いなければ最初に起動したもの
+        val ghostDir = intent.getStringExtra(EXTRA_GHOST)
         setContent {
             MaterialTheme {
                 var page by rememberSaveable { mutableStateOf(first) }
                 // パレットから開いたページは、戻るでパレットに戻る
                 BackHandler(enabled = page != first) { page = first }
-                val controller by GhostOverlayService.controller.collectAsState()
+                val controllers by GhostOverlayService.controllers.collectAsState()
+                val controller = controllers.firstOrNull { it.ghost.dir.name == ghostDir } ?: controllers.firstOrNull()
                 Scaffold(
                     topBar = {
                         TopAppBar(
@@ -107,6 +110,7 @@ class DeveloperActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_PAGE = "page"
+        private const val EXTRA_GHOST = "ghost"
         const val PAGE_BACKLOG = "backlog"
         const val PAGE_LOG = "log"
         const val PAGE_SHIORI_REQUEST = "shiorirequest"
@@ -121,10 +125,11 @@ class DeveloperActivity : ComponentActivity() {
             PAGE_DEVELOPER to "開発用パレット",
         )
 
-        fun start(context: Context, page: String) {
+        fun start(context: Context, page: String, ghostDir: String? = null) {
             context.startActivity(
                 Intent(context, DeveloperActivity::class.java)
                     .putExtra(EXTRA_PAGE, page)
+                    .putExtra(EXTRA_GHOST, ghostDir)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         }
@@ -173,8 +178,8 @@ private fun BacklogPage(controller: GhostController, modifier: Modifier) {
 @Composable
 private fun FaceIcon(controller: GhostController, entry: BacklogEntry) {
     val sizePx = with(LocalDensity.current) { FACE_SIZE.roundToPx() }
-    val face by produceState<ImageBitmap?>(null, entry.surface, sizePx) {
-        value = GhostOverlayService.faceIcon(entry.surface, sizePx)?.asImageBitmap()
+    val face by produceState<ImageBitmap?>(null, controller, entry.surface, sizePx) {
+        value = GhostOverlayService.faceIcon(controller, entry.surface, sizePx)?.asImageBitmap()
     }
     val image = face ?: return
     // 枠の色はシェルが決める（sakura.icon.frame.color など）。書いていなければ枠は無し

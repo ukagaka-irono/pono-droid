@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import net.pono.baseware.net.SstpRequest
 import net.pono.baseware.sakura.ScriptPlayer
 import net.pono.baseware.shell.Shell
 import net.pono.baseware.update.FetchResult
@@ -137,6 +138,37 @@ class MultiGhostTest {
         withTimeout(5000) { b.c.state.first { !it.talking } }
         delay(100)
         assertEquals(0, a.shiori.count("OnOtherGhostTalk"))
+    }
+
+    @Test
+    fun sstpGoesToTheNamedGhost() = run {
+        val a = boot("a", emptyMap())
+        val b = boot("b", emptyMap())
+        fun req(vararg headers: Pair<String, String>) = SstpRequest("SEND", "1.4", headers.toList(), Charsets.UTF_8)
+        assertEquals(a.c, hub.sstpTarget(req("Sender" to "x")))
+        assertEquals(b.c, hub.sstpTarget(req("ReceiverGhostName" to "びい")))
+        assertEquals(null, hub.sstpTarget(req("ReceiverGhostName" to "いない")))
+        assertEquals(b.c, hub.sstpTarget(req("IfGhost" to "だれか", "Script" to "x", "IfGhost" to "びい", "Script" to "y")))
+        assertEquals(b.c, hub.sstpTarget(req("ID" to b.c.uniqueId)))
+    }
+
+    @Test
+    fun overlapsAcrossGhostsAndQuietDispose() = run {
+        val a = boot("a", emptyMap())
+        val b = boot("b", emptyMap())
+        a.c.onOtherWindowLayout(listOf("びい/0" to "あい/0"), listOf("びい/1"))
+        assertEquals(listOf("あい/0-びい/0", ""), a.shiori.awaitEvent("OnOtherOverlap"))
+        assertEquals(listOf("びい/1", ""), a.shiori.awaitEvent("OnOtherOffscreen"))
+        // 同じなら送らない
+        a.c.onOtherWindowLayout(listOf("あい/0" to "びい/0"), listOf("びい/1"))
+        delay(100)
+        assertEquals(1, a.shiori.count("OnOtherOverlap"))
+        // dispose は何も送らずに抜ける
+        withTimeout(5000) { b.c.dispose().join() }
+        assertEquals(listOf(a.c), hub.running)
+        delay(100)
+        assertEquals(0, a.shiori.count("OnOtherGhostClosed"))
+        assertEquals(0, b.shiori.count("OnClose"))
     }
 
     @Test
