@@ -175,6 +175,13 @@ android {
             isMinifyEnabled = false
             if (releaseSigningReady) signingConfig = signingConfigs.getByName("release")
         }
+        // 動きの速さを確かめるための版。中身はリリースと同じ（デバッグできない）で、デバッグ用の鍵で署名するので、
+        // 端末に入っているデバッグ版の上にデータを残したまま入れられる
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
     }
 
     compileOptions {

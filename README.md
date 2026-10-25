@@ -80,6 +80,14 @@ git submodule update --init --recursive
 
 APK は `app/build/outputs/apk/debug/app-debug.apk` にできます。
 
+デバッグ版は端末で前もってコンパイルされないので、開いてすぐのスクロールなどがカクつきます（moto g05 で、開いて最初のスクロールのフレームの 6〜9% が遅れました）。ふだん使うには、中身がリリースと同じでデバッグ用の鍵で署名した版を入れます。デバッグ版の上に、データを残したまま入れられます。
+
+```bash
+./gradlew :app:installBenchmark
+```
+
+この版は、端末が空いているときにライブラリのプロファイルでコンパイルされると速くなります（同じ端末で、遅れたフレームは 0〜1%、開くまでは 2.2 秒から 0.5 秒に）。すぐ確かめたいときは `adb shell cmd package compile -m speed-profile -f net.pono.droid` でコンパイルできます。
+
 ### テスト
 
 ```bash

@@ -494,7 +494,7 @@ private data class GhostItem(
 
 private fun GhostItem(ghost: Ghost, balloons: BalloonRepository) = GhostItem(
     ghost = ghost,
-    shells = ghost.shellDirs.map { dir -> dir.name to runCatching { Shell(dir).name }.getOrDefault(dir.name) },
+    shells = ghost.shellDirs.map { dir -> dir.name to Shell.nameOf(dir) },
     selectedShell = ghost.shellDir()?.name,
     balloons = listOf<Pair<String?, String>>(null to "簡易バルーン") + balloons.list().map { it.dir.name to it.name },
     selectedBalloon = ghost.balloon(balloons)?.dir?.name,

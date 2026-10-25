@@ -121,6 +121,12 @@ class Shell(val dir: File) {
     }
 
     companion object {
+        /**
+         * [dir] のシェルの名前（descript.txt の name、無ければディレクトリ名）。[Shell] を作ると surfaces*.txt をすべて読むので、
+         * 名前だけ要るとき（一覧やメニュー）はこちら
+         */
+        fun nameOf(dir: File): String = runCatching { Descript.read(File(dir, "descript.txt"))["name"] }.getOrNull() ?: dir.name
+
         private val SURFACE_FILE = Regex("""^surface0*(\d+)\.png$""")
 
         /** サーフェスの定義ファイル（surfaces.txt、surfaces_xxx.txt、surfaces2.txt など）と alias.txt */

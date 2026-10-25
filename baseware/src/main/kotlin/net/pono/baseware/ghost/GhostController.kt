@@ -1301,7 +1301,7 @@ class GhostController(
             "getversion" -> data("${ShioriSession.SENDER}/$basewareVersion")
             "getshortversion" -> data(basewareVersion.takeWhile { it.isDigit() || it == '.' })
             "getghostnamelist" -> lines(repository?.list()?.map { it.name } ?: listOf(ghost.name))
-            "getshellnamelist" -> lines(ghost.shellDirs.map { runCatching { Shell(it).name }.getOrDefault(it.name) })
+            "getshellnamelist" -> lines(ghost.shellDirs.map { Shell.nameOf(it) })
             "getballoonnamelist" -> lines(repository?.balloons?.list()?.map { it.name }.orEmpty())
             "getheadlinenamelist", "getpluginnamelist" -> SstpResponse(204)
             "getstatus" -> data(property("currentghost.status"))
@@ -2604,7 +2604,7 @@ class GhostController(
                     val dirs = ghost.shellDirs
                     val dir = when (name) {
                         "random" -> dirs.randomOrNull()
-                        else -> dirs.firstOrNull { it.name == name } ?: dirs.firstOrNull { runCatching { Shell(it).name }.getOrNull() == name }
+                        else -> dirs.firstOrNull { it.name == name } ?: dirs.firstOrNull { Shell.nameOf(it) == name }
                     }
                     dir?.let { it to Shell(it) }
                 }
@@ -3250,7 +3250,7 @@ class GhostController(
         for (dir in ghost.shellDirs) {
             // \![set,property,currentghost.shelllist(名前).menu,hidden] とシェルの descript.txt の menu,hidden
             if (shellMenu(dir) == "hidden" && dir != shell.dir) continue
-            val name = runCatching { Shell(dir).name }.getOrDefault(dir.name)
+            val name = Shell.nameOf(dir)
             sb.append("\\q[${quote((if (dir == shell.dir) "● " else "○ ") + name)},pono:shell,${dir.name}]\\n")
         }
         sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
@@ -4241,7 +4241,7 @@ class GhostController(
             key == "shelllist.count" -> ghost.shellDirs.size.toString()
             key.startsWith("shelllist") -> listProperty(key.removePrefix("shelllist"), ghost.shellDirs, shell.dir) { dir, k, index ->
                 when (k) {
-                    "name" -> runCatching { Shell(dir).name }.getOrDefault(dir.name)
+                    "name" -> Shell.nameOf(dir)
                     "path" -> dir.absolutePath + "/"
                     "index" -> index.toString()
                     "menu" -> shellMenu(dir)
@@ -4532,7 +4532,7 @@ class GhostController(
         when {
             key.startsWith("shelllist(") && key.endsWith(").menu") -> {
                 val selector = key.substring(10, key.length - 6)
-                val dir = ghost.shellDirs.firstOrNull { it.name == selector || runCatching { Shell(it).name }.getOrNull() == selector } ?: return false
+                val dir = ghost.shellDirs.firstOrNull { it.name == selector || Shell.nameOf(it) == selector } ?: return false
                 ghost.saveProfile(ghost.loadProfile().apply { setProperty("menu.shell.${dir.name}", value.trim().lowercase()) })
             }
             BIND_MENU.matches(key) -> {
