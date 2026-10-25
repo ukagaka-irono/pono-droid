@@ -5,6 +5,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import net.pono.baseware.balloon.Balloon
 import net.pono.baseware.sakura.ScriptPlayer
 import net.pono.baseware.sakura.SoundOptions
 import net.pono.baseware.shell.Shell
@@ -37,6 +38,8 @@ class MorePropertiesTest {
 
         override fun soundStatus() = sounds
 
+        override fun imageMainColor(file: File): Int? = if (file.name == "balloons0.png") 0x336699 else null
+
         override fun soundControl(command: String, file: File?, options: SoundOptions) {
             soundCalls += "$command:${file?.name}:${options.seekMs}:${options.seekRelative}"
         }
@@ -52,7 +55,12 @@ class MorePropertiesTest {
 
     private class Env(val c: GhostController, val shiori: ScriptedShiori, val platform: PropPlatform, val ghost: Ghost, val root: File)
 
-    private fun run(replies: Map<String, String> = emptyMap(), prepare: (File) -> Unit = {}, block: suspend Env.() -> Unit) = runBlocking<Unit> {
+    private fun run(
+        replies: Map<String, String> = emptyMap(),
+        prepare: (File) -> Unit = {},
+        withBalloon: Boolean = false,
+        block: suspend Env.() -> Unit,
+    ) = runBlocking<Unit> {
         val shiori = ScriptedShiori(replies)
         val scope = testScope()
         try {
@@ -70,6 +78,17 @@ class MorePropertiesTest {
             )
             File(g, "shell/master/surfaces.txt").writeText("charset,UTF-8\r\nsurface0\r\n{\r\ncollision0,0,0,2,2,Head\r\n}\r\nsurface5\r\n{\r\nelement0,overlay,surface0.png,0,0\r\n}\r\nsakura.tooltips\r\n{\r\nHead,あたま\r\n}\r\n")
             prepare(root)
+            val balloon = if (withBalloon) {
+                val dir = File(root.parentFile, "balloon/maid").apply { mkdirs() }
+                File(dir, "descript.txt").writeText("charset,UTF-8\r\nname,maid\r\norigin.x,10\r\norigin.y,10\r\nvalidrect.right,-10\r\nvalidrect.bottom,-10\r\nfont.height,20\r\n")
+                // 幅 200・高さ 100 の PNG の頭
+                File(dir, "balloons0.png").writeBytes(
+                    byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, -56, 0, 0, 0, 100, 8, 6, 0, 0, 0),
+                )
+                Balloon(dir)
+            } else {
+                null
+            }
             val ghost = Ghost(g)
             val platform = PropPlatform()
             platform.inner.system = SystemInfo(darkTheme = true, doNotDisturb = true)
@@ -81,6 +100,7 @@ class MorePropertiesTest {
                 scope = scope,
                 platform = platform,
                 repository = GhostRepository(root),
+                balloon = balloon,
                 player = ScriptPlayer(charWaitMs = 0),
                 updateFetcher = HttpFetcher { _, _, _ -> FetchResult.HttpError(404) },
             )
@@ -118,6 +138,35 @@ class MorePropertiesTest {
         assertEquals("1", c.property("currentghost.seriko.tooltip.scope(0).textlist.count"))
         assertEquals("あたま", c.property("currentghost.seriko.tooltip.scope(0).textlist(Head).text"))
         assertEquals("Head", c.property("currentghost.seriko.tooltip.scope(0).textlist.index(0).name"))
+    }
+
+    @Test
+    fun balloonTextAreaAndColour() = run(withBalloon = true) {
+        assertEquals(listOf("180", "80", "180", "80"),
+            listOf("validwidth", "validheight", "validwidth.initial", "validheight.initial").map { c.property("currentghost.balloon.scope(0).$it") })
+        // 1行は文字の高さの 1.4 倍（20 → 28）なので、80 には 2 行
+        assertEquals("2", c.property("currentghost.balloon.scope(0).lines"))
+        assertEquals("10", c.property("currentghost.balloon.scope(0).char_width"))
+        assertEquals("51,102,153", c.property("currentghost.balloon.scope(0).background.color"))
+        assertEquals("yaya.dll", c.property("currentghost.shiori"))
+        assertEquals("yaya.dll", c.property("ghostlist.index(0).shiori"))
+    }
+
+    @Test
+    fun simpleBalloonIsWhite() = run {
+        assertEquals("255,255,255", c.property("currentghost.balloon.scope(0).background.color"))
+        assertNull(c.property("currentghost.balloon.scope(0).validwidth"))
+    }
+
+    @Test
+    fun usbDevicesComeAndGo() = run {
+        val keyboard = ConnectedDevice("usb", "Keyboard", "ACME", "/dev/bus/usb/001/002")
+        c.onDevicesArrived(emptyList())
+        c.onDevicesArrived(listOf(keyboard))
+        assertEquals(listOf("usb\u0001Keyboard\u0001ACME\u0001/dev/bus/usb/001/002"), shiori.awaitEvent("OnDeviceArrival"))
+        c.onDevicesRemoved(listOf(keyboard.copy(name = "Key\nboard")))
+        assertEquals(listOf("usb\u0001Key board\u0001ACME\u0001/dev/bus/usb/001/002"), shiori.awaitEvent("OnDeviceRemove"))
+        assertEquals(1, shiori.count("OnDeviceArrival"))
     }
 
     @Test

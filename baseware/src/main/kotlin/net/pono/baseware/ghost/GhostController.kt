@@ -147,6 +147,9 @@ data class SystemDialogRequest(
 /** 端末のカレンダーの予定1件（ユーザーの予定。アプリの設定で許したときだけ読む）。終日なら [start] はその日の 0 時 */
 data class DeviceEvent(val title: String, val description: String, val start: java.time.LocalDateTime, val end: java.time.LocalDateTime, val allDay: Boolean)
 
+/** つないだ機器の1つ（OnDeviceArrival / OnDeviceRemove）。[type] は usb など、[file] は機器のファイル名 */
+data class ConnectedDevice(val type: String, val name: String, val maker: String, val file: String)
+
 /** 端末の記憶領域の1つ（system.disk.index(ID).*）。[type] は fixed / removable など */
 data class DiskInfo(val mountpoint: String, val type: String, val totalMb: Long, val freeMb: Long)
 
@@ -274,6 +277,9 @@ interface GhostPlatform {
 
     /** [scope] のキャラクターのウィンドウの今の位置（出していなければ null） */
     fun windowGeometry(scope: Int): WindowGeometry? = null
+
+    /** [file]（バルーンの画像）の代表の色（いちばん多く使われている色、0xRRGGBB）。分からなければ null */
+    fun imageMainColor(file: File): Int? = null
 
     /** 記憶領域（system.disk.*） */
     fun diskInfo(): List<DiskInfo> = emptyList()
@@ -1150,6 +1156,19 @@ class GhostController(
     /** %lastghostname / %lastobjectname */
     private var lastInstalledGhost: String? = null
     private var lastInstalledObject: String? = null
+
+    /** 機器がつながった（OnDeviceArrival）。1台ずつ、種類・名前・作った会社・機器のファイル名を 0x01 でつないだ Reference */
+    fun onDevicesArrived(devices: List<ConnectedDevice>) {
+        if (devices.isNotEmpty()) raise("OnDeviceArrival", devices.map(::deviceReference), userInitiated = false)
+    }
+
+    /** 機器が外れた（OnDeviceRemove） */
+    fun onDevicesRemoved(devices: List<ConnectedDevice>) {
+        if (devices.isNotEmpty()) raise("OnDeviceRemove", devices.map(::deviceReference), userInitiated = false)
+    }
+
+    private fun deviceReference(d: ConnectedDevice) =
+        listOf(d.type, d.name, d.maker, d.file).joinToString("\u0001") { it.replace('\u0001', ' ').replace('\r', ' ').replace('\n', ' ') }
 
     /** \![set,trayballoon] の通知に触れた（OnTrayBalloonClick）。何行かあれば 0x01 でつなぐ */
     fun onTrayBalloonClick(title: String, text: String) = raise("OnTrayBalloonClick", listOf(title, text.replace('\n', '\u0001')))
@@ -3875,6 +3894,8 @@ class GhostController(
         "path" -> g.dir.absolutePath + "/"
         "homeurl" -> g.descript["homeurl"].orEmpty()
         "index" -> index.toString()
+        // SHIORI の名前（descript.txt の shiori）
+        "shiori" -> g.shioriName
         else -> null
     }
 
@@ -3924,6 +3945,9 @@ class GhostController(
                     "rect" -> (g?.balloon ?: ScreenRect(0, 0, 0, 0)).toString()
                     "scaling" -> formatNumber((g?.balloonScale ?: 1.0) * 100)
                     "vertical" -> "0"
+                    "validwidth", "validheight", "validwidth.initial", "validheight.initial", "lines", "lines.initial", "char_width" ->
+                        balloonTextProperty(scope, m.groupValues[2], s.characters[scope]?.balloonId ?: 0)
+                    "background.color" -> balloonBackground(scope, s.characters[scope]?.balloonId ?: 0)
                     else -> null
                 }
             }
@@ -4061,9 +4085,38 @@ class GhostController(
         developerLog.add(kind, type, ghost.name, (listOf(event) + references.take(3)).joinToString(" "))
     }
 
+    /** バルーンの文字の範囲の幅・高さ・行数・半角の幅（initial は最初の画像のもの）。簡易バルーンなら null */
+    private fun balloonTextProperty(scope: Int, key: String, balloonId: Int): String? {
+        val b = balloon ?: return null
+        val initial = key.endsWith(".initial")
+        val image = (if (initial) b.images(scope).firstOrNull() else b.imageForId(scope, balloonId) ?: b.images(scope).firstOrNull()) ?: return null
+        val (w, h) = pngSize(image.file) ?: return null
+        val area = b.textArea(w, h)
+        // 1行の高さは、pono-droid のバルーンの描き方と同じく文字の高さの 1.4 倍（BalloonViews の LINE_HEIGHT）
+        val lineHeight = maxOf(1, (b.fontHeight * 7 + 4) / 5)
+        return when (key.removeSuffix(".initial")) {
+            "validwidth" -> (area.right - area.left).toString()
+            "validheight" -> (area.bottom - area.top).toString()
+            "lines" -> ((area.bottom - area.top) / lineHeight).toString()
+            // 等幅のフォントの半角の幅（文字の高さの半分。SSP の等幅の決まりと同じ）
+            "char_width" -> maxOf(1, b.fontHeight / 2).toString()
+            else -> null
+        }
+    }
+
+    /** バルーンの代表の色（R,G,B）。簡易バルーンは白 */
+    private fun balloonBackground(scope: Int, balloonId: Int): String? {
+        val b = balloon ?: return "255,255,255"
+        val image = b.imageForId(scope, balloonId) ?: b.images(scope).firstOrNull() ?: return null
+        val c = platform.imageMainColor(image.file) ?: return null
+        return "${c shr 16 and 0xff},${c shr 8 and 0xff},${c and 0xff}"
+    }
+
     /** サーフェスの画像の大きさ（PNG の頭を読む）。画像が無ければ null */
-    private fun surfaceSize(id: Int): Pair<Int, Int>? {
-        val file = shell.surfaceImage(id) ?: return null
+    private fun surfaceSize(id: Int): Pair<Int, Int>? = shell.surfaceImage(id)?.let(::pngSize)
+
+    /** PNG の幅と高さ（ファイルの頭の IHDR を読む）。PNG でなければ null */
+    private fun pngSize(file: File): Pair<Int, Int>? {
         return runCatching {
             file.inputStream().use { input ->
                 val head = ByteArray(24)

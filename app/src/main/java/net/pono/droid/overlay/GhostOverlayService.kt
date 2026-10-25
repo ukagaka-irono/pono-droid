@@ -59,6 +59,7 @@ import net.pono.baseware.ghost.GhostRepository
 import net.pono.baseware.ghost.InputRequest
 import net.pono.baseware.ghost.NetworkStatus
 import net.pono.baseware.ghost.PreviousGhost
+import net.pono.baseware.ghost.ConnectedDevice
 import net.pono.baseware.ghost.DeviceEvent
 import net.pono.baseware.ghost.DiskInfo
 import net.pono.baseware.ghost.SoundStatus
@@ -396,6 +397,8 @@ class GhostOverlayService : LifecycleService() {
 
                 override fun soundStatus(): List<SoundStatus> = sound.statuses()
 
+                override fun imageMainColor(file: File): Int? = BalloonColors.mainColor(file)
+
                 override fun voiceRecognitionEnabled(): Boolean = voiceAllowed()
 
                 override fun mailAccounts(): List<net.pono.baseware.net.MailAccount> = runCatching { MailAccounts.load(this@GhostOverlayService) }.getOrDefault(emptyList())
@@ -461,6 +464,8 @@ class GhostOverlayService : LifecycleService() {
         _controller.value = c
         updateSstp()
         updateVoice()
+        usbDevices = null
+        watchUsb()
         _running.value = ghost.dir.name
         c.setScreenOn(getSystemService(PowerManager::class.java).isInteractive)
         createWindows(c)
@@ -648,6 +653,40 @@ class GhostOverlayService : LifecycleService() {
     private fun voiceAllowed(): Boolean = OverlaySettings.voice(OverlaySettings.prefs(this)) &&
         checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
+    /** つないでいる USB 機器（機器のファイル名ごと）。設定で選んだときだけ、画面がついている間に少しずつ見て変わったら伝える */
+    private var usbDevices: Map<String, ConnectedDevice>? = null
+    private var usbJob: Job? = null
+
+    private fun watchUsb() {
+        usbJob?.cancel()
+        usbJob = lifecycleScope.launch {
+            while (true) {
+                val c = controller
+                if (!OverlaySettings.usb(OverlaySettings.prefs(this@GhostOverlayService))) {
+                    // 選び直したときに、そのときつないであったものを知らせないよう、覚えていたものは捨てる
+                    usbDevices = null
+                } else if (c != null && getSystemService(PowerManager::class.java)?.isInteractive != false) {
+                    val now = runCatching {
+                        getSystemService(android.hardware.usb.UsbManager::class.java)?.deviceList?.values?.associate { d ->
+                            // 名前や会社は、機器を使ってよいと言われるまで読めない端末がある
+                            val name = runCatching { d.productName }.getOrNull() ?: d.deviceName
+                            val maker = runCatching { d.manufacturerName }.getOrNull().orEmpty()
+                            d.deviceName to ConnectedDevice("usb", name, maker, d.deviceName)
+                        }
+                    }.getOrNull().orEmpty()
+                    val before = usbDevices
+                    // 起動したときにつないであったものは知らせない
+                    if (before != null) {
+                        c.onDevicesArrived(now.filterKeys { it !in before }.values.toList())
+                        c.onDevicesRemoved(before.filterKeys { it !in now }.values.toList())
+                    }
+                    usbDevices = now
+                }
+                kotlinx.coroutines.delay(USB_POLL_MS)
+            }
+        }
+    }
+
     private fun updateVoice() {
         val c = controller
         val screenOn = getSystemService(PowerManager::class.java)?.isInteractive != false
@@ -706,6 +745,8 @@ class GhostOverlayService : LifecycleService() {
     }
 
     private fun teardown() {
+        usbJob?.cancel()
+        usbJob = null
         sstp?.stop()
         sstp = null
         voice?.stop()
@@ -1133,6 +1174,7 @@ class GhostOverlayService : LifecycleService() {
         }
 
         private const val SAVE_WAIT_MS = 120_000L
+        private const val USB_POLL_MS = 10_000L
 
         private val _controller = MutableStateFlow<GhostController?>(null)
 

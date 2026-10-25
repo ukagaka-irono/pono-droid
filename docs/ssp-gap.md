@@ -11,7 +11,7 @@ pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 - 🔒 作れるが、安全のため決めてから（端末やアカウントに触る・ゴーストに権限を渡す）
 - ⛔ 作れない（Windows の DLL やパソコン専用の機能が前提）
 
-数: イベント 270（済 186）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
+数: イベント 270（済 188）、さくらスクリプト 357、プロパティ 180、SHIORI リソース 161。
 
 決めたこと（2026-10-24）:
 
@@ -67,14 +67,14 @@ OnVoiceRecognitionStatus / OnVoiceRecognitionWord（設定で選び、マイク�
 呼んでから 30 秒のうちに言ったこともそのキャラクターへ。誰も呼んでいない話し声は送らない。画面が消えている間は聞かない）、
 OnBIFFBegin / Complete / Failure・OnBIFF2Complete（\![biff] とメニュー・設定した間隔。POP3 と IMAP をいつも TLS で。パスワードは
 Android Keystore の鍵で暗号にして保存する。中身は読まず、差出人と件名だけ）、
-OnSystemDialog / OnSystemDialogCancel（\![open,dialog,...]。選んだファイルはゴーストのフォルダの pono/dialog/ に写して渡す）
+OnSystemDialog / OnSystemDialogCancel（\![open,dialog,...]。選んだファイルはゴーストのフォルダの pono/dialog/ に写して渡す）、
+OnDeviceArrival / OnDeviceRemove（USB 機器。設定で選んだときだけ、画面がついている間に 10 秒ごとに見る。起動したときにつないであったものは知らせない）
 
 ### 🔨 Android で作れる
 - ⛔ OnConfigurationDialogHelp（SSP の設定画面の項目ごとのヘルプ。pono-droid の設定画面にはヘルプのボタンが無い）
 
 ### 🔒 決めてから
 - ⛔ OnScheduleRead（カレンダーのアイコンの上にカーソルを置いたとき。pono-droid にはカレンダーの画面もカーソルも無い）
-- OnDeviceArrival / Remove（USB 機器）
 - ⛔ OnRecycleBin*（Android にはごみ箱が無い。写真などのアプリのごみ箱を空にするのは、ユーザーのデータを消すことになるので作らない）
 
 ### 👥 複数ゴーストの同時起動が要る
@@ -170,13 +170,14 @@ system.year〜millisecond・dayofweek・cursor.pos・os.*・cpu.*・memory.*・m
 currentghost の一部（name・status・scope.count・shelllist.current.name など）、
 system.theme.app.mode（pono-droid の画面はいつも light）/ theme.os.mode、system.dnd.mode（おやすみモード）、system.network.*、system.disk.*（アプリの置き場と共有の置き場）、
 currentghost.shelllist(…).menu、scope(ID).x / y / rect / surface.x / surface.y / scaling / currentmonitor.* / surface(ID).rect、
-balloon.scope(ID).x / y / rect / scaling / vertical、seriko.surfacelist.all / defined、seriko.sticky-window / zorder、seriko.tooltip.*、
+balloon.scope(ID).x / y / rect / scaling / vertical / validwidth / validheight / lines / char_width（.initial も。1行は文字の高さの 1.4 倍）/ background.color（画像でいちばん多い色）、
+ghostlist(…).shiori（SHIORI の名前）、seriko.surfacelist.all / defined、seriko.sticky-window / zorder、seriko.tooltip.*、
 sound.count / sound.index(ID).* / sound(名前).*、mousecursor・seriko.cursor（カーソルは無いので書いたものを返すだけ）、sakura / kero / char*.bind.menu、
 history.ghost / balloon、rateofuselist.index(順位).*（起動回数・分・週・月・割合）、developer.log.script / error / network / update。
 \![set,property] は [SET有効] のうち shelllist(…).menu・*.bind.menu・sticky-window・zorder・tooltip・sound の position / playing / pause・カーソル
 
 ### 🔨 Android で作れる
-- balloon.scope(ID).validwidth / validheight / lines / char_width / basepos / background.color（バルーンの描き方を表示する側から聞く）
+- balloon.scope(ID).basepos（いま書いている位置。表示する側から聞く）
 - ghostlist(…).shiori.変数名（SHIORI に聞く）
 
 ### 👥 複数ゴーストの同時起動が要る

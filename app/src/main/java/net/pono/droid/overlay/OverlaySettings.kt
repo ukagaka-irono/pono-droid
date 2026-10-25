@@ -56,4 +56,9 @@ object OverlaySettings {
     const val KEY_VOICE = "voice"
 
     fun voice(prefs: SharedPreferences) = prefs.getBoolean(KEY_VOICE, false)
+
+    /** USB 機器をつないだり外したりしたらゴーストに伝えるか（OnDeviceArrival / OnDeviceRemove。最初は伝えない） */
+    const val KEY_USB = "usb"
+
+    fun usb(prefs: SharedPreferences) = prefs.getBoolean(KEY_USB, false)
 }

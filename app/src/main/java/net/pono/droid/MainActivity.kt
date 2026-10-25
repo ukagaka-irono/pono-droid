@@ -272,6 +272,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                         onDenied = { scope.launch { snackbar.showSnackbar("マイクの許可がありません") } },
                     )
                 }
+                item(key = "setting:usb") { SettingSwitch("USB 機器をつないだり外したりしたらゴーストに伝える", OverlaySettings.KEY_USB, OverlaySettings::usb) }
                 item(key = "setting:mail") { MailAccountRow(onMessage = { scope.launch { snackbar.showSnackbar(it) } }) }
                 item(key = "version") {
                     Text(

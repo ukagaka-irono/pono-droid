@@ -43,7 +43,12 @@ class BiffTest {
                 platform = MailPlatform(), player = ScriptPlayer(charWaitMs = 0), mailChecker = checker,
             )
             c.start()
-            assertEquals(listOf("", "", "メイン"), shiori.awaitEvent("OnBIFFBegin"))
+            // アカウントごとに OnBIFFBegin が来る。どちらが先に届くかは決まっていない
+            withTimeout(5000) { while (shiori.count("OnBIFFBegin") < 2) delay(10) }
+            assertEquals(
+                setOf(listOf("", "", "メイン"), listOf("", "", "壊れた")),
+                synchronized(shiori.events) { shiori.events.filter { it.first == "OnBIFFBegin" }.map { it.second }.toSet() },
+            )
             val first = shiori.awaitEvent("OnBIFFComplete")
             assertEquals(listOf("1", "10", "メイン", "0"), first.take(4))
             assertEquals("from1\u0001subject1", first[7])
