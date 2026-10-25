@@ -1014,14 +1014,14 @@ list/sakura-script/misc/bang-enter-collisionmode-bang-enter-collisionmode-rect.m
 list/sakura-script/misc/bang-enter-inductionmode.md	PARTIAL	\![enter,inductionmode]	上の InductionMode と同じ
 list/sakura-script/misc/bang-enter-passivemode.md	PARTIAL	\![enter,passivemode]	上の PassiveMode の制限の多くが無い
 list/sakura-script/misc/bang-enter-selectmode-rect-bang-enter-selectmode-rect-bang-enter-selectmode-rect.md	DONE	\![enter,selectmode,モード(rect),左,上,右,下]\![enter,selectmode,モード(rect),当たり判定名]\![enter,selectmode,モード(rect)]	実装済み
-list/sakura-script/misc/bang-execute-compressarchive.md	PARTIAL	\![execute,compressarchive,ファイル名,ディレクトリ名,オプション...]	--password（AES の ZIP）が無い
+list/sakura-script/misc/bang-execute-compressarchive.md	DONE	\![execute,compressarchive,ファイル名,ディレクトリ名,オプション...]	--password（AES の ZIP。zip4j）も
 list/sakura-script/misc/bang-execute-createnar.md	DONE	\![execute,createnar,出力先ファイル]	実装済み
 list/sakura-script/misc/bang-execute-createupdatedata.md	DONE	\![execute,createupdatedata,出力先ファイル]	実装済み
 list/sakura-script/misc/bang-execute-dropdefault-file-.-bang-execute-dropdefault-url-URL.md	DONE	\![execute,dropdefault,file,ファイルパス,ファイルパス...] \![execute,dropdefault,url,URL,種別]	実装済み
 list/sakura-script/misc/bang-execute-dumpballoon-ID-prefix-ID.md	PARTIAL	\![execute,dumpballoon,ディレクトリ,スコープID,prefix,イベントID]	--hide=balloonmarker,balloonnum を読まない
 list/sakura-script/misc/bang-execute-dumpsurface-ID-prefix-ID-ID.md	DONE	\![execute,dumpsurface,ディレクトリ,スコープID,サーフェスリスト,prefix,イベントID,ゼロ位置切り出し,アニメーションID]	実装済み
 list/sakura-script/misc/bang-execute-emptyrecyclebin.md	IMPOSSIBLE	\![execute,emptyrecyclebin]	Android にごみ箱が無い（決めたこと）
-list/sakura-script/misc/bang-execute-extractarchive.md	PARTIAL	\![execute,extractarchive,ファイル名,ディレクトリ名,オプション...]	--password（パスワード付き ZIP）が無い。java.util.zip では読めないので zip4j などが要る
+list/sakura-script/misc/bang-execute-extractarchive.md	DONE	\![execute,extractarchive,ファイル名,ディレクトリ名,オプション...]	--password（AES の ZIP。zip4j）も
 list/sakura-script/misc/bang-execute-filewatch.md	DONE	\![execute,filewatch,パス,オプション...]	実装済み
 list/sakura-script/misc/bang-execute-http-delete-URL.md	DONE	\![execute,http-delete,URL,オプション,オプション,オプション...]	HttpCommand で扱う
 list/sakura-script/misc/bang-execute-http-get-URL-2.md	DONE	\![execute,http-get,URL,パラメータ]	実装済み
@@ -1041,7 +1041,7 @@ list/sakura-script/misc/bang-execute-nslookup-1-2.md	DONE	\![execute,nslookup,�
 list/sakura-script/misc/bang-execute-ping-1-2.md	DONE	\![execute,ping,パラメータ1,パラメータ2,...]	InetAddress.isReachable の代わり。--ttl / --size / --df / --data は Android では指定できない
 list/sakura-script/misc/bang-execute-rss-get-URL.md	DONE	\![execute,rss-get,URL,オプション,オプション,オプション...]	実装済み
 list/sakura-script/misc/bang-execute-rss-post-URL.md	DONE	\![execute,rss-post,URL,オプション,オプション,オプション...]	実装済み
-list/sakura-script/misc/bang-execute-schedule-add.md	PARTIAL	\![execute,schedule-add,オプション,オプション,オプション...]	--url・--categories・--status・--type・--exdate・--script を読まない
+list/sakura-script/misc/bang-execute-schedule-add.md	DONE	\![execute,schedule-add,オプション,オプション,オプション...]	--url・--categories・--status・--type・--exdate・--script も覚える
 list/sakura-script/misc/bang-execute-schedule-delete-UID.md	DONE	\![execute,schedule-delete,UID,オプション...]	実装済み
 list/sakura-script/misc/bang-execute-schedule-get.md	DONE	\![execute,schedule-get,オプション,オプション,オプション...]	実装済み
 list/sakura-script/misc/bang-execute-websocket-URL.md	DONE	\![execute,websocket,URL,オプション,オプション,オプション...]	実装済み
@@ -1460,9 +1460,9 @@ list/shiori-event/boot-close-change/OnVirtualDesktopChanged.md	IMPOSSIBLE	OnVirt
 list/shiori-event/boot-close-change/OnWindowStateMinimize.md	DONE	OnWindowStateMinimize	実装済み
 list/shiori-event/boot-close-change/OnWindowStateRestore.md	DONE	OnWindowStateRestore	実装済み
 list/shiori-event/boot-close-change/index.md	NA	起動・終了・切り替えイベント	目次のページ
-list/shiori-event/calendar/OnSchedule5MinutesToGo.md	PARTIAL	OnSchedule5MinutesToGo	Reference0 に種類（event など。\![execute,schedule-add] の --type）でなく ghost / user を入れ、Reference3 のスクリプトがいつも空
+list/shiori-event/calendar/OnSchedule5MinutesToGo.md	DONE	OnSchedule5MinutesToGo	決まった値で送る
 list/shiori-event/calendar/OnScheduleRead.md	IMPOSSIBLE	OnScheduleRead	カレンダーのアイコンもカーソルも無い（決めたこと）
-list/shiori-event/calendar/OnScheduleTodayNotify.md	PARTIAL	OnScheduleTodayNotify	各予定の1つ目に種類でなく ghost / user を入れ、スクリプトがいつも空（--type・--script を覚えていない）
+list/shiori-event/calendar/OnScheduleTodayNotify.md	DONE	OnScheduleTodayNotify	決まった値で送る
 list/shiori-event/calendar/OnSchedulepostBegin.md	IMPOSSIBLE	OnSchedulepostBegin	スケジュールセンサー・ポストはプラグイン（決めたこと）
 list/shiori-event/calendar/OnSchedulepostComplete.md	IMPOSSIBLE	OnSchedulepostComplete	スケジュールセンサー・ポストはプラグイン（決めたこと）
 list/shiori-event/calendar/OnSchedulesenseBegin.md	IMPOSSIBLE	OnSchedulesenseBegin	スケジュールセンサー・ポストはプラグイン（決めたこと）
@@ -1546,7 +1546,7 @@ list/shiori-event/install/OnInstallBegin.md	DONE	OnInstallBegin	実装済み
 list/shiori-event/install/OnInstallComplete.md	DONE	OnInstallComplete	実装済み
 list/shiori-event/install/OnInstallCompleteAll.md	DONE	OnInstallCompleteAll	実装済み
 list/shiori-event/install/OnInstallCompleteEx.md	DONE	OnInstallCompleteEx	実装済み
-list/shiori-event/install/OnInstallFailure.md	PARTIAL	OnInstallFailure	install.txt の不備を invalid で送る（SSP は invalid type）。unknown は決まった値に無い
+list/shiori-event/install/OnInstallFailure.md	DONE	OnInstallFailure	決まった値で送る
 list/shiori-event/install/OnInstallRefuse.md	DONE	OnInstallRefuse	実装済み
 list/shiori-event/install/OnInstallReroute.md	BUILD	OnInstallReroute	accept で名指しされたゴーストが一緒に起動していたら、そちらへ入れて以降のイベントもそちらに送る（いまは OnInstallRefuse）
 list/shiori-event/install/caption_install-identifier.md	DONE	インストールの識別子	ghost / shell / balloon / supplement を送る。plugin・headline・calendar は入れられない
@@ -1598,9 +1598,9 @@ list/shiori-event/network-update/OnUpdateResult.md	DONE	OnUpdateResult	実装済
 list/shiori-event/network-update/OnUpdateResultEx.md	DONE	OnUpdateResultEx	実装済み
 list/shiori-event/network-update/OnUpdateResultExplorer.md	BUILD	OnUpdateResultExplorer	アプリのゴースト一覧の「更新」から始めたときは OnUpdateResult の代わりにこれを送る
 list/shiori-event/network-update/caption_updateorder.md	NA	ネットワーク更新イベントの発生順序	順序の説明。OnUpdateProcessExec 以外はこの順で送っている
-list/shiori-event/network-update/caption_updatereason.md	PARTIAL	ネットワーク更新理由	メニューやアプリの「更新」からは user を送っている。SSP の値は manual。自動更新（auto）は無い
+list/shiori-event/network-update/caption_updatereason.md	DONE	ネットワーク更新理由	メニューと「更新」は manual、スクリプトは script（自動更新の設定は無いので auto は来ない）
 list/shiori-event/network-update/caption_updateresultcomplete.md	DONE	ネットワーク更新成功理由	none / changed を送る
-list/shiori-event/network-update/caption_updateresultfailure.md	PARTIAL	ネットワーク失敗理由	timeout・md5 miss・404 など・fileio は送る。更新中にもう一度始めたときの executing を送らず黙って止める
+list/shiori-event/network-update/caption_updateresultfailure.md	DONE	ネットワーク失敗理由	決まった値で送る
 list/shiori-event/network-update/caption_updatetype.md	DONE	ネットワーク更新対象の種別	ghost / shell / balloon を送る。plugin・headline は無い
 list/shiori-event/network-update/index.md	NA	ネットワーク更新イベント	目次のページ
 list/shiori-event/notify/OnNotifyBalloonInfo.md	DONE	OnNotifyBalloonInfo	実装済み
@@ -1613,7 +1613,7 @@ list/shiori-event/notify/OnNotifySelfInfo.md	DONE	OnNotifySelfInfo	実装済み
 list/shiori-event/notify/OnNotifyShellInfo.md	DONE	OnNotifyShellInfo	実装済み
 list/shiori-event/notify/OnNotifyUserInfo.md	DONE	OnNotifyUserInfo	実装済み
 list/shiori-event/notify/balloonpathlist.md	BUILD	balloonpathlist	起動時にバルーンの置き場のパスを NOTIFY
-list/shiori-event/notify/basewareversion.md	PARTIAL	basewareversion	Reference0 に pono-droid、Reference1 に版を送っていて逆。仕様は Reference0 が版、Reference1 が本体の名前
+list/shiori-event/notify/basewareversion.md	DONE	basewareversion	決まった値で送る
 list/shiori-event/notify/calendarpluginpathlist.md	IMPOSSIBLE	calendarpluginpathlist	カレンダーのプラグインは作らない（決めたこと）
 list/shiori-event/notify/calendarskinpathlist.md	IMPOSSIBLE	calendarskinpathlist	カレンダーの画面が無い（決めたこと）
 list/shiori-event/notify/capability.md	BUILD	capability	起動時に pono-droid が扱う SHIORI のヘッダ（request.* / response.*）を NOTIFY
@@ -1723,7 +1723,7 @@ list/shiori-event/other/OnSoundStop.md	DONE	OnSoundStop	実装済み
 list/shiori-event/other/OnTextDrop.md	DONE	OnTextDrop	実装済み
 list/shiori-event/other/OnTranslate.md	DONE	OnTranslate	実装済み
 list/shiori-event/other/OnVideoPlayEx.md	BUILD	OnVideoPlayEx	🔒 OnMusicPlayEx と同じ仕組みで、動画のセッションのときに送る。ssp-gap では ⛔
-list/shiori-event/other/caption_archive_error_codes.md	PARTIAL	アーカイブ操作エラーコード	Failure の理由が例外の文（notauthorized・too large など）のまま。file not found・corrupted・password required などの決まった言葉にする
+list/shiori-event/other/caption_archive_error_codes.md	DONE	アーカイブ操作エラーコード	決まった値で送る
 list/shiori-event/other/caption_musicplayex_codes.md	NA	OnMusicPlayExの拡張情報リスト	OnMusicPlayEx の値の表
 list/shiori-event/other/index.md	NA	その他イベント	目次のページ
 list/shiori-event/other/property.get.md	BUILD	property.get	activeghostlist(...).ext.名前 を読んだとき相手のゴーストに送る（.ext はまだ無い）

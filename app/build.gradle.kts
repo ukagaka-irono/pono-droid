@@ -95,6 +95,10 @@ abstract class GenerateLicenseAssets : DefaultTask() {
                 "Copyright JetBrains s.r.o. and contributors\n\nLicensed under the Apache License, Version 2.0.",
             ),
             Entry(
+                "Zip4j", "Apache-2.0", "https://github.com/srikanth-lingala/zip4j",
+                "Copyright 2010 Srikanth Reddy Lingala\n\nLicensed under the Apache License, Version 2.0.",
+            ),
+            Entry(
                 "LLVM libc++", "Apache-2.0 WITH LLVM-exception", "https://libcxx.llvm.org/",
                 "Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.\n" +
                     "See https://llvm.org/LICENSE.txt for license information.",

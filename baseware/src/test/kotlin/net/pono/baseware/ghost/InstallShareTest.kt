@@ -116,7 +116,7 @@ class InstallShareTest {
     @Test
     fun brokenNarFails() = run { c, shiori, _ ->
         assertEquals(null, c.installNar(nar("bad.nar", mapOf("readme.txt" to "x"))).getOrNull())
-        assertEquals(listOf("invalid"), shiori.awaitEvent("OnInstallFailure"))
+        assertEquals(listOf("invalid type"), shiori.awaitEvent("OnInstallFailure"))
     }
 
     @Test

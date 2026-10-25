@@ -29,10 +29,31 @@ class ScheduleTest {
         s.add(GhostSchedule.Entry("a", "打ち合わせ（変更）", "20261001T100000"))
         val events = s.calendar().events
         assertEquals(listOf("a" to "打ち合わせ（変更）", "b" to "記念日"), events.map { it.uid to it.summary }.sortedBy { it.first })
-        assertEquals(emptyMap<String, Int>(), s.notifyMinutes())
+        // 置き換えたので、a の知らせる分は消えている
+        assertEquals(null, s.extras()["a"]?.notifyMinutes)
         assertTrue(s.delete("b"))
         assertTrue(!s.delete("b"))
         assertEquals("テスト", s.calendar().name)
+    }
+
+    @Test
+    fun keepsTheOtherFieldsTypeAndScript() {
+        val s = GhostSchedule(File(tmp.root, "x.ics"), "x")
+        s.add(
+            GhostSchedule.Entry(
+                "m", "会議", "20261001T100000", rrule = "FREQ=WEEKLY", url = "https://example.test/m", categories = "仕事,定例", status = "TENTATIVE",
+                exdates = listOf("20261008"), type = "meeting", script = "\\0会議だよ\\e",
+            ),
+        )
+        val e = s.calendar().events.single()
+        assertEquals(listOf("https://example.test/m", "TENTATIVE"), listOf(e.url, e.status))
+        assertEquals(setOf(LocalDate.of(2026, 10, 8)), e.exdates)
+        assertEquals(GhostSchedule.Extra(null, "meeting", "\\0会議だよ\\e"), s.extras()["m"])
+        val today = s.today(LocalDate.of(2026, 10, 15)).single().split('\u0001')
+        assertEquals(listOf("meeting", "会議", "", "\\0会議だよ\\e"), today.take(4))
+        // 除いた日には無い
+        assertTrue(s.today(LocalDate.of(2026, 10, 8)).isEmpty())
+        assertEquals("default", GhostSchedule.scheduleType("nonsense"))
     }
 
     @Test
@@ -93,7 +114,8 @@ class ScheduleTest {
         val y = today.year
         val m = today.monthValue
         val d = today.dayOfMonth
-        assertEquals("ghost\u0001今日の会\u0001\u0001\u0001$y,$m,$d,23,0,0\u0001$y,$m,$d,23,30,0\u0001", list[0])
-        assertEquals("user\u0001歯医者\u0001\u0001\u0001$y,$m,$d,9,0,0\u0001$y,$m,$d,9,30,0\u0001", list[1])
+        // 種類を決めていない予定と端末の予定は default
+        assertEquals("default\u0001今日の会\u0001\u0001\u0001$y,$m,$d,23,0,0\u0001$y,$m,$d,23,30,0\u0001", list[0])
+        assertEquals("default\u0001歯医者\u0001\u0001\u0001$y,$m,$d,9,0,0\u0001$y,$m,$d,9,30,0\u0001", list[1])
     }
 }

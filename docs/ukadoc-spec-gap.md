@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1021・一部だけ 119・作る 291・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1031・一部だけ 109・作る 291・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -381,7 +381,7 @@
 
 ## さくらスクリプト
 
-済み 279 項目。
+済み 282 項目。
 
 ### 🔨 作る（9）
 - \q[ID][タイトル]または\q*[ID][タイトル] — 古い \q[ID][タイトル] / \q0[ID][タイトル] を読まない（tokenize で2つ目の [] を読む）
@@ -394,7 +394,7 @@
 - sound の --spectrum= で通知される帯域とレベル \[2.9.18\] — MediaCodec で波形を取り出して FFT し OnSoundSpectrum を送る（Visualizer はマイクの許可が要るので使わない）
 - \![set,alignmentondesktop,bottomまたはtop] — 黙って飛ばしている。alignmenttodesktop の top / bottom と同じにすればよい（SSP も同じ扱い）
 
-### 🔧 一部だけ（55）
+### 🔧 一部だけ（52）
 - \_b\,オプション...\] — --option=… と --clipping / --scaling を読まない（opaque は位置引数のときだけ）
 - \_b\,オプション...\] — --option=foreground・fixed、--clipping / --scaling を読まない。画像はいつも文字の下
 - \_l[x,y] — x が数のときに次の列にするだけ。y・centerx / centery・em / lh / %・@ の相対を扱わない
@@ -419,11 +419,8 @@
 - \f[underline,パラメータ] — default が off になる（バルーンが太字などのとき消せない）、disable が無効表示の飾りにならない
 - \![enter,inductionmode] — 上の InductionMode と同じ
 - \![enter,passivemode] — 上の PassiveMode の制限の多くが無い
-- \![execute,compressarchive,ファイル名,ディレクトリ名,オプション...] — --password（AES の ZIP）が無い
 - \![execute,dumpballoon,ディレクトリ,スコープID,prefix,イベントID] — --hide=balloonmarker,balloonnum を読まない
-- \![execute,extractarchive,ファイル名,ディレクトリ名,オプション...] — --password（パスワード付き ZIP）が無い。java.util.zip では読めないので zip4j などが要る
 - \![execute,install,url,URL,種別] — 種別は nar だけ。homeurl（そこから更新）・ical（予定表として購読）・ssf を作れる。feed はヘッドラインなので作らない
-- \![execute,schedule-add,オプション,オプション,オプション...] — --url・--categories・--status・--type・--exdate・--script を読まない
 - http/rss/ical/websocket オプション — --log（通信の中身をファイルに残す）が無い。--insecure は安全のため使わない
 - InductionMode — induction はパッシブの残りの制限（メールを見ない・切り替えや更新や消去をさせないなど）を持たない
 - PassiveMode — タイムアウトしない・メールを見ない・cantalk 0・SSTP 409 だけ。メニュー・スクリプトブレーク・ファイルを渡す・切り替え・最小化・終了・更新・消去を止めない
@@ -569,7 +566,7 @@
 
 ## SHIORI イベント
 
-済み 219 項目。
+済み 226 項目。
 
 ### 🔨 作る（34）
 - OnBasewareUpdated — 前に起動したときのアプリの版を覚えておき、変わっていたら OnBoot の代わりに送る（ssp-gap では ⛔）
@@ -607,15 +604,8 @@
 - property.get — activeghostlist(...).ext.名前 を読んだとき相手のゴーストに送る（.ext はまだ無い）
 - property.set — activeghostlist(...).ext.名前 に書いたとき相手のゴーストに送り、204 なら成功
 
-### 🔧 一部だけ（8）
-- OnSchedule5MinutesToGo — Reference0 に種類（event など。\![execute,schedule-add] の --type）でなく ghost / user を入れ、Reference3 のスクリプトがいつも空
-- OnScheduleTodayNotify — 各予定の1つ目に種類でなく ghost / user を入れ、スクリプトがいつも空（--type・--script を覚えていない）
-- OnInstallFailure — install.txt の不備を invalid で送る（SSP は invalid type）。unknown は決まった値に無い
-- ネットワーク更新理由 — メニューやアプリの「更新」からは user を送っている。SSP の値は manual。自動更新（auto）は無い
-- ネットワーク失敗理由 — timeout・md5 miss・404 など・fileio は送る。更新中にもう一度始めたときの executing を送らず黙って止める
-- basewareversion — Reference0 に pono-droid、Reference1 に版を送っていて逆。仕様は Reference0 が版、Reference1 が本体の名前
+### 🔧 一部だけ（1）
 - OnMusicPlay — SSTP の GIVE Song だけ。端末で鳴っている曲（MediaSession）からは送らない
-- アーカイブ操作エラーコード — Failure の理由が例外の文（notauthorized・too large など）のまま。file not found・corrupted・password required などの決まった言葉にする
 
 ### ⛔ 作れない（55）
 - OnBasewareUpdating — アプリの更新は Play ストアが行い、置き換える前にアプリへ知らせが来ない

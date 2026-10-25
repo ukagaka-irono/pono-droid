@@ -25,23 +25,29 @@ class GhostSchedule(private val file: File, private val name: String) {
         val location: String = "",
         /** 始まる何分前に知らせるか（null なら SSP と同じ 5 分前） */
         val notifyMinutes: Int? = null,
+        val url: String = "",
+        /** CATEGORIES の値そのまま（カンマ区切り） */
+        val categories: String = "",
+        /** CONFIRMED / TENTATIVE / CANCELLED か空 */
+        val status: String = "",
+        /** 繰り返しから除く日（yyyymmdd） */
+        val exdates: List<String> = emptyList(),
+        /** 予定の種類（[TYPES] のどれか。OnSchedule5MinutesToGo などの Reference0） */
+        val type: String = DEFAULT_TYPE,
+        /** 予定に添えるさくらスクリプト */
+        val script: String = "",
     )
+
+    /** ICS の X- の欄に書いておく、pono-droid だけが使うもの */
+    data class Extra(val notifyMinutes: Int?, val type: String, val script: String)
 
     @Synchronized
     fun calendar(): ICalendar = runCatching { file.takeIf { it.isFile }?.readText()?.let(ICal::parse) }.getOrNull()
         ?: ICalendar(name, "", "GREGORIAN", emptyList())
 
-    /** 知らせる分（UID → 分）。ICS の X-PONO-NOTIFY に書いておく */
+    /** 知らせる分・種類・スクリプト（UID ごと）。ICS の X-PONO-NOTIFY / X-PONO-TYPE / X-PONO-SCRIPT に書いておく */
     @Synchronized
-    fun notifyMinutes(): Map<String, Int> {
-        val text = runCatching { file.takeIf { it.isFile }?.readText() }.getOrNull() ?: return emptyMap()
-        val out = HashMap<String, Int>()
-        for (block in text.split("BEGIN:VEVENT").drop(1)) {
-            val uid = Regex("""(?m)^UID:(.*)$""").find(block)?.groupValues?.get(1)?.trim() ?: continue
-            Regex("""(?m)^X-PONO-NOTIFY:(\d+)""").find(block)?.groupValues?.get(1)?.toIntOrNull()?.let { out[uid] = it }
-        }
-        return out
-    }
+    fun extras(): Map<String, Extra> = entries().associate { it.uid to Extra(it.notifyMinutes, it.type, it.script) }
 
     /** 予定を足す（同じ UID があれば置き換える）。書き込めなければ例外 */
     @Synchronized
@@ -70,6 +76,9 @@ class GhostSchedule(private val file: File, private val name: String) {
                 uid = uid, summary = unescape(v("SUMMARY").orEmpty()), start = v("DTSTART").orEmpty(), end = v("DTEND").orEmpty(),
                 rrule = v("RRULE").orEmpty(), description = unescape(v("DESCRIPTION").orEmpty()), location = unescape(v("LOCATION").orEmpty()),
                 notifyMinutes = v("X-PONO-NOTIFY")?.toIntOrNull(),
+                url = v("URL").orEmpty(), categories = v("CATEGORIES").orEmpty(), status = v("STATUS").orEmpty(),
+                exdates = v("EXDATE")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty(),
+                type = scheduleType(v("X-PONO-TYPE")), script = unescape(v("X-PONO-SCRIPT").orEmpty()),
             )
         }
     }
@@ -85,7 +94,13 @@ class GhostSchedule(private val file: File, private val name: String) {
             if (e.description.isNotEmpty()) sb.append("DESCRIPTION:${escape(e.description)}\r\n")
             if (e.location.isNotEmpty()) sb.append("LOCATION:${escape(e.location)}\r\n")
             if (e.rrule.isNotEmpty()) sb.append("RRULE:${e.rrule}\r\n")
+            if (e.exdates.isNotEmpty()) sb.append("EXDATE;VALUE=DATE:${e.exdates.joinToString(",")}\r\n")
+            if (e.url.isNotEmpty()) sb.append("URL:${e.url.replace("\r", "").replace("\n", "")}\r\n")
+            if (e.categories.isNotEmpty()) sb.append("CATEGORIES:${e.categories.replace("\r", "").replace("\n", "")}\r\n")
+            if (e.status.isNotEmpty()) sb.append("STATUS:${e.status}\r\n")
             e.notifyMinutes?.let { sb.append("X-PONO-NOTIFY:$it\r\n") }
+            if (e.type != DEFAULT_TYPE) sb.append("X-PONO-TYPE:${e.type}\r\n")
+            if (e.script.isNotEmpty()) sb.append("X-PONO-SCRIPT:${escape(e.script)}\r\n")
             sb.append("END:VEVENT\r\n")
         }
         sb.append("END:VCALENDAR\r\n")
@@ -100,14 +115,17 @@ class GhostSchedule(private val file: File, private val name: String) {
     private fun unescape(s: String) = s.replace("\\n", "\n").replace("\\,", ",").replace("\\;", ";").replace("\\\\", "\\")
 
     /** 今日の予定（OnScheduleTodayNotify の1件ずつ: 種類[1]題[1]説明[1]スクリプト[1]開始[1]終了[1]） */
-    fun today(day: LocalDate = LocalDate.now()): List<String> = calendar().events
-        .filter { ICal.occurrences(it, day, day).isNotEmpty() }
-        .sortedWith(compareBy({ it.allDay.not() }, { it.start.toLocalTime() }))
-        .map { e -> todayReference("ghost", e.summary, e.description, "", e, day) }
+    fun today(day: LocalDate = LocalDate.now()): List<String> {
+        val extras = extras()
+        return calendar().events
+            .filter { ICal.occurrences(it, day, day).isNotEmpty() }
+            .sortedWith(compareBy({ it.allDay.not() }, { it.start.toLocalTime() }))
+            .map { e -> todayReference(extras[e.uid]?.type ?: DEFAULT_TYPE, e.summary, e.description, extras[e.uid]?.script.orEmpty(), e, day) }
+    }
 
     /** これから知らせる予定（[now] から [withinMinutes] 分のうちに「知らせる時刻」になるもの）。発生の開始時刻と一緒に */
     fun dueNotifications(now: LocalDateTime, withinMinutes: Long = 1): List<Pair<ICalEvent, LocalDateTime>> {
-        val minutes = notifyMinutes()
+        val minutes = extras().mapNotNull { (uid, x) -> x.notifyMinutes?.let { uid to it } }.toMap()
         val out = mutableListOf<Pair<ICalEvent, LocalDateTime>>()
         for (e in calendar().events) {
             if (e.allDay) continue
@@ -123,6 +141,15 @@ class GhostSchedule(private val file: File, private val name: String) {
 
     companion object {
         const val DEFAULT_NOTIFY_MINUTES = 5
+
+        /** 予定の種類（SSP のスケジュールタイプ）。知らない種類は default */
+        val TYPES = setOf(
+            "default", "event", "meeting", "appointment", "reservation", "duedate", "party", "date", "work", "go", "tv", "recording",
+            "cd", "game", "video", "book", "release",
+        )
+        const val DEFAULT_TYPE = "default"
+
+        fun scheduleType(value: String?): String = value?.trim()?.lowercase()?.takeIf { it in TYPES } ?: DEFAULT_TYPE
         private const val MAX_ENTRIES = 1000
 
         private val DATE = DateTimeFormatter.BASIC_ISO_DATE

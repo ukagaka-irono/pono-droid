@@ -250,9 +250,34 @@ class NetToolsTest {
                 z.closeEntry()
             }
             c.raise("OnSlip", emptyList())
-            assertEquals("invalid path", shiori.awaitEvent("OnExtractArchiveFailure")[1])
+            assertEquals("invalid parameter", shiori.awaitEvent("OnExtractArchiveFailure")[1])
             assertTrue(!File(master.parentFile.parentFile, "evil.txt").exists())
         }
+    }
+
+    @Test
+    fun passwordZipsAndSpecErrorCodes() {
+        val src = tmp.newFolder("src")
+        File(src, "sub").mkdirs()
+        File(src, "a.txt").writeText("AA")
+        File(src, "sub/b.txt").writeText("BB")
+        val zip = File(tmp.root, "locked.zip")
+        assertEquals(2, NetTools.compress(src, zip, "secret").files)
+        fun code(block: () -> Unit) = try {
+            block()
+            "none"
+        } catch (e: NetTools.ArchiveException) {
+            e.code
+        }
+        // パスワード付きはパスワードが要り、違えば mismatch
+        assertEquals("password required", code { NetTools.extract(zip, tmp.newFolder("o1")) })
+        assertEquals("password mismatch", code { NetTools.extract(zip, tmp.newFolder("o2"), "wrong") })
+        val out = tmp.newFolder("o3")
+        assertEquals(2, NetTools.extract(zip, out, "secret").files)
+        assertEquals("BB", File(out, "sub/b.txt").readText())
+        assertEquals("file not found", code { NetTools.extract(File(tmp.root, "none.zip"), tmp.newFolder("o4")) })
+        File(tmp.root, "broken.zip").writeText("not a zip")
+        assertEquals("corrupted", code { NetTools.extract(File(tmp.root, "broken.zip"), tmp.newFolder("o5")) })
     }
 
     @Test

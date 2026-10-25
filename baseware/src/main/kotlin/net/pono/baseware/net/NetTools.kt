@@ -1,13 +1,15 @@
 package net.pono.baseware.net
 
+import net.lingala.zip4j.ZipFile
+import net.lingala.zip4j.exception.ZipException
+import net.lingala.zip4j.model.ZipParameters
+import net.lingala.zip4j.model.enums.AesKeyStrength
+import net.lingala.zip4j.model.enums.EncryptionMethod
 import java.io.File
 import java.io.IOException
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 
 /** \![execute,ping] / \![execute,nslookup] / \7（SNTP）など、通信の小さな道具 */
 object NetTools {
@@ -77,35 +79,51 @@ object NetTools {
 
     data class ArchiveResult(val files: Int, val compressed: Long, val uncompressed: Long)
 
+    /**
+     * アーカイブの失敗。[code] は SSP の決まった言葉（invalid parameter・file not found・directory not found・create directory failed・
+     * open failed・corrupted・crc・password required・password mismatch など）
+     */
+    class ArchiveException(val code: String) : IOException(code)
+
     /** 展開するときの上限（細工した ZIP で端末を埋めさせない） */
     const val MAX_ARCHIVE_FILES = 10_000
     const val MAX_ARCHIVE_BYTES = 512L * 1024 * 1024
 
-    /** [zip] を [dest] に展開する。[dest] の外に出るパス（zip slip）は失敗にする */
-    fun extract(zip: File, dest: File): ArchiveResult {
+    /**
+     * [zip] を [dest] に展開する（[password] があればパスワード付きの ZIP も）。[dest] の外に出るパス（zip slip）は失敗にする。
+     * 失敗は [ArchiveException]
+     */
+    fun extract(zip: File, dest: File, password: String? = null): ArchiveResult {
+        if (!zip.isFile) throw ArchiveException("file not found")
         val root = dest.canonicalFile
-        root.mkdirs()
+        if (!root.isDirectory && !root.mkdirs()) throw ArchiveException("create directory failed")
         var files = 0
         var total = 0L
-        ZipInputStream(zip.inputStream().buffered()).use { zin ->
-            while (true) {
-                val entry = zin.nextEntry ?: break
-                val target = File(root, entry.name.replace('\\', '/')).canonicalFile
-                if (target != root && !target.path.startsWith(root.path + File.separator)) throw IOException("invalid path")
-                if (entry.isDirectory) {
-                    target.mkdirs()
-                    continue
-                }
-                if (++files > MAX_ARCHIVE_FILES) throw IOException("too many files")
-                target.parentFile?.mkdirs()
-                target.outputStream().use { out ->
-                    val buf = ByteArray(64 * 1024)
-                    while (true) {
-                        val n = zin.read(buf)
-                        if (n < 0) break
-                        total += n
-                        if (total > MAX_ARCHIVE_BYTES) throw IOException("too large")
-                        out.write(buf, 0, n)
+        archiveErrors {
+            ZipFile(zip, password?.toCharArray()).use { z ->
+                if (!z.isValidZipFile) throw ArchiveException("corrupted")
+                val headers = z.fileHeaders
+                if (password == null && headers.any { it.isEncrypted }) throw ArchiveException("password required")
+                for (h in headers) {
+                    val target = File(root, h.fileName.replace('\\', '/')).canonicalFile
+                    if (target != root && !target.path.startsWith(root.path + File.separator)) throw ArchiveException("invalid parameter")
+                    if (h.isDirectory) {
+                        target.mkdirs()
+                        continue
+                    }
+                    if (++files > MAX_ARCHIVE_FILES) throw ArchiveException("invalid parameter")
+                    target.parentFile?.let { if (!it.isDirectory && !it.mkdirs()) throw ArchiveException("create directory failed") }
+                    z.getInputStream(h).use { input ->
+                        target.outputStream().use { out ->
+                            val buf = ByteArray(64 * 1024)
+                            while (true) {
+                                val n = input.read(buf)
+                                if (n < 0) break
+                                total += n
+                                if (total > MAX_ARCHIVE_BYTES) throw ArchiveException("invalid parameter")
+                                out.write(buf, 0, n)
+                            }
+                        }
                     }
                 }
             }
@@ -113,25 +131,53 @@ object NetTools {
         return ArchiveResult(files, zip.length(), total)
     }
 
-    /** [source]（ファイルかフォルダ）を [zip] にまとめる。[zip] 自身は中に入れない */
-    fun compress(source: File, zip: File): ArchiveResult {
+    /** [source]（ファイルかフォルダ）を [zip] にまとめる（[password] があれば AES で暗号にする）。[zip] 自身は中に入れない */
+    fun compress(source: File, zip: File, password: String? = null): ArchiveResult {
         val base = source.canonicalFile
+        if (!base.exists()) throw ArchiveException(if (source.path.endsWith("/")) "directory not found" else "file not found")
         val out = zip.canonicalFile
         val files = if (base.isDirectory) base.walkTopDown().filter { it.isFile && it.canonicalFile != out }.toList() else listOf(base)
-        if (files.size > MAX_ARCHIVE_FILES) throw IOException("too many files")
-        var total = 0L
-        out.parentFile?.mkdirs()
-        ZipOutputStream(out.outputStream().buffered()).use { zout ->
-            for (f in files) {
-                val name = if (base.isDirectory) f.canonicalFile.relativeTo(base).invariantSeparatorsPath else f.name
-                zout.putNextEntry(ZipEntry(name))
-                f.inputStream().use { it.copyTo(zout) }
-                zout.closeEntry()
-                total += f.length()
-                if (total > MAX_ARCHIVE_BYTES) throw IOException("too large")
+        if (files.size > MAX_ARCHIVE_FILES) throw ArchiveException("invalid parameter")
+        val total = files.sumOf { it.length() }
+        if (total > MAX_ARCHIVE_BYTES) throw ArchiveException("invalid parameter")
+        out.parentFile?.let { if (!it.isDirectory && !it.mkdirs()) throw ArchiveException("create directory failed") }
+        out.delete()
+        archiveErrors {
+            ZipFile(out, password?.toCharArray()).use { z ->
+                for (f in files) {
+                    val params = ZipParameters().apply {
+                        fileNameInZip = if (base.isDirectory) f.canonicalFile.relativeTo(base).invariantSeparatorsPath else f.name
+                        if (password != null) {
+                            isEncryptFiles = true
+                            encryptionMethod = EncryptionMethod.AES
+                            aesKeyStrength = AesKeyStrength.KEY_STRENGTH_256
+                        }
+                    }
+                    z.addFile(f, params)
+                }
             }
         }
         return ArchiveResult(files.size, out.length(), total)
+    }
+
+    /** zip4j とファイルの失敗を、SSP の決まった言葉の [ArchiveException] にする */
+    private inline fun <T> archiveErrors(block: () -> T): T = try {
+        block()
+    } catch (e: ArchiveException) {
+        throw e
+    } catch (e: ZipException) {
+        throw ArchiveException(
+            when (e.type) {
+                ZipException.Type.WRONG_PASSWORD -> "password mismatch"
+                ZipException.Type.CHECKSUM_MISMATCH -> "crc"
+                ZipException.Type.UNKNOWN_COMPRESSION_METHOD, ZipException.Type.UNSUPPORTED_ENCRYPTION -> "unknown method"
+                else -> if (e.message?.contains("password", ignoreCase = true) == true) "password mismatch" else "corrupted"
+            },
+        )
+    } catch (e: java.io.FileNotFoundException) {
+        throw ArchiveException("open failed")
+    } catch (e: IOException) {
+        throw ArchiveException("stream")
     }
 }
 

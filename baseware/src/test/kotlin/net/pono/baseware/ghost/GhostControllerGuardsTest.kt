@@ -126,8 +126,37 @@ class GhostControllerGuardsTest {
             controller.networkUpdate()
             assertEquals("none", shiori.awaitEvent("OnUpdateComplete")[0])
             controller.networkUpdate()
-            assertEquals("unknown", shiori.awaitEvent("OnUpdateFailure")[0])
+            assertEquals("parse", shiori.awaitEvent("OnUpdateFailure")[0])
         } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun secondUpdateWhileRunningSendsExecutingAndVersionComesFirst() = runBlocking {
+        val ghost = tmp.newTestGhost(extraDescript = "homeurl,https://example.test/ghost/\r\n")
+        val release = CountDownLatch(1)
+        val fetcher = HttpFetcher { _, _, _ ->
+            release.await(5, TimeUnit.SECONDS)
+            FetchResult.HttpError(404)
+        }
+        val shiori = ScriptedShiori(emptyMap())
+        val scope = testScope()
+        try {
+            val controller = testController(ghost, shiori, scope, fetcher = fetcher)
+            controller.start()
+            shiori.awaitEvent("OnFirstBoot")
+            // basewareversion は Reference0 が版、Reference1 が本体の名前
+            assertEquals(GhostController.BASEWARE_VERSION, shiori.awaitEvent("basewareversion")[0])
+            assertEquals("pono-droid", shiori.awaitEvent("basewareversion")[1])
+            controller.networkUpdate()
+            // メニューやアプリの「更新」は manual
+            assertEquals("manual", shiori.awaitEvent("OnUpdateBegin")[4])
+            controller.networkUpdate()
+            assertEquals(listOf("executing", "", "", "ghost", "manual"), shiori.awaitEvent("OnUpdateFailure"))
+            release.countDown()
+        } finally {
+            release.countDown()
             scope.cancel()
         }
     }

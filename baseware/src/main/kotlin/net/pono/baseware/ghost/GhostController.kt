@@ -704,7 +704,8 @@ class GhostController(
         session = s
         val notified = runCatching {
             s.get("version")?.value?.let { platform.log("SHIORI version: $it") }
-            s.notify("basewareversion", ShioriSession.SENDER, basewareVersion)
+            // Reference0 が版、Reference1 が本体の名前
+            s.notify("basewareversion", basewareVersion, ShioriSession.SENDER)
             s.notify(
                 "OnNotifySelfInfo", ghost.name, ghost.sakuraName, ghost.keroName, shell.name, shell.dir.absolutePath + "/",
                 balloon?.name.orEmpty(), balloon?.let { it.dir.absolutePath + "/" }.orEmpty(),
@@ -863,7 +864,7 @@ class GhostController(
      * 最後に結果をまとめて OnUpdateResult（checkonly なら OnUpdateCheckResult）を送る。[options] は checkonly / testonly / recovery、
      * [reason] は SSP の更新実行理由（script / user）。シェルの変更は次の起動から反映される
      */
-    fun networkUpdate(types: List<String> = listOf("ghost"), options: Set<String> = emptySet(), reason: String = "user") {
+    fun networkUpdate(types: List<String> = listOf("ghost"), options: Set<String> = emptySet(), reason: String = "manual") {
         val targets = types.mapNotNull { type ->
             when (type) {
                 "ghost" -> UpdateTarget("ghost", ghost.name, ghost.dir, homeUrlOverride ?: ghost.descript["homeurl"])
@@ -902,7 +903,15 @@ class GhostController(
     }
 
     private fun runUpdates(targets: List<UpdateTarget>, options: Set<String>, reason: String, extended: Boolean) {
-        if (updating || closing || targets.isEmpty()) return
+        if (closing || targets.isEmpty()) return
+        // もう更新しているなら、二重に始めずに executing で知らせる
+        if (updating) {
+            for (t in targets) {
+                val prefix = if (t.type == "ghost") "OnUpdate" else "OnUpdateOther"
+                raise(if ("checkonly" in options) "OnUpdateCheckFailure" else "${prefix}Failure", listOf("executing", "", "", t.type, reason), userInitiated = false)
+            }
+            return
+        }
         updating = true
         val check = "checkonly" in options
         val mode = when {
@@ -995,7 +1004,8 @@ class GhostController(
         } catch (e: Exception) {
             // 更新サーバーが返した変な一覧などで落ちないように。ゴーストには失敗として伝える
             platform.log("network update failed: $e")
-            val why = if (e is IOException) "fileio" else "unknown"
+            // 一覧が読めないなど、取れたが中身を解けないものは parse
+            val why = if (e is IOException) "fileio" else "parse"
             raise(if (check) "OnUpdateCheckFailure" else "${prefix}Failure", refs(why, ""))
             return row(false, why)
         }
@@ -1033,7 +1043,7 @@ class GhostController(
                 uid = "", start = d.start, end = d.end, allDay = d.allDay, summary = d.title, description = d.description,
                 location = "", url = "", status = "", categories = "", rrule = "", exdates = emptySet(),
             )
-            GhostSchedule.todayReference("user", d.title, d.description, "", e, day)
+            GhostSchedule.todayReference(GhostSchedule.DEFAULT_TYPE, d.title, d.description, "", e, day)
         }
         return schedule.today(day) + user
     }
@@ -1042,13 +1052,18 @@ class GhostController(
     private fun checkSchedule() {
         notifyTodayIfChanged()
         val now = java.time.LocalDateTime.now().withSecond(0).withNano(0)
+        val extras = schedule.extras()
         for ((e, _) in schedule.dueNotifications(now)) {
-            raise("OnSchedule5MinutesToGo", listOf("ghost", e.summary, e.description, ""), userInitiated = false)
+            val x = extras[e.uid]
+            raise("OnSchedule5MinutesToGo", listOf(x?.type ?: GhostSchedule.DEFAULT_TYPE, e.summary, e.description, x?.script.orEmpty()), userInitiated = false)
         }
+        // 端末のカレンダーの予定には種類が無い
         for (d in runCatching { platform.deviceSchedule(now.toLocalDate()) }.getOrDefault(emptyList())) {
             if (d.allDay) continue
             val at = d.start.minusMinutes(GhostSchedule.DEFAULT_NOTIFY_MINUTES.toLong())
-            if (!at.isBefore(now) && at.isBefore(now.plusMinutes(1))) raise("OnSchedule5MinutesToGo", listOf("user", d.title, d.description, ""), userInitiated = false)
+            if (!at.isBefore(now) && at.isBefore(now.plusMinutes(1))) {
+                raise("OnSchedule5MinutesToGo", listOf(GhostSchedule.DEFAULT_TYPE, d.title, d.description, ""), userInitiated = false)
+            }
         }
     }
 
@@ -1063,7 +1078,10 @@ class GhostController(
     private fun scheduleEvents(event: String, base: String) =
         if (event.startsWith("On")) event to event + "Failure" else base to "OnExecuteScheduleFailure"
 
-    /** \![execute,schedule-add,--uid,--summary,--start,--end,--rrule,--notify,--description,--location,--event] */
+    /**
+     * \![execute,schedule-add,--uid,--summary,--start,--end,--rrule,--exdate,--notify,--description,--location,--url,--categories,
+     * --status,--type,--script,--event]
+     */
     private fun scheduleAdd(args: List<String>) {
         val (_, opts) = splitArgs(args)
         val (ok, failed) = scheduleEvents(opts["event"].orEmpty(), "OnExecuteScheduleComplete")
@@ -1071,13 +1089,23 @@ class GhostController(
         val start = opts["start"]?.let(GhostSchedule::normalizeDate)
         val end = opts["end"]?.let { GhostSchedule.normalizeDate(it) ?: "" }.orEmpty()
         val summary = opts["summary"]?.trim().orEmpty()
-        if (summary.isEmpty() || start == null || (opts["end"] != null && end.isEmpty()) || !GhostSchedule.validUid(uid)) {
+        // 除く日は yyyymmdd をカンマで（区切りの - は無視する）
+        val exdates = opts["exdate"]?.split(',')?.map { it.trim().replace("-", "") }?.filter { it.isNotEmpty() }.orEmpty()
+        if (summary.isEmpty() || start == null || (opts["end"] != null && end.isEmpty()) || !GhostSchedule.validUid(uid) ||
+            exdates.any { GhostSchedule.normalizeDate(it)?.length != 8 }
+        ) {
             raise(failed, listOf("add", "invalid", opts["uid"].orEmpty()), userInitiated = false)
             return
         }
         val entry = GhostSchedule.Entry(
             uid, summary, start, end, opts["rrule"]?.trim()?.replace("\r", "")?.replace("\n", "").orEmpty(),
             opts["description"].orEmpty(), opts["location"].orEmpty(), opts["notify"]?.trim()?.toIntOrNull()?.coerceIn(0, 7 * 24 * 60),
+            url = opts["url"]?.trim().orEmpty(),
+            categories = opts["categories"]?.trim().orEmpty(),
+            status = opts["status"]?.trim()?.uppercase()?.takeIf { it in setOf("CONFIRMED", "TENTATIVE", "CANCELLED") }.orEmpty(),
+            exdates = exdates,
+            type = GhostSchedule.scheduleType(opts["type"]),
+            script = opts["script"].orEmpty(),
         )
         val saved = runCatching { schedule.add(entry) }.isSuccess
         if (saved) raise(ok, listOf("add", uid), userInitiated = false) else raise(failed, listOf("add", "save", uid), userInitiated = false)
@@ -2097,19 +2125,19 @@ class GhostController(
         val job = scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
+                    val password = opts["password"]?.takeIf { it.isNotEmpty() }
                     when {
                         // ゴーストのフォルダの外には書かない・外は読まない
-                        file == null || dir == null -> throw IOException("notauthorized")
-                        opts.containsKey("password") -> throw IOException("password not supported")
-                        compress -> NetTools.compress(dir, file)
-                        else -> NetTools.extract(file, dir)
+                        file == null || dir == null -> throw NetTools.ArchiveException("invalid parameter")
+                        compress -> NetTools.compress(dir, file, password)
+                        else -> NetTools.extract(file, dir, password)
                     }
                 }
             }
             // 結果は、待っているスクリプトとは別に、話し終わってから送る
             scope.launch {
                 result.onSuccess { r -> deliverLater(complete, listOf(event, r.files.toString(), r.compressed.toString(), r.uncompressed.toString())) }
-                    .onFailure { e -> deliverLater(failure, listOf(event, e.message ?: "error")) }
+                    .onFailure { e -> deliverLater(failure, listOf(event, (e as? NetTools.ArchiveException)?.code ?: "stream")) }
             }
         }
         return if (event.isEmpty()) job else null
@@ -2189,10 +2217,9 @@ class GhostController(
 
     /** OnInstallFailure の理由（SSP の決まった言葉に近いもの） */
     private fun installFailure(e: Throwable): String = when {
-        e.message?.contains("install.txt") == true -> "invalid"
+        e.message?.contains("install.txt") == true -> "invalid type"
         e.message?.contains("type=") == true -> "unsupported"
-        e is IOException -> "extraction"
-        else -> "unknown"
+        else -> "extraction"
     }
 
     /**
@@ -2203,7 +2230,7 @@ class GhostController(
         return when (kind) {
             "path" -> {
                 val file = args.getOrNull(1)?.let(::ghostPath)?.takeIf { it.isFile } ?: run {
-                    raise("OnInstallFailure", listOf("invalid"), userInitiated = false)
+                    raise("OnInstallFailure", listOf("invalid type"), userInitiated = false)
                     return null
                 }
                 scope.launch { installNar(file) }
@@ -2233,7 +2260,8 @@ class GhostController(
         }
         if (r != FetchResult.Ok) {
             if (dropped) raise("OnURLDropFailure", listOf(file.absolutePath, NetworkUpdater.describe(r), url, scopeId.toString()), userInitiated = false)
-            else raise("OnInstallFailure", listOf("download"), userInitiated = false)
+            // 落とせなかったときも、展開できなかったことにする（決まった言葉に「取れない」が無いので）
+            else raise("OnInstallFailure", listOf("extraction"), userInitiated = false)
             file.delete()
             return
         }
