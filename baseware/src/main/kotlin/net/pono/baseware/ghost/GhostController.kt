@@ -1885,6 +1885,18 @@ class GhostController(
     private class Socket(val url: String, val id: String, val job: Job) {
         @Volatile var session: WebSocketSession? = null
         @Volatile var closing = false
+
+        /** 送るもの（と Close）を、スクリプトに書いた順に送るための順番待ち */
+        val sendLock = Mutex()
+    }
+
+    /**
+     * [block] を、そのソケットの順番待ちに今すぐ並べてから IO で動かす（並ぶのは呼んだその場なので、送る順が入れ替わらない）
+     */
+    private fun inOrder(socket: Socket, block: () -> Unit) {
+        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            socket.sendLock.withLock { withContext(Dispatchers.IO) { runCatching(block) } }
+        }
     }
 
     private val sockets = HashMap<String, Socket>()
@@ -1980,12 +1992,11 @@ class GhostController(
 
     /** \![send,websocket,URL,data1,data2...]（CRLF でつなぐ）と \![send,websocket-binary,URL,base64]。つながっていなければ何もしない */
     private fun sendWebSocket(binary: Boolean, url: String, data: List<String>) {
-        val session = sockets[url.trim()]?.session ?: return
-        scope.launch(Dispatchers.IO) {
-            runCatching {
-                if (binary) session.sendBinary(java.util.Base64.getDecoder().decode(data.firstOrNull().orEmpty().trim()))
-                else session.sendText(data.joinToString("\r\n"))
-            }
+        val socket = sockets[url.trim()] ?: return
+        val session = socket.session ?: return
+        inOrder(socket) {
+            if (binary) session.sendBinary(java.util.Base64.getDecoder().decode(data.firstOrNull().orEmpty().trim()))
+            else session.sendText(data.joinToString("\r\n"))
         }
     }
 
@@ -1993,7 +2004,8 @@ class GhostController(
     private fun closeWebSocket(url: String, code: Int) {
         val socket = sockets[url.trim()] ?: return
         socket.closing = true
-        scope.launch(Dispatchers.IO) { socket.session?.close(code) }
+        // 先に頼んだ送信を送り終えてから閉じる
+        inOrder(socket) { socket.session?.close(code) }
     }
 
     /** \![cancel,websocket,URL]。Close を送らずに切り、OnExecuteWebSocketClose（userbreak） */
