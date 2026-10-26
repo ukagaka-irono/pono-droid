@@ -621,7 +621,7 @@ list/plugin-event/plugin-event/version.md	IMPOSSIBLE	version	プラグインに�
 list/propertysystem/index.md	NA	プロパティシステム	目次のページ
 list/propertysystem/property-system/activeghostlist-.ext.md	PARTIAL	activeghostlist(ゴースト名/本体側名/パス).ext.拡張プロパティ名	読むと相手に property.get、書くと property.set を送る（\![get,property] など待てるところだけ。%property[…] はその場で答えが要るので空）
 list/propertysystem/property-system/activeghostlist.current.md	DONE	activeghostlist.current.汎用プロパティ名	自分を返す
-list/propertysystem/property-system/activeghostlist.index-ID-.ext.md	BUILD	activeghostlist.index(ID).ext.拡張プロパティ名	上の ext と同じ。index(ID) で選んだゴーストの SHIORI に property.get / set
+list/propertysystem/property-system/activeghostlist.index-ID-.ext.md	PARTIAL	activeghostlist.index(ID).ext.拡張プロパティ名	activeghostlist(…).ext と同じ（index(ID) で選んだゴーストに property.get / set。%property[…] では空）
 list/propertysystem/property-system/activeghostlist.index-ID.md	DONE	activeghostlist.index(ID).汎用プロパティ名	動いているゴーストの並びから選ぶ
 list/propertysystem/property-system/activeghostlist.md	DONE	activeghostlist(ゴースト名/本体側名/パス).汎用プロパティ名	listProperty で (名前/本体側名/パス) を選ぶ
 list/propertysystem/property-system/balloonlist.count.md	DONE	balloonlist.count	実装済み
@@ -660,7 +660,7 @@ list/propertysystem/property-system/currentghost.mousecursor.hand.md	DONE	curren
 list/propertysystem/property-system/currentghost.mousecursor.md	DONE	currentghost.mousecursor	カーソルが無いので、書いた値を返すだけ
 list/propertysystem/property-system/currentghost.mousecursor.text.md	DONE	currentghost.mousecursor.text	カーソルが無いので、書いた値を返すだけ
 list/propertysystem/property-system/currentghost.mousecursor.wait.md	DONE	currentghost.mousecursor.wait	カーソルが無いので、書いた値を返すだけ
-list/propertysystem/property-system/currentghost.scope-ID-.animation.num.md	PARTIAL	currentghost.scope(ID).animation.num	動いているアニメーションの ID の一覧でなく、そのサーフェスの定義の数を返している。SET（\i と同じに動かす）も無い
+list/propertysystem/property-system/currentghost.scope-ID-.animation.num.md	DONE	currentghost.scope(ID).animation.num	読むと動いているアニメーションの ID（カンマ区切り）、書くと \i と同じに足して動かす
 list/propertysystem/property-system/currentghost.scope-ID-.currentmonitor.bpp.md	DONE	currentghost.scope(ID).currentmonitor.bpp	実装済み
 list/propertysystem/property-system/currentghost.scope-ID-.currentmonitor.dpi.md	DONE	currentghost.scope(ID).currentmonitor.dpi	実装済み
 list/propertysystem/property-system/currentghost.scope-ID-.currentmonitor.primary.md	DONE	currentghost.scope(ID).currentmonitor.primary	実装済み
@@ -704,9 +704,9 @@ list/propertysystem/property-system/developer.log.-.count.md	DONE	developer.log.
 list/propertysystem/property-system/developer.log.-.index-ID-2.md	DONE	developer.log.ログ種別(名前).index(ID).ログプロパティ名	名前で絞り、index を省けば最新
 list/propertysystem/property-system/developer.log.-.index-ID.md	DONE	developer.log.ログ種別.index(ID).ログプロパティ名	type / name / value / time
 list/propertysystem/property-system/general-property/char-star-.bind.menu.md	DONE	char\*.bind.menu	実装済み
-list/propertysystem/property-system/general-property/craftmanurl.md	PARTIAL	craftmanurl	ゴーストだけ。バルーンとシェルの descript.txt の craftmanurl を返さない
-list/propertysystem/property-system/general-property/craftmanw.md	PARTIAL	craftmanw	ゴーストとバルーンだけ。シェルの craftmanw を返さない
-list/propertysystem/property-system/general-property/homeurl.md	PARTIAL	homeurl	ゴーストだけ。バルーンとシェルの homeurl を返さない
+list/propertysystem/property-system/general-property/craftmanurl.md	DONE	craftmanurl	ゴースト・シェル・バルーンの descript.txt の craftmanurl
+list/propertysystem/property-system/general-property/craftmanw.md	DONE	craftmanw	ゴースト・シェル・バルーンの craftmanw（無ければ craftman）
+list/propertysystem/property-system/general-property/homeurl.md	DONE	homeurl	ゴースト・シェル・バルーンの homeurl
 list/propertysystem/property-system/general-property/index-item.md	DONE	index	実装済み
 list/propertysystem/property-system/general-property/index.md	NA	汎用プロパティ名	目次のページ
 list/propertysystem/property-system/general-property/kero.bind.menu.md	DONE	kero.bind.menu	実装済み
@@ -717,11 +717,11 @@ list/propertysystem/property-system/general-property/path.md	DONE	path	実装済
 list/propertysystem/property-system/general-property/sakura.bind.menu.md	DONE	sakura.bind.menu	実装済み
 list/propertysystem/property-system/general-property/sakuraname.md	DONE	sakuraname	実装済み
 list/propertysystem/property-system/general-property/shiori.md	DONE	shiori.変数名	SHIORI に GET で聞く（\![get,property] だけ）
-list/propertysystem/property-system/general-property/thumbnail.md	BUILD	thumbnail	そのフォルダの thumbnail.png（ゴースト・シェル・バルーン）のパスを返す
-list/propertysystem/property-system/general-property/update_result.md	BUILD	update_result	ネットワーク更新の最後の結果をゴーストごとに profile に残して返す
-list/propertysystem/property-system/general-property/update_time.md	BUILD	update_time	ネットワーク更新の最後の時刻を profile に残して返す
-list/propertysystem/property-system/general-property/username.md	PARTIAL	username	%username はあるが、currentghost.username と activeghostlist(…).username を返さない（一緒に動いているゴーストの userName を聞く）
-list/propertysystem/property-system/ghostlist-.icon.md	BUILD	ghostlist(ゴースト名/本体側名/パス).icon	ghostProperty に icon が無い。descript.txt の icon をゴーストのフォルダからのパスにして返す
+list/propertysystem/property-system/general-property/thumbnail.md	DONE	thumbnail	そのフォルダの thumbnail.png のパス（無ければ空）
+list/propertysystem/property-system/general-property/update_result.md	DONE	update_result	最後のネットワーク更新の結果（OK,ファイル数 / NG,理由）をそのフォルダの pono/update.properties に残して返す
+list/propertysystem/property-system/general-property/update_time.md	DONE	update_time	最後のネットワーク更新の時刻（年,月,日,時,分,秒）
+list/propertysystem/property-system/general-property/username.md	DONE	username	自分と一緒に動いているゴーストの username（動いていなければ無い）
+list/propertysystem/property-system/ghostlist-.icon.md	DONE	ghostlist(ゴースト名/本体側名/パス).icon	descript.txt の icon（ghost/master からのパス）を絶対パスにして返す
 list/propertysystem/property-system/ghostlist.count.md	DONE	ghostlist.count	実装済み
 list/propertysystem/property-system/ghostlist.current.md	DONE	ghostlist.current.汎用プロパティ名	自分を返す
 list/propertysystem/property-system/ghostlist.index-ID.md	DONE	ghostlist.index(ID).汎用プロパティ名	入っているゴーストの並びから選ぶ
@@ -749,18 +749,18 @@ list/propertysystem/property-system/pluginlist-ID.md	IMPOSSIBLE	pluginlist(プ�
 list/propertysystem/property-system/pluginlist.count.md	IMPOSSIBLE	pluginlist.count	プラグインは作らない（決めたこと）
 list/propertysystem/property-system/pluginlist.index-ID-.ext.md	IMPOSSIBLE	pluginlist.index(ID).ext.拡張プロパティ名	プラグインは作らない（決めたこと）
 list/propertysystem/property-system/pluginlist.index-ID.md	IMPOSSIBLE	pluginlist.index(ID).汎用プロパティ名	プラグインは作らない（決めたこと）
-list/propertysystem/property-system/rateofuselist-.bootminute.md	BUILD	rateofuselist(名前).bootminute	rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-list/propertysystem/property-system/rateofuselist-.bootminutemonthly.md	BUILD	rateofuselist(名前).bootminutemonthly	rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-list/propertysystem/property-system/rateofuselist-.bootminuteweekly.md	BUILD	rateofuselist(名前).bootminuteweekly	rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-list/propertysystem/property-system/rateofuselist-.boottime.md	BUILD	rateofuselist(名前).boottime	rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-list/propertysystem/property-system/rateofuselist-.boottimemonthly.md	BUILD	rateofuselist(名前).boottimemonthly	rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-list/propertysystem/property-system/rateofuselist-.boottimeweekly.md	BUILD	rateofuselist(名前).boottimeweekly	rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-list/propertysystem/property-system/rateofuselist-.keroname.md	BUILD	rateofuselist(名前).keroname	rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-list/propertysystem/property-system/rateofuselist-.name.md	BUILD	rateofuselist(名前).name	rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-list/propertysystem/property-system/rateofuselist-.percent.md	BUILD	rateofuselist(名前).percent	rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-list/propertysystem/property-system/rateofuselist-.percentmonthly.md	BUILD	rateofuselist(名前).percentmonthly	rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-list/propertysystem/property-system/rateofuselist-.percentweekly.md	BUILD	rateofuselist(名前).percentweekly	rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-list/propertysystem/property-system/rateofuselist-.sakuraname.md	BUILD	rateofuselist(名前).sakuraname	rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
+list/propertysystem/property-system/rateofuselist-.bootminute.md	DONE	rateofuselist(名前).bootminute	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
+list/propertysystem/property-system/rateofuselist-.bootminutemonthly.md	DONE	rateofuselist(名前).bootminutemonthly	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
+list/propertysystem/property-system/rateofuselist-.bootminuteweekly.md	DONE	rateofuselist(名前).bootminuteweekly	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
+list/propertysystem/property-system/rateofuselist-.boottime.md	DONE	rateofuselist(名前).boottime	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
+list/propertysystem/property-system/rateofuselist-.boottimemonthly.md	DONE	rateofuselist(名前).boottimemonthly	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
+list/propertysystem/property-system/rateofuselist-.boottimeweekly.md	DONE	rateofuselist(名前).boottimeweekly	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
+list/propertysystem/property-system/rateofuselist-.keroname.md	DONE	rateofuselist(名前).keroname	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
+list/propertysystem/property-system/rateofuselist-.name.md	DONE	rateofuselist(名前).name	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
+list/propertysystem/property-system/rateofuselist-.percent.md	DONE	rateofuselist(名前).percent	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
+list/propertysystem/property-system/rateofuselist-.percentmonthly.md	DONE	rateofuselist(名前).percentmonthly	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
+list/propertysystem/property-system/rateofuselist-.percentweekly.md	DONE	rateofuselist(名前).percentweekly	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
+list/propertysystem/property-system/rateofuselist-.sakuraname.md	DONE	rateofuselist(名前).sakuraname	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
 list/propertysystem/property-system/rateofuselist.index-.bootminute.md	DONE	rateofuselist.index(順位).bootminute	実装済み
 list/propertysystem/property-system/rateofuselist.index-.bootminutemonthly.md	DONE	rateofuselist.index(順位).bootminutemonthly	実装済み
 list/propertysystem/property-system/rateofuselist.index-.bootminuteweekly.md	DONE	rateofuselist.index(順位).bootminuteweekly	実装済み
@@ -774,27 +774,27 @@ list/propertysystem/property-system/rateofuselist.index-.percentmonthly.md	DONE	
 list/propertysystem/property-system/rateofuselist.index-.percentweekly.md	DONE	rateofuselist.index(順位).percentweekly	実装済み
 list/propertysystem/property-system/rateofuselist.index-.sakuraname.md	DONE	rateofuselist.index(順位).sakuraname	実装済み
 list/propertysystem/property-system/sound-property/index.md	NA	サウンドプロパティ名	目次のページ
-list/propertysystem/property-system/sound-property/notes_sound_meta.md	BUILD	サウンドプロパティのメタデータ（meta.～）について \[2.8.73\]	meta.* を作るときの決まり（タグが無ければプロパティごと無いことにする）
+list/propertysystem/property-system/sound-property/notes_sound_meta.md	DONE	サウンドプロパティのメタデータ（meta.～）について \[2.8.73\]	タグが無ければ、その meta.* は無いプロパティになる
 list/propertysystem/property-system/sound-property/notes_sound_propertyset.md	DONE	サウンドプロパティの書き込みについて \[2.8.72\]	position / playing / pause の書き込みをタグと同じ処理に回す
 list/propertysystem/property-system/sound-property/sound.duration.md	DONE	duration	実装済み
 list/propertysystem/property-system/sound-property/sound.error.md	DONE	error	実装済み
 list/propertysystem/property-system/sound-property/sound.id.md	DONE	id	実装済み
 list/propertysystem/property-system/sound-property/sound.loop.md	DONE	loop	実装済み
-list/propertysystem/property-system/sound-property/sound.meta.album.md	BUILD	meta.album	meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-list/propertysystem/property-system/sound-property/sound.meta.albumartist.md	BUILD	meta.albumartist	meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-list/propertysystem/property-system/sound-property/sound.meta.artist.md	BUILD	meta.artist	meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-list/propertysystem/property-system/sound-property/sound.meta.artwork.md	BUILD	meta.artwork	meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-list/propertysystem/property-system/sound-property/sound.meta.genre.md	BUILD	meta.genre	meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-list/propertysystem/property-system/sound-property/sound.meta.title.md	BUILD	meta.title	meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-list/propertysystem/property-system/sound-property/sound.meta.track.md	BUILD	meta.track	meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-list/propertysystem/property-system/sound-property/sound.meta.year.md	BUILD	meta.year	meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
+list/propertysystem/property-system/sound-property/sound.meta.album.md	DONE	meta.album	MediaMetadataRetriever でタグを読む（無ければプロパティごと無い。artwork は書き出した画像のパス）
+list/propertysystem/property-system/sound-property/sound.meta.albumartist.md	DONE	meta.albumartist	MediaMetadataRetriever でタグを読む（無ければプロパティごと無い。artwork は書き出した画像のパス）
+list/propertysystem/property-system/sound-property/sound.meta.artist.md	DONE	meta.artist	MediaMetadataRetriever でタグを読む（無ければプロパティごと無い。artwork は書き出した画像のパス）
+list/propertysystem/property-system/sound-property/sound.meta.artwork.md	DONE	meta.artwork	MediaMetadataRetriever でタグを読む（無ければプロパティごと無い。artwork は書き出した画像のパス）
+list/propertysystem/property-system/sound-property/sound.meta.genre.md	DONE	meta.genre	MediaMetadataRetriever でタグを読む（無ければプロパティごと無い。artwork は書き出した画像のパス）
+list/propertysystem/property-system/sound-property/sound.meta.title.md	DONE	meta.title	MediaMetadataRetriever でタグを読む（無ければプロパティごと無い。artwork は書き出した画像のパス）
+list/propertysystem/property-system/sound-property/sound.meta.track.md	DONE	meta.track	MediaMetadataRetriever でタグを読む（無ければプロパティごと無い。artwork は書き出した画像のパス）
+list/propertysystem/property-system/sound-property/sound.meta.year.md	DONE	meta.year	MediaMetadataRetriever でタグを読む（無ければプロパティごと無い。artwork は書き出した画像のパス）
 list/propertysystem/property-system/sound-property/sound.name.md	DONE	name	実装済み
 list/propertysystem/property-system/sound-property/sound.path.md	DONE	path	実装済み
 list/propertysystem/property-system/sound-property/sound.pause.md	DONE	pause	実装済み
 list/propertysystem/property-system/sound-property/sound.playing.md	DONE	playing	実装済み
 list/propertysystem/property-system/sound-property/sound.position.md	DONE	position	実装済み
 list/propertysystem/property-system/sound-property/sound.preload.md	DONE	preload	実装済み
-list/propertysystem/property-system/system.cpu.md	PARTIAL	system.cpu.(キー)	load と clock がいつも 0、vendor と features が空。load は OnCPULoadHigh で測る /proc/stat の値を使える
+list/propertysystem/property-system/system.cpu.md	DONE	system.cpu.(キー)	load（数秒ごとに測る負荷）・num・vendor・name（SoC）・clock（MHz）・features（/proc/cpuinfo）
 list/propertysystem/property-system/system.cursor.pos.md	DONE	system.cursor.pos	カーソルが無いので 0,0
 list/propertysystem/property-system/system.day.md	DONE	system.day	実装済み
 list/propertysystem/property-system/system.dayofweek.md	DONE	system.dayofweek	実装済み

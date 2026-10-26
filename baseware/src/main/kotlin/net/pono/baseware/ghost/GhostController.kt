@@ -87,6 +87,11 @@ data class DeviceInfo(
     val screenWidth: Int = 0,
     val screenHeight: Int = 0,
     val dpi: Int = 0,
+    /** system.cpu.vendor / name / features / clock（MHz）。分からなければ空か 0 */
+    val cpuVendor: String = "",
+    val cpuName: String = "",
+    val cpuFeatures: String = "",
+    val cpuClockMhz: Int = 0,
 )
 
 /** 電池の状態。[percent] は -1 なら不明 */
@@ -300,6 +305,12 @@ interface GhostPlatform {
 
     /** 鳴らしている音（先に読んだだけのものも） */
     fun soundStatus(): List<SoundStatus> = emptyList()
+
+    /**
+     * 音のファイルのタグ（サウンドプロパティの meta.title / artist / album / albumartist / genre / year / track / artwork）。
+     * 無いものは入れない（そのプロパティは無いことになる）。artwork は画像を書き出したファイルのパス
+     */
+    fun soundMeta(file: File): Map<String, String> = emptyMap()
 
     /** メールを確かめるアカウント（アプリの設定で入れたもの。最初は無い） */
     fun mailAccounts(): List<MailAccount> = emptyList()
@@ -1013,7 +1024,12 @@ class GhostController(
         scope.launch {
             val results = mutableListOf<String>()
             try {
-                for (t in targets) results += updateOne(t, mode, reason, extended)
+                for (t in targets) {
+                    val row = updateOne(t, mode, reason, extended)
+                    results += row
+                    // 確かめるだけでなければ、結果と時刻を残す（update_result / update_time）
+                    if (!check) UpdateRecord.save(t.dir, row.split('\u0001').takeLast(2).joinToString(","))
+                }
             } finally {
                 updating = false
             }
@@ -3772,11 +3788,15 @@ class GhostController(
     private var memoryHighCount = 0
     private var memoryHigh = false
 
+    /** いちばん新しい CPU の負荷（system.cpu.load） */
+    private var lastCpuLoad: Int? = null
+
     /**
      * 端末の負荷（パーセント。CPU が分からなければ null）。数秒ごとに呼ぶ。80% 以上が続いたら OnCPULoadHigh / OnMemoryLoadHigh、
      * その後 60% を下回ったら OnCPULoadLow / OnMemoryLoadLow（SSP と同じ）
      */
     fun onLoad(cpuPercent: Int?, memoryPercent: Int?) {
+        cpuPercent?.let { lastCpuLoad = it }
         fun check(value: Int?, count: Int, high: Boolean, name: String, set: (Int, Boolean) -> Unit) {
             value ?: return
             when {
@@ -4686,14 +4706,21 @@ class GhostController(
             }
             n.startsWith("history.ghost") -> historyProperty(n.removePrefix("history.ghost"), history?.recentGhosts().orEmpty().mapNotNull { repository?.find(it) }) { g, key, i -> ghostProperty(g, key, i) }
             n.startsWith("history.balloon") -> historyProperty(n.removePrefix("history.balloon"), history?.recentBalloons().orEmpty().mapNotNull { repository?.balloons?.find(it) }) { b, key, i -> balloonProperty(b, key, i) }
-            n.startsWith("rateofuselist.") -> rateOfUseProperty(n.removePrefix("rateofuselist."))
+            n.startsWith("rateofuselist.") || n.startsWith("rateofuselist(") -> rateOfUseProperty(n.removePrefix("rateofuselist").removePrefix("."))
             n.startsWith("developer.log.") -> developerLogProperty(n.removePrefix("developer.log."))
             n.startsWith("system.os.") -> osProperty(n.removePrefix("system.os."))
-            n.startsWith("system.cpu.") -> when (n.removePrefix("system.cpu.")) {
-                "num" -> (platform.deviceInfo()?.cpuCount ?: 0).toString()
-                "name" -> platform.deviceInfo()?.arch.orEmpty()
-                "load", "clock" -> "0"
-                else -> ""
+            n.startsWith("system.cpu.") -> {
+                val d = platform.deviceInfo()
+                when (n.removePrefix("system.cpu.")) {
+                    "num" -> (d?.cpuCount ?: 0).toString()
+                    "name" -> d?.cpuName?.takeIf { it.isNotEmpty() } ?: d?.arch.orEmpty()
+                    "vendor" -> d?.cpuVendor.orEmpty()
+                    "features" -> d?.cpuFeatures.orEmpty()
+                    "clock" -> (d?.cpuClockMhz ?: 0).toString()
+                    // 数秒ごとに測っている負荷（OnCPULoadHigh と同じもの）
+                    "load" -> (lastCpuLoad ?: 0).toString()
+                    else -> ""
+                }
             }
             n.startsWith("system.memory.") -> platform.deviceInfo()?.let { d ->
                 when (n.removePrefix("system.memory.")) {
@@ -4861,15 +4888,37 @@ class GhostController(
         "index" -> index.toString()
         // SHIORI の名前（descript.txt の shiori）
         "shiori" -> g.shioriName
+        "thumbnail" -> thumbnailOf(g.dir)
+        // descript.txt の icon（ghost/master からのパス）
+        "icon" -> g.descript["icon"]?.trim()?.takeIf { it.isNotEmpty() }?.let { File(g.masterDir, it.replace('\\', '/')) }
+            ?.takeIf { it.isFile && it.canonicalPath.startsWith(g.dir.canonicalPath + File.separator) }?.absolutePath.orEmpty()
+        "update_result" -> UpdateRecord.load(g.dir)?.result.orEmpty()
+        "update_time" -> UpdateRecord.load(g.dir)?.time.orEmpty()
+        // 動いているゴーストだけ（自分か、一緒に動いているもの）
+        "username" -> runningController(g)?.userName
+        else -> null
+    }
+
+    /** そのフォルダの thumbnail.png（大文字小文字は問わない）。無ければ空 */
+    private fun thumbnailOf(dir: File): String =
+        dir.listFiles()?.firstOrNull { it.isFile && it.name.equals("thumbnail.png", ignoreCase = true) }?.absolutePath.orEmpty()
+
+    /** シェル・バルーンの descript.txt にある、作者・URL・サムネイル・更新の結果 */
+    private fun packageProperty(dir: File, descript: net.pono.baseware.text.Descript, key: String): String? = when (key) {
+        "craftmanw" -> descript["craftmanw"] ?: descript["craftman"].orEmpty()
+        "craftmanurl" -> descript["craftmanurl"].orEmpty()
+        "homeurl" -> descript["homeurl"].orEmpty()
+        "thumbnail" -> thumbnailOf(dir)
+        "update_result" -> UpdateRecord.load(dir)?.result.orEmpty()
+        "update_time" -> UpdateRecord.load(dir)?.time.orEmpty()
         else -> null
     }
 
     private fun balloonProperty(b: Balloon, key: String, index: Int): String? = when (key) {
         "name" -> b.name
-        "craftmanw" -> b.descript["craftmanw"] ?: b.descript["craftman"].orEmpty()
         "path" -> b.dir.absolutePath + "/"
         "index" -> index.toString()
-        else -> null
+        else -> packageProperty(b.dir, b.descript, key)
     }
 
     private fun currentGhostProperty(key: String): String? {
@@ -4884,7 +4933,7 @@ class GhostController(
                     "path" -> dir.absolutePath + "/"
                     "index" -> index.toString()
                     "menu" -> shellMenu(dir)
-                    else -> null
+                    else -> packageProperty(dir, if (dir == shell.dir) shell.descript else net.pono.baseware.text.Descript.read(File(dir, "descript.txt")), k)
                 }
             }
             key == "scope.count" -> characterScopes.size.toString()
@@ -4924,7 +4973,8 @@ class GhostController(
                     "y" -> platform.windowGeometry(scope)?.surface?.bottom?.toString() ?: "0"
                     "surface.x" -> platform.windowGeometry(scope)?.surface?.left?.toString() ?: "0"
                     "surface.y" -> platform.windowGeometry(scope)?.surface?.top?.toString() ?: "0"
-                    "animation.num" -> (shell.surfaces[s.characters[scope]?.surface ?: -1]?.animations?.size ?: 0).toString()
+                    // いま動いているアニメーションの ID（カンマ区切り）
+                    "animation.num" -> playingAnimations.value[scope].orEmpty().sorted().joinToString(",")
                     else -> when {
                         m.groupValues[2].startsWith("currentmonitor.") -> property("system.monitor.index(0)." + m.groupValues[2].removePrefix("currentmonitor."))
                         m.groupValues[2].startsWith("surface(") -> {
@@ -4979,10 +5029,22 @@ class GhostController(
     /** rateofuselist.index(順位).name など。起動していた時間の長い順 */
     private fun rateOfUseProperty(rest: String): String? {
         val h = history ?: return null
-        if (!rest.startsWith("index(")) return null
-        val rank = rest.substring(6, rest.indexOf(')').takeIf { it > 6 } ?: return null).toIntOrNull() ?: return null
         val all = h.usage()
-        val u = all.getOrNull(rank) ?: return null
+        val u = when {
+            rest.startsWith("index(") -> {
+                val rank = rest.substring(6, rest.indexOf(')').takeIf { it > 6 } ?: return null).toIntOrNull() ?: return null
+                all.getOrNull(rank)
+            }
+            // rateofuselist(名前).… は、ゴーストの名前・本体側の名前・フォルダ名で選ぶ
+            rest.startsWith("(") -> {
+                val selector = rest.substring(1, rest.indexOf(')').takeIf { it > 1 } ?: return null)
+                all.firstOrNull { u ->
+                    val g = repository?.find(u.dirName)
+                    u.dirName == selector || g?.name == selector || g?.sakuraName == selector
+                }
+            }
+            else -> null
+        } ?: return null
         val today = h.today()
         val g = repository?.find(u.dirName)
         fun percent(mine: Int, total: Int) = if (total <= 0) "0" else formatNumber(mine * 100.0 / total)
@@ -5158,7 +5220,8 @@ class GhostController(
         "preload" -> if (st.preload) "1" else "0"
         "loop" -> if (st.loop) "1" else "0"
         "error" -> st.error
-        else -> null
+        // タグが無ければ、そのプロパティは無い（null）
+        else -> if (key.startsWith("meta.")) platform.soundMeta(st.file)[key.removePrefix("meta.")] else null
     }
 
     /**
@@ -5192,6 +5255,12 @@ class GhostController(
                 val explicit = groups.flatten().map { it.first() in "sb" }.distinct()
                 if (explicit.size > 1) return false
                 _state.update { it.copy(window = it.window.copy(zorder = groups)) }
+            }
+            // scope(ID).animation.num に書くと、そのアニメーションを \i と同じに足して動かす
+            Regex("""^scope\((\d+)\)\.animation\.num$""").matches(key) -> {
+                val scope = key.substringAfter("scope(").substringBefore(')').toIntOrNull() ?: return false
+                val ids = value.split(',').mapNotNull { it.trim().toIntOrNull() }.takeIf { it.isNotEmpty() } ?: return false
+                for (id in ids) _state.update { it.update(scope) { c -> c.command(++animationCounter, AnimationCommand.Start(id)) } }
             }
             key.startsWith("seriko.tooltip.scope(") -> {
                 val scope = key.substringAfter("scope(").substringBefore(')').toIntOrNull() ?: return false

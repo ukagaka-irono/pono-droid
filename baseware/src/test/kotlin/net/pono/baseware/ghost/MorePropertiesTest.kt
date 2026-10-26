@@ -13,6 +13,7 @@ import net.pono.baseware.update.FetchResult
 import net.pono.baseware.update.HttpFetcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -37,6 +38,10 @@ class MorePropertiesTest {
         override fun diskInfo() = listOf(DiskInfo("/data", "fixed", 64_000, 12_000), DiskInfo("/storage/emulated/0", "removable", 128_000, 100_000))
 
         override fun soundStatus() = sounds
+
+        var meta: Map<String, String> = emptyMap()
+
+        override fun soundMeta(file: File) = meta
 
         override fun imageMainColor(file: File): Int? = if (file.name == "balloons0.png") 0x336699 else null
 
@@ -241,6 +246,42 @@ class MorePropertiesTest {
         assertTrue(c.property("rateofuselist.index(0).percent")!!.toDouble() >= 96.0)
         assertEquals("1", c.property("rateofuselist.index(1).boottime"))
         assertEquals("0", c.property("rateofuselist.index(1).percentweekly"))
+        // 名前・本体側の名前・フォルダ名でも選べる
+        assertEquals("30", c.property("rateofuselist(ほかのこ).bootminute"))
+        assertEquals("ほか", c.property("rateofuselist(other).name"))
+    }
+
+    @Test
+    fun packageCpuAnimationAndSoundProperties() = run(withBalloon = true, prepare = { root ->
+        File(root, "me/thumbnail.png").writeText("x")
+        File(root, "me/ghost/master/descript.txt").appendText("icon,icon.ico\r\n")
+        File(root, "me/ghost/master/icon.ico").writeText("i")
+        File(root, "me/shell/summer/descript.txt").appendText("craftmanw,なつ\r\nhomeurl,https://s.test/\r\n")
+        UpdateRecord.save(File(root, "me"), "OK,3")
+    }) {
+        assertTrue(c.property("currentghost.thumbnail")!!.endsWith("thumbnail.png"))
+        assertTrue(c.property("currentghost.icon")!!.endsWith("icon.ico"))
+        assertEquals("OK,3", c.property("currentghost.update_result"))
+        assertEquals(6, c.property("currentghost.update_time")!!.split(',').size)
+        assertEquals("なつ", c.property("currentghost.shelllist(summer).craftmanw"))
+        assertEquals("https://s.test/", c.property("currentghost.shelllist(summer).homeurl"))
+        assertNotNull(c.property("currentghost.username"))
+        platform.inner.device = DeviceInfo(cpuVendor = "Qualcomm", cpuName = "SM8550", cpuFeatures = "neon aes", cpuClockMhz = 3200)
+        assertEquals("Qualcomm", c.property("system.cpu.vendor"))
+        assertEquals("SM8550", c.property("system.cpu.name"))
+        assertEquals("neon aes", c.property("system.cpu.features"))
+        assertEquals("3200", c.property("system.cpu.clock"))
+        c.onLoad(42, 10)
+        assertEquals("42", c.property("system.cpu.load"))
+        // いま動いているアニメーション。書くと足して動かす
+        c.onAnimationsPlaying(0, setOf(3, 1))
+        assertEquals("1,3", c.property("currentghost.scope(0).animation.num"))
+        assertTrue(c.setProperty("currentghost.scope(0).animation.num", "5,6"))
+        // タグがあるものだけ。無ければプロパティが無い
+        platform.sounds = listOf(SoundStatus(File(root, "me/ghost/master/bgm.ogg"), 1, 0, 1000, true, false, false, false))
+        platform.meta = mapOf("title" to "うた")
+        assertEquals("うた", c.property("currentghost.sound(bgm.ogg).meta.title"))
+        assertNull(c.property("currentghost.sound(bgm.ogg).meta.album"))
     }
 
     @Test

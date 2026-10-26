@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1203・一部だけ 63・作る 165・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1234・一部だけ 58・作る 139・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -372,44 +372,11 @@
 
 ## プロパティシステム
 
-済み 149 項目。
+済み 180 項目。
 
-### 🔨 作る（26）
-- activeghostlist.index(ID).ext.拡張プロパティ名 — 上の ext と同じ。index(ID) で選んだゴーストの SHIORI に property.get / set
-- thumbnail — そのフォルダの thumbnail.png（ゴースト・シェル・バルーン）のパスを返す
-- update_result — ネットワーク更新の最後の結果をゴーストごとに profile に残して返す
-- update_time — ネットワーク更新の最後の時刻を profile に残して返す
-- ghostlist(ゴースト名/本体側名/パス).icon — ghostProperty に icon が無い。descript.txt の icon をゴーストのフォルダからのパスにして返す
-- rateofuselist(名前).bootminute — rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-- rateofuselist(名前).bootminutemonthly — rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-- rateofuselist(名前).bootminuteweekly — rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-- rateofuselist(名前).boottime — rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-- rateofuselist(名前).boottimemonthly — rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-- rateofuselist(名前).boottimeweekly — rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-- rateofuselist(名前).keroname — rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-- rateofuselist(名前).name — rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-- rateofuselist(名前).percent — rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-- rateofuselist(名前).percentmonthly — rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-- rateofuselist(名前).percentweekly — rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-- rateofuselist(名前).sakuraname — rateofuselist(名前). の形を読まない（index(順位) だけ）。rateOfUseProperty で名前から選べばよい
-- サウンドプロパティのメタデータ（meta.～）について \[2.8.73\] — meta.* を作るときの決まり（タグが無ければプロパティごと無いことにする）
-- meta.album — meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-- meta.albumartist — meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-- meta.artist — meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-- meta.artwork — meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-- meta.genre — meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-- meta.title — meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-- meta.track — meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-- meta.year — meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
-
-### 🔧 一部だけ（7）
+### 🔧 一部だけ（2）
 - activeghostlist(ゴースト名/本体側名/パス).ext.拡張プロパティ名 — 読むと相手に property.get、書くと property.set を送る（\![get,property] など待てるところだけ。%property[…] はその場で答えが要るので空）
-- currentghost.scope(ID).animation.num — 動いているアニメーションの ID の一覧でなく、そのサーフェスの定義の数を返している。SET（\i と同じに動かす）も無い
-- craftmanurl — ゴーストだけ。バルーンとシェルの descript.txt の craftmanurl を返さない
-- craftmanw — ゴーストとバルーンだけ。シェルの craftmanw を返さない
-- homeurl — ゴーストだけ。バルーンとシェルの homeurl を返さない
-- username — %username はあるが、currentghost.username と activeghostlist(…).username を返さない（一緒に動いているゴーストの userName を聞く）
-- system.cpu.(キー) — load と clock がいつも 0、vendor と features が空。load は OnCPULoadHigh で測る /proc/stat の値を使える
+- activeghostlist.index(ID).ext.拡張プロパティ名 — activeghostlist(…).ext と同じ（index(ID) で選んだゴーストに property.get / set。%property[…] では空）
 
 ### ⛔ 作れない（14）
 - headlinelist.count — ヘッドラインセンサーは作らない（決めたこと）

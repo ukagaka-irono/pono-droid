@@ -349,8 +349,14 @@ class GhostOverlayService : LifecycleService() {
                             screenWidth = metrics.widthPixels,
                             screenHeight = metrics.heightPixels,
                             dpi = metrics.densityDpi,
+                            cpuVendor = if (Build.VERSION.SDK_INT >= 31) Build.SOC_MANUFACTURER else Build.HARDWARE.orEmpty(),
+                            cpuName = if (Build.VERSION.SDK_INT >= 31) Build.SOC_MODEL else "",
+                            cpuFeatures = cpuFeatures,
+                            cpuClockMhz = cpuClockMhz,
                         )
                     }
+
+                    override fun soundMeta(file: File): Map<String, String> = SoundMeta.read(file, cacheDir)
 
                     override fun batteryInfo(): BatteryInfo? =
                         registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let(::batteryInfo)
@@ -900,6 +906,15 @@ class GhostOverlayService : LifecycleService() {
             controller = null
             return stopping
         }
+    }
+
+    /** /proc/cpuinfo の Features（拡張命令。空白区切り）と、cpu0 のいちばん速いクロック（MHz）。読めなければ空と 0 */
+    private val cpuFeatures: String by lazy {
+        runCatching { File("/proc/cpuinfo").readLines() }.getOrDefault(emptyList())
+            .firstOrNull { it.startsWith("Features") }?.substringAfter(':')?.trim().orEmpty()
+    }
+    private val cpuClockMhz: Int by lazy {
+        runCatching { File("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq").readText().trim().toInt() / 1000 }.getOrDefault(0)
     }
 
     /** 声を聞く（設定で選び、マイクを許可したときだけ。画面が消えている間は聞かない） */
