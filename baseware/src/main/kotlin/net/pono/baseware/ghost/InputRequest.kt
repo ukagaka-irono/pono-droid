@@ -16,6 +16,8 @@ data class InputRequest(
     val serial: Int,
     /** DATE は 年,月,日、TIME は 時,分,秒、SLIDER は 今の値,最小,最大 */
     val values: List<Int> = emptyList(),
+    /** --placeholder=案内文。入力欄が空のときだけ薄く出す（答えには入らない。textareabox は改行入り） */
+    val placeholder: String? = null,
 ) {
     enum class Kind {
         /** 1行入力。答えは ID のイベント（On で始まるとき）か OnUserInput */
@@ -73,11 +75,16 @@ data class InputRequest(
             }
             fun timeout() = positional.getOrNull(1)?.trim()?.toLongOrNull() ?: 0L
             fun number(i: Int, default: Int) = positional.getOrNull(i)?.trim()?.toIntOrNull() ?: default
+            // --placeholder=案内文（inputbox / passwordinput / textareabox）。textareabox は \1 で改行
+            val placeholder = args.firstOrNull { it.trim().startsWith("--placeholder=") }?.trim()?.substringAfter('=')
+                ?.replace('\u0001', '\n')?.take(MAX_PLACEHOLDER)?.takeIf { it.isNotEmpty() }
             val now = java.util.Calendar.getInstance()
             return when (kind.lowercase()) {
-                "inputbox" -> InputRequest(Kind.INPUT, id, positional.getOrNull(2).orEmpty(), timeout(), serial)
-                "passwordinput" -> InputRequest(Kind.PASSWORD, id, positional.getOrNull(2).orEmpty(), timeout(), serial)
-                "textareabox" -> InputRequest(Kind.TEXTAREA, id, positional.getOrNull(2).orEmpty().replace('\u0001', '\n'), timeout(), serial)
+                "inputbox" -> InputRequest(Kind.INPUT, id, positional.getOrNull(2).orEmpty(), timeout(), serial, placeholder = placeholder)
+                "passwordinput" -> InputRequest(Kind.PASSWORD, id, positional.getOrNull(2).orEmpty(), timeout(), serial, placeholder = placeholder)
+                "textareabox" -> InputRequest(
+                    Kind.TEXTAREA, id, positional.getOrNull(2).orEmpty().replace('\u0001', '\n'), timeout(), serial, placeholder = placeholder,
+                )
                 "dateinput" -> InputRequest(
                     Kind.DATE, id, "", timeout(), serial,
                     listOf(number(2, now.get(java.util.Calendar.YEAR)), number(3, now.get(java.util.Calendar.MONTH) + 1), number(4, now.get(java.util.Calendar.DAY_OF_MONTH))),
@@ -94,5 +101,8 @@ data class InputRequest(
                 else -> null
             }
         }
+
+        /** 案内文の長さの上限 */
+        private const val MAX_PLACEHOLDER = 200
     }
 }

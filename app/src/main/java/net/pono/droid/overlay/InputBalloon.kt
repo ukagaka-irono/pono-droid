@@ -145,7 +145,8 @@ private fun SkinInputBox(
 ) {
     val density = LocalDensity.current
     val maxWidthPx = with(density) { balloonMaxWidth().toPx() }
-    val scale = minOf(density.density, maxWidthPx / image.bitmap.width)
+    // バルーンの dpi（作った画面の DPI）の分も掛ける
+    val scale = minOf(density.density * skin.balloon.dpiFactor, maxWidthPx / image.bitmap.width)
     fun px(v: Int) = with(density) { (v * scale).toDp() }
     val area = image.area
     val balloon = skin.balloon
@@ -162,7 +163,8 @@ private fun SkinInputBox(
             value = value,
             onValueChange = onValueChange,
             singleLine = !multiLine,
-            textStyle = TextStyle(color = color, fontSize = fontSize.sp),
+            // communicatebox.font.name（無ければ font.name）
+            textStyle = TextStyle(color = color, fontSize = fontSize.sp, fontFamily = BalloonFonts.family(balloon.communicateFontNames)),
             cursorBrush = SolidColor(color),
             visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = keyboardOptions(request, password),
@@ -174,6 +176,16 @@ private fun SkinInputBox(
                 .focusRequester(focus),
             decorationBox = { field ->
                 Box(Modifier.fillMaxSize().padding(horizontal = 2.dp), contentAlignment = if (multiLine) Alignment.TopStart else Alignment.CenterStart) {
+                    // --placeholder の案内文。空のときだけ薄く出す（communicatebox.placeholder.color、無ければ文字の色を薄めたもの）
+                    if (value.text.isEmpty()) request.placeholder?.let { hint ->
+                        Text(
+                            hint,
+                            color = balloon.placeholderColor?.toColor() ?: color.copy(alpha = 0.45f),
+                            fontSize = fontSize.sp,
+                            fontFamily = BalloonFonts.family(balloon.communicateFontNames),
+                            maxLines = if (multiLine) Int.MAX_VALUE else 1,
+                        )
+                    }
                     field()
                 }
             },

@@ -4,77 +4,28 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1234・一部だけ 58・作る 139・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1283・一部だけ 52・作る 96・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
-済み 105 項目。
+済み 154 項目。
 
-### 🔨 作る（53）
-- arrow.filename,ファイル名 — 矢印は arrow0/1.png 決め打ち。arrow.filename と arrows/arrowk/arrowpN を Balloon.arrowImage で読む
-- clickwaitmarker.filename,ファイル名 — クリック待ちの印が無い。state.waitingClick はあるので SkinFrame に clickwait*.png を出す
-- marker.filename,ファイル名 — \![*] は「▸」の文字で出している。marker.png（markers/markerk/markerpN）を選択肢の前に画像で置く
-- sstpmarker.filename,ファイル名 — SSTP で届いたスクリプトの印が無い。sstp.png / sstp_new.png（s/k/pN）と送り主の名前を出す
-- anchor.blendmethod,コマンド — 読み飛ばしている。notmaskpen / mergepennot などは BlendMode や色の反転で近い見た目にできる
-- anchor.font.shadowcolor.b,数値 — LinkLook に影が無い。影の色を足して SpanStyle の shadow にする
-- anchor.font.shadowcolor.g,数値 — LinkLook に影が無い。影の色を足して SpanStyle の shadow にする
-- anchor.font.shadowcolor.r,数値 — LinkLook に影が無い。影の色を足して SpanStyle の shadow にする
-- anchor.font.shadowstyle,形態指定 — LinkLook に影が無い。offset / outline を足す
-- anchor.notselect.font.shadowcolor.b,数値 — LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-- anchor.notselect.font.shadowcolor.g,数値 — LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-- anchor.notselect.font.shadowcolor.r,数値 — LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-- anchor.notselect.font.shadowstyle,形態指定 — LinkLook に影が無い。anchor.font.shadowstyle と一緒に作る
-- anchor.visited.font.shadowcolor.b,数値 — LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-- anchor.visited.font.shadowcolor.g,数値 — LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-- anchor.visited.font.shadowcolor.r,数値 — LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-- anchor.visited.font.shadowstyle,形態指定 — LinkLook に影が無い。anchor.font.shadowstyle と一緒に作る
-- clickwaitmarker.x,座標 — クリック待ちの印と一緒に作る。既定は arrow1 の位置
-- clickwaitmarker.y,座標 — クリック待ちの印と一緒に作る。既定は arrow1 の位置
-- communicatebox.font.name,フォント名 — 入力欄の書体を変えていない。BalloonFonts.family で SkinInputBox の TextStyle に渡す
-- communicatebox.placeholder.color.b,数値 — --placeholder の案内文がまだ無い。BasicTextField の decorationBox に薄い色で出す
-- communicatebox.placeholder.color.g,数値 — --placeholder の案内文がまだ無い。BasicTextField の decorationBox に薄い色で出す
-- communicatebox.placeholder.color.r,数値 — --placeholder の案内文がまだ無い。BasicTextField の decorationBox に薄い色で出す
+### 🔨 作る（10）
 - craftmanurl,URL — バルーンでは使っていない。アプリのバルーンの一覧に作者の URL を出す
-- cursor.blendmethod,コマンド — 読み飛ばしている。anchor.blendmethod と一緒に近い見た目で作る
-- cursor.font.shadowcolor.b,数値 — LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-- cursor.font.shadowcolor.g,数値 — LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-- cursor.font.shadowcolor.r,数値 — LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-- cursor.font.shadowstyle,形態指定 — LinkLook に影が無い。anchor.font.shadowstyle と一緒に作る
-- cursor.notselect.font.shadowcolor.b,数値 — LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-- cursor.notselect.font.shadowcolor.g,数値 — LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-- cursor.notselect.font.shadowcolor.r,数値 — LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-- cursor.notselect.font.shadowstyle,形態指定 — LinkLook に影が無い。anchor.font.shadowstyle と一緒に作る
-- dpi,推奨DPI — 読んでいない。バルーンの倍率に 96/dpi を掛ける（SkinBalloon と SkinInputBox の scale）
-- number.font.name,フォント名 — 数の書体を変えていない。BalloonLabel に BalloonFonts.family を渡す
 - number.yb,座標 — number.y の別名として読むだけ。縦書きの意味は vertical と一緒に
-- overlay_outside_balloon,数値 — 印はバルーンのウィンドウの中だけ。1 ならウィンドウを印の分だけ広げる
-- paint_transparent_region_black,数値 — .pna のときキー色の所を黒で塗っていない（0 相当）。ImageTransparency.applyPna で既定 1 にする
 - readme.charset,文字コード — バルーンの readme と一緒に作る。TextCharsets で読む
 - readme,ファイル名 — バルーンの readme を開く所が無い（ゴーストだけ）。インストール後とバルーンの一覧から TextViewerActivity で出す
-- sstpmarker.x,座標 — SSTP の印と一緒に作る
-- sstpmarker.y,座標 — SSTP の印と一緒に作る
-- sstpmessage.font.name,フォント名 — 印の文字の書体を変えていない。BalloonLabel に BalloonFonts.family を渡す
-- sstpmessage.xr,座標 — 読んでいない。印の文字をこの位置で切る
 - sstpmessage.yb,座標 — 縦書きのときだけ使う。vertical と一緒に
-- use_input_alpha,数値 — バルーンを半透明にする設定がまだ無い。作るときに入力の箱にも効かせるかをこれで決める
 - vertical,0/1 — 縦書きが無い（balloon.scope.vertical もいつも 0）。Compose に縦書きが無いので1文字ずつ並べる組版が要る
-- windowposition.x,座標 — 読んでいない。CharacterWindow.placeBalloon の balloonAlign（center / bottom）と balloonOffset と同じ仕組みで作れる
-- windowposition.y,座標 — 読んでいない。windowposition.x と一緒に placeBalloon でずらす
 - wordwrappoint.y,座標 — 縦書きのときだけ使う。vertical と一緒に
 - 推奨の意味 — 推奨の意味の説明。ゴーストを消すとき推奨バルーンも消すか聞く動きは recommended.ghost と一緒に作る
 - recommended.ghost,ゴースト名 — 読んでいない。ほかのゴーストで選ぶとき警告し、そのゴーストを消すとき一緒に消すか聞く
 - recommended.ghost.path,パス — recommended.ghost と一緒に。ゴーストのフォルダ名で比べる
 
-### 🔧 一部だけ（9）
-- balloons\*s.txt/balloonk\*s.txt — balloonc*s.txt の communicatebox だけ読む。balloons*s.txt/balloonk*s.txt の origin・validrect・font・arrow などの上書きと windowposition は無い。balloonc5s.txt が descript.txt を引き継いでしまう
-- disable.font.(フォント定義),(指定) — disable.font.color と bold / italic / underline / strike は読む。disable.font.name と height は読まない
-- origin.x,座標 — 読むが、負の値（右端から）を 0 にしてしまう。縦書きの意味も無い
-- origin.y,座標 — 読むが、負の値（下端から）を 0 にしてしまう
-- use_self_alpha,値 — 画像のアルファと .pna はいつも使う（1 相当）。full（アルファの無い画像もキー色で抜かない）と 0 を読まない
-- validrect.left,座標 — 読むが、負の値（右端から）を 0 にしてしまう
-- validrect.top,座標 — 読むが、負の値（下端から）を 0 にしてしまう
-- windowposition.limit,0/1 — オーバーレイは Android が画面の中に収めるので 1 相当。0 は FLAG_LAYOUT_NO_LIMITS で作れる
-- Balloon設定 — *1 の負の座標は arrow・online・sstpmessage・number と validrect.right/bottom だけ。origin と validrect.left/top の負の値、--数値 の書き方は読まない
+### 🔧 一部だけ（3）
+- balloons\*s.txt/balloonk\*s.txt — 画像ごとの balloons*s.txt で、文字の範囲・矢印や印の位置・windowposition を上書きする。文字の色・大きさ・書体は descript.txt のまま
+- overlay_outside_balloon,数値 — 0 ならオンライン・SSTP の印をバルーンの画像の中に収め、1 なら収めない。ウィンドウを印の分だけ広げてはいない
+- use_input_alpha,数値 — 1 なら入力の箱の画像もバルーンと同じ透明度の扱いにする。バルーン全体を半透明にする設定は pono-droid に無い
 
 ### ⛔ 作れない（4）
 - cursor,ファイル名 / mousecursor,ファイル名 — マウスカーソルが無い（タッチで操作する）
@@ -694,7 +645,7 @@
 済み 2 項目。
 
 ### 🔧 一部だけ（4）
-- バルーン — balloons*s.txt / balloonk*s.txt、balloonp*、arrows* / arrowk* / arrowp*、sstp*.png・marker*.png、clickwait*.png、thumbnail.png を使っていない（バルーンの組と重なる）
+- バルーン — balloons*s.txt・arrows* など・marker・clickwait・sstp の画像は使う。balloonp*（3人目以降のバルーン画像）と thumbnail.png はまだ
 - ゴースト — thumbnail.png（一覧のサムネイル）・*.ico・ai0.png / ai0_dark.png（AI グラフの絵）を使っていない
 - シェル — surface*.png や element の APNG / GIF / WebP は動く（Android 9 から）。SERIKO のコマより上に出る
 - ネットワーク更新 — delete1.txt など delete[数字].txt を読まない（delete.txt だけ）

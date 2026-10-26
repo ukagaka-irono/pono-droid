@@ -1414,6 +1414,8 @@ class GhostController(
         if ("nobreak" in req.options) withTimeoutOrNull(SSTP_NOBREAK_WAIT_MS) { _state.first { !it.talking && !it.waitingChoice } }
         cancelScript()
         runScript(script, untrustedScript = !owned, strict = "strict" in req.options)
+        // ほかのアプリから届いたものは、バルーンに SSTP の印を出す
+        if (!owned) _state.update { it.copy(sstpScript = true) }
         sstpRun = scriptRuns
         if (!owned) lastSstpSender = sender
         return SstpResponse(200, listOf("Script" to script) + replyHeaders)
@@ -4319,7 +4321,7 @@ class GhostController(
         // 先頭が \C なら、今出ているバルーンを消さずに続ける
         if (!script.startsWith("\\C")) hideBalloons()
         // 前のスクリプトの \t と、manual でない \![lock] はここで外れる
-        _state.update { it.withScriptEnded().copy(talking = true) }
+        _state.update { it.withScriptEnded().copy(talking = true, sstpScript = false) }
         lastScript = script
         developerLog.add("script", "Ghost", ghost.name, script)
         val run = ++scriptRuns
@@ -5741,7 +5743,7 @@ class GhostController(
         override fun appendText(scope: Int, text: String) {
             talked()
             speak(scope)
-            _state.update { it.update(scope) { c -> c.appendText(text, styles[scope] ?: TextStyle.Default, countTalk = serikoTalk) } }
+            _state.update { it.update(scope) { c -> c.appendText(text, styles[scope] ?: TextStyle.Default, countTalk = serikoTalk) }.copy(lastTextScope = scope) }
         }
 
         override fun newLine(scope: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.NewLine) } }

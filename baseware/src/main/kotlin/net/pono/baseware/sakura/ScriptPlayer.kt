@@ -14,9 +14,24 @@ enum class VerticalAlign { TOP, CENTER, BOTTOM }
  * 選択肢やリンクの、ある状態（押している・押していない・訪問済み）の見た目。null はバルーンの既定。
  * [shape] は square / underline / square+underline / none、[brush] は矩形の中、[pen] は枠と下線、[font] は文字の色（0xRRGGBB）
  */
-data class LinkLook(val shape: String? = null, val brush: Int? = null, val pen: Int? = null, val font: Int? = null) {
+/**
+ * 選択肢・リンクの見た目。[shadow] は影の色（0xRRGGBB）、[shadowOutline] は影を縁取りにするか、
+ * [blend] はバルーンの blendmethod（notmaskpen など。カーソルの色の重ね方）
+ */
+data class LinkLook(
+    val shape: String? = null,
+    val brush: Int? = null,
+    val pen: Int? = null,
+    val font: Int? = null,
+    val shadow: Int? = null,
+    val shadowOutline: Boolean? = null,
+    val blend: String? = null,
+) {
     /** [other] で決めていないところを、こちらで埋める */
-    fun or(other: LinkLook) = LinkLook(shape ?: other.shape, brush ?: other.brush, pen ?: other.pen, font ?: other.font)
+    fun or(other: LinkLook) = LinkLook(
+        shape ?: other.shape, brush ?: other.brush, pen ?: other.pen, font ?: other.font,
+        shadow ?: other.shadow, shadowOutline ?: other.shadowOutline, blend ?: other.blend,
+    )
 }
 
 /** \f[cursor*] / \f[cursornotselect*] / \f[anchor*] / \f[anchornotselect*] / \f[anchorvisited*] と \f[anchor.font.color] */

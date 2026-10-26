@@ -341,7 +341,10 @@ fun CharacterBalloon(scopeId: Int, controller: GhostController, skin: BalloonSki
     // 入力の箱は SSP と同じく \0 のバルーンの位置に、話している文の下に出す
     val input = state.input?.takeIf { scopeId == 0 }
     Column(horizontalAlignment = if (scopeId == 1) Alignment.Start else Alignment.End) {
-        TalkBalloon(scopeId, character, state.loading, state.online && scopeId == 0, state.visitedAnchors, controller, skin)
+        TalkBalloon(
+            scopeId, character, state.loading, state.online && scopeId == 0, state.visitedAnchors, controller, skin,
+            state.waitingClick, state.lastTextScope, state.sstpScript,
+        )
         if (input != null) InputBalloon(input, skin, controller::onInputSubmit, controller::onInputCancel)
     }
 }
@@ -356,6 +359,9 @@ private fun TalkBalloon(
     visited: Set<String>,
     controller: GhostController,
     skin: BalloonSkin?,
+    waitingClick: Boolean = false,
+    lastTextScope: Int? = null,
+    sstp: Boolean = false,
 ) {
     val items = character.balloon ?: if (online && loading == null) emptyList() else run {
         // 読み込み中は \0 の上に小さな吹き出しで知らせる（話し始めたら普通のバルーンに替わる）
@@ -368,7 +374,12 @@ private fun TalkBalloon(
     val choices = ChoiceActions(controller::onChoice, { controller.onChoiceHover(it) }, visited)
     val labels = BalloonLabels(character.balloonMarker, character.balloonNum)
     if (skin != null) {
-        SkinBalloon(items, skin, scopeId, character.balloonId ?: character.defaultBalloonId, onClick, choices, character.autoScroll, online, labels)
+        SkinBalloon(
+            items, skin, scopeId, character.balloonId ?: character.defaultBalloonId, onClick, choices, character.autoScroll, online, labels,
+            // クリック待ちの印は最後に話したキャラクターのバルーンに、SSTP の印は届いたスクリプトの間だけ
+            clickWait = waitingClick && lastTextScope == scopeId,
+            sstp = sstp,
+        )
     } else {
         SimpleBalloon(items, onClick, choices, character.autoScroll, online, labels)
     }

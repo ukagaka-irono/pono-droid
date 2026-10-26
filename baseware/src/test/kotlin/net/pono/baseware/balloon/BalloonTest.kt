@@ -229,7 +229,7 @@ class BalloonTest {
             "\ncommunicatebox.x,22\ncommunicatebox.y,32\ncommunicatebox.width,296\ncommunicatebox.height,24\n" +
                 "communicatebox.font.color.r,10\ncommunicatebox.font.color.g,20\ncommunicatebox.font.color.b,30\n",
         )
-        // balloonc5s.txt は balloonc5.png だけの指定（descript.txt より優先）
+        // balloonc5s.txt は balloonc5.png だけの指定。descript.txt の値（1行の箱向け）は引き継がず、書いていなければ四辺から 8 ピクセル内側
         File(dir, "balloonc5s.txt").writeText("charset,UTF-8\ncommunicatebox.y,10\ncommunicatebox.height,120\n")
         val balloon = Balloon(dir)
         val c0 = balloon.communicateImage(multiLine = false)!!
@@ -237,7 +237,7 @@ class BalloonTest {
         assertEquals("balloonc0.png", c0.name)
         assertEquals("balloonc5.png", c5.name)
         assertEquals(TextArea(22, 32, 22 + 296, 32 + 24), balloon.communicateBox(c0, 340, 64))
-        assertEquals(TextArea(22, 10, 22 + 296, 10 + 120), balloon.communicateBox(c5, 340, 160))
+        assertEquals(TextArea(8, 10, 340 - 8, 10 + 120), balloon.communicateBox(c5, 340, 160))
         assertEquals(BalloonColor(10, 20, 30), balloon.communicateFontColor)
         assertNull(balloon.communicateBackground)
         // 画像からはみ出す指定は画像の中に収める

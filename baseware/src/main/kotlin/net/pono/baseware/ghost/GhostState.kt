@@ -164,6 +164,10 @@ data class GhostState(
     val characters: Map<Int, CharacterState> = emptyMap(),
     val talking: Boolean = false,
     val waitingClick: Boolean = false,
+    /** いちばん最後に文字を出したキャラクター（クリック待ちの印をそのバルーンに出す） */
+    val lastTextScope: Int? = null,
+    /** いま話しているのは SSTP で届いたスクリプト（バルーンに SSTP の印を出す） */
+    val sstpScript: Boolean = false,
     val waitingChoice: Boolean = false,
     /** 画面が消えている間は false。タイマーのイベントと SERIKO のアニメーションを止める */
     val screenOn: Boolean = true,

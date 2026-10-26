@@ -92,6 +92,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import net.pono.baseware.balloon.Balloon
+import net.pono.baseware.balloon.BalloonSelfAlpha
 import net.pono.baseware.balloon.BalloonColor
 import net.pono.baseware.balloon.TextArea
 import net.pono.baseware.ghost.BalloonItem
@@ -120,7 +121,12 @@ data class BalloonTextStyle(
     val disabledColor: Color = Color(0xFF9E9E9E),
     /** 無効表示の飾り（disable.font.bold / italic / underline / strike）。無いものは null（ふつうの文字と同じ） */
     val disabledFlags: Map<String, Boolean?> = emptyMap(),
+    /** 無効表示の書体と大きさ（disable.font.name / height）。null ならふつうの文字と同じ */
+    val disabledFontFamily: FontFamily? = null,
+    val disabledFontHeight: Int? = null,
     val links: LinkDefaults = LinkDefaults(choiceColor),
+    /** \![*] の印の画像（marker.png）。null なら「▸」の文字で出す */
+    val markerImage: ImageBitmap? = null,
 ) {
     /** 文全体に付ける既定の飾り */
     fun base(): ComposeTextStyle = ComposeTextStyle(
@@ -144,6 +150,9 @@ data class BalloonTextStyle(
             else -> Color.Unspecified
         }
     }
+
+    /** 選択肢・リンクの影（cursor.font.shadowcolor など）。縁取りかどうかが決まっていなければ文の影と同じ */
+    fun linkShadow(look: ResolvedLook): Shadow? = look.shadow?.let { shadow(it, look.shadowOutline ?: shadowOutline) }
 
     /** \f[shadowstyle,outline] は縁取り（ずらさずにぼかす）、それ以外は右下にずらす */
     private fun shadow(color: Color, outline: Boolean) =
@@ -193,8 +202,9 @@ data class BalloonTextStyle(
             // false は外す（バルーンが太字でも細くする）。null はバルーンの既定のまま
             fontWeight = bold?.let { if (it) FontWeight.Bold else FontWeight.Normal },
             fontStyle = italic?.let { if (it) FontStyle.Italic else FontStyle.Normal },
-            fontSize = size(style).sp,
-            fontFamily = style.font?.let(BalloonFonts::family),
+            // 無効表示の書体と大きさ（disable.font.name / height）
+            fontSize = ((if (style.disabled) disabledFontHeight?.let { maxOf(it * spPerPx, 6f) } else null) ?: size(style)).sp,
+            fontFamily = style.font?.let(BalloonFonts::family) ?: if (style.disabled) disabledFontFamily else null,
             baselineShift = when {
                 style.sub == true -> BaselineShift.Subscript
                 style.sup == true -> BaselineShift.Superscript
@@ -298,9 +308,14 @@ fun SimpleBalloon(
 
 /** バルーン画像の上の小さな文字（印の文字・数）。[height] はバルーン画像のピクセル、無ければ本文より小さく */
 @Composable
-private fun BalloonLabel(text: String, height: Int?, color: BalloonColor?, style: BalloonTextStyle, modifier: Modifier) {
+private fun BalloonLabel(text: String, height: Int?, color: BalloonColor?, style: BalloonTextStyle, modifier: Modifier, fontNames: List<String> = emptyList()) {
     val size = height?.let { maxOf(it * style.spPerPx, 9f) } ?: (style.fontSize.value * 0.8f)
-    Text(text, fontSize = size.sp, color = color?.toColor() ?: style.textColor, maxLines = 1, softWrap = false, modifier = modifier)
+    // sstpmessage.font.name / number.font.name（無ければ本文の書体）
+    val family = BalloonFonts.family(fontNames) ?: style.fontFamily
+    Text(
+        text, fontSize = size.sp, color = color?.toColor() ?: style.textColor, maxLines = 1, softWrap = false, fontFamily = family,
+        overflow = TextOverflow.Clip, modifier = modifier,
+    )
 }
 
 /** SHIORI やシェルを読み込んでいる間に出す、くるくる回る印と [text] だけの小さな吹き出し（簡易バルーンと同じ見た目） */
@@ -341,6 +356,8 @@ fun SkinBalloon(
     autoScroll: Boolean = true,
     online: Boolean = false,
     labels: BalloonLabels = BalloonLabels(),
+    clickWait: Boolean = false,
+    sstp: Boolean = false,
 ) {
     val images by produceState<List<BalloonSkin.Image>?>(null, skin, scopeId) {
         value = withContext(Dispatchers.IO) { skin.images(scopeId) }
@@ -353,8 +370,9 @@ fun SkinBalloon(
     val density = LocalDensity.current
     val maxWidthPx = with(density) { balloonMaxWidth().toPx() }
     // 1枚ごとに縮めると大きさで文字の大きさが変わるので、いちばん広い画像に合わせて同じ比率で縮める
-    val scale = minOf(density.density * LocalBalloonScale.current, maxWidthPx / candidates.maxOf { it.bitmap.width })
-    val style = skin.textStyle(scale / density.density, scale)
+    // バルーンの dpi（作った画面の DPI）の分も掛ける
+    val scale = minOf(density.density * LocalBalloonScale.current * skin.balloon.dpiFactor, maxWidthPx / candidates.maxOf { it.bitmap.width })
+    val style = skin.textStyle(scale / density.density, scale, scopeId)
     val scroll = rememberScrollState()
     AutoScroll(items, scroll, autoScroll)
     val onlineFrames by produceState<List<ImageBitmap>>(emptyList(), skin, scopeId, online) {
@@ -375,7 +393,7 @@ fun SkinBalloon(
         } ?: candidates.lastIndex
         val image = candidates[chosen]
         val placeable = subcompose("balloon") {
-            SkinFrame(image, skin, scale, scroll, onlineFrames, labels, style) { BalloonBody(items, choices, style) }
+            SkinFrame(image, skin, scopeId, scale, scroll, onlineFrames, labels, style, clickWait, sstp) { BalloonBody(items, choices, style) }
         }.first().measure(Constraints())
         layout(placeable.width, placeable.height) { placeable.place(0, 0) }
     }
@@ -390,11 +408,14 @@ fun SkinBalloon(
 private fun SkinFrame(
     image: BalloonSkin.Image,
     skin: BalloonSkin,
+    scopeId: Int,
     scale: Float,
     scroll: ScrollState,
     onlineFrames: List<ImageBitmap>,
     labels: BalloonLabels,
     style: BalloonTextStyle,
+    clickWait: Boolean,
+    sstp: Boolean,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -402,6 +423,11 @@ private fun SkinFrame(
     fun px(v: Int) = with(density) { (v * scale).toDp() }
     val w = image.bitmap.width
     val h = image.bitmap.height
+    // 画像ごとの balloons0s.txt で上書きした位置を使う
+    val look = image.look
+    /** 印などの画像パーツの位置。overlay_outside_balloon が 1 でなければ、バルーンの画像からはみ出さないようにする */
+    fun inside(x: Int, y: Int, pw: Int, ph: Int): Pair<Int, Int> =
+        if (look.overlayOutside) x to y else x.coerceIn(0, maxOf(0, w - pw)) to y.coerceIn(0, maxOf(0, h - ph))
     Box(Modifier.size(px(w), px(h))) {
         Image(image.bitmap, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.size(px(w), px(h)))
         if (onlineFrames.isNotEmpty()) {
@@ -412,7 +438,7 @@ private fun SkinFrame(
                 }
             }
             val bmp = onlineFrames[frame.coerceIn(0, onlineFrames.lastIndex)]
-            val (x, y) = skin.balloon.onlinePosition(w, h)
+            val (x, y) = look.onlinePosition(w, h).let { (ox, oy) -> inside(ox, oy, bmp.width, bmp.height) }
             Image(
                 bmp,
                 contentDescription = "オンライン",
@@ -420,10 +446,20 @@ private fun SkinFrame(
                 modifier = Modifier.offset(px(x), px(y)).size(px(bmp.width), px(bmp.height)),
             )
         }
-        val b = skin.balloon
+        val b = look
+        // SSTP で届いたスクリプトの印（sstp_new.png など）
+        if (sstp) skin.sstpMarker(scopeId)?.let { mark ->
+            val (x, y) = b.sstpMarkerPosition(w, h).let { (sx, sy) -> inside(sx, sy, mark.width, mark.height) }
+            Image(mark, contentDescription = "SSTP", contentScale = ContentScale.FillBounds, modifier = Modifier.offset(px(x), px(y)).size(px(mark.width), px(mark.height)))
+        }
         labels.marker?.let { marker ->
             val (x, y) = b.markerPosition(w, h) ?: (image.area.left to maxOf(0, image.area.top - b.fontHeight - 2))
-            BalloonLabel(marker, b.markerFontHeight, b.markerColor, style, Modifier.offset(px(x), px(y)))
+            // sstpmessage.xr があれば、そこで切る
+            val end = b.markerEnd(w)?.takeIf { it > x }
+            BalloonLabel(
+                marker, b.markerFontHeight, b.markerColor, style,
+                Modifier.offset(px(x), px(y)).let { m -> if (end != null) m.width(px(end - x)) else m }, b.markerFontNames,
+            )
         }
         labels.number?.let { number ->
             val (x, y) = b.numberPosition(w, h) ?: (image.area.right to maxOf(0, image.area.bottom - b.fontHeight))
@@ -435,6 +471,7 @@ private fun SkinFrame(
                     val p = measurable.measure(constraints.copy(minWidth = 0))
                     layout(p.width, p.height) { p.place(right - p.width, with(density) { (y * scale).toInt() }) }
                 },
+                b.numberFontNames,
             )
         }
         Box(
@@ -446,10 +483,16 @@ private fun SkinFrame(
             content()
         }
         val page = (image.area.height * scale * 0.8f).toInt()
-        for ((which, visible) in listOf(0 to (scroll.value > 0), 1 to (scroll.value < scroll.maxValue))) {
-            val arrow = skin.arrow(which) ?: continue
+        // クリック待ちの印（clickwait.png など）。続きの矢印が出ているときは重ならないよう矢印を優先する
+        val more = scroll.value < scroll.maxValue
+        if (clickWait && !more) skin.clickWait(scopeId)?.let { mark ->
+            val (x, y) = b.clickWaitPosition(w, h, mark.width, mark.height)
+            Image(mark, contentDescription = "クリック待ち", contentScale = ContentScale.FillBounds, modifier = Modifier.offset(px(x), px(y)).size(px(mark.width), px(mark.height)))
+        }
+        for ((which, visible) in listOf(0 to (scroll.value > 0), 1 to more)) {
+            val arrow = skin.arrow(which, scopeId) ?: continue
             if (!visible) continue
-            val (x, y) = skin.balloon.arrowPosition(which, w, h, arrow.width, arrow.height)
+            val (x, y) = b.arrowPosition(which, w, h, arrow.width, arrow.height)
             // 矢印は縮めると指より小さくなるので、押せる範囲は矢印を中心に 40dp 取る
             val arrowW = px(arrow.width)
             val arrowH = px(arrow.height)
@@ -576,10 +619,23 @@ private fun BalloonText(
                     }
                 }
                 is BalloonLayout.Run.ChoiceRun -> {
-                    if (run.marked) append("▸ ")
+                    if (run.marked) {
+                        // \![*] の印。バルーンに marker.png があれば画像で
+                        val mark = style.markerImage
+                        if (mark != null) {
+                            val id = "mark$index"
+                            appendInlineContent(id, "▸")
+                            inlineContent[id] = InlineTextContent(
+                                with(density) { Placeholder((mark.width * style.spPerPx).dp.toSp(), (mark.height * style.spPerPx).dp.toSp(), PlaceholderVerticalAlign.Center) },
+                            ) { Image(mark, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.size((mark.width * style.spPerPx).dp, (mark.height * style.spPerPx).dp)) }
+                            append(" ")
+                        } else {
+                            append("▸ ")
+                        }
+                    }
                     val look = lookOf(ranges.size)
                     val start = length
-                    withStyle(SpanStyle(color = look.font, fontWeight = FontWeight.Medium)) { append(run.choice.title) }
+                    withStyle(SpanStyle(color = look.font, fontWeight = FontWeight.Medium, shadow = style.linkShadow(look))) { append(run.choice.title) }
                     ranges += start until length
                 }
                 is BalloonLayout.Run.Image -> {
@@ -626,7 +682,8 @@ private fun BalloonText(
                     val look = lookOf(k)
                     if (look.square) {
                         val path = l.getPathForRange(r.first, r.last + 1)
-                        look.brush?.let { drawPath(path, it) }
+                        // blendmethod があれば、その重ね方で塗る
+                        look.brush?.let { drawPath(path, it, blendMode = look.blend ?: androidx.compose.ui.graphics.drawscope.DrawScope.DefaultBlendMode) }
                         look.pen?.let { drawPath(path, it, style = Stroke(stroke)) }
                     }
                     if (look.underline) {
@@ -691,22 +748,45 @@ private fun BalloonPicture(path: String, opaque: Boolean, dpPerPx: Float, modifi
 
 /** インストール済みのバルーンを、画面に出せる形にしたもの。画像は使うときに読み込んで覚えておく */
 class BalloonSkin(val balloon: Balloon) {
-    /** [index] は balloons2.png の 2（\b[n] で選ぶときに使う） */
-    class Image(val bitmap: ImageBitmap, val area: TextArea, val index: Int)
+    /** [index] は balloons2.png の 2（\b[n] で選ぶときに使う）。[look] はその画像の balloons2s.txt で上書きした設定 */
+    class Image(val bitmap: ImageBitmap, val area: TextArea, val index: Int, val look: Balloon)
 
     private val cache = HashMap<Int, List<Image>>()
-    private val arrows = HashMap<Int, ImageBitmap?>()
+    private val parts = HashMap<String, ImageBitmap?>()
+
+    /** バルーンの画像を、use_self_alpha と paint_transparent_region_black に従って読む */
+    private fun load(file: java.io.File): Bitmap? {
+        val mode = balloon.selfAlpha
+        return ImageTransparency.load(
+            file, balloon.pnaFor(file), selfAlpha = mode != BalloonSelfAlpha.OFF, colorKey = mode != BalloonSelfAlpha.FULL,
+            paintBlack = balloon.paintTransparentBlack,
+        )
+    }
 
     @Synchronized
     fun images(scope: Int): List<Image> = cache.getOrPut(scope) {
         // 矢印も一緒に読んでおく（描くときに読み込みで待たせない）
-        arrow(0)
-        arrow(1)
+        arrow(0, scope)
+        arrow(1, scope)
         balloon.images(scope).mapNotNull { img ->
-            val bmp = ImageTransparency.load(img.file, balloon.pnaFor(img.file), selfAlpha = null) ?: return@mapNotNull null
-            Image(bmp.asImageBitmap(), balloon.textArea(bmp.width, bmp.height), img.index)
+            val bmp = load(img.file) ?: return@mapNotNull null
+            val look = balloon.variant(img.file)
+            Image(bmp.asImageBitmap(), look.textArea(bmp.width, bmp.height), img.index, look)
         }
     }
+
+    /** 画像のパーツ（矢印・印など）。読んだものは覚えておく */
+    @Synchronized
+    private fun part(key: String, file: () -> java.io.File?): ImageBitmap? = parts.getOrPut(key) { file()?.let(::load)?.asImageBitmap() }
+
+    /** \![*] の印（marker.png など）。無いバルーンなら null */
+    fun marker(scope: Int): ImageBitmap? = part("marker$scope") { balloon.markerImage(scope) }
+
+    /** クリック待ちの印（clickwait.png など） */
+    fun clickWait(scope: Int): ImageBitmap? = part("clickwait$scope") { balloon.clickWaitImage(scope) }
+
+    /** SSTP の印（sstp_new.png / sstp.png など） */
+    fun sstpMarker(scope: Int): ImageBitmap? = part("sstp$scope") { balloon.sstpMarkerImage(scope) }
 
     private val communicates = HashMap<Boolean, Image?>()
 
@@ -717,29 +797,27 @@ class BalloonSkin(val balloon: Balloon) {
     @Synchronized
     fun communicate(multiLine: Boolean): Image? = communicates.getOrPut(multiLine) {
         val file = balloon.communicateImage(multiLine) ?: return@getOrPut null
-        val bmp = ImageTransparency.load(file, balloon.pnaFor(file), selfAlpha = null) ?: return@getOrPut null
-        Image(bmp.asImageBitmap(), balloon.communicateBox(file, bmp.width, bmp.height), 0)
+        // 入力の箱は use_input_alpha が 1 のときだけバルーンと同じ透明度の扱いにする（0 なら画像のアルファをそのまま）
+        val bmp = (if (balloon.useInputAlpha) load(file) else ImageTransparency.load(file, balloon.pnaFor(file), selfAlpha = null)) ?: return@getOrPut null
+        Image(bmp.asImageBitmap(), balloon.communicateBox(file, bmp.width, bmp.height), 0, balloon.variant(file))
     }
 
-    /** スクロールの矢印（0 が上、1 が下）。無いバルーンなら null */
-    @Synchronized
-    fun arrow(which: Int): ImageBitmap? = arrows.getOrPut(which) {
-        balloon.arrowImage(which)?.let { ImageTransparency.load(it, balloon.pnaFor(it), selfAlpha = null) }?.asImageBitmap()
-    }
+    /** スクロールの矢印（0 が上、1 が下）。arrow.filename とキャラクターごとの arrows / arrowk / arrowpN。無いバルーンなら null */
+    fun arrow(which: Int, scope: Int = 0): ImageBitmap? = part("arrow$which.$scope") { balloon.arrowImage(which, scope) }
 
     private val online = HashMap<Int, List<ImageBitmap>>()
 
     /** オンラインの印のコマ（online0.png…）。無いバルーンなら空 */
     @Synchronized
     fun onlineFrames(scope: Int): List<ImageBitmap> = online.getOrPut(scope) {
-        balloon.onlineImages(scope).mapNotNull { ImageTransparency.load(it, balloon.pnaFor(it), selfAlpha = null)?.asImageBitmap() }
+        balloon.onlineImages(scope).mapNotNull { load(it)?.asImageBitmap() }
     }
 
     /**
      * [dpPerPx] は画像の 1px が何 dp になるか、[pxPerPx] は画面の何 px になるか。字が小さくなりすぎないよう 12sp は残す。
      * font.name・影・太字などの既定もバルーンの descript.txt から取る
      */
-    fun textStyle(dpPerPx: Float, pxPerPx: Float): BalloonTextStyle {
+    fun textStyle(dpPerPx: Float, pxPerPx: Float, scope: Int = 0): BalloonTextStyle {
         val simple = BalloonTextStyle.Simple
         val choiceColor = balloon.choiceColor?.toColor() ?: simple.choiceColor
         return BalloonTextStyle(
@@ -767,6 +845,9 @@ class BalloonSkin(val balloon: Balloon) {
             outline = balloon.outline,
             disabledColor = balloon.disabledColor?.toColor() ?: simple.disabledColor,
             disabledFlags = listOf("bold", "italic", "underline", "strike").associateWith(balloon::disabledFlag),
+            disabledFontFamily = balloon.disabledFontNames.takeIf { it.isNotEmpty() }?.let(BalloonFonts::family),
+            disabledFontHeight = balloon.disabledFontHeight,
+            markerImage = marker(scope),
         )
     }
 }

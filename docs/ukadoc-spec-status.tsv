@@ -2,34 +2,34 @@
 CLAUDE.md	NA	CLAUDE.md	仕様書のリポジトリの決まりで、ベースウェアの要件ではない
 INDEX.md	NA	UKADOC トップページ	目次のページ
 README.md	NA	ukadoc-spec	リポジトリの説明
-descript/balloon/balloonsoption/arrow.filename.md	BUILD	arrow.filename,ファイル名	矢印は arrow0/1.png 決め打ち。arrow.filename と arrows/arrowk/arrowpN を Balloon.arrowImage で読む
-descript/balloon/balloonsoption/balloons-s-txt-balloonk-s-txt.md	PARTIAL	balloons\*s.txt/balloonk\*s.txt	balloonc*s.txt の communicatebox だけ読む。balloons*s.txt/balloonk*s.txt の origin・validrect・font・arrow などの上書きと windowposition は無い。balloonc5s.txt が descript.txt を引き継いでしまう
-descript/balloon/balloonsoption/clickwaitmarker.filename.md	BUILD	clickwaitmarker.filename,ファイル名	クリック待ちの印が無い。state.waitingClick はあるので SkinFrame に clickwait*.png を出す
+descript/balloon/balloonsoption/arrow.filename.md	DONE	arrow.filename,ファイル名	arrow.filename と、キャラクターごとの arrows / arrowk / arrowpN を先に探す
+descript/balloon/balloonsoption/balloons-s-txt-balloonk-s-txt.md	PARTIAL	balloons\*s.txt/balloonk\*s.txt	画像ごとの balloons*s.txt で、文字の範囲・矢印や印の位置・windowposition を上書きする。文字の色・大きさ・書体は descript.txt のまま
+descript/balloon/balloonsoption/clickwaitmarker.filename.md	DONE	clickwaitmarker.filename,ファイル名	クリック待ちの間、最後に話したキャラクターのバルーンに clickwait*.png を出す（続きの矢印が出ている間は矢印）
 descript/balloon/balloonsoption/index.md	NA	balloons\*s.txt/balloonk\*s.txt/balloonc\*s.txt(個別指定)	一覧のページ
-descript/balloon/balloonsoption/marker.filename.md	BUILD	marker.filename,ファイル名	\![*] は「▸」の文字で出している。marker.png（markers/markerk/markerpN）を選択肢の前に画像で置く
+descript/balloon/balloonsoption/marker.filename.md	DONE	marker.filename,ファイル名	\![*] の印を marker*.png の画像で選択肢の前に置く（無いバルーンは「▸」）
 descript/balloon/balloonsoption/onlinemarker.filename.md	DONE	onlinemarker.filename,ファイル名	onlineN.png と onlines/onlinek/onlinepN を読む
-descript/balloon/balloonsoption/sstpmarker.filename.md	BUILD	sstpmarker.filename,ファイル名	SSTP で届いたスクリプトの印が無い。sstp.png / sstp_new.png（s/k/pN）と送り主の名前を出す
-descript/balloon/descript-txt/anchor.blendmethod.md	BUILD	anchor.blendmethod,コマンド	読み飛ばしている。notmaskpen / mergepennot などは BlendMode や色の反転で近い見た目にできる
+descript/balloon/balloonsoption/sstpmarker.filename.md	DONE	sstpmarker.filename,ファイル名	SSTP で届いたスクリプトの間、sstp_new*.png（無ければ sstp*.png）を出す
+descript/balloon/descript-txt/anchor.blendmethod.md	DONE	anchor.blendmethod,コマンド	notmaskpen などを近い重ね方（反転・明るく・暗く）にして、塗りに使う
 descript/balloon/descript-txt/anchor.brush.color.b.md	DONE	anchor.brush.color.b,数値	linkLook("anchor") の brush
 descript/balloon/descript-txt/anchor.brush.color.g.md	DONE	anchor.brush.color.g,数値	linkLook("anchor") の brush
 descript/balloon/descript-txt/anchor.brush.color.r.md	DONE	anchor.brush.color.r,数値	linkLook("anchor") の brush
 descript/balloon/descript-txt/anchor.font.color.b.md	DONE	anchor.font.color.b,数値	anchorColor と linkLook の font
 descript/balloon/descript-txt/anchor.font.color.g.md	DONE	anchor.font.color.g,数値	anchorColor と linkLook の font
 descript/balloon/descript-txt/anchor.font.color.r.md	DONE	anchor.font.color.r,数値	anchorColor と linkLook の font
-descript/balloon/descript-txt/anchor.font.shadowcolor.b.md	BUILD	anchor.font.shadowcolor.b,数値	LinkLook に影が無い。影の色を足して SpanStyle の shadow にする
-descript/balloon/descript-txt/anchor.font.shadowcolor.g.md	BUILD	anchor.font.shadowcolor.g,数値	LinkLook に影が無い。影の色を足して SpanStyle の shadow にする
-descript/balloon/descript-txt/anchor.font.shadowcolor.r.md	BUILD	anchor.font.shadowcolor.r,数値	LinkLook に影が無い。影の色を足して SpanStyle の shadow にする
-descript/balloon/descript-txt/anchor.font.shadowstyle.md	BUILD	anchor.font.shadowstyle,形態指定	LinkLook に影が無い。offset / outline を足す
+descript/balloon/descript-txt/anchor.font.shadowcolor.b.md	DONE	anchor.font.shadowcolor.b,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/anchor.font.shadowcolor.g.md	DONE	anchor.font.shadowcolor.g,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/anchor.font.shadowcolor.r.md	DONE	anchor.font.shadowcolor.r,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/anchor.font.shadowstyle.md	DONE	anchor.font.shadowstyle,形態指定	選択肢・リンクの影を右下（offset）か縁取り（outline）にする（無ければ font.shadowstyle）
 descript/balloon/descript-txt/anchor.notselect.brush.color.b.md	DONE	anchor.notselect.brush.color.b,数値	linkLook("anchor.notselect") の brush
 descript/balloon/descript-txt/anchor.notselect.brush.color.g.md	DONE	anchor.notselect.brush.color.g,数値	linkLook("anchor.notselect") の brush
 descript/balloon/descript-txt/anchor.notselect.brush.color.r.md	DONE	anchor.notselect.brush.color.r,数値	linkLook("anchor.notselect") の brush
 descript/balloon/descript-txt/anchor.notselect.font.color.b.md	DONE	anchor.notselect.font.color.b,数値	linkLook("anchor.notselect") の font
 descript/balloon/descript-txt/anchor.notselect.font.color.g.md	DONE	anchor.notselect.font.color.g,数値	linkLook("anchor.notselect") の font
 descript/balloon/descript-txt/anchor.notselect.font.color.r.md	DONE	anchor.notselect.font.color.r,数値	linkLook("anchor.notselect") の font
-descript/balloon/descript-txt/anchor.notselect.font.shadowcolor.b.md	BUILD	anchor.notselect.font.shadowcolor.b,数値	LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-descript/balloon/descript-txt/anchor.notselect.font.shadowcolor.g.md	BUILD	anchor.notselect.font.shadowcolor.g,数値	LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-descript/balloon/descript-txt/anchor.notselect.font.shadowcolor.r.md	BUILD	anchor.notselect.font.shadowcolor.r,数値	LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-descript/balloon/descript-txt/anchor.notselect.font.shadowstyle.md	BUILD	anchor.notselect.font.shadowstyle,形態指定	LinkLook に影が無い。anchor.font.shadowstyle と一緒に作る
+descript/balloon/descript-txt/anchor.notselect.font.shadowcolor.b.md	DONE	anchor.notselect.font.shadowcolor.b,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/anchor.notselect.font.shadowcolor.g.md	DONE	anchor.notselect.font.shadowcolor.g,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/anchor.notselect.font.shadowcolor.r.md	DONE	anchor.notselect.font.shadowcolor.r,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/anchor.notselect.font.shadowstyle.md	DONE	anchor.notselect.font.shadowstyle,形態指定	選択肢・リンクの影を右下（offset）か縁取り（outline）にする（無ければ font.shadowstyle）
 descript/balloon/descript-txt/anchor.notselect.pen.color.b.md	DONE	anchor.notselect.pen.color.b,数値	linkLook("anchor.notselect") の pen
 descript/balloon/descript-txt/anchor.notselect.pen.color.g.md	DONE	anchor.notselect.pen.color.g,数値	linkLook("anchor.notselect") の pen
 descript/balloon/descript-txt/anchor.notselect.pen.color.r.md	DONE	anchor.notselect.pen.color.r,数値	linkLook("anchor.notselect") の pen
@@ -44,10 +44,10 @@ descript/balloon/descript-txt/anchor.visited.brush.color.r.md	DONE	anchor.visite
 descript/balloon/descript-txt/anchor.visited.font.color.b.md	DONE	anchor.visited.font.color.b,数値	linkLook("anchor.visited") の font
 descript/balloon/descript-txt/anchor.visited.font.color.g.md	DONE	anchor.visited.font.color.g,数値	linkLook("anchor.visited") の font
 descript/balloon/descript-txt/anchor.visited.font.color.r.md	DONE	anchor.visited.font.color.r,数値	linkLook("anchor.visited") の font
-descript/balloon/descript-txt/anchor.visited.font.shadowcolor.b.md	BUILD	anchor.visited.font.shadowcolor.b,数値	LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-descript/balloon/descript-txt/anchor.visited.font.shadowcolor.g.md	BUILD	anchor.visited.font.shadowcolor.g,数値	LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-descript/balloon/descript-txt/anchor.visited.font.shadowcolor.r.md	BUILD	anchor.visited.font.shadowcolor.r,数値	LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-descript/balloon/descript-txt/anchor.visited.font.shadowstyle.md	BUILD	anchor.visited.font.shadowstyle,形態指定	LinkLook に影が無い。anchor.font.shadowstyle と一緒に作る
+descript/balloon/descript-txt/anchor.visited.font.shadowcolor.b.md	DONE	anchor.visited.font.shadowcolor.b,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/anchor.visited.font.shadowcolor.g.md	DONE	anchor.visited.font.shadowcolor.g,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/anchor.visited.font.shadowcolor.r.md	DONE	anchor.visited.font.shadowcolor.r,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/anchor.visited.font.shadowstyle.md	DONE	anchor.visited.font.shadowstyle,形態指定	選択肢・リンクの影を右下（offset）か縁取り（outline）にする（無ければ font.shadowstyle）
 descript/balloon/descript-txt/anchor.visited.pen.color.b.md	DONE	anchor.visited.pen.color.b,数値	linkLook("anchor.visited") の pen
 descript/balloon/descript-txt/anchor.visited.pen.color.g.md	DONE	anchor.visited.pen.color.g,数値	linkLook("anchor.visited") の pen
 descript/balloon/descript-txt/anchor.visited.pen.color.r.md	DONE	anchor.visited.pen.color.r,数値	linkLook("anchor.visited") の pen
@@ -57,36 +57,36 @@ descript/balloon/descript-txt/arrow0.y.md	DONE	arrow0.y,座標	Balloon.arrowPosi
 descript/balloon/descript-txt/arrow1.x.md	DONE	arrow1.x,座標	Balloon.arrowPosition。負なら右端から
 descript/balloon/descript-txt/arrow1.y.md	DONE	arrow1.y,座標	Balloon.arrowPosition。負なら下端から
 descript/balloon/descript-txt/charset.md	DONE	charset,文字コード	Descript.read が charset 行で読む
-descript/balloon/descript-txt/clickwaitmarker.x.md	BUILD	clickwaitmarker.x,座標	クリック待ちの印と一緒に作る。既定は arrow1 の位置
-descript/balloon/descript-txt/clickwaitmarker.y.md	BUILD	clickwaitmarker.y,座標	クリック待ちの印と一緒に作る。既定は arrow1 の位置
+descript/balloon/descript-txt/clickwaitmarker.x.md	DONE	clickwaitmarker.x,座標	クリック待ちの印の位置（負は右端から。無ければ下向きの矢印の位置）
+descript/balloon/descript-txt/clickwaitmarker.y.md	DONE	clickwaitmarker.y,座標	クリック待ちの印の位置（負は下端から。無ければ下向きの矢印の位置）
 descript/balloon/descript-txt/communicatebox.background.color.b.md	DONE	communicatebox.background.color.b,数値	communicateBackground。無ければ画像に透かす（SSP は画像の中心の色）
 descript/balloon/descript-txt/communicatebox.background.color.g.md	DONE	communicatebox.background.color.g,数値	communicateBackground。無ければ画像に透かす（SSP は画像の中心の色）
 descript/balloon/descript-txt/communicatebox.background.color.r.md	DONE	communicatebox.background.color.r,数値	communicateBackground。無ければ画像に透かす（SSP は画像の中心の色）
 descript/balloon/descript-txt/communicatebox.font.color.b.md	DONE	communicatebox.font.color.b,数値	communicateFontColor
 descript/balloon/descript-txt/communicatebox.font.color.g.md	DONE	communicatebox.font.color.g,数値	communicateFontColor
 descript/balloon/descript-txt/communicatebox.font.color.r.md	DONE	communicatebox.font.color.r,数値	communicateFontColor
-descript/balloon/descript-txt/communicatebox.font.name.md	BUILD	communicatebox.font.name,フォント名	入力欄の書体を変えていない。BalloonFonts.family で SkinInputBox の TextStyle に渡す
+descript/balloon/descript-txt/communicatebox.font.name.md	DONE	communicatebox.font.name,フォント名	バルーンの画像で描く入力欄の書体（無ければ font.name）
 descript/balloon/descript-txt/communicatebox.height.md	DONE	communicatebox.height,サイズ	Balloon.communicateBox
-descript/balloon/descript-txt/communicatebox.placeholder.color.b.md	BUILD	communicatebox.placeholder.color.b,数値	--placeholder の案内文がまだ無い。BasicTextField の decorationBox に薄い色で出す
-descript/balloon/descript-txt/communicatebox.placeholder.color.g.md	BUILD	communicatebox.placeholder.color.g,数値	--placeholder の案内文がまだ無い。BasicTextField の decorationBox に薄い色で出す
-descript/balloon/descript-txt/communicatebox.placeholder.color.r.md	BUILD	communicatebox.placeholder.color.r,数値	--placeholder の案内文がまだ無い。BasicTextField の decorationBox に薄い色で出す
+descript/balloon/descript-txt/communicatebox.placeholder.color.b.md	DONE	communicatebox.placeholder.color.b,数値	--placeholder の案内文の色（無ければ文字の色を薄めたもの）。バルーンの画像で描く入力欄だけ
+descript/balloon/descript-txt/communicatebox.placeholder.color.g.md	DONE	communicatebox.placeholder.color.g,数値	--placeholder の案内文の色（無ければ文字の色を薄めたもの）。バルーンの画像で描く入力欄だけ
+descript/balloon/descript-txt/communicatebox.placeholder.color.r.md	DONE	communicatebox.placeholder.color.r,数値	--placeholder の案内文の色（無ければ文字の色を薄めたもの）。バルーンの画像で描く入力欄だけ
 descript/balloon/descript-txt/communicatebox.width.md	DONE	communicatebox.width,サイズ	Balloon.communicateBox
 descript/balloon/descript-txt/communicatebox.x.md	DONE	communicatebox.x,座標	Balloon.communicateBox
 descript/balloon/descript-txt/communicatebox.y.md	DONE	communicatebox.y,座標	Balloon.communicateBox
 descript/balloon/descript-txt/craftman.md	DONE	craftman,作者名	craftmanw が無いときに使う
 descript/balloon/descript-txt/craftmanurl.md	BUILD	craftmanurl,URL	バルーンでは使っていない。アプリのバルーンの一覧に作者の URL を出す
 descript/balloon/descript-txt/craftmanw.md	DONE	craftmanw,作者名	アプリの一覧と balloonlist.*.craftmanw
-descript/balloon/descript-txt/cursor.blendmethod.md	BUILD	cursor.blendmethod,コマンド	読み飛ばしている。anchor.blendmethod と一緒に近い見た目で作る
+descript/balloon/descript-txt/cursor.blendmethod.md	DONE	cursor.blendmethod,コマンド	notmaskpen などを近い重ね方（反転・明るく・暗く）にして、塗りに使う
 descript/balloon/descript-txt/cursor.brush.color.b.md	DONE	cursor.brush.color.b,数値	linkLook("cursor") の brush（押している間）
 descript/balloon/descript-txt/cursor.brush.color.g.md	DONE	cursor.brush.color.g,数値	linkLook("cursor") の brush（押している間）
 descript/balloon/descript-txt/cursor.brush.color.r.md	DONE	cursor.brush.color.r,数値	linkLook("cursor") の brush（押している間）
 descript/balloon/descript-txt/cursor.font.color.b.md	DONE	cursor.font.color.b,数値	linkLook("cursor") の font と choiceColor
 descript/balloon/descript-txt/cursor.font.color.g.md	DONE	cursor.font.color.g,数値	linkLook("cursor") の font と choiceColor
 descript/balloon/descript-txt/cursor.font.color.r.md	DONE	cursor.font.color.r,数値	linkLook("cursor") の font と choiceColor
-descript/balloon/descript-txt/cursor.font.shadowcolor.b.md	BUILD	cursor.font.shadowcolor.b,数値	LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-descript/balloon/descript-txt/cursor.font.shadowcolor.g.md	BUILD	cursor.font.shadowcolor.g,数値	LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-descript/balloon/descript-txt/cursor.font.shadowcolor.r.md	BUILD	cursor.font.shadowcolor.r,数値	LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-descript/balloon/descript-txt/cursor.font.shadowstyle.md	BUILD	cursor.font.shadowstyle,形態指定	LinkLook に影が無い。anchor.font.shadowstyle と一緒に作る
+descript/balloon/descript-txt/cursor.font.shadowcolor.b.md	DONE	cursor.font.shadowcolor.b,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/cursor.font.shadowcolor.g.md	DONE	cursor.font.shadowcolor.g,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/cursor.font.shadowcolor.r.md	DONE	cursor.font.shadowcolor.r,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/cursor.font.shadowstyle.md	DONE	cursor.font.shadowstyle,形態指定	選択肢・リンクの影を右下（offset）か縁取り（outline）にする（無ければ font.shadowstyle）
 descript/balloon/descript-txt/cursor.md	IMPOSSIBLE	cursor,ファイル名 / mousecursor,ファイル名	マウスカーソルが無い（タッチで操作する）
 descript/balloon/descript-txt/cursor.notselect.brush.color.b.md	DONE	cursor.notselect.brush.color.b,数値	linkLook("cursor.notselect") の brush
 descript/balloon/descript-txt/cursor.notselect.brush.color.g.md	DONE	cursor.notselect.brush.color.g,数値	linkLook("cursor.notselect") の brush
@@ -94,10 +94,10 @@ descript/balloon/descript-txt/cursor.notselect.brush.color.r.md	DONE	cursor.nots
 descript/balloon/descript-txt/cursor.notselect.font.color.b.md	DONE	cursor.notselect.font.color.b,数値	linkLook("cursor.notselect") の font
 descript/balloon/descript-txt/cursor.notselect.font.color.g.md	DONE	cursor.notselect.font.color.g,数値	linkLook("cursor.notselect") の font
 descript/balloon/descript-txt/cursor.notselect.font.color.r.md	DONE	cursor.notselect.font.color.r,数値	linkLook("cursor.notselect") の font
-descript/balloon/descript-txt/cursor.notselect.font.shadowcolor.b.md	BUILD	cursor.notselect.font.shadowcolor.b,数値	LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-descript/balloon/descript-txt/cursor.notselect.font.shadowcolor.g.md	BUILD	cursor.notselect.font.shadowcolor.g,数値	LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-descript/balloon/descript-txt/cursor.notselect.font.shadowcolor.r.md	BUILD	cursor.notselect.font.shadowcolor.r,数値	LinkLook に影が無い。anchor.font.shadowcolor と一緒に作る
-descript/balloon/descript-txt/cursor.notselect.font.shadowstyle.md	BUILD	cursor.notselect.font.shadowstyle,形態指定	LinkLook に影が無い。anchor.font.shadowstyle と一緒に作る
+descript/balloon/descript-txt/cursor.notselect.font.shadowcolor.b.md	DONE	cursor.notselect.font.shadowcolor.b,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/cursor.notselect.font.shadowcolor.g.md	DONE	cursor.notselect.font.shadowcolor.g,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/cursor.notselect.font.shadowcolor.r.md	DONE	cursor.notselect.font.shadowcolor.r,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
+descript/balloon/descript-txt/cursor.notselect.font.shadowstyle.md	DONE	cursor.notselect.font.shadowstyle,形態指定	選択肢・リンクの影を右下（offset）か縁取り（outline）にする（無ければ font.shadowstyle）
 descript/balloon/descript-txt/cursor.notselect.pen.color.b.md	DONE	cursor.notselect.pen.color.b,数値	linkLook("cursor.notselect") の pen
 descript/balloon/descript-txt/cursor.notselect.pen.color.g.md	DONE	cursor.notselect.pen.color.g,数値	linkLook("cursor.notselect") の pen
 descript/balloon/descript-txt/cursor.notselect.pen.color.r.md	DONE	cursor.notselect.pen.color.r,数値	linkLook("cursor.notselect") の pen
@@ -106,8 +106,8 @@ descript/balloon/descript-txt/cursor.pen.color.b.md	DONE	cursor.pen.color.b,数�
 descript/balloon/descript-txt/cursor.pen.color.g.md	DONE	cursor.pen.color.g,数値	linkLook("cursor") の pen。無いとき矩形の枠を描かない（SSP は文字の色で描く）
 descript/balloon/descript-txt/cursor.pen.color.r.md	DONE	cursor.pen.color.r,数値	linkLook("cursor") の pen。無いとき矩形の枠を描かない（SSP は文字の色で描く）
 descript/balloon/descript-txt/cursor.style.md	DONE	cursor.style,形状	既定は square で SSP と同じ
-descript/balloon/descript-txt/disable.font.md	PARTIAL	disable.font.(フォント定義),(指定)	disable.font.color と bold / italic / underline / strike は読む。disable.font.name と height は読まない
-descript/balloon/descript-txt/dpi.md	BUILD	dpi,推奨DPI	読んでいない。バルーンの倍率に 96/dpi を掛ける（SkinBalloon と SkinInputBox の scale）
+descript/balloon/descript-txt/disable.font.md	DONE	disable.font.(フォント定義),(指定)	disable.font.color・bold などに加え、name と height も読む
+descript/balloon/descript-txt/dpi.md	DONE	dpi,推奨DPI	バルーンと入力の箱を 96 / dpi 倍で出す
 descript/balloon/descript-txt/font.bold.md	DONE	font.bold,0/1	BalloonTextStyle.bold
 descript/balloon/descript-txt/font.color.b.md	DONE	font.color.b,数値	Balloon.fontColor
 descript/balloon/descript-txt/font.color.g.md	DONE	font.color.g,数値	Balloon.fontColor
@@ -134,7 +134,7 @@ descript/balloon/descript-txt/number.font.color.b.md	DONE	number.font.color.b,�
 descript/balloon/descript-txt/number.font.color.g.md	DONE	number.font.color.g,数値	Balloon.numberColor
 descript/balloon/descript-txt/number.font.color.r.md	DONE	number.font.color.r,数値	Balloon.numberColor
 descript/balloon/descript-txt/number.font.height.md	DONE	number.font.height,数値	Balloon.numberFontHeight
-descript/balloon/descript-txt/number.font.name.md	BUILD	number.font.name,フォント名	数の書体を変えていない。BalloonLabel に BalloonFonts.family を渡す
+descript/balloon/descript-txt/number.font.name.md	DONE	number.font.name,フォント名	数の書体（無ければ本文の書体）
 descript/balloon/descript-txt/number.x.md	DONE	number.x,座標	Balloon.numberPosition（右端にそろえる）
 descript/balloon/descript-txt/number.xr.md	DONE	number.xr,座標	Balloon.numberPosition
 descript/balloon/descript-txt/number.y.md	DONE	number.y,座標	Balloon.numberPosition
@@ -142,37 +142,37 @@ descript/balloon/descript-txt/number.yb.md	BUILD	number.yb,座標	number.y の�
 descript/balloon/descript-txt/onlinemarker.interval.md	DONE	onlinemarker.interval,待機時間	Balloon.onlineInterval（50 ミリ秒より短くしない）
 descript/balloon/descript-txt/onlinemarker.x.md	DONE	onlinemarker.x,座標	Balloon.onlinePosition
 descript/balloon/descript-txt/onlinemarker.y.md	DONE	onlinemarker.y,座標	Balloon.onlinePosition
-descript/balloon/descript-txt/origin.x.md	PARTIAL	origin.x,座標	読むが、負の値（右端から）を 0 にしてしまう。縦書きの意味も無い
-descript/balloon/descript-txt/origin.y.md	PARTIAL	origin.y,座標	読むが、負の値（下端から）を 0 にしてしまう
-descript/balloon/descript-txt/overlay_outside_balloon.md	BUILD	overlay_outside_balloon,数値	印はバルーンのウィンドウの中だけ。1 ならウィンドウを印の分だけ広げる
-descript/balloon/descript-txt/paint_transparent_region_black.md	BUILD	paint_transparent_region_black,数値	.pna のときキー色の所を黒で塗っていない（0 相当）。ImageTransparency.applyPna で既定 1 にする
+descript/balloon/descript-txt/origin.x.md	DONE	origin.x,座標	負の値は右端から、--数値 は本当の負の数（縦書きの意味は vertical と一緒に）
+descript/balloon/descript-txt/origin.y.md	DONE	origin.y,座標	負の値は下端から、--数値 は本当の負の数
+descript/balloon/descript-txt/overlay_outside_balloon.md	PARTIAL	overlay_outside_balloon,数値	0 ならオンライン・SSTP の印をバルーンの画像の中に収め、1 なら収めない。ウィンドウを印の分だけ広げてはいない
+descript/balloon/descript-txt/paint_transparent_region_black.md	DONE	paint_transparent_region_black,数値	.pna の画像は既定で、左上の色の所を黒にしてから透明度を掛ける（0 / 1 で決められる）
 descript/balloon/descript-txt/readme.charset.md	BUILD	readme.charset,文字コード	バルーンの readme と一緒に作る。TextCharsets で読む
 descript/balloon/descript-txt/readme.md	BUILD	readme,ファイル名	バルーンの readme を開く所が無い（ゴーストだけ）。インストール後とバルーンの一覧から TextViewerActivity で出す
-descript/balloon/descript-txt/sstpmarker.x.md	BUILD	sstpmarker.x,座標	SSTP の印と一緒に作る
-descript/balloon/descript-txt/sstpmarker.y.md	BUILD	sstpmarker.y,座標	SSTP の印と一緒に作る
+descript/balloon/descript-txt/sstpmarker.x.md	DONE	sstpmarker.x,座標	SSTP の印の位置（負は右端から。無ければ文字の範囲の左上）
+descript/balloon/descript-txt/sstpmarker.y.md	DONE	sstpmarker.y,座標	SSTP の印の位置（負は下端から。無ければ文字の範囲の左上）
 descript/balloon/descript-txt/sstpmessage.font.color.b.md	DONE	sstpmessage.font.color.b,数値	Balloon.markerColor（\![set,balloonmarker] の文字）
 descript/balloon/descript-txt/sstpmessage.font.color.g.md	DONE	sstpmessage.font.color.g,数値	Balloon.markerColor（\![set,balloonmarker] の文字）
 descript/balloon/descript-txt/sstpmessage.font.color.r.md	DONE	sstpmessage.font.color.r,数値	Balloon.markerColor（\![set,balloonmarker] の文字）
 descript/balloon/descript-txt/sstpmessage.font.height.md	DONE	sstpmessage.font.height,サイズ	Balloon.markerFontHeight
-descript/balloon/descript-txt/sstpmessage.font.name.md	BUILD	sstpmessage.font.name,フォント名	印の文字の書体を変えていない。BalloonLabel に BalloonFonts.family を渡す
+descript/balloon/descript-txt/sstpmessage.font.name.md	DONE	sstpmessage.font.name,フォント名	印の文字の書体（無ければ本文の書体）
 descript/balloon/descript-txt/sstpmessage.x.md	DONE	sstpmessage.x,座標	Balloon.markerPosition
-descript/balloon/descript-txt/sstpmessage.xr.md	BUILD	sstpmessage.xr,座標	読んでいない。印の文字をこの位置で切る
+descript/balloon/descript-txt/sstpmessage.xr.md	DONE	sstpmessage.xr,座標	印の文字をこの位置で切る（負は右端から）
 descript/balloon/descript-txt/sstpmessage.y.md	DONE	sstpmessage.y,座標	Balloon.markerPosition
 descript/balloon/descript-txt/sstpmessage.yb.md	BUILD	sstpmessage.yb,座標	縦書きのときだけ使う。vertical と一緒に
 descript/balloon/descript-txt/type.md	DONE	type,種別	インストールで type を見る
-descript/balloon/descript-txt/use_input_alpha.md	BUILD	use_input_alpha,数値	バルーンを半透明にする設定がまだ無い。作るときに入力の箱にも効かせるかをこれで決める
-descript/balloon/descript-txt/use_self_alpha.md	PARTIAL	use_self_alpha,値	画像のアルファと .pna はいつも使う（1 相当）。full（アルファの無い画像もキー色で抜かない）と 0 を読まない
+descript/balloon/descript-txt/use_input_alpha.md	PARTIAL	use_input_alpha,数値	1 なら入力の箱の画像もバルーンと同じ透明度の扱いにする。バルーン全体を半透明にする設定は pono-droid に無い
+descript/balloon/descript-txt/use_self_alpha.md	DONE	use_self_alpha,値	0（既定。画像のアルファを使わない）・1 / true・full の3通り
 descript/balloon/descript-txt/validrect.bottom.md	DONE	validrect.bottom,座標	0 以下は下端から
-descript/balloon/descript-txt/validrect.left.md	PARTIAL	validrect.left,座標	読むが、負の値（右端から）を 0 にしてしまう
+descript/balloon/descript-txt/validrect.left.md	DONE	validrect.left,座標	負の値は右端から、--数値 は本当の負の数
 descript/balloon/descript-txt/validrect.right.md	DONE	validrect.right,座標	0 以下は右端から
-descript/balloon/descript-txt/validrect.top.md	PARTIAL	validrect.top,座標	読むが、負の値（下端から）を 0 にしてしまう
+descript/balloon/descript-txt/validrect.top.md	DONE	validrect.top,座標	負の値は下端から、--数値 は本当の負の数
 descript/balloon/descript-txt/vertical.md	BUILD	vertical,0/1	縦書きが無い（balloon.scope.vertical もいつも 0）。Compose に縦書きが無いので1文字ずつ並べる組版が要る
-descript/balloon/descript-txt/windowposition.limit.md	PARTIAL	windowposition.limit,0/1	オーバーレイは Android が画面の中に収めるので 1 相当。0 は FLAG_LAYOUT_NO_LIMITS で作れる
-descript/balloon/descript-txt/windowposition.x.md	BUILD	windowposition.x,座標	読んでいない。CharacterWindow.placeBalloon の balloonAlign（center / bottom）と balloonOffset と同じ仕組みで作れる
-descript/balloon/descript-txt/windowposition.y.md	BUILD	windowposition.y,座標	読んでいない。windowposition.x と一緒に placeBalloon でずらす
+descript/balloon/descript-txt/windowposition.limit.md	DONE	windowposition.limit,0/1	0 ならバルーンのウィンドウを画面からはみ出せるようにする
+descript/balloon/descript-txt/windowposition.x.md	DONE	windowposition.x,座標	descript.txt（と画像ごとの上書き）の数値は右へずらし、center / top はシェルの中央上、bottom は中央下
+descript/balloon/descript-txt/windowposition.y.md	DONE	windowposition.y,座標	下へずらす（center / bottom の基本位置からも）
 descript/balloon/descript-txt/wordwrappoint.x.md	DONE	wordwrappoint.x,座標	Balloon.textArea の右端
 descript/balloon/descript-txt/wordwrappoint.y.md	BUILD	wordwrappoint.y,座標	縦書きのときだけ使う。vertical と一緒に
-descript/balloon/index.md	PARTIAL	Balloon設定	*1 の負の座標は arrow・online・sstpmessage・number と validrect.right/bottom だけ。origin と validrect.left/top の負の値、--数値 の書き方は読まない
+descript/balloon/index.md	DONE	Balloon設定	*1 の座標はどれも負なら右端・下端から、--数値 は本当の負の数
 descript/balloon/recommended-ghost/caption_recommended.md	BUILD	推奨の意味	推奨の意味の説明。ゴーストを消すとき推奨バルーンも消すか聞く動きは recommended.ghost と一緒に作る
 descript/balloon/recommended-ghost/index.md	NA	descript.txt - 推奨ゴースト	一覧のページ
 descript/balloon/recommended-ghost/recommended.ghost.md	BUILD	recommended.ghost,ゴースト名	読んでいない。ほかのゴーストで選ぶとき警告し、そのゴーストを消すとき一緒に消すか聞く
@@ -1949,7 +1949,7 @@ list/shiori-resource/tooltip/index.md	NA	ツールチップ系	目次のペー�
 list/shiori-resource/tooltip/tooltip.md	DONE	tooltip	実装済み
 list/shiori-resource/update/index.md	NA	更新情報	目次のページ
 list/shiori-resource/update/other_homeurl_override.md	DONE	other_homeurl_override	実装済み
-manual/balloon.md	PARTIAL	バルーン	balloons*s.txt / balloonk*s.txt、balloonp*、arrows* / arrowk* / arrowp*、sstp*.png・marker*.png、clickwait*.png、thumbnail.png を使っていない（バルーンの組と重なる）
+manual/balloon.md	PARTIAL	バルーン	balloons*s.txt・arrows* など・marker・clickwait・sstp の画像は使う。balloonp*（3人目以降のバルーン画像）と thumbnail.png はまだ
 manual/directory.md	NA	全体の構成	フォルダの構成の説明
 manual/ghost.md	PARTIAL	ゴースト	thumbnail.png（一覧のサムネイル）・*.ico・ai0.png / ai0_dark.png（AI グラフの絵）を使っていない
 manual/install.md	DONE	インストール	.nar（zip）のインストール。lzh・cab・自己解凍 exe は対象外

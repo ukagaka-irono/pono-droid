@@ -91,7 +91,13 @@ class CharacterWindow(
         x = savedPosition("x") ?: defaultX(density)
         y = savedPosition("y") ?: defaultY(density)
     }
-    private val balloonParams = overlayParams()
+    private val balloonParams = overlayParams().apply {
+        // バルーンの windowposition.limit が 0 なら、画面の外にはみ出してもよい
+        if (balloonSkin?.balloon?.keepOnScreen == false) flags = flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+    }
+
+    /** バルーンの descript.txt の windowposition.x / y */
+    private val windowPosition = balloonSkin?.balloon?.windowPosition
 
     /** サーフェスの高さ（px）。バルーンはこの分だけ上に置く */
     private var surfaceHeight = 0
@@ -260,7 +266,8 @@ class CharacterWindow(
                 val center = if (alignEnd) screenWidth - params.x - sw / 2 else params.x + sw / 2
                 if (center < screenWidth / 2) "right" else "left"
             }
-            else -> c?.balloonAlign
+            // スクリプトやシェルの指定が無ければ、バルーンの windowposition.x の center / bottom
+            else -> c?.balloonAlign ?: windowPosition?.anchor
         }
         // 既定のずれは、x がシェルに近づく向きで正（右に出すときは左向き）。ここでは右向きを正にする
         val defaults = c?.balloonOffsets ?: BalloonOffsets()
@@ -275,8 +282,11 @@ class CharacterWindow(
         val relative = c?.balloonOffsetRelative ?: (false to false)
         val offX = if (script == null) dx else if (relative.first) dx + script.first else script.first
         val offY = if (script == null) dy else if (relative.second) dy + script.second else script.second
-        val ox = (offX * pxPerImagePx).toInt()
-        val oy = (offY * pxPerImagePx).toInt()
+        // バルーンの windowposition.x / y の数値（バルーン画像のピクセル。x はどちらに出していても右が正）
+        val wp = windowPosition
+        val balloonPx = context.resources.displayMetrics.density * balloonScale.floatValue * (balloonSkin?.balloon?.dpiFactor ?: 1f)
+        val ox = (offX * pxPerImagePx + (wp?.x ?: 0) * balloonPx).toInt()
+        val oy = (offY * pxPerImagePx + (wp?.y ?: 0) * balloonPx).toInt()
         // x はウィンドウを寄せた側（\0 などは右、\1 は左）の端からの距離、y は下の端からの距離
         val (x, y) = when (align) {
             "center" -> params.x + (sw - bw) / 2 to params.y + surfaceHeight

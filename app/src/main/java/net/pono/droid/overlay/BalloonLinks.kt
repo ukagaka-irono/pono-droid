@@ -1,5 +1,6 @@
 package net.pono.droid.overlay
 
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import net.pono.baseware.sakura.Choice
 import net.pono.baseware.sakura.ChoiceLooks
@@ -12,8 +13,20 @@ data class ChoiceActions(
     val visited: Set<String> = emptySet(),
 )
 
-/** 選択肢かリンクを、いまの状態で描く見た目。[square] なら矩形（[brush] で塗り [pen] で囲む）、[underline] なら下線 */
-class ResolvedLook(val square: Boolean, val underline: Boolean, val brush: Color?, val pen: Color?, val font: Color)
+/**
+ * 選択肢かリンクを、いまの状態で描く見た目。[square] なら矩形（[brush] で塗り [pen] で囲む）、[underline] なら下線。
+ * [shadow] は文字の影の色（null なら文の影のまま）、[shadowOutline] は縁取りか、[blend] は塗りの重ね方（blendmethod）
+ */
+class ResolvedLook(
+    val square: Boolean,
+    val underline: Boolean,
+    val brush: Color?,
+    val pen: Color?,
+    val font: Color,
+    val shadow: Color? = null,
+    val shadowOutline: Boolean? = null,
+    val blend: BlendMode? = null,
+)
 
 /**
  * バルーンの descript.txt の cursor.* / cursor.notselect.* / anchor.* / anchor.notselect.* / anchor.visited.*。
@@ -50,7 +63,22 @@ data class LinkDefaults(
             brush = look.brush?.let(::rgb) ?: if (square && selected) base.copy(alpha = 0.15f) else null,
             pen = look.pen?.let(::rgb),
             font = look.font?.let(::rgb) ?: if (isAnchor && visited && !selected) base.copy(alpha = 0.7f) else base,
+            shadow = look.shadow?.let(::rgb),
+            shadowOutline = look.shadowOutline,
+            blend = look.blend?.let(::blendMode),
         )
+    }
+
+    /**
+     * blendmethod（Windows の SetROP2 のモード名）を、近い見た目の重ね方にする。
+     * notmaskpen・not・xorpen は下の色を反転したように、mergepen・mergepennot は明るく、maskpen は暗く重ねる
+     */
+    private fun blendMode(name: String): BlendMode? = when (name) {
+        "notmaskpen", "not", "xorpen", "notxorpen", "notcopypen" -> BlendMode.Difference
+        "mergepennot", "mergepen", "mergenotpen", "notmergepen" -> BlendMode.Screen
+        "maskpen", "masknotpen", "maskpennot" -> BlendMode.Multiply
+        "white", "black", "nop", "copypen" -> null
+        else -> null
     }
 
     private fun rgb(v: Int) = Color(v or 0xFF000000.toInt())
