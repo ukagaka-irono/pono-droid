@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1124・一部だけ 66・作る 241・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1162・一部だけ 62・作る 207・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -90,26 +90,14 @@
 
 ## ゴーストの descript.txt
 
-済み 42 項目。
+済み 54 項目。
 
-### 🔨 作る（17）
-- menu.font.height,フォントサイズ — メニューはバルーンに出すので、\f[height] をメニューのスクリプトの頭に付ける（シェルの指定が先）
-- menu.font.name,フォント名 — 同じく \f[name] を付ける
+### 🔨 作る（5）
 - readme.charset,文字コード — readme は UTF-8 か CP932 の自動判定だけ。readme.charset があればそれで読む
-- seriko.defaultsurfacedirectoryname,ディレクトリ名 — Ghost.defaultShellDir が master 決め打ち。この値のディレクトリを先に探す
-- shiori.encoding,文字コード — ShioriSession の最初の文字コードを charset でなくこれにする（Charset ヘッダが来たらそちら）
-- shiori.escape_unknown,0/1 — ShioriRequest.encode で変換できない文字を ?escape!unicode[0xABCD] にし、答えで戻す
-- shiori.forceencoding,文字コード — Charset ヘッダを無視してこの文字コードに固定する（ShioriSession）
 - shiori.logo.align,位置情報 — AI グラフを絵で描くとき（今はラベルと値を文字で並べる）の背景画像の基準
 - shiori.logo.file,ファイル名 — 同上。背景画像（複数・_dark）
 - shiori.logo.x,X座標 — 同上。背景画像の X
 - shiori.logo.y,Y座標 — 同上。背景画像の Y
-- sstp.allowcommunicate,数値 — 0 なら SSTP の COMMUNICATE（と GIVE の Document）を受けない（handleSstp）
-- sstp.allowunspecifiedsend,数値 — 0 なら ReceiverGhostName も IfGhost も無い SSTP を受けない（handleSstp / GhostHub）
-- sstp.alwaystranslate,数値 — 1 なら notranslate を無視して、SSTP のスクリプトも OnTranslate に通す
-- default.balloon.path,パス — balloon より先に、このパスのバルーンを探す（Ghost.balloon）
-- recommended.balloon,バルーン名 — 既定のバルーンにし、ほかに切り替えるときに確かめる
-- recommended.balloon.path,パス — パスで探す。ほかに切り替えるときに確かめる
 
 ### 🔧 一部だけ（3）
 - descript.txt（Ghostの） — 説明のページ。\ や % で始まる値を捨てる決まりはしていない（名前などをメニューのスクリプトにそのまま入れている）
@@ -140,42 +128,14 @@
 
 ## シェルの descript.txt
 
-済み 55 項目。
+済み 81 項目。
 
-### 🔨 作る（27）
-- char\*.bindgroup\*.addid,ID — 着せ替えを付けたら addid のものも付け、元が全部外れたら外す（applyBind）
-- char\*.bindoption\*.group,カテゴリ名,オプション — 今は同じカテゴリから 1 つ・外せる、の決め打ち。mustselect と multiple を applyBind に入れる
-- char\*.menuitem\*,ID — 着せ替えのメニューを menuitem の順に並べ、- で区切りを入れる（dressupMenu）
-- char\*.menuitemex\*,メニュー名,ID — 着せ替えのメニューにメニュー名の階層を作る（dressupMenu）
+### 🔨 作る（5）
 - craftman,作者名 — シェルの作者を出すところが無い。シェルの一覧に出す
 - craftmanurl,URL — 同上
 - craftmanw,作者名 — 同上
-- kero.bindgroup\*.addid,ID — addid（char*.bindgroup*.addid と同じ）
-- kero.bindoption\*.group,カテゴリ名,オプション — mustselect / multiple（char*.bindoption*.group と同じ）
-- kero.menuitem\*,ID — menuitem の順と区切り（char*.menuitem* と同じ）
-- kero.menuitemex\*,メニュー名,ID — menuitemex の階層（char*.menuitemex* と同じ）
-- menu.background.font.color.b,数値 — SHIORI リソースのものは使う。シェルの descript.txt のものも読む（menuColors、リソースが先）
-- menu.background.font.color.g,数値 — 同上
-- menu.background.font.color.r,数値 — 同上
-- menu.font.height,フォントサイズ — \f[height] をメニューの頭に付ける（ゴーストの指定より先）
-- menu.font.name,フォント名 — \f[name] をメニューの頭に付ける
-- menu.foreground.font.color.b,数値 — SHIORI リソースのものは使う。シェルの descript.txt のものも読む（menuColors）
-- menu.foreground.font.color.g,数値 — 同上
-- menu.foreground.font.color.r,数値 — 同上
 - readme.charset,文字コード — シェルの readme を作るとき、この文字コードで読む
 - readme,ファイル名 — シェルの readme を開くところが無い。シェルのメニューか一覧から開けるようにする
-- sakura.bindgroup\*.addid,ID — addid
-- sakura.bindoption\*.group,カテゴリ名,オプション — mustselect / multiple
-- sakura.menuitem\*,ID — menuitem の順と区切り
-- sakura.menuitemex\*,メニュー名,ID — menuitemex の階層
-- seriko.dpi,推奨DPI — シェル画像の倍率に 96 / dpi を掛ける（SurfaceRenderer と当たり判定）
-- seriko.paint_transparent_region_black,数値 — .pna のとき、左上の色の画素を黒にしてから透明度を掛ける（既定は 1 相当）。今は色のまま
-
-### 🔧 一部だけ（4）
-- char\*.bindgroup\*.name,カテゴリ名,パーツ名,サムネイル名 — カテゴリとパーツは読む。サムネイル名は読まない（メニューは文字だけ、OnNotifyDressupInfo も空）
-- kero.bindgroup\*.name,カテゴリ名,パーツ名,サムネイル名 — サムネイル名は読まない
-- sakura.bindgroup\*.name,カテゴリ名,パーツ名,サムネイル名 — サムネイル名は読まない
-- seriko.use_self_alpha,値 — 1 だけ読む。true と full を読まない。1 でもアルファの無い画像を左上の色で抜かない（full の動きになる）
 
 ### ⛔ 作れない（15）
 - menu.background.alignment,位置 — メニューはバルーンに出すので、メニューの絵が無い（⛔）

@@ -17,7 +17,8 @@ class ShioriTimeoutException(message: String) : RuntimeException(message)
 
 /**
  * 1つの SHIORI を1本のスレッドで動かし、SHIORI/3.0 の文字列でやりとりする。
- * 文字コードは最初は descript.txt の指定を使い、以後は SHIORI が返した `Charset` に合わせる。
+ * 文字コードは最初は descript.txt の指定を使い、以後は SHIORI が返した `Charset` に合わせる（[forceCharset] なら合わせない）。
+ * [escapeUnknown] なら、その文字コードにできない文字を ?escape!unicode[0xABCD] にして渡し、答えで元に戻す。
  * 呼び出しには時間の上限があり、過ぎたら [Shiori.abort] して [ShioriTimeoutException] を投げる。
  */
 class ShioriSession(
@@ -27,6 +28,8 @@ class ShioriSession(
     dispatcher: CoroutineDispatcher? = null,
     private val requestTimeoutMs: Long = REQUEST_TIMEOUT_MS,
     private val loadTimeoutMs: Long = LOAD_TIMEOUT_MS,
+    private val forceCharset: Boolean = false,
+    private val escapeUnknown: Boolean = false,
 ) {
     private val executor = if (dispatcher == null) Executors.newSingleThreadExecutor { r -> Thread(r, "shiori") } else null
     private val dispatcher: CoroutineDispatcher = dispatcher ?: executor!!.asCoroutineDispatcher()
@@ -41,9 +44,9 @@ class ShioriSession(
     suspend fun load(dir: File): Boolean = call(loadTimeoutMs, "load") { shiori.load(dir) } ?: false
 
     suspend fun request(request: ShioriRequest): ShioriResponse? = call(requestTimeoutMs, request.id) {
-        val raw = shiori.request(request.encode(charset, sender)) ?: return@call null
-        val response = ShioriResponse.parse(raw, charset) ?: return@call null
-        response.headers["Charset"]?.let(TextCharsets::resolve)?.let { charset = it }
+        val raw = shiori.request(request.encode(charset, sender, escapeUnknown)) ?: return@call null
+        val response = ShioriResponse.parse(raw, charset, force = forceCharset, unescape = escapeUnknown) ?: return@call null
+        if (!forceCharset) response.headers["Charset"]?.let(TextCharsets::resolve)?.let { charset = it }
         response
     }
 

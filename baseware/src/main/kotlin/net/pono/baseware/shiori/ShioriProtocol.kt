@@ -13,9 +13,10 @@ data class ShioriRequest(
 ) {
     /**
      * SenderType（既定は internal）・SecurityLevel（既定は local）・SecurityOrigin・Status は [headers] にあればその値で、ID より前に書く。
-     * ほかのヘッダ（BaseID・Age・X-SSTP-PassThru-* など）は ID の後
+     * ほかのヘッダ（BaseID・Age・X-SSTP-PassThru-* など）は ID の後。
+     * [escapeUnknown]（descript.txt の shiori.escape_unknown）なら、[charset] にできない文字を ?escape!unicode[0xABCD] にする
      */
-    fun encode(charset: Charset, sender: String): ByteArray {
+    fun encode(charset: Charset, sender: String, escapeUnknown: Boolean = false): ByteArray {
         val sb = StringBuilder()
         sb.append(method.name).append(" SHIORI/3.0\r\n")
         sb.append("Charset: ").append(charsetHeaderName(charset)).append("\r\n")
@@ -28,7 +29,8 @@ data class ShioriRequest(
         headers.filterKeys { it !in FRONT_HEADERS }.forEach { (k, v) -> sb.append(sanitize(k)).append(": ").append(sanitize(v)).append("\r\n") }
         references.forEachIndexed { i, v -> sb.append("Reference").append(i).append(": ").append(sanitize(v)).append("\r\n") }
         sb.append("\r\n")
-        return sb.toString().toByteArray(charset)
+        val text = if (escapeUnknown) escape(sb.toString(), charset) else sb.toString()
+        return text.toByteArray(charset)
     }
 
     /** 改行はヘッダを壊す（別のヘッダを差し込める）し、NUL は C の文字列をそこで切るので、どちらも通さない */
@@ -37,6 +39,27 @@ data class ShioriRequest(
 
     companion object {
         private val FRONT_HEADERS = setOf("SenderType", "SecurityLevel", "SecurityOrigin", "Status")
+
+        private val ESCAPED = Regex("""\?escape!unicode\[0x([0-9A-Fa-f]{1,6})]""")
+
+        /** [charset] にできない文字（サロゲートペアは1文字として）を ?escape!unicode[0xABCD] にする */
+        fun escape(text: String, charset: Charset): String {
+            val encoder = charset.newEncoder()
+            val sb = StringBuilder(text.length)
+            var i = 0
+            while (i < text.length) {
+                val cp = text.codePointAt(i)
+                val s = String(Character.toChars(cp))
+                if (encoder.canEncode(s)) sb.append(s) else sb.append("?escape!unicode[0x").append(Integer.toHexString(cp).uppercase().padStart(4, '0')).append(']')
+                i += Character.charCount(cp)
+            }
+            return sb.toString()
+        }
+
+        /** [escape] で書いた形を元の文字に戻す */
+        fun unescape(text: String): String = if ("?escape!unicode[" !in text) text else ESCAPED.replace(text) { m ->
+            m.groupValues[1].toIntOrNull(16)?.takeIf { Character.isValidCodePoint(it) }?.let { String(Character.toChars(it)) } ?: m.value
+        }
 
         fun charsetHeaderName(charset: Charset): String =
             if (charset == TextCharsets.CP932) "Shift_JIS" else charset.name()
@@ -60,11 +83,12 @@ data class ShioriResponse(
 
         /**
          * 生のレスポンスを読む。文字コードは `Charset` ヘッダ（ASCII なのでどの文字コードでも読める）で決め、
-         * 無ければ [fallback] を使う。
+         * 無ければ [fallback] を使う。[force]（descript.txt の shiori.forceencoding）なら `Charset` ヘッダは見ずに [fallback] で読む。
+         * [unescape] なら ?escape!unicode[0xABCD] を元の文字に戻す
          */
-        fun parse(bytes: ByteArray, fallback: Charset): ShioriResponse? {
+        fun parse(bytes: ByteArray, fallback: Charset, force: Boolean = false, unescape: Boolean = false): ShioriResponse? {
             val latin = String(bytes, Charsets.ISO_8859_1)
-            val declared = latin.lineSequence()
+            val declared = if (force) null else latin.lineSequence()
                 .map { it.trimEnd('\r') }
                 .firstOrNull { it.startsWith("Charset:", ignoreCase = true) }
                 ?.substringAfter(':')?.trim()
@@ -78,7 +102,7 @@ data class ShioriResponse(
                 val colon = line.indexOf(": ").takeIf { it > 0 } ?: line.indexOf(':').takeIf { it > 0 } ?: continue
                 val key = line.substring(0, colon)
                 val value = line.substring(colon + 1).removePrefix(" ")
-                headers[key] = value
+                headers[key] = if (unescape) ShioriRequest.unescape(value) else value
             }
             return ShioriResponse(code, headers)
         }

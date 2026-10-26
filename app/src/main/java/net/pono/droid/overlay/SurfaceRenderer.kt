@@ -11,6 +11,7 @@ import net.pono.baseware.shell.AnimatedImages
 import net.pono.baseware.shell.CollisionRegion
 import net.pono.baseware.shell.PatternFrame
 import net.pono.baseware.shell.RegionMask
+import net.pono.baseware.shell.SelfAlpha
 import net.pono.baseware.shell.Shell
 import net.pono.baseware.shell.SortOrder
 import net.pono.baseware.shell.SurfaceElement
@@ -238,9 +239,15 @@ class SurfaceRenderer(private val shell: Shell) {
         return Bitmap.createBitmap(px, b.width, b.height, Bitmap.Config.ARGB_8888)
     }
 
-    /** シェルは seriko.use_self_alpha で決め打ち（0 なら PNG にアルファがあっても .pna か左上の色で抜く） */
+    /**
+     * シェルは seriko.use_self_alpha で決め打ち（0 なら PNG にアルファがあっても .pna か左上の色で抜く。
+     * 1 / true はアルファが無ければ .pna か左上の色、full はアルファが無ければ .pna か不透明）
+     */
     private fun load(file: File): Bitmap? = images.getOrPut(file) {
-        ImageTransparency.load(file, shell.pnaFor(file), selfAlpha = shell.useSelfAlpha)
+        val mode = shell.selfAlpha
+        ImageTransparency.load(
+            file, shell.pnaFor(file), selfAlpha = mode != SelfAlpha.OFF, colorKey = mode != SelfAlpha.FULL, paintBlack = shell.paintTransparentBlack,
+        )
     }
 
     private companion object {

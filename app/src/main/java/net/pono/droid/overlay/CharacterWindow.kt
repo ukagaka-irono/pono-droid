@@ -139,7 +139,7 @@ class CharacterWindow(
                     scopeId = scopeId,
                     controller = controller,
                     renderer = renderer,
-                    dpPerImagePx = scale.floatValue,
+                    dpPerImagePx = imageScale(),
                     touchHandler = touchHandler,
                     onHeightChanged = { h ->
                         if (h != surfaceHeight) {
@@ -184,6 +184,9 @@ class CharacterWindow(
             if (view === balloonView && controller.state.value.characters[scopeId]?.balloonAlign != null) placeBalloon()
         }
     }
+
+    /** シェル画像の 1px が何 dp か。設定の大きさに、シェルの seriko.dpi の分（96 / dpi）を掛ける */
+    private fun imageScale(): Float = scale.floatValue * controller.shell.dpiFactor
 
     /** \![set,balloonalign] / \![set,balloonoffset] が変わった */
     fun refreshBalloon() = placeBalloon()
@@ -247,7 +250,7 @@ class CharacterWindow(
      */
     private fun placeBalloon(add: Boolean = false) {
         val c = controller.state.value.characters[scopeId]
-        val pxPerImagePx = scale.floatValue * context.resources.displayMetrics.density
+        val pxPerImagePx = imageScale() * context.resources.displayMetrics.density
         val sw = if (params.width > 0) params.width else surfaceView.width
         val bw = balloonParams.width.coerceAtLeast(0)
         val bh = balloonParams.height.coerceAtLeast(0)
@@ -524,7 +527,7 @@ class CharacterWindow(
     fun basePoint(): Pair<Int, Int> {
         val c = controller.state.value.characters[scopeId]
         val def = c?.let { controller.shell.surfaces[it.surface] }
-        val px = scale.floatValue * context.resources.displayMetrics.density
+        val px = imageScale() * context.resources.displayMetrics.density
         val w = surfaceView.width
         val h = surfaceView.height
         val x = def?.baseposX?.let { (it * px * abs(c.scaleX)).toInt() } ?: (w / 2)

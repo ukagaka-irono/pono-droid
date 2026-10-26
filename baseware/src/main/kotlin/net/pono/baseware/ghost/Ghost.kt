@@ -24,8 +24,11 @@ class Ghost(val dir: File) {
     val shellDirs: List<File>
         get() = File(dir, "shell").listFiles { f -> f.isDirectory }?.sortedBy { it.name }.orEmpty()
 
-    fun defaultShellDir(): File? =
-        shellDirs.firstOrNull { it.name == "master" } ?: shellDirs.firstOrNull()
+    /** 既定のシェル。descript.txt の seriko.defaultsurfacedirectoryname（既定は master）、無ければ最初のもの */
+    fun defaultShellDir(): File? {
+        val preferred = descript["seriko.defaultsurfacedirectoryname"]?.trim()?.takeIf { it.isNotEmpty() } ?: "master"
+        return shellDirs.firstOrNull { it.name == preferred } ?: shellDirs.firstOrNull { it.name == "master" } ?: shellDirs.firstOrNull()
+    }
 
     /** 選んであるシェル（無ければ既定のシェル） */
     fun shellDir(): File? =
@@ -37,15 +40,28 @@ class Ghost(val dir: File) {
     }
 
     /**
-     * 使うバルーン。選んであればそれ、無ければゴーストの descript.txt の balloon 指定。
-     * どちらもインストールされていなければ null（pono-droid の簡易バルーンを使う）。
+     * 使うバルーン。選んであればそれ、無ければ [recommendedBalloon]、次に descript.txt の default.balloon.path、balloon 指定。
+     * どれもインストールされていなければ null（pono-droid の簡易バルーンを使う）。
      */
     fun balloon(balloons: BalloonRepository): Balloon? =
         when (val selected = loadProfile().getProperty(PROFILE_BALLOON)) {
             BALLOON_SIMPLE -> null
-            null -> descript["balloon"]?.let(balloons::findByName)
+            null -> recommendedBalloon(balloons)
+                ?: descript["default.balloon.path"]?.let { balloonByPath(balloons, it) }
+                ?: descript["balloon"]?.let(balloons::findByName)
             else -> balloons.find(selected)
         }
+
+    /** descript.txt の recommended.balloon.path か recommended.balloon（名前）のバルーン。入っていなければ null */
+    fun recommendedBalloon(balloons: BalloonRepository): Balloon? =
+        descript["recommended.balloon.path"]?.let { balloonByPath(balloons, it) } ?: descript["recommended.balloon"]?.let(balloons::findByName)
+
+    /** recommended.balloon などで推奨のバルーンを決めているか */
+    val hasRecommendedBalloon: Boolean get() = descript["recommended.balloon.path"] != null || descript["recommended.balloon"] != null
+
+    /** balloon\名前 のような相対パスの、最後のディレクトリ名でバルーンを探す */
+    private fun balloonByPath(balloons: BalloonRepository, path: String): Balloon? =
+        path.replace('\\', '/').trim('/', ' ').substringAfterLast('/').takeIf { it.isNotEmpty() && it != ".." && it != "." }?.let(balloons::find)
 
     /** バルーンを選ぶ。null なら pono-droid の簡易バルーン */
     fun selectBalloon(balloonDirName: String?) {

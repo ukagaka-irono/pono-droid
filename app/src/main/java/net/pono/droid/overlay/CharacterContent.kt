@@ -413,7 +413,7 @@ private fun BoxScope.ImportedAnimation(file: java.io.File, x: Int, y: Int, waitM
                         }
                     }
                 } else {
-                    ImageTransparency.load(file, null, selfAlpha = true)?.let { android.graphics.drawable.BitmapDrawable(null, it) }
+                    ImageTransparency.load(file, null, selfAlpha = true, colorKey = false)?.let { android.graphics.drawable.BitmapDrawable(null, it) }
                 }
             }.getOrNull()
         }

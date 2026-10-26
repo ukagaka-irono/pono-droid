@@ -29,7 +29,8 @@ class GhostHub {
 
     /**
      * SSTP を受けるゴースト。ReceiverGhostName / Ghost があればそのゴースト（動いていなければ null）、uniqueid の ID ならそのゴースト、
-     * IfGhost に名前のあるゴーストが動いていればそのゴースト、どれでもなければ最初に起動したもの（SSP と同じ）
+     * IfGhost に名前のあるゴーストが動いていればそのゴースト、どれでもなければ最初に起動したもの（SSP と同じ。
+     * descript.txt の sstp.allowunspecifiedsend が 0 のゴーストは飛ばす）
      */
     fun sstpTarget(req: SstpRequest): GhostController? {
         val all = running.ifEmpty { return null }
@@ -43,6 +44,6 @@ class GhostHub {
             val names = value.split(',').map { it.trim() }
             all.firstOrNull { names[0] == it.ghost.sakuraName && (names.size < 2 || names[1] == it.ghost.keroName) }?.let { return it }
         }
-        return all.first()
+        return all.firstOrNull { it.acceptsUnspecified } ?: all.first()
     }
 }

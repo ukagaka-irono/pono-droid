@@ -212,8 +212,8 @@ descript/ghost/descript-txt/kero.name.md	DONE	kero.name,名前	keroName
 descript/ghost/descript-txt/kero.seriko.alignmenttodesktop.md	DONE	kero.seriko.alignmenttodesktop,位置情報	ゴースト全体＜これ＜シェル全体＜シェルのスコープの順で起動時の吸着にする
 descript/ghost/descript-txt/kero.seriko.defaultsurface.md	DONE	kero.seriko.defaultsurface,数値	scopeName で読む（defaultSurface）
 descript/ghost/descript-txt/makoto.md	IMPOSSIBLE	makoto,ファイル名	MAKOTO は Windows の DLL（⛔）
-descript/ghost/descript-txt/menu.font.height.md	BUILD	menu.font.height,フォントサイズ	メニューはバルーンに出すので、\f[height] をメニューのスクリプトの頭に付ける（シェルの指定が先）
-descript/ghost/descript-txt/menu.font.name.md	BUILD	menu.font.name,フォント名	同じく \f[name] を付ける
+descript/ghost/descript-txt/menu.font.height.md	DONE	menu.font.height,フォントサイズ	メニューの頭に \f[height] を付ける（シェルの指定が先）
+descript/ghost/descript-txt/menu.font.name.md	DONE	menu.font.name,フォント名	メニューの頭に \f[name] を付ける（シェルの指定が先）
 descript/ghost/descript-txt/mousecursor.arrow.md	IMPOSSIBLE	mousecursor.arrow,ファイル名	マウスカーソルが無い（⛔）
 descript/ghost/descript-txt/mousecursor.grip.md	IMPOSSIBLE	mousecursor.grip,ファイル名	マウスカーソルが無い（⛔）
 descript/ghost/descript-txt/mousecursor.hand.md	IMPOSSIBLE	mousecursor.hand,ファイル名	マウスカーソルが無い（⛔）
@@ -234,29 +234,29 @@ descript/ghost/descript-txt/sakura.name2.md	DONE	sakura.name2,名前	%selfname2
 descript/ghost/descript-txt/sakura.seriko.alignmenttodesktop.md	DONE	sakura.seriko.alignmenttodesktop,位置情報	ゴースト全体＜これ＜シェル全体＜シェルのスコープの順で起動時の吸着にする
 descript/ghost/descript-txt/sakura.seriko.defaultsurface.md	DONE	sakura.seriko.defaultsurface,数値	defaultSurface（シェルが先、次にゴースト）
 descript/ghost/descript-txt/seriko.alignmenttodesktop.md	PARTIAL	seriko.alignmenttodesktop,位置情報	書いてあればその吸着にする。どこにも書いていないときは bottom でなく自由に動かせる（スマートフォンの画面なので、下の端に並べない）
-descript/ghost/descript-txt/seriko.defaultsurfacedirectoryname.md	BUILD	seriko.defaultsurfacedirectoryname,ディレクトリ名	Ghost.defaultShellDir が master 決め打ち。この値のディレクトリを先に探す
+descript/ghost/descript-txt/seriko.defaultsurfacedirectoryname.md	DONE	seriko.defaultsurfacedirectoryname,ディレクトリ名	このディレクトリのシェルを既定にする（無ければ master、次に最初のもの）
 descript/ghost/descript-txt/shiori.cache.md	NA	shiori.cache,数値	ゴーストキャッシュが無い。切り替えるといつも unload する（0 と同じ）
-descript/ghost/descript-txt/shiori.encoding.md	BUILD	shiori.encoding,文字コード	ShioriSession の最初の文字コードを charset でなくこれにする（Charset ヘッダが来たらそちら）
-descript/ghost/descript-txt/shiori.escape_unknown.md	BUILD	shiori.escape_unknown,0/1	ShioriRequest.encode で変換できない文字を ?escape!unicode[0xABCD] にし、答えで戻す
-descript/ghost/descript-txt/shiori.forceencoding.md	BUILD	shiori.forceencoding,文字コード	Charset ヘッダを無視してこの文字コードに固定する（ShioriSession）
+descript/ghost/descript-txt/shiori.encoding.md	DONE	shiori.encoding,文字コード	SHIORI とのやりとりの最初の文字コード（Charset ヘッダが来たらそちら）
+descript/ghost/descript-txt/shiori.escape_unknown.md	DONE	shiori.escape_unknown,0/1	できない文字を ?escape!unicode[0xABCD] にして渡し、答えで戻す
+descript/ghost/descript-txt/shiori.forceencoding.md	DONE	shiori.forceencoding,文字コード	Charset ヘッダを見ずにこの文字コードに決める
 descript/ghost/descript-txt/shiori.logo.align.md	BUILD	shiori.logo.align,位置情報	AI グラフを絵で描くとき（今はラベルと値を文字で並べる）の背景画像の基準
 descript/ghost/descript-txt/shiori.logo.file.md	BUILD	shiori.logo.file,ファイル名	同上。背景画像（複数・_dark）
 descript/ghost/descript-txt/shiori.logo.x.md	BUILD	shiori.logo.x,X座標	同上。背景画像の X
 descript/ghost/descript-txt/shiori.logo.y.md	BUILD	shiori.logo.y,Y座標	同上。背景画像の Y
 descript/ghost/descript-txt/shiori.md	DONE	shiori,ファイル名	使う SHIORI を選ぶのに読む
 descript/ghost/descript-txt/shiori.version.md	NA	shiori.version,バージョン	pono-droid で動く SHIORI（YAYA・里々・華和梨・かがり）はどれも 3.0。2.x は送らない
-descript/ghost/descript-txt/sstp.allowcommunicate.md	BUILD	sstp.allowcommunicate,数値	0 なら SSTP の COMMUNICATE（と GIVE の Document）を受けない（handleSstp）
-descript/ghost/descript-txt/sstp.allowunspecifiedsend.md	BUILD	sstp.allowunspecifiedsend,数値	0 なら ReceiverGhostName も IfGhost も無い SSTP を受けない（handleSstp / GhostHub）
-descript/ghost/descript-txt/sstp.alwaystranslate.md	BUILD	sstp.alwaystranslate,数値	1 なら notranslate を無視して、SSTP のスクリプトも OnTranslate に通す
+descript/ghost/descript-txt/sstp.allowcommunicate.md	DONE	sstp.allowcommunicate,数値	0 なら COMMUNICATE と GIVE の Document を 420 で断る
+descript/ghost/descript-txt/sstp.allowunspecifiedsend.md	DONE	sstp.allowunspecifiedsend,数値	0 ならゴーストを指名しない SSTP を 420 で断り、ほかのゴーストに回す
+descript/ghost/descript-txt/sstp.alwaystranslate.md	DONE	sstp.alwaystranslate,数値	1 なら notranslate でも OnTranslate に通す
 descript/ghost/descript-txt/title.md	NA	title,表示名	起動ログに出すだけ。pono-droid には起動ログが無い
 descript/ghost/descript-txt/type.md	DONE	type,種別	ghost/master の descript.txt で見分ける
 descript/ghost/index.md	NA	Ghost設定	一覧のページ
 descript/ghost/recommended-balloon/balloon.md	DONE	balloon,バルーン名	選んでいなければ名前でバルーンを探す（Ghost.balloon）
 descript/ghost/recommended-balloon/caption_recommended.md	NA	標準と推奨の使い分け	使い分けの説明。中身は recommended.balloon などの行で扱う
-descript/ghost/recommended-balloon/default.balloon.path.md	BUILD	default.balloon.path,パス	balloon より先に、このパスのバルーンを探す（Ghost.balloon）
+descript/ghost/recommended-balloon/default.balloon.path.md	DONE	default.balloon.path,パス	選んでいなければ、balloon より先にこのパスのバルーン（最後のディレクトリ名で探す）
 descript/ghost/recommended-balloon/index.md	NA	descript.txt - 推奨バルーン	一覧のページ
-descript/ghost/recommended-balloon/recommended.balloon.md	BUILD	recommended.balloon,バルーン名	既定のバルーンにし、ほかに切り替えるときに確かめる
-descript/ghost/recommended-balloon/recommended.balloon.path.md	BUILD	recommended.balloon.path,パス	パスで探す。ほかに切り替えるときに確かめる
+descript/ghost/recommended-balloon/recommended.balloon.md	DONE	recommended.balloon,バルーン名	既定のバルーンにし、ほかに切り替えるときはバルーンで確かめる
+descript/ghost/recommended-balloon/recommended.balloon.path.md	DONE	recommended.balloon.path,パス	パスで探す。ほかに切り替えるときはバルーンで確かめる
 descript/headline/descript-txt/alwaysdisplay.md	IMPOSSIBLE	alwaysdisplay,数値	ヘッドラインは作らない（⛔）
 descript/headline/descript-txt/charset.md	IMPOSSIBLE	charset,文字コード	ヘッドラインは作らない（⛔）
 descript/headline/descript-txt/dllname.md	IMPOSSIBLE	dllname,ファイル名	ヘッドラインは作らない（⛔。Windows の DLL）
@@ -487,10 +487,10 @@ descript/shell-surfacetable/surfacetable-txt/scope.md	BUILD	scope,数値	サー�
 descript/shell-surfacetable/surfacetable-txt/version.md	BUILD	version,数値	読むだけ（いつも 1）。surfacetable.txt を読むときに一緒に
 descript/shell/descript-txt/char-star-.balloon.dontmove.md	DONE	char\*.balloon.dontmove,数値	バルーンは指で動かせないので、いつも禁止と同じ
 descript/shell/descript-txt/char-star-.balloon.syncscale.md	DONE	char\*.balloon.syncscale,true	true ならバルーンの大きさをキャラクターの大きさに合わせる
-descript/shell/descript-txt/char-star-.bindgroup-star-.addid.md	BUILD	char\*.bindgroup\*.addid,ID	着せ替えを付けたら addid のものも付け、元が全部外れたら外す（applyBind）
+descript/shell/descript-txt/char-star-.bindgroup-star-.addid.md	DONE	char\*.bindgroup\*.addid,ID	付けたら addid のものも付け、それを付けるパーツが全部外れたら外す
 descript/shell/descript-txt/char-star-.bindgroup-star-.default.md	DONE	char\*.bindgroup\*.default,数値	bindGroups が scopeName で読む
-descript/shell/descript-txt/char-star-.bindgroup-star-.name.md	PARTIAL	char\*.bindgroup\*.name,カテゴリ名,パーツ名,サムネイル名	カテゴリとパーツは読む。サムネイル名は読まない（メニューは文字だけ、OnNotifyDressupInfo も空）
-descript/shell/descript-txt/char-star-.bindoption-star-.group.md	BUILD	char\*.bindoption\*.group,カテゴリ名,オプション	今は同じカテゴリから 1 つ・外せる、の決め打ち。mustselect と multiple を applyBind に入れる
+descript/shell/descript-txt/char-star-.bindgroup-star-.name.md	DONE	char\*.bindgroup\*.name,カテゴリ名,パーツ名,サムネイル名	カテゴリ・パーツ・サムネイル名を読む（サムネイル名は OnNotifyDressupInfo で渡す。メニューは文字だけ）
+descript/shell/descript-txt/char-star-.bindoption-star-.group.md	DONE	char\*.bindoption\*.group,カテゴリ名,オプション	mustselect（最後の1つは外せず、起動時に1つも無ければ最初のもの）と multiple（同じカテゴリから何個でも）
 descript/shell/descript-txt/char-star-.defaultleft.md	DONE	char\*.defaultleft,X座標	SHIORI リソース＞シェル＞ゴーストの descript.txt の順で最初の位置にする
 descript/shell/descript-txt/char-star-.defaulttop.md	DONE	char\*.defaulttop,Y座標	SHIORI リソース＞シェル＞ゴーストの descript.txt の順で最初の位置にする
 descript/shell/descript-txt/char-star-.defaultx.md	DONE	char\*.defaultx,X座標	SHIORI リソース＞シェル＞ゴーストの descript.txt の順で最初の位置にする
@@ -499,8 +499,8 @@ descript/shell/descript-txt/char-star-.icon.frame.color.b.md	DONE	char\*.icon.fr
 descript/shell/descript-txt/char-star-.icon.frame.color.g.md	DONE	char\*.icon.frame.color.g,数値	同上
 descript/shell/descript-txt/char-star-.icon.frame.color.r.md	DONE	char\*.icon.frame.color.r,数値	同上
 descript/shell/descript-txt/char-star-.menu.md	DONE	char\*.menu,autoまたはhidden	bindMenu が読む（hidden なら出さない）
-descript/shell/descript-txt/char-star-.menuitem-star.md	BUILD	char\*.menuitem\*,ID	着せ替えのメニューを menuitem の順に並べ、- で区切りを入れる（dressupMenu）
-descript/shell/descript-txt/char-star-.menuitemex-star.md	BUILD	char\*.menuitemex\*,メニュー名,ID	着せ替えのメニューにメニュー名の階層を作る（dressupMenu）
+descript/shell/descript-txt/char-star-.menuitem-star.md	DONE	char\*.menuitem\*,ID	着せ替えのメニューをこの順に並べ、- は区切り線。書いていないパーツは後ろに出す
+descript/shell/descript-txt/char-star-.menuitemex-star.md	DONE	char\*.menuitemex\*,メニュー名,ID	メニュー名の階層を作り、その中にこの順に並べる
 descript/shell/descript-txt/char-star-.name.md	DONE	char\*.name,名前	シェルの名前で %selfname・%keroname・scope(n).name・呼びかけを上書きする（name.allowoverride が 0 なら使わない）
 descript/shell/descript-txt/char-star-.seriko.alignmenttodesktop.md	DONE	char\*.seriko.alignmenttodesktop,位置情報	シェルのスコープ＞シェル全体＞ゴーストのスコープ＞ゴースト全体の順で起動時の吸着にする
 descript/shell/descript-txt/charset.md	DONE	charset,文字コード	charset 行を読む（TextCharsets）
@@ -516,10 +516,10 @@ descript/shell/descript-txt/kero.balloon.dontmove_.md	DONE	kero.balloon.dontmove
 descript/shell/descript-txt/kero.balloon.offsetx.md	DONE	kero.balloon.offsetx,座標	バルーンを出す向きごとの既定のずれ（l / r / c / b 付きも。シェル＞ゴースト）。\![set,balloonoffset,@…] はそこからずらす
 descript/shell/descript-txt/kero.balloon.offsety.md	DONE	kero.balloon.offsety,座標	バルーンを出す向きごとの既定のずれ（l / r / c / b 付きも。シェル＞ゴースト）。\![set,balloonoffset,@…] はそこからずらす
 descript/shell/descript-txt/kero.balloon.syncscale_.md	DONE	kero.balloon.syncscale,true	true ならバルーンの大きさをキャラクターの大きさに合わせる
-descript/shell/descript-txt/kero.bindgroup-star-.addid.md	BUILD	kero.bindgroup\*.addid,ID	addid（char*.bindgroup*.addid と同じ）
+descript/shell/descript-txt/kero.bindgroup-star-.addid.md	DONE	kero.bindgroup\*.addid,ID	付けたら addid のものも付け、それを付けるパーツが全部外れたら外す
 descript/shell/descript-txt/kero.bindgroup-star-.default.md	DONE	kero.bindgroup\*.default,数値	bindGroups が読む
-descript/shell/descript-txt/kero.bindgroup-star-.name.md	PARTIAL	kero.bindgroup\*.name,カテゴリ名,パーツ名,サムネイル名	サムネイル名は読まない
-descript/shell/descript-txt/kero.bindoption-star-.group.md	BUILD	kero.bindoption\*.group,カテゴリ名,オプション	mustselect / multiple（char*.bindoption*.group と同じ）
+descript/shell/descript-txt/kero.bindgroup-star-.name.md	DONE	kero.bindgroup\*.name,カテゴリ名,パーツ名,サムネイル名	カテゴリ・パーツ・サムネイル名を読む（サムネイル名は OnNotifyDressupInfo で渡す。メニューは文字だけ）
+descript/shell/descript-txt/kero.bindoption-star-.group.md	DONE	kero.bindoption\*.group,カテゴリ名,オプション	mustselect（最後の1つは外せず、起動時に1つも無ければ最初のもの）と multiple（同じカテゴリから何個でも）
 descript/shell/descript-txt/kero.defaultleft.md	DONE	kero.defaultleft,X座標	SHIORI リソース＞シェル＞ゴーストの descript.txt の順で最初の位置にする
 descript/shell/descript-txt/kero.defaulttop.md	DONE	kero.defaulttop,Y座標	SHIORI リソース＞シェル＞ゴーストの descript.txt の順で最初の位置にする
 descript/shell/descript-txt/kero.defaultx.md	DONE	kero.defaultx,X座標	SHIORI リソース＞シェル＞ゴーストの descript.txt の順で最初の位置にする
@@ -528,25 +528,25 @@ descript/shell/descript-txt/kero.icon.frame.color.b.md	DONE	kero.icon.frame.colo
 descript/shell/descript-txt/kero.icon.frame.color.g.md	DONE	kero.icon.frame.color.g,数値	同上
 descript/shell/descript-txt/kero.icon.frame.color.r.md	DONE	kero.icon.frame.color.r,数値	同上
 descript/shell/descript-txt/kero.menu.md	DONE	kero.menu,autoまたはhidden	bindMenu が scopeName で読む
-descript/shell/descript-txt/kero.menuitem-star.md	BUILD	kero.menuitem\*,ID	menuitem の順と区切り（char*.menuitem* と同じ）
-descript/shell/descript-txt/kero.menuitemex-star.md	BUILD	kero.menuitemex\*,メニュー名,ID	menuitemex の階層（char*.menuitemex* と同じ）
+descript/shell/descript-txt/kero.menuitem-star.md	DONE	kero.menuitem\*,ID	着せ替えのメニューをこの順に並べ、- は区切り線。書いていないパーツは後ろに出す
+descript/shell/descript-txt/kero.menuitemex-star.md	DONE	kero.menuitemex\*,メニュー名,ID	メニュー名の階層を作り、その中にこの順に並べる
 descript/shell/descript-txt/kero.name.md	DONE	kero.name,名前	シェルの名前で %selfname・%keroname・scope(n).name・呼びかけを上書きする（name.allowoverride が 0 なら使わない）
 descript/shell/descript-txt/kero.seriko.alignmenttodesktop.md	DONE	kero.seriko.alignmenttodesktop,位置情報	シェルのスコープ＞シェル全体＞ゴーストのスコープ＞ゴースト全体の順で起動時の吸着にする
 descript/shell/descript-txt/menu.background.alignment.md	IMPOSSIBLE	menu.background.alignment,位置	メニューはバルーンに出すので、メニューの絵が無い（⛔）
 descript/shell/descript-txt/menu.background.bitmap.filename.md	IMPOSSIBLE	menu.background.bitmap.filename,ファイル名	メニューの絵が無い（⛔）
-descript/shell/descript-txt/menu.background.font.color.b.md	BUILD	menu.background.font.color.b,数値	SHIORI リソースのものは使う。シェルの descript.txt のものも読む（menuColors、リソースが先）
-descript/shell/descript-txt/menu.background.font.color.g.md	BUILD	menu.background.font.color.g,数値	同上
-descript/shell/descript-txt/menu.background.font.color.r.md	BUILD	menu.background.font.color.r,数値	同上
+descript/shell/descript-txt/menu.background.font.color.b.md	DONE	menu.background.font.color.b,数値	SHIORI リソース、無ければシェルの descript.txt の色をメニューに使う
+descript/shell/descript-txt/menu.background.font.color.g.md	DONE	menu.background.font.color.g,数値	SHIORI リソース、無ければシェルの descript.txt の色をメニューに使う
+descript/shell/descript-txt/menu.background.font.color.r.md	DONE	menu.background.font.color.r,数値	SHIORI リソース、無ければシェルの descript.txt の色をメニューに使う
 descript/shell/descript-txt/menu.disable.font.color.b.md	IMPOSSIBLE	menu.disable.font.color.b	押せない項目を出さない（⛔）
 descript/shell/descript-txt/menu.disable.font.color.g.md	IMPOSSIBLE	menu.disable.font.color.g	押せない項目を出さない（⛔）
 descript/shell/descript-txt/menu.disable.font.color.r.md	IMPOSSIBLE	menu.disable.font.color.r	押せない項目を出さない（⛔）
-descript/shell/descript-txt/menu.font.height.md	BUILD	menu.font.height,フォントサイズ	\f[height] をメニューの頭に付ける（ゴーストの指定より先）
-descript/shell/descript-txt/menu.font.name.md	BUILD	menu.font.name,フォント名	\f[name] をメニューの頭に付ける
+descript/shell/descript-txt/menu.font.height.md	DONE	menu.font.height,フォントサイズ	メニューの頭に \f[height] を付ける（シェル＞ゴースト）
+descript/shell/descript-txt/menu.font.name.md	DONE	menu.font.name,フォント名	メニューの頭に \f[name] を付ける（シェル＞ゴースト）
 descript/shell/descript-txt/menu.foreground.alignment.md	IMPOSSIBLE	menu.foreground.alignment,位置	メニューの絵が無い（⛔）
 descript/shell/descript-txt/menu.foreground.bitmap.filename.md	IMPOSSIBLE	menu.foreground.bitmap.filename,ファイル名	メニューの絵が無い（⛔）
-descript/shell/descript-txt/menu.foreground.font.color.b.md	BUILD	menu.foreground.font.color.b,数値	SHIORI リソースのものは使う。シェルの descript.txt のものも読む（menuColors）
-descript/shell/descript-txt/menu.foreground.font.color.g.md	BUILD	menu.foreground.font.color.g,数値	同上
-descript/shell/descript-txt/menu.foreground.font.color.r.md	BUILD	menu.foreground.font.color.r,数値	同上
+descript/shell/descript-txt/menu.foreground.font.color.b.md	DONE	menu.foreground.font.color.b,数値	SHIORI リソース、無ければシェルの descript.txt の色をメニューに使う
+descript/shell/descript-txt/menu.foreground.font.color.g.md	DONE	menu.foreground.font.color.g,数値	SHIORI リソース、無ければシェルの descript.txt の色をメニューに使う
+descript/shell/descript-txt/menu.foreground.font.color.r.md	DONE	menu.foreground.font.color.r,数値	SHIORI リソース、無ければシェルの descript.txt の色をメニューに使う
 descript/shell/descript-txt/menu.frame.color.b.md	IMPOSSIBLE	menu.frame.color.b,数値	メニューの枠が無い（⛔）
 descript/shell/descript-txt/menu.frame.color.g.md	IMPOSSIBLE	menu.frame.color.g,数値	メニューの枠が無い（⛔）
 descript/shell/descript-txt/menu.frame.color.r.md	IMPOSSIBLE	menu.frame.color.r,数値	メニューの枠が無い（⛔）
@@ -565,10 +565,10 @@ descript/shell/descript-txt/sakura.balloon.dontmove_.md	DONE	sakura.balloon.dont
 descript/shell/descript-txt/sakura.balloon.offsetx.md	DONE	sakura.balloon.offsetx,座標	バルーンを出す向きごとの既定のずれ（l / r / c / b 付きも。シェル＞ゴースト）。\![set,balloonoffset,@…] はそこからずらす
 descript/shell/descript-txt/sakura.balloon.offsety.md	DONE	sakura.balloon.offsety,座標	バルーンを出す向きごとの既定のずれ（l / r / c / b 付きも。シェル＞ゴースト）。\![set,balloonoffset,@…] はそこからずらす
 descript/shell/descript-txt/sakura.balloon.syncscale_.md	DONE	sakura.balloon.syncscale,true	true ならバルーンの大きさをキャラクターの大きさに合わせる
-descript/shell/descript-txt/sakura.bindgroup-star-.addid.md	BUILD	sakura.bindgroup\*.addid,ID	addid
+descript/shell/descript-txt/sakura.bindgroup-star-.addid.md	DONE	sakura.bindgroup\*.addid,ID	付けたら addid のものも付け、それを付けるパーツが全部外れたら外す
 descript/shell/descript-txt/sakura.bindgroup-star-.default.md	DONE	sakura.bindgroup\*.default,数値	bindGroups が読む
-descript/shell/descript-txt/sakura.bindgroup-star-.name.md	PARTIAL	sakura.bindgroup\*.name,カテゴリ名,パーツ名,サムネイル名	サムネイル名は読まない
-descript/shell/descript-txt/sakura.bindoption-star-.group.md	BUILD	sakura.bindoption\*.group,カテゴリ名,オプション	mustselect / multiple
+descript/shell/descript-txt/sakura.bindgroup-star-.name.md	DONE	sakura.bindgroup\*.name,カテゴリ名,パーツ名,サムネイル名	カテゴリ・パーツ・サムネイル名を読む（サムネイル名は OnNotifyDressupInfo で渡す。メニューは文字だけ）
+descript/shell/descript-txt/sakura.bindoption-star-.group.md	DONE	sakura.bindoption\*.group,カテゴリ名,オプション	mustselect（最後の1つは外せず、起動時に1つも無ければ最初のもの）と multiple（同じカテゴリから何個でも）
 descript/shell/descript-txt/sakura.defaultleft.md	DONE	sakura.defaultleft,X座標	SHIORI リソース＞シェル＞ゴーストの descript.txt の順で最初の位置にする
 descript/shell/descript-txt/sakura.defaulttop.md	DONE	sakura.defaulttop,Y座標	SHIORI リソース＞シェル＞ゴーストの descript.txt の順で最初の位置にする
 descript/shell/descript-txt/sakura.defaultx.md	DONE	sakura.defaultx,X座標	SHIORI リソース＞シェル＞ゴーストの descript.txt の順で最初の位置にする
@@ -577,17 +577,17 @@ descript/shell/descript-txt/sakura.icon.frame.color.b.md	DONE	sakura.icon.frame.
 descript/shell/descript-txt/sakura.icon.frame.color.g.md	DONE	sakura.icon.frame.color.g,数値	同上
 descript/shell/descript-txt/sakura.icon.frame.color.r.md	DONE	sakura.icon.frame.color.r,数値	同上
 descript/shell/descript-txt/sakura.menu.md	DONE	sakura.menu,autoまたはhidden	bindMenu が読む
-descript/shell/descript-txt/sakura.menuitem-star.md	BUILD	sakura.menuitem\*,ID	menuitem の順と区切り
-descript/shell/descript-txt/sakura.menuitemex-star.md	BUILD	sakura.menuitemex\*,メニュー名,ID	menuitemex の階層
+descript/shell/descript-txt/sakura.menuitem-star.md	DONE	sakura.menuitem\*,ID	着せ替えのメニューをこの順に並べ、- は区切り線。書いていないパーツは後ろに出す
+descript/shell/descript-txt/sakura.menuitemex-star.md	DONE	sakura.menuitemex\*,メニュー名,ID	メニュー名の階層を作り、その中にこの順に並べる
 descript/shell/descript-txt/sakura.name.md	DONE	sakura.name,名前	シェルの名前で %selfname・%keroname・scope(n).name・呼びかけを上書きする（name.allowoverride が 0 なら使わない）
 descript/shell/descript-txt/sakura.name2.md	DONE	sakura.name2,名前	シェルの sakura.name2 で %selfname2 を上書きする
 descript/shell/descript-txt/sakura.seriko.alignmenttodesktop.md	DONE	sakura.seriko.alignmenttodesktop,位置情報	シェルのスコープ＞シェル全体＞ゴーストのスコープ＞ゴースト全体の順で起動時の吸着にする
 descript/shell/descript-txt/seriko.alignmenttodesktop.md	DONE	seriko.alignmenttodesktop,位置情報	シェル全体の吸着の既定（シェルのスコープより後、ゴーストより先）
-descript/shell/descript-txt/seriko.dpi.md	BUILD	seriko.dpi,推奨DPI	シェル画像の倍率に 96 / dpi を掛ける（SurfaceRenderer と当たり判定）
+descript/shell/descript-txt/seriko.dpi.md	DONE	seriko.dpi,推奨DPI	シェル画像を 96 / dpi 倍で出す（大きさ・バルーンのずれ・当たり判定の座標）
 descript/shell/descript-txt/seriko.force_disable_crossfade.md	DONE	seriko.force_disable_crossfade,値	サーフェスの切り替えにクロスフェードを使わないので、いつも無効と同じ
-descript/shell/descript-txt/seriko.paint_transparent_region_black.md	BUILD	seriko.paint_transparent_region_black,数値	.pna のとき、左上の色の画素を黒にしてから透明度を掛ける（既定は 1 相当）。今は色のまま
+descript/shell/descript-txt/seriko.paint_transparent_region_black.md	DONE	seriko.paint_transparent_region_black,数値	0 / 1 と、書いていないとき（.pna は 1、アルファの画像は 0）
 descript/shell/descript-txt/seriko.sticky-window.md	DONE	seriko.sticky-window,スコープID,スコープID,...	起動時とシェルを替えたときに、\![set,sticky-window] と同じに効かせる
-descript/shell/descript-txt/seriko.use_self_alpha.md	PARTIAL	seriko.use_self_alpha,値	1 だけ読む。true と full を読まない。1 でもアルファの無い画像を左上の色で抜かない（full の動きになる）
+descript/shell/descript-txt/seriko.use_self_alpha.md	DONE	seriko.use_self_alpha,値	0 / 1・true / full の3通り（full はアルファの無い画像を左上の色で抜かない）
 descript/shell/descript-txt/seriko.zorder.md	DONE	seriko.zorder,スコープID,スコープID,...	起動時とシェルを替えたときに、\![set,zorder] と同じに効かせる
 descript/shell/descript-txt/type.md	DONE	type,種別	シェルの種別。動きには関わらない
 descript/shell/index.md	NA	Shell設定	一覧のページ

@@ -682,7 +682,7 @@ private fun BalloonPicture(path: String, opaque: Boolean, dpPerPx: Float, modifi
     val bitmap by produceState<ImageBitmap?>(null, path, opaque) {
         // 左上の色を透過色にする（opaque なら抜かない）。PNG にアルファがあればそれを使う
         value = withContext(Dispatchers.IO) {
-            ImageTransparency.load(java.io.File(path), null, selfAlpha = if (opaque) true else null)?.asImageBitmap()
+            ImageTransparency.load(java.io.File(path), null, selfAlpha = if (opaque) true else null, colorKey = !opaque)?.asImageBitmap()
         }
     }
     val bmp = bitmap ?: return
@@ -777,18 +777,46 @@ object ImageTransparency {
     const val MAX_SIDE = 4096
     const val MAX_PIXELS = 8_000_000L
 
-    /** @param selfAlpha true / false で決め打ち、null なら画像にアルファがあるかで決める */
-    fun load(file: java.io.File, pna: java.io.File?, selfAlpha: Boolean?): Bitmap? {
+    /**
+     * @param selfAlpha true なら画像のアルファを使う（無ければ .pna か左上の色）、false なら使わない（.pna か左上の色）、
+     * null なら画像にアルファがあればそれを、無ければ .pna か左上の色
+     * @param colorKey false なら、アルファも .pna も無い画像を左上の色で抜かずに不透明のまま（use_self_alpha,full）
+     * @param paintBlack seriko.paint_transparent_region_black。左上の色の画素を黒にしてから透明度を掛けるか
+     * （null なら .pna のときだけ黒にする）
+     */
+    fun load(file: java.io.File, pna: java.io.File?, selfAlpha: Boolean?, colorKey: Boolean = true, paintBlack: Boolean? = null): Bitmap? {
         if (!fits(file)) return null
         val opts = BitmapFactory.Options().apply {
             inMutable = true
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
         val bmp = BitmapFactory.decodeFile(file.path, opts) ?: return null
-        if (selfAlpha ?: bmp.hasAlpha()) return bmp
+        if (selfAlpha != false && bmp.hasAlpha()) {
+            if (paintBlack == true) paintKeyBlack(bmp)
+            return bmp
+        }
+        // selfAlpha が true でもアルファの無い画像は、.pna か左上の色で抜く
+        if (selfAlpha == true && !bmp.hasAlpha() && pna == null && !colorKey) return bmp
         val pnaBmp = pna?.takeIf(::fits)?.let { BitmapFactory.decodeFile(it.path) }
-        if (pnaBmp != null && pnaBmp.width == bmp.width && pnaBmp.height == bmp.height) applyPna(bmp, pnaBmp) else applyColorKey(bmp)
+        when {
+            pnaBmp != null && pnaBmp.width == bmp.width && pnaBmp.height == bmp.height -> {
+                if (paintBlack != false) paintKeyBlack(bmp)
+                applyPna(bmp, pnaBmp)
+            }
+            colorKey -> applyColorKey(bmp)
+        }
         return bmp
+    }
+
+    /** 左上の色と同じ色の画素を黒にする（透明度はそのまま） */
+    private fun paintKeyBlack(bmp: Bitmap) {
+        val px = IntArray(bmp.width * bmp.height)
+        bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
+        val key = px[0] and 0x00FFFFFF
+        for (i in px.indices) {
+            if ((px[i] and 0x00FFFFFF) == key) px[i] = px[i] and 0xFF000000.toInt()
+        }
+        bmp.setPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
     }
 
     /** 画像の寸法（読めないか大きすぎるなら null）。中身は読まない */

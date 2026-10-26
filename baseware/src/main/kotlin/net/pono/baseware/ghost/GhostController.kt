@@ -703,7 +703,13 @@ class GhostController(
             platform.onError("${ghost.name}: ${ghost.shioriName} は未対応です（YAYA・里々・華和梨・Kagari に対応）")
             return false
         }
-        val s = ShioriSession(shiori, ghost.charset)
+        // descript.txt の shiori.forceencoding（Charset ヘッダを見ない）、shiori.encoding（最初の文字コード）、charset の順
+        val forced = ghost.descript["shiori.forceencoding"]?.let(TextCharsets::resolve)
+        val initial = forced ?: ghost.descript["shiori.encoding"]?.let(TextCharsets::resolve) ?: ghost.charset
+        val s = ShioriSession(
+            shiori, initial, forceCharset = forced != null,
+            escapeUnknown = ghost.descript["shiori.escape_unknown"]?.trim()?.lowercase() in setOf("1", "true"),
+        )
         // 読み込みで固まる辞書（load で無限ループ）は時間切れの例外になる
         if (!runCatching { s.load(ghost.masterDir) }.getOrDefault(false)) {
             runCatching { s.unload() }
@@ -827,8 +833,9 @@ class GhostController(
     /** OnNotifyDressupInfo の Reference: [キャラ ID, カテゴリ, パーツ, オプション, 有効 1/0, サムネイル] を 0x01 でつないだもの */
     private fun dressupInfo(): List<String> = characterScopes.flatMap { scope ->
         val binds = _state.value.characters[scope]?.binds.orEmpty()
+        val options = shell.bindOptions(scope)
         shell.bindGroups(scope).map { g ->
-            listOf(scope.toString(), g.category, g.part, "", if (g.id in binds) "1" else "0", "").joinToString("\u0001")
+            listOf(scope.toString(), g.category, g.part, options[g.category]?.text.orEmpty(), if (g.id in binds) "1" else "0", g.thumbnail.orEmpty()).joinToString("\u0001")
         }
     }
 
@@ -1276,6 +1283,12 @@ class GhostController(
         if (target != null && target != ghost.sakuraName && target != ghost.name) return SstpResponse(404)
         if (closing) return SstpResponse(503)
         if (req.method == "EXECUTE") return sstpExecute(req, sender, owned)
+        // descript.txt の sstp.allowunspecifiedsend が 0 なら、ゴーストを指名しない SSTP は受けない
+        if (!owned && !acceptsUnspecified && target == null && req.headers.none { it.first.equals("IfGhost", ignoreCase = true) }) return SstpResponse(420)
+        // sstp.allowcommunicate が 0 なら COMMUNICATE（と GIVE の Document）は受けない
+        if (!owned && ghost.descript.int("sstp.allowcommunicate") == 0 && (req.method == "COMMUNICATE" || (req.method == "GIVE" && req["Document"] != null))) {
+            return SstpResponse(420)
+        }
         val s = _state.value
         if (s.window.minimized) return SstpResponse(512)
         if (!owned && (s.timeCritical || s.passive)) return SstpResponse(409)
@@ -1299,7 +1312,8 @@ class GhostController(
                         notify(event, refs, origin())
                         null
                     }
-                    else -> request(event, refs, translate = "notranslate" !in req.options, origin = origin(), onResponse = keep)
+                    // sstp.alwaystranslate が 1 なら notranslate でも OnTranslate に通す
+                    else -> request(event, refs, translate = "notranslate" !in req.options || alwaysTranslate, origin = origin(), onResponse = keep)
                 }
                 answered ?: sstpScript(req)
             }
@@ -1322,6 +1336,12 @@ class GhostController(
         if (!owned) lastSstpSender = sender
         return SstpResponse(200, listOf("Script" to script) + replyHeaders)
     }
+
+    /** descript.txt の sstp.allowunspecifiedsend が 0 でない（ゴーストを指名しない SSTP も受ける） */
+    val acceptsUnspecified: Boolean get() = ghost.descript.int("sstp.allowunspecifiedsend") != 0
+
+    /** descript.txt の sstp.alwaystranslate が 1 */
+    private val alwaysTranslate: Boolean get() = ghost.descript.int("sstp.alwaystranslate") == 1
 
     /** FMO の1ゴースト分（識別ID.キー[1]値 の行） */
     private fun fmoEntry(): String {
@@ -2746,20 +2766,57 @@ class GhostController(
         raise("OnBalloonChange", listOf(next?.name.orEmpty(), path))
     }
 
-    /** 着せ替えを付け外しする。[on] が null なら切り替え。[byUser] はメニューから */
-    private fun applyBind(scopeId: Int, group: net.pono.baseware.shell.BindGroup, on: Boolean?, byUser: Boolean, events: Boolean = true) {
-        var enabled = false
-        _state.update {
-            it.update(scopeId) { c ->
-                enabled = on ?: (group.id !in c.binds)
-                // 同じカテゴリのパーツは1つだけ（服を着替えるように差し替える）
-                val others = shell.bindGroups(scopeId).filter { g -> g.category == group.category }.map { g -> g.id }.toSet()
-                c.copy(binds = if (enabled) c.binds - others + group.id else c.binds - group.id)
-            }
+    /** 自分で付けた着せ替え（addid で一緒に付いたものは入れない）。キャラクターごと */
+    private val wornBinds = HashMap<Int, Set<Int>>()
+
+    /** [worn] に、addid で一緒に付くものを足したもの（実際に重ねる着せ替え） */
+    private fun withAddIds(scopeId: Int, worn: Set<Int>): Set<Int> {
+        val groups = shell.bindGroups(scopeId).associateBy { it.id }
+        return worn + worn.flatMap { groups[it]?.addIds.orEmpty() }
+    }
+
+    /** 起動時とシェルを替えたときの着せ替え。default のもの。mustselect のカテゴリで1つも無ければ最初のもの */
+    private fun defaultBinds(scopeId: Int): Set<Int> {
+        if (bindDisabled) return emptySet()
+        val groups = shell.bindGroups(scopeId)
+        val worn = groups.filter { it.default }.map { it.id }.toMutableSet()
+        for ((category, option) in shell.bindOptions(scopeId)) {
+            if (!option.mustSelect) continue
+            val inCategory = groups.filter { it.category == category }
+            if (inCategory.none { it.id in worn }) inCategory.firstOrNull()?.let { worn += it.id }
         }
+        return worn
+    }
+
+    /**
+     * 着せ替えを付け外しする。[on] が null なら切り替え。[byUser] はメニューから。
+     * 同じカテゴリのパーツはふつう1つだけ（服を着替えるように差し替える）。bindoption の multiple なら何個でも、
+     * mustselect なら最後の1つは外せない。addid のものは、それを一緒に付けるパーツが全部外れたら外れる
+     */
+    private fun applyBind(scopeId: Int, group: net.pono.baseware.shell.BindGroup, on: Boolean?, byUser: Boolean, events: Boolean = true) {
+        val before = _state.value.characters[scopeId]?.binds.orEmpty()
+        val worn = wornBinds[scopeId] ?: before
+        val enabled = on ?: (group.id !in before)
+        val option = shell.bindOptions(scopeId)[group.category] ?: net.pono.baseware.shell.BindOption()
+        val sameCategory = shell.bindGroups(scopeId).filter { it.category == group.category }.map { it.id }.toSet()
+        val next = if (enabled) {
+            if (option.multiple) worn + group.id else worn - sameCategory + group.id
+        } else {
+            if (option.mustSelect && (worn intersect sameCategory) == setOf(group.id)) return
+            worn - group.id
+        }
+        wornBinds[scopeId] = next
+        val after = withAddIds(scopeId, next)
+        _state.update { it.update(scopeId) { c -> c.copy(binds = after) } }
         // \![bind-noevent] は知らせない
         if (!events) return
-        raise("OnDressupChanged", listOf(scopeId.toString(), group.part, if (enabled) "1" else "0", group.category, if (byUser) "user" else "script"), userInitiated = false)
+        // 付け外しが変わったパーツを、それぞれ知らせる（差し替えで外れたものと、addid で一緒に変わったものも）。
+        // 変わらなくても（付いているものをまた付けた）、頼まれたパーツのことは知らせる
+        val groups = shell.bindGroups(scopeId)
+        val changed = groups.filter { (it.id in after) != (it.id in before) }.ifEmpty { listOf(group) }
+        for (g in changed.sortedBy { if (it.id == group.id) 1 else 0 }) {
+            raise("OnDressupChanged", listOf(scopeId.toString(), g.part, if (g.id in after) "1" else "0", g.category, if (byUser) "user" else "script"), userInitiated = false)
+        }
         dressupInfo().takeIf { it.isNotEmpty() }?.let { notify("OnNotifyDressupInfo", it) }
     }
 
@@ -3228,13 +3285,24 @@ class GhostController(
         return quote(default)
     }
 
-    /** menu.background.font.color.* を項目の文字の色に、menu.foreground.font.color.* を選んでいる項目の文字の色にする */
+    /**
+     * menu.background.font.color.* を項目の文字の色に、menu.foreground.font.color.* を選んでいる項目の文字の色にする
+     * （SHIORI リソース、無ければシェルの descript.txt）。menu.font.name / height はシェルの、次にゴーストの descript.txt
+     */
     private suspend fun menuColors(): String {
         suspend fun rgb(prefix: String): String? {
-            val parts = listOf("r", "g", "b").map { c -> resource("$prefix.$c")?.trim()?.toIntOrNull()?.coerceIn(0, 255) ?: return null }
+            val parts = listOf("r", "g", "b").map { c ->
+                (resource("$prefix.$c") ?: shell.descript["$prefix.$c"])?.trim()?.toIntOrNull()?.coerceIn(0, 255) ?: return null
+            }
             return parts.joinToString(",")
         }
         val sb = StringBuilder()
+        (shell.descript["menu.font.name"] ?: ghost.descript["menu.font.name"])?.trim()?.takeIf { it.isNotEmpty() }?.let { name ->
+            fontCandidate(name).takeIf { it.isNotEmpty() }?.let { sb.append("\\f[name,${quote(it)}]") }
+        }
+        (shell.descript.int("menu.font.height") ?: ghost.descript.int("menu.font.height"))?.takeIf { it in 1..MAX_MENU_FONT }?.let {
+            sb.append("\\f[height,$it]")
+        }
         rgb("menu.background.font.color")?.let { sb.append("\\f[color,$it]\\f[cursornotselectfontcolor,$it]") }
         rgb("menu.foreground.font.color")?.let { sb.append("\\f[cursorfontcolor,$it]") }
         return sb.toString()
@@ -3340,12 +3408,41 @@ class GhostController(
         return sb.toString()
     }
 
-    private fun dressupMenu(scopeId: Int): String {
+    /**
+     * 着せ替えのメニュー。menuitem* / menuitemex* があればその順に並べ（- は区切り線、menuitemex はその名前の階層の中）、
+     * 書いていないパーツは後ろに出す。[submenu] は menuitemex の階層の番号（その中だけ出す）
+     */
+    private fun dressupMenu(scopeId: Int, submenu: Int? = null): String {
         val binds = _state.value.characters[scopeId]?.binds.orEmpty()
+        val groups = shell.bindGroups(scopeId)
+        val items = shell.dressupMenuItems(scopeId)
+        val submenus = items.mapNotNull { it.submenu }.distinct()
         val sb = StringBuilder("\\p[$scopeId]\\_q")
-        for (g in shell.bindGroups(scopeId)) {
-            sb.append("\\q[${quote((if (g.id in binds) "● " else "○ ") + g.category + ": " + g.part)},pono:bind,$scopeId,${g.id}]\\n")
+        fun part(g: net.pono.baseware.shell.BindGroup) {
+            val back = submenu?.let { ",$it" }.orEmpty()
+            sb.append("\\q[${quote((if (g.id in binds) "● " else "○ ") + g.category + ": " + g.part)},pono:bind,$scopeId,${g.id}$back]\\n")
         }
+        fun separator() = sb.append("\\f[color,128,128,128]――――――\\f[color,default]\\n")
+        if (submenu != null) {
+            val name = submenus.getOrNull(submenu)
+            for (item in items.filter { it.submenu == name && name != null }) {
+                if (item.id == null) separator() else groups.firstOrNull { it.id == item.id }?.let(::part)
+            }
+            sb.append("\\q[戻る,pono:dressup,$scopeId]\\e")
+            return sb.toString()
+        }
+        val shownSubmenus = HashSet<String>()
+        for (item in items) {
+            when {
+                item.submenu != null -> if (shownSubmenus.add(item.submenu)) {
+                    sb.append("\\q[${quote(item.submenu + " ▸")},pono:dressupsub,$scopeId,${submenus.indexOf(item.submenu)}]\\n")
+                }
+                item.id == null -> separator()
+                else -> groups.firstOrNull { it.id == item.id }?.let(::part)
+            }
+        }
+        val listed = items.mapNotNull { it.id }.toSet()
+        groups.filter { it.id !in listed }.forEach(::part)
         sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
         return sb.toString()
     }
@@ -4179,10 +4276,11 @@ class GhostController(
                     "pono:sites" -> scope.launch { runScript(sitesMenu(refs.getOrNull(0) ?: "recommend", refs.getOrNull(1)?.toIntOrNull() ?: 0)) }
                     "pono:site" -> scope.launch { openSite(refs.getOrNull(0) ?: "recommend", refs.getOrNull(1)?.toIntOrNull() ?: 0, refs.getOrNull(2)?.toIntOrNull() ?: 0) }
                     "pono:dressup" -> runScript(dressupMenu(scopeId))
+                    "pono:dressupsub" -> runScript(dressupMenu(scopeId, refs.getOrNull(1)?.toIntOrNull()))
                     "pono:bind" -> {
                         val group = shell.bindGroups(scopeId).firstOrNull { it.id == refs.getOrNull(1)?.toIntOrNull() }
                         if (group != null) applyBind(scopeId, group, null, byUser = true)
-                        runScript(dressupMenu(scopeId))
+                        runScript(dressupMenu(scopeId, refs.getOrNull(2)?.toIntOrNull()))
                     }
                     "pono:shells" -> runScript(shellsMenu(scopeId))
                     "pono:shell" -> refs.firstOrNull()?.let { changeShell(it, byUser = true) }
@@ -4191,7 +4289,21 @@ class GhostController(
                     "pono:ghost" -> refs.firstOrNull()?.let { changeGhost(it, byUser = true) }
                     "pono:callghosts" -> runScript(callGhostsMenu(scopeId))
                     "pono:callghost" -> refs.firstOrNull()?.let { callGhost(it, raiseEvent = true, byUser = true) }
-                    "pono:balloon" -> refs.firstOrNull()?.let { changeBalloon(it) }
+                    // descript.txt の recommended.balloon と違うものに替えるときは、先に確かめる（SSP の警告と同じ）
+                    "pono:balloon" -> refs.firstOrNull()?.let { dir ->
+                        val balloons = repository?.balloons
+                        val recommended = balloons?.let(ghost::recommendedBalloon)
+                        if (ghost.hasRecommendedBalloon && recommended?.dir?.name != dir) {
+                            runScript(
+                                "\\p[$scopeId]\\_qこのゴーストは「${recommended?.name ?: ghost.descript["recommended.balloon"].orEmpty()}」のバルーンで使うよう作られています。" +
+                                    "ほかのバルーンでは正しく表示されないことがあります。\\n\\n" +
+                                    "\\q[それでも切り替える,pono:balloonforce,${quote(dir)}]\\n\\q[やめる,pono:balloons,$scopeId]\\e",
+                            )
+                        } else {
+                            changeBalloon(dir)
+                        }
+                    }
+                    "pono:balloonforce" -> refs.firstOrNull()?.let { changeBalloon(it) }
                     "pono:readme" -> readmeFile()?.let { platform.showText(ghost.name, readmeText()) }
                 }
             }
@@ -4324,12 +4436,14 @@ class GhostController(
     }
 
     private fun resetSurfaces() {
+        wornBinds.clear()
+        for (s in characterScopes) wornBinds[s] = defaultBinds(s)
         _state.update {
             GhostState(
                 characters = characterScopes.associateWith { scope ->
                     CharacterState(
                         scope, defaultSurface(scope),
-                        binds = if (bindDisabled) emptySet() else shell.bindGroups(scope).filter { g -> g.default }.map { g -> g.id }.toSet(),
+                        binds = withAddIds(scope, wornBinds.getValue(scope)),
                         defaultBalloonId = defaultBalloonId(scope),
                         // スクリプトで決めた画面の端への吸着やバルーンの置き方・印はゴーストが終わるまで続く。決めていなければ
                         // （シェルが替わったら新しいシェルの）descript.txt の既定
@@ -5762,6 +5876,9 @@ class GhostController(
 
         /** \![set,balloonoffset] でずらせる量の上限（シェル画像のピクセル） */
         const val MAX_BALLOON_OFFSET = 2000
+
+        /** descript.txt の menu.font.height の上限 */
+        private const val MAX_MENU_FONT = 72
 
         /** descript.txt の seriko.alignmenttodesktop に書ける値 */
         private val ALIGNMENTS = setOf("top", "bottom", "left", "right", "free")

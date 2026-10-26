@@ -4,7 +4,30 @@ import net.pono.baseware.text.Descript
 import net.pono.baseware.text.TextCharsets
 import java.io.File
 
-data class BindGroup(val id: Int, val category: String, val part: String, val default: Boolean)
+/**
+ * 着せ替えのパーツ。[thumbnail] は bindgroup*.name の3つ目（サムネイル名）、[addIds] は bindgroup*.addid
+ * （このパーツを付けたら一緒に付くもの）
+ */
+/** seriko.use_self_alpha の3通り */
+enum class SelfAlpha { OFF, ON, FULL }
+
+data class BindGroup(
+    val id: Int,
+    val category: String,
+    val part: String,
+    val default: Boolean,
+    val thumbnail: String? = null,
+    val addIds: Set<Int> = emptySet(),
+)
+
+/** bindoption*.group,カテゴリ,オプション。[mustSelect] なら必ず1つ付け、[multiple] なら同じカテゴリから何個でも付けられる */
+data class BindOption(val mustSelect: Boolean = false, val multiple: Boolean = false) {
+    /** OnNotifyDressupInfo のオプション（mustselect+multiple のように + でつなぐ） */
+    val text: String get() = listOfNotNull("mustselect".takeIf { mustSelect }, "multiple".takeIf { multiple }).joinToString("+")
+}
+
+/** 着せ替えメニューの1行（menuitem* / menuitemex*）。[id] が null なら区切り線、[submenu] があればその名前の階層の中 */
+data class DressupMenuItem(val id: Int?, val submenu: String? = null)
 
 /** シェル（見た目）のディレクトリ。画像の読み込みはプラットフォーム側で行う。 */
 class Shell(val dir: File) {
@@ -61,8 +84,24 @@ class Shell(val dir: File) {
         return (r shl 16) or (g shl 8) or b
     }
 
-    /** 1 なら PNG のアルファをそのまま使う。0 なら .pna か左上の色で透過する。 */
-    val useSelfAlpha: Boolean get() = descript.int("seriko.use_self_alpha") == 1
+    /**
+     * seriko.use_self_alpha。1 / true なら PNG のアルファを使い（無ければ .pna、それも無ければ左上の色で抜く）、
+     * full ならアルファの無い画像は左上の色で抜かずに不透明のまま。0 なら PNG のアルファは使わず、.pna か左上の色
+     */
+    val selfAlpha: SelfAlpha get() = when (descript["seriko.use_self_alpha"]?.trim()?.lowercase()) {
+        "1", "true" -> SelfAlpha.ON
+        "full" -> SelfAlpha.FULL
+        else -> SelfAlpha.OFF
+    }
+
+    /**
+     * seriko.paint_transparent_region_black。1 なら左上の色の画素を黒にしてから透明度を掛け、0 なら色のまま。
+     * 書いていなければ null（.pna の画像は 1、アルファのある画像は 0 のように扱う）
+     */
+    val paintTransparentBlack: Boolean? get() = descript.int("seriko.paint_transparent_region_black")?.let { it != 0 }
+
+    /** seriko.dpi（シェルを作った画面の DPI。既定は 96）に合わせて、絵を 96 / dpi 倍で出す */
+    val dpiFactor: Float get() = descript.int("seriko.dpi")?.takeIf { it in 24..960 }?.let { 96f / it } ?: 1f
 
     /**
      * 着せ替えのパーツ。descript.txt の `sakura.bindgroupN.name,カテゴリ,パーツ` と `sakura.bindgroupN.default,1`。
@@ -75,8 +114,40 @@ class Shell(val dir: File) {
             val id = pattern.matchEntire(key)?.groupValues?.get(1)?.toIntOrNull() ?: return@mapNotNull null
             val parts = value.split(',').map { it.trim() }
             if (parts.size < 2) return@mapNotNull null
-            BindGroup(id, parts[0], parts[1], descript.int("$prefix$id.default") == 1)
+            val addIds = descript["$prefix$id.addid"].orEmpty().split(',').mapNotNull { it.trim().toIntOrNull() }.filter { it != id }.toSet()
+            BindGroup(id, parts[0], parts[1], descript.int("$prefix$id.default") == 1, parts.getOrNull(2)?.takeIf { it.isNotEmpty() }, addIds)
         }.sortedBy { it.id }
+    }
+
+    /** カテゴリごとの着せ替えのオプション（`sakura.bindoption0.group,カテゴリ,mustselect+multiple`） */
+    fun bindOptions(scope: Int): Map<String, BindOption> {
+        val pattern = Regex("""^${Regex.escape(scopeName(scope))}\.bindoption\d+\.group$""")
+        val out = HashMap<String, BindOption>()
+        for ((key, value) in descript.entries) {
+            if (!pattern.matches(key)) continue
+            val category = value.substringBefore(',').trim()
+            val options = value.substringAfter(',', "").split('+').map { it.trim().lowercase() }
+            if (category.isNotEmpty()) out[category] = BindOption("mustselect" in options, "multiple" in options)
+        }
+        return out
+    }
+
+    /** 着せ替えメニューの並び（menuitem* と menuitemex* を番号の順に）。どちらも書いていなければ空 */
+    fun dressupMenuItems(scope: Int): List<DressupMenuItem> {
+        val pattern = Regex("""^${Regex.escape(scopeName(scope))}\.menuitem(ex)?(\d+)$""")
+        return descript.entries.mapNotNull { (key, value) ->
+            val m = pattern.matchEntire(key) ?: return@mapNotNull null
+            val index = m.groupValues[2].toIntOrNull() ?: return@mapNotNull null
+            val item = if (m.groupValues[1].isEmpty()) {
+                DressupMenuItem(value.trim().takeIf { it != "-" }?.toIntOrNull() ?: if (value.trim() == "-") null else return@mapNotNull null)
+            } else {
+                val name = value.substringBefore(',').trim()
+                val id = value.substringAfter(',', "").trim()
+                if (name.isEmpty()) return@mapNotNull null
+                DressupMenuItem(id.takeIf { it != "-" }?.toIntOrNull() ?: if (id == "-") null else return@mapNotNull null, name)
+            }
+            index to item
+        }.sortedBy { it.first }.map { it.second }
     }
 
     /** シェルの descript.txt で決めてある最初のサーフェス。無ければ null（ゴーストの descript.txt か既定の値を使う） */
