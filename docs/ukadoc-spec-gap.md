@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1180・一部だけ 62・作る 189・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1198・一部だけ 62・作る 171・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -521,27 +521,7 @@
 
 ## SHIORI リソース
 
-済み 70 項目。
-
-### 🔨 作る（18）
-- オーナードローメニュー項目表示 — *button.visible（0 なら出さない）を聞いていない。メニューに出す項目ごとに caption と一緒に聞く
-- ショートカットキー — 「(&P)」などがそのまま出てしまう。キーは無いので & の印を表示から消す
-- char\*.recommendsites.caption — \p[2] 以降のおすすめの名前として、char*.recommendbuttoncaption の次に聞く
-- configurationbutton.caption — メニューに「設定」を足す（\![open,configurationdialog] と同じくアプリの設定を開く）
-- configurationrootbutton.caption — configurationbutton と同じ項目の名前として聞く
-- dictationbutton.caption — メニューに音声認識の入り切りを足す（マイクの許可が無ければ設定を開く）
-- ghostexplorerbutton.caption — メニューにアプリのゴースト一覧を開く項目を足す（\![open,ghostexplorer] と同じ）
-- ghostinstallbutton.caption — メニューに .nar を選んで入れる項目を足す（アプリの画面にある機能）
-- helpbutton.caption — メニューに「説明書」を足す（\![open,help] と同じ pono-droid の説明）
-- leavepassivebutton.caption — パッシブモードの間、メニューに強制解除を出してこの名前を使う
-- shellscaleotherbutton.caption — 大きさの下位メニューの「その他」。入力の箱で倍率を聞く
-- shellscalerootbutton.caption — メニューにキャラクターの大きさを足す（アプリの画面にあり、OnShellScaling も送れる）
-- sntpbutton.caption — メニューに時計合わせ（\7 と同じ、ずれを測るだけ）を足す
-- switchblacklistingbutton.caption — メニューの「SSTP を受けない」の名前に使う（いまは決まった文）
-- switchmovetodefaultpositionbutton.caption — メニューの「位置を戻す」の名前に使う（いまは決まった文）
-- switchquietbutton.caption — メニューに「サウンドを鳴らさない」の入り切りを足す（いまは無い）
-- switchreloadbutton.caption — メニューに SHIORI の読み込み直し（reloadShiori）を足す
-- texttospeechbutton.caption — メニューに読み上げの入り切りを足す（アプリの設定にある）
+済み 88 項目。
 
 ### ⛔ 作れない（71）
 - (入力ボックス種類).defaultleft　(入力ボックス種類).defaulttop — 入力の箱は \0 のバルーンの位置に出す（決めたこと）

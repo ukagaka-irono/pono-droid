@@ -109,6 +109,40 @@ class MenuResourcesTest {
     }
 
     @Test
+    fun shortcutsVisibilityAndNewItems() = run(
+        mapOf("updatebutton.caption" to "こうしん(&U)", "helpbutton.caption" to "A&&B", "sntpbutton.visible" to "0"),
+    ) { c, _ ->
+        c.onMouseLongPress(0, 0, 0, null)
+        c.awaitChoice("pono:close")
+        val titles = c.choices().associate { it.choice.id to it.choice.title }
+        // & はショートカットキーの印なので消す（&& は & のまま）
+        assertEquals("こうしん(U)", titles["pono:update"])
+        assertEquals("A&B", titles["pono:help"])
+        // *.visible が 0 なら出さない
+        assertFalse("pono:sntp" in titles)
+        assertEquals("○ サウンドを鳴らさない", titles["pono:quiet"])
+        assertTrue(listOf("pono:scale", "pono:reloadshiori", "pono:settings", "pono:speech", "pono:dictation").all { it in titles })
+        // 入り切りすると、印が替わったメニューを出し直す
+        c.onChoice(Choice("サウンドを鳴らさない", "pono:quiet", listOf("0")))
+        withTimeout(5000) { c.state.first { _ -> c.choices().any { it.choice.title == "● サウンドを鳴らさない" } } }
+        // 大きさの下位メニュー（今の大きさに印）
+        c.onChoice(Choice("キャラクターの大きさ", "pono:scale", listOf("0")))
+        withTimeout(5000) { c.state.first { _ -> c.choices().any { it.choice.title == "● 100%" } } }
+        assertTrue(c.choices().any { it.choice.id == "pono:scaleother" })
+    }
+
+    @Test
+    fun leavePassiveModeFromTheMenu() = run(mapOf("OnPassive" to """\0\![enter,passivemode]\e""")) { c, _ ->
+        withTimeout(5000) { c.state.first { it.booted } }
+        c.raise("OnPassive", emptyList())
+        withTimeout(5000) { c.state.first { it.passive } }
+        c.onMouseLongPress(0, 0, 0, null)
+        c.awaitChoice("pono:leavepassive")
+        c.onChoice(Choice("制限モードを解除", "pono:leavepassive", emptyList()))
+        withTimeout(5000) { c.state.first { !it.passive } }
+    }
+
+    @Test
     fun shortMenuAndHiddenMenu() = run(mapOf("kero.popupmenu.type" to "1", "sakura.popupmenu.visible" to "0")) { c, _ ->
         c.onMouseLongPress(1, 0, 0, null)
         c.awaitChoice("pono:close")

@@ -1842,7 +1842,7 @@ list/shiori-resource/ownerdraw-image/index.md	NA	オーナードローメニュ�
 list/shiori-resource/ownerdraw-image/menu.background.bitmap.filename.md	IMPOSSIBLE	menu.background.bitmap.filename	メニューはバルーンに出すので絵を敷かない（決めたこと）
 list/shiori-resource/ownerdraw-image/menu.foreground.bitmap.filename.md	IMPOSSIBLE	menu.foreground.bitmap.filename	メニューはバルーンに出すので絵を敷かない（決めたこと）
 list/shiori-resource/ownerdraw-image/menu.sidebar.bitmap.filename.md	IMPOSSIBLE	menu.sidebar.bitmap.filename	メニューはバルーンに出すので絵を敷かない（決めたこと）
-list/shiori-resource/ownerdraw-item-display.md	BUILD	オーナードローメニュー項目表示	*button.visible（0 なら出さない）を聞いていない。メニューに出す項目ごとに caption と一緒に聞く
+list/shiori-resource/ownerdraw-item-display.md	DONE	オーナードローメニュー項目表示	メニューの項目ごとに *.caption を *.visible にしたものを聞き、0 なら出さない
 list/shiori-resource/ownerdraw-item-name/activaterootbutton.caption.md	IMPOSSIBLE	activaterootbutton.caption	Windows の手前に出す設定。オーバーレイはいつも手前（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/addressbarbutton.caption.md	IMPOSSIBLE	addressbarbutton.caption	SSP のアドレスバー。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/aistatebutton.caption.md	DONE	aistatebutton.caption	実装済み
@@ -1857,34 +1857,34 @@ list/shiori-resource/ownerdraw-item-name/calendarbutton.caption.md	IMPOSSIBLE	ca
 list/shiori-resource/ownerdraw-item-name/callghosthistorybutton.caption.md	IMPOSSIBLE	callghosthistorybutton.caption	最近使ったものの一覧が無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/callghostrootbutton.caption.md	DONE	callghostrootbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/callsstpsendboxbutton.caption.md	IMPOSSIBLE	callsstpsendboxbutton.caption	SSTP 送信ボックスが無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/caption_menushortcut.md	BUILD	ショートカットキー	「(&P)」などがそのまま出てしまう。キーは無いので & の印を表示から消す
-list/shiori-resource/ownerdraw-item-name/char-star-.recommendsites.caption.md	BUILD	char\*.recommendsites.caption	\p[2] 以降のおすすめの名前として、char*.recommendbuttoncaption の次に聞く
+list/shiori-resource/ownerdraw-item-name/caption_menushortcut.md	DONE	ショートカットキー	キーボードは無いので、& の印を表示から消す（&& は &）
+list/shiori-resource/ownerdraw-item-name/char-star-.recommendsites.caption.md	DONE	char\*.recommendsites.caption	\p[2] 以降のおすすめの名前として、charN.recommendbuttoncaption の次に聞く
 list/shiori-resource/ownerdraw-item-name/charsetbutton.caption.md	IMPOSSIBLE	charsetbutton.caption	文字コードの選択が無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/closeballoonbutton.caption.md	DONE	closeballoonbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/closebutton.caption.md	DONE	closebutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/collisionvisiblebutton.caption.md	IMPOSSIBLE	collisionvisiblebutton.caption	Materia の当たり判定表示。メニューに無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/configurationbutton.caption.md	BUILD	configurationbutton.caption	メニューに「設定」を足す（\![open,configurationdialog] と同じくアプリの設定を開く）
-list/shiori-resource/ownerdraw-item-name/configurationrootbutton.caption.md	BUILD	configurationrootbutton.caption	configurationbutton と同じ項目の名前として聞く
+list/shiori-resource/ownerdraw-item-name/configurationbutton.caption.md	DONE	configurationbutton.caption	メニューの「設定」（pono-droid の画面を開く）の名前
+list/shiori-resource/ownerdraw-item-name/configurationrootbutton.caption.md	DONE	configurationrootbutton.caption	メニューの「設定」の名前（configurationbutton.caption の次に聞く）
 list/shiori-resource/ownerdraw-item-name/debugballoonbutton.caption.md	IMPOSSIBLE	debugballoonbutton.caption	Materia のバルーンマーカー表示。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/definedsurfaceonlybutton.caption.md	IMPOSSIBLE	definedsurfaceonlybutton.caption	SSP の互換の切り替え。メニューに無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/dictationbutton.caption.md	BUILD	dictationbutton.caption	メニューに音声認識の入り切りを足す（マイクの許可が無ければ設定を開く）
+list/shiori-resource/ownerdraw-item-name/dictationbutton.caption.md	DONE	dictationbutton.caption	メニューの音声認識の入り切りの名前（マイクの許可が無ければ設定の画面を開く）
 list/shiori-resource/ownerdraw-item-name/dressuprootbutton.caption.md	DONE	dressuprootbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/duibutton.caption.md	IMPOSSIBLE	duibutton.caption	DUI が無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/enableballoonmovebutton.caption.md	IMPOSSIBLE	enableballoonmovebutton.caption	バルーンはいつもキャラクターの上で動かせない（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/entry.md	NA	-	変更できない項目（言語）。pono-droid のメニューに言語は無い
 list/shiori-resource/ownerdraw-item-name/firststaffbutton.caption.md	IMPOSSIBLE	firststaffbutton.caption	バージョン情報の画面が無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/ghostexplorerbutton.caption.md	BUILD	ghostexplorerbutton.caption	メニューにアプリのゴースト一覧を開く項目を足す（\![open,ghostexplorer] と同じ）
+list/shiori-resource/ownerdraw-item-name/ghostexplorerbutton.caption.md	DONE	ghostexplorerbutton.caption	メニューの「ゴーストの一覧」（pono-droid の画面を開く）の名前
 list/shiori-resource/ownerdraw-item-name/ghosthistorybutton.caption.md	IMPOSSIBLE	ghosthistorybutton.caption	最近使ったものの一覧が無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/ghostinstallbutton.caption.md	BUILD	ghostinstallbutton.caption	メニューに .nar を選んで入れる項目を足す（アプリの画面にある機能）
+list/shiori-resource/ownerdraw-item-name/ghostinstallbutton.caption.md	DONE	ghostinstallbutton.caption	メニューの「ゴーストを入れる」（.nar を選べる pono-droid の画面を開く）の名前
 list/shiori-resource/ownerdraw-item-name/ghostrootbutton.caption.md	DONE	ghostrootbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/headlinesensehistorybutton.caption.md	IMPOSSIBLE	headlinesensehistorybutton.caption	ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/headlinesenserootbutton.caption.md	IMPOSSIBLE	headlinesenserootbutton.caption	ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/helpbutton.caption.md	BUILD	helpbutton.caption	メニューに「説明書」を足す（\![open,help] と同じ pono-droid の説明）
+list/shiori-resource/ownerdraw-item-name/helpbutton.caption.md	DONE	helpbutton.caption	メニューの「説明書」（pono-droid の説明を開く）の名前
 list/shiori-resource/ownerdraw-item-name/hidebutton.caption.md	DONE	hidebutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/historyrootbutton.caption.md	IMPOSSIBLE	historyrootbutton.caption	最近使ったものの一覧が無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/index.md	NA	オーナードローメニュー項目名	目次のページ
 list/shiori-resource/ownerdraw-item-name/inforootbutton.caption.md	IMPOSSIBLE	inforootbutton.caption	SSP の情報の下位メニュー。メニューに無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/leavepassivebutton.caption.md	BUILD	leavepassivebutton.caption	パッシブモードの間、メニューに強制解除を出してこの名前を使う
+list/shiori-resource/ownerdraw-item-name/leavepassivebutton.caption.md	DONE	leavepassivebutton.caption	パッシブモードの間、メニューのいちばん上に出す強制解除の名前
 list/shiori-resource/ownerdraw-item-name/messengerbutton.caption.md	IMPOSSIBLE	messengerbutton.caption	SSP メッセンジャが無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/pluginhistorybutton.caption.md	IMPOSSIBLE	pluginhistorybutton.caption	プラグインは作らない（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/pluginrootbutton.caption.md	IMPOSSIBLE	pluginrootbutton.caption	プラグインは作らない（決めたこと・メニューに無い）
@@ -1903,14 +1903,14 @@ list/shiori-resource/ownerdraw-item-name/resetballoonpositionbutton.caption.md	I
 list/shiori-resource/ownerdraw-item-name/resettodefaultbutton.caption.md	IMPOSSIBLE	resettodefaultbutton.caption	SSP の設定を標準に戻す。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/scriptlogbutton.caption.md	IMPOSSIBLE	scriptlogbutton.caption	SSP の開発用パレットのスクリプトログ。メニューに無く、開発用の画面で見る
 list/shiori-resource/ownerdraw-item-name/shellrootbutton.caption.md	DONE	shellrootbutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/shellscaleotherbutton.caption.md	BUILD	shellscaleotherbutton.caption	大きさの下位メニューの「その他」。入力の箱で倍率を聞く
-list/shiori-resource/ownerdraw-item-name/shellscalerootbutton.caption.md	BUILD	shellscalerootbutton.caption	メニューにキャラクターの大きさを足す（アプリの画面にあり、OnShellScaling も送れる）
-list/shiori-resource/ownerdraw-item-name/sntpbutton.caption.md	BUILD	sntpbutton.caption	メニューに時計合わせ（\7 と同じ、ずれを測るだけ）を足す
+list/shiori-resource/ownerdraw-item-name/shellscaleotherbutton.caption.md	DONE	shellscaleotherbutton.caption	大きさの下位メニューの「その他」（スライダーで倍率を聞く）の名前
+list/shiori-resource/ownerdraw-item-name/shellscalerootbutton.caption.md	DONE	shellscalerootbutton.caption	メニューの「キャラクターの大きさ」（50〜200% とその他。変えると OnShellScaling）の名前
+list/shiori-resource/ownerdraw-item-name/sntpbutton.caption.md	DONE	sntpbutton.caption	メニューの「時計合わせ」（\7 と同じ、ずれを測るだけ）の名前
 list/shiori-resource/ownerdraw-item-name/switchactivatewhentalkbutton.caption.md	IMPOSSIBLE	switchactivatewhentalkbutton.caption	Windows の手前に出す設定。オーバーレイはいつも手前（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchactivatewhentalkexceptupdatebutton.caption.md	IMPOSSIBLE	switchactivatewhentalkexceptupdatebutton.caption	Windows の手前に出す設定。オーバーレイはいつも手前（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchautobiffbutton.caption.md	IMPOSSIBLE	switchautobiffbutton.caption	Materia のスイッチ。間隔はアプリの設定にある（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchautoheadlinesensebutton.caption.md	IMPOSSIBLE	switchautoheadlinesensebutton.caption	ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchblacklistingbutton.caption.md	BUILD	switchblacklistingbutton.caption	メニューの「SSTP を受けない」の名前に使う（いまは決まった文）
+list/shiori-resource/ownerdraw-item-name/switchblacklistingbutton.caption.md	DONE	switchblacklistingbutton.caption	メニューの「SSTP を受けない」の名前
 list/shiori-resource/ownerdraw-item-name/switchcompatiblemodebutton.caption.md	IMPOSSIBLE	switchcompatiblemodebutton.caption	SSP の旧仕様サポートの切り替え。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchconsolealwaysvisiblebutton.caption.md	IMPOSSIBLE	switchconsolealwaysvisiblebutton.caption	Materia のコンソール（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchconsolevisiblebutton.caption.md	IMPOSSIBLE	switchconsolevisiblebutton.caption	Materia のコンソール（決めたこと・メニューに無い）
@@ -1922,17 +1922,17 @@ list/shiori-resource/ownerdraw-item-name/switchforcealignfreebutton.caption.md	I
 list/shiori-resource/ownerdraw-item-name/switchforcealignlimitbutton.caption.md	IMPOSSIBLE	switchforcealignlimitbutton.caption	キャラクターの自由移動の設定。いつも自由（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchignoreserikomovebutton.caption.md	IMPOSSIBLE	switchignoreserikomovebutton.caption	SERIKO の move を無視する切り替えが無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchlocalsstpbutton.caption.md	IMPOSSIBLE	switchlocalsstpbutton.caption	Materia のスイッチ。SSTP はアプリの設定で選ぶ（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchmovetodefaultpositionbutton.caption.md	BUILD	switchmovetodefaultpositionbutton.caption	メニューの「位置を戻す」の名前に使う（いまは決まった文）
+list/shiori-resource/ownerdraw-item-name/switchmovetodefaultpositionbutton.caption.md	DONE	switchmovetodefaultpositionbutton.caption	メニューの「位置を戻す」の名前
 list/shiori-resource/ownerdraw-item-name/switchproxybutton.caption.md	IMPOSSIBLE	switchproxybutton.caption	プロキシの設定が無い（端末の設定に従う）（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchquietbutton.caption.md	BUILD	switchquietbutton.caption	メニューに「サウンドを鳴らさない」の入り切りを足す（いまは無い）
-list/shiori-resource/ownerdraw-item-name/switchreloadbutton.caption.md	BUILD	switchreloadbutton.caption	メニューに SHIORI の読み込み直し（reloadShiori）を足す
+list/shiori-resource/ownerdraw-item-name/switchquietbutton.caption.md	DONE	switchquietbutton.caption	メニューの「サウンドを鳴らさない」（入り切り。入っている間は音を鳴らさない）の名前
+list/shiori-resource/ownerdraw-item-name/switchreloadbutton.caption.md	DONE	switchreloadbutton.caption	メニューの「SHIORI を読み込み直す」の名前
 list/shiori-resource/ownerdraw-item-name/switchreloadtempghostbutton.caption.md	IMPOSSIBLE	switchreloadtempghostbutton.caption	一時起動ゴーストが無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchremotesstpbutton.caption.md	IMPOSSIBLE	switchremotesstpbutton.caption	LAN からの SSTP は受けない（決めたこと）（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchrootbutton.caption.md	IMPOSSIBLE	switchrootbutton.caption	Materia のスイッチの下位メニュー（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchtalkghostbutton.caption.md	IMPOSSIBLE	switchtalkghostbutton.caption	話す間隔の設定がメニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/systeminfobutton.caption.md	IMPOSSIBLE	systeminfobutton.caption	SSP のシステム情報の提出（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/termsbutton.caption.md	DONE	termsbutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/texttospeechbutton.caption.md	BUILD	texttospeechbutton.caption	メニューに読み上げの入り切りを足す（アプリの設定にある）
+list/shiori-resource/ownerdraw-item-name/texttospeechbutton.caption.md	DONE	texttospeechbutton.caption	メニューの読み上げの入り切りの名前
 list/shiori-resource/ownerdraw-item-name/updatebutton.caption.md	DONE	updatebutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/updatefmobutton.caption.md	IMPOSSIBLE	updatefmobutton.caption	Windows の FMO（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/updateplatformbutton.caption.md	IMPOSSIBLE	updateplatformbutton.caption	アプリの更新は Play ストア（決めたこと・メニューに無い）

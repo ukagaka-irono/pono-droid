@@ -223,6 +223,18 @@ interface GhostPlatform {
     /** pono-droid の設定画面（SSP の本体設定やゴーストエクスプローラの代わり） */
     fun openSettings() {}
 
+    /** メニューの「キャラクターの大きさ」で倍率（パーセント）を変える。変えられれば true（OnShellScaling はアプリが送る） */
+    fun setCharacterScale(percent: Int): Boolean = false
+
+    /** 今のキャラクターの大きさ（パーセント） */
+    fun characterScalePercent(): Int = 100
+
+    /** メニューから読み上げを入り切りする。変えられれば true */
+    fun setSpeechEnabled(on: Boolean): Boolean = false
+
+    /** メニューから音声認識を入り切りする。マイクの許可が無ければ設定の画面を開いて false */
+    fun setVoiceRecognitionEnabled(on: Boolean): Boolean = false
+
     /** 音を鳴らす（\8 \_v \![sound]）。[volume] は 0〜100（null なら既定） */
     fun playSound(file: File, loop: Boolean, volume: Int?) {}
 
@@ -3328,9 +3340,31 @@ class GhostController(
      */
     /** メニューの項目名。ゴーストが返したもの（[names] の前のものほど先。新しい名前・古い名前の順）、無ければ [default] */
     private suspend fun caption(default: String, vararg names: String): String {
-        for (n in names) resource(n)?.let { return quote(it) }
+        for (n in names) resource(n)?.let { return quote(stripShortcut(it)) }
         return quote(default)
     }
+
+    /** 「きほん(&P)」の & はショートカットキーの印。キーボードは無いので、印だけ消す（&& は & のまま） */
+    private fun stripShortcut(s: String): String = s.replace("&&", "\u0000").replace(Regex("&(?=.)"), "").replace("\u0000", "&")
+
+    /**
+     * メニューの1項目（\q と改行）。*.caption を *.visible にしたリソースが 0 なら出さない（null）。
+     * [mark] が true / false なら、入り切りの印（● / ○）を名前の前に付ける
+     */
+    private suspend fun item(default: String, choice: String, vararg names: String, mark: Boolean? = null): String? {
+        for (n in names) {
+            if (n.endsWith(".caption") && resource(n.removeSuffix(".caption") + ".visible")?.trim() == "0") return null
+        }
+        val text = caption(default, *names)
+        val title = when (mark) {
+            null -> text
+            else -> quote((if (mark) "● " else "○ ") + text.removeSurrounding("\"").replace("\"\"", "\""))
+        }
+        return "\\q[$title,$choice]\\n"
+    }
+
+    /** メニューの「サウンドを鳴らさない」。入っている間は音を鳴らさない */
+    private var soundMuted = false
 
     /**
      * menu.background.font.color.* を項目の文字の色に、menu.foreground.font.color.* を選んでいる項目の文字の色にする
@@ -3366,34 +3400,64 @@ class GhostController(
         val short = resource("$scopeName.popupmenu.type")?.trim() == "1"
         val bindScope = if (!short && scopeId != 0 && resource("$scopeName.popupmenu.applybindtoself")?.trim() == "0") 0 else scopeId
         val sb = StringBuilder("\\p[$scopeId]\\_q").append(menuColors()).append("【${ShioriSession.SENDER}】\\n")
+        fun add(line: String?) {
+            line?.let(sb::append)
+        }
+        // 制限モード（パッシブモード）の間は、いちばん上に強制解除
+        if (_state.value.passive) add(item("制限モードを解除", "pono:leavepassive", "leavepassivebutton.caption"))
         if (parseSites(resource("$scopeName.recommendsites")).isNotEmpty()) {
-            sb.append("\\q[${caption("おすすめ", "$scopeName.recommendbuttoncaption", "recommendrootbutton.caption")},pono:sites,recommend,$scopeId]\\n")
+            add(item("おすすめ", "pono:sites,recommend,$scopeId", "$scopeName.recommendbuttoncaption", "$scopeName.recommendsites.caption", "recommendrootbutton.caption"))
         }
         if (parseSites(resource("$scopeName.portalsites")).isNotEmpty()) {
-            sb.append("\\q[${caption("ポータル", "$scopeName.portalbuttoncaption", "portalrootbutton.caption")},pono:sites,portal,$scopeId]\\n")
+            add(item("ポータル", "pono:sites,portal,$scopeId", "$scopeName.portalbuttoncaption", "portalrootbutton.caption"))
         }
         if (!short) sb.append("\\q[ゴーストのメニュー（中クリック）,pono:middle,$scopeId]\\n")
         if (!bindDisabled && shell.bindGroups(bindScope).isNotEmpty() && bindMenu(bindScope) != "hidden") {
-            sb.append("\\q[${caption("きせかえ", "dressuprootbutton.caption")},pono:dressup,$bindScope]\\n")
+            add(item("きせかえ", "pono:dressup,$bindScope", "dressuprootbutton.caption"))
         }
         if (!short) {
-            if ((repository?.list()?.size ?: 0) > 1) sb.append("\\q[${caption("ゴースト切り替え", "ghostrootbutton.caption")},pono:ghosts,$scopeId]\\n")
-            if (callableGhosts().isNotEmpty()) sb.append("\\q[${caption("ほかのゴーストを呼ぶ", "callghostrootbutton.caption")},pono:callghosts,$scopeId]\\n")
-            if (ghost.shellDirs.size > 1) sb.append("\\q[${caption("シェル", "shellrootbutton.caption")},pono:shells,$scopeId]\\n")
-            if (repository != null) sb.append("\\q[${caption("バルーン", "balloonrootbutton.caption")},pono:balloons,$scopeId]\\n")
-            if (readmeFile() != null) sb.append("\\q[${caption("Read Me", "readmebutton.caption", "readmebuttoncaption")},pono:readme]\\n")
-            if (termsFile() != null) sb.append("\\q[${caption("利用規約", "termsbutton.caption")},pono:terms-open]\\n")
-            if (aiStates().isNotEmpty()) sb.append("\\q[${caption("AI グラフ", "aistatebutton.caption")},pono:aistate,$scopeId]\\n")
-            if (history?.usage()?.isNotEmpty() == true) sb.append("\\q[${caption("使用率", "rateofusebutton.caption")},pono:rateofuse,$scopeId]\\n")
-            sb.append("\\q[${caption("ネットワーク更新", "updatebutton.caption", "updatebuttoncaption")},pono:update]\\n")
-            sb.append("\\q[位置を戻す,pono:resetpos]\\n")
+            if ((repository?.list()?.size ?: 0) > 1) add(item("ゴースト切り替え", "pono:ghosts,$scopeId", "ghostrootbutton.caption"))
+            if (callableGhosts().isNotEmpty()) add(item("ほかのゴーストを呼ぶ", "pono:callghosts,$scopeId", "callghostrootbutton.caption"))
+            if (ghost.shellDirs.size > 1) add(item("シェル", "pono:shells,$scopeId", "shellrootbutton.caption"))
+            add(item("キャラクターの大きさ", "pono:scale,$scopeId", "shellscalerootbutton.caption"))
+            if (repository != null) add(item("バルーン", "pono:balloons,$scopeId", "balloonrootbutton.caption"))
+            if (readmeFile() != null) add(item("Read Me", "pono:readme", "readmebutton.caption", "readmebuttoncaption"))
+            if (termsFile() != null) add(item("利用規約", "pono:terms-open", "termsbutton.caption"))
+            if (aiStates().isNotEmpty()) add(item("AI グラフ", "pono:aistate,$scopeId", "aistatebutton.caption"))
+            if (history?.usage()?.isNotEmpty() == true) add(item("使用率", "pono:rateofuse,$scopeId", "rateofusebutton.caption"))
+            add(item("ネットワーク更新", "pono:update", "updatebutton.caption", "updatebuttoncaption"))
+            add(item("位置を戻す", "pono:resetpos", "switchmovetodefaultpositionbutton.caption"))
+            add(item("時計合わせ", "pono:sntp", "sntpbutton.caption"))
+            add(item("サウンドを鳴らさない", "pono:quiet,$scopeId", "switchquietbutton.caption", mark = soundMuted))
+            add(item("読み上げ", "pono:speech,$scopeId", "texttospeechbutton.caption", mark = platform.speechEnabled()))
+            add(item("音声認識", "pono:dictation,$scopeId", "dictationbutton.caption", mark = platform.voiceRecognitionEnabled()))
+            add(item("SHIORI を読み込み直す", "pono:reloadshiori", "switchreloadbutton.caption"))
         }
-        if (!short && platform.mailAccounts().isNotEmpty()) sb.append("\\q[${caption("メールを確認", "biffbutton.caption")},pono:biff]\\n")
-        sb.append("\\q[${caption("隠す", "hidebutton.caption")},pono:hide]\\n")
-        lastSstpSender?.let { sb.append("\\q[${quote(literalScript("「$it」の SSTP を受けない"))},pono:sstp-block]\\n") }
-        if (!short && vanishVisible()) sb.append("\\q[${caption("消去", "vanishbutton.caption", "vanishbuttoncaption")},pono:vanish,$scopeId]\\n")
-        sb.append("\\q[${caption("ゴーストを終了", "quitbutton.caption", "closebutton.caption")},pono:close]\\n")
+        if (!short && platform.mailAccounts().isNotEmpty()) add(item("メールを確認", "pono:biff", "biffbutton.caption"))
+        add(item("隠す", "pono:hide", "hidebutton.caption"))
+        lastSstpSender?.let { sender ->
+            add(item(literalScript("「$sender」の SSTP を受けない"), "pono:sstp-block", "switchblacklistingbutton.caption"))
+        }
+        if (!short && vanishVisible()) add(item("消去", "pono:vanish,$scopeId", "vanishbutton.caption", "vanishbuttoncaption"))
+        if (!short) {
+            // 設定・ゴーストの一覧・ゴーストを入れるのは、どれも pono-droid の画面（ゴーストの一覧と .nar を選ぶところがある）
+            add(item("ゴーストを入れる", "pono:settings", "ghostinstallbutton.caption"))
+            add(item("ゴーストの一覧", "pono:settings", "ghostexplorerbutton.caption"))
+            add(item("設定", "pono:settings", "configurationbutton.caption", "configurationrootbutton.caption"))
+            add(item("説明書", "pono:help", "helpbutton.caption"))
+        }
+        add(item("ゴーストを終了", "pono:close", "quitbutton.caption", "closebutton.caption"))
         sb.append("\\q[${caption("閉じる", "closeballoonbutton.caption")},pono:cancel]\\e")
+        return sb.toString()
+    }
+
+    /** キャラクターの大きさの下位メニュー。決まった倍率と「その他」（スライダーで聞く） */
+    private suspend fun scaleMenu(scopeId: Int): String {
+        val current = platform.characterScalePercent()
+        val sb = StringBuilder("\\p[$scopeId]\\_q").append(menuColors())
+        for (p in SCALE_STEPS) sb.append("\\q[${(if (p == current) "● " else "○ ")}$p%,pono:setscale,$scopeId,$p]\\n")
+        item("その他", "pono:scaleother,$scopeId", "shellscaleotherbutton.caption")?.let(sb::append)
+        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -3820,6 +3884,11 @@ class GhostController(
         lastUserActivity = System.currentTimeMillis()
         inputTimeout?.cancel()
         _state.update { it.copy(input = null) }
+        // メニューの「キャラクターの大きさ」の「その他」
+        if (request.id == SCALE_INPUT) {
+            text.trim().toIntOrNull()?.let { platform.setCharacterScale(it.coerceIn(SCALE_MIN, SCALE_MAX)) }
+            return
+        }
         // ユーザーが打った文字（パスワードのこともある）はログに残さない
         // ID が On で始まればそのイベント（Reference0 = 答え）、そうでなければ OnUserInput（ID, 答え）
         fun answer(event: String, extra: List<String> = emptyList(), sensitive: Boolean = true) {
@@ -4318,6 +4387,31 @@ class GhostController(
                     "pono:middle" -> onMiddleClick(scopeId)
                     "pono:hide" -> minimize("user")
                     "pono:resetpos" -> requestResetWindowPos()
+                    "pono:leavepassive" -> _state.update { it.copy(passive = false) }
+                    "pono:scale" -> scope.launch { runScript(scaleMenu(scopeId)) }
+                    "pono:setscale" -> refs.getOrNull(1)?.toIntOrNull()?.let { platform.setCharacterScale(it) }
+                    "pono:scaleother" -> InputRequest.fromOpenTag(
+                        "sliderinput", listOf(SCALE_INPUT, "-1", platform.characterScalePercent().toString(), SCALE_MIN.toString(), SCALE_MAX.toString()), inputSerial + 1,
+                    )?.let {
+                        inputSerial++
+                        openInput(it)
+                    }
+                    "pono:sntp" -> startSntp()
+                    "pono:quiet" -> {
+                        soundMuted = !soundMuted
+                        if (soundMuted) platform.stopSound()
+                        scope.launch { runScript(basewareMenu(scopeId)) }
+                    }
+                    "pono:speech" -> {
+                        platform.setSpeechEnabled(!platform.speechEnabled())
+                        scope.launch { runScript(basewareMenu(scopeId)) }
+                    }
+                    "pono:dictation" -> if (platform.setVoiceRecognitionEnabled(!platform.voiceRecognitionEnabled())) {
+                        scope.launch { runScript(basewareMenu(scopeId)) }
+                    }
+                    "pono:reloadshiori" -> scope.launch { reloadShiori() }
+                    "pono:settings" -> platform.openSettings()
+                    "pono:help" -> platform.openUrl(HELP_URL)
                     "pono:update" -> networkUpdate()
                     // ほかのゴーストも動いていれば、このゴーストだけ終える
                     "pono:close" -> close("user", scopeId, all = false)
@@ -5267,6 +5361,8 @@ class GhostController(
 
         override fun playSound(file: String, loop: Boolean, options: SoundOptions) {
             val f = soundFile(file) ?: return platform.log("音が見つかりません: $file")
+            // メニューで「サウンドを鳴らさない」にしている間は鳴らさない
+            if (soundMuted) return
             soundNames[f.path] = file
             platform.playSound(f, loop, options)
         }
@@ -5931,6 +6027,12 @@ class GhostController(
 
         /** \![set,balloonoffset] でずらせる量の上限（シェル画像のピクセル） */
         const val MAX_BALLOON_OFFSET = 2000
+
+        /** メニューの「キャラクターの大きさ」の倍率（パーセント）と、「その他」のスライダーの範囲・入力の箱の ID */
+        private val SCALE_STEPS = listOf(50, 75, 100, 150, 200)
+        private const val SCALE_MIN = 50
+        private const val SCALE_MAX = 250
+        private const val SCALE_INPUT = "pono:scale"
 
         /** 一緒に動いているゴーストが増減したことを知らせるイベント（otherghostname を送り直す） */
         private val OTHER_GHOST_CHANGES = setOf("OnOtherGhostBooted", "OnOtherGhostClosed", "OnOtherGhostChanged", "OnOtherGhostVanished")

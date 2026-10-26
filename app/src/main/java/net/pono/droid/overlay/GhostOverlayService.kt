@@ -452,6 +452,32 @@ class GhostOverlayService : LifecycleService() {
                         startActivity(Intent(this@GhostOverlayService, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     }
 
+                    // メニューの入り切りは設定と同じところに書く（変わったことは設定の見張りが伝える）
+                    override fun setCharacterScale(percent: Int): Boolean {
+                        val v = (percent / 100f).coerceIn(OverlaySettings.MIN_CHARACTER_SCALE, OverlaySettings.MAX_CHARACTER_SCALE)
+                        OverlaySettings.prefs(this@GhostOverlayService).edit().putFloat(OverlaySettings.KEY_CHARACTER_SCALE, v).apply()
+                        return true
+                    }
+
+                    override fun characterScalePercent(): Int =
+                        (OverlaySettings.characterScale(OverlaySettings.prefs(this@GhostOverlayService)) * 100).roundToInt()
+
+                    override fun setSpeechEnabled(on: Boolean): Boolean {
+                        OverlaySettings.prefs(this@GhostOverlayService).edit().putBoolean(OverlaySettings.KEY_SPEECH, on).apply()
+                        return true
+                    }
+
+                    override fun setVoiceRecognitionEnabled(on: Boolean): Boolean {
+                        val granted = checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        // マイクの許可は pono-droid の画面で聞く
+                        if (on && !granted) {
+                            openSettings()
+                            return false
+                        }
+                        OverlaySettings.prefs(this@GhostOverlayService).edit().putBoolean(OverlaySettings.KEY_VOICE, on).apply()
+                        return true
+                    }
+
                     override fun playSound(file: File, loop: Boolean, volume: Int?) = sound.play(file, loop, SoundOptions(volume = volume))
 
                     override fun playSound(file: File, loop: Boolean, options: SoundOptions) = sound.play(file, loop, options)
