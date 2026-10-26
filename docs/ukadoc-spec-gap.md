@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1162・一部だけ 62・作る 207・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1169・一部だけ 62・作る 200・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -436,17 +436,10 @@
 
 ## SHIORI イベント
 
-済み 226 項目。
+済み 233 項目。
 
-### 🔨 作る（34）
-- OnBasewareUpdated — 前に起動したときのアプリの版を覚えておき、変わっていたら OnBoot の代わりに送る（ssp-gap では ⛔）
-- OnDestroy — SHIORI を外す直前に NOTIFY（reloadShiori のときは reload）。ssp-gap では ⛔ だが足すだけ
-- OnInitialize — SHIORI を読み込んだ直後に NOTIFY（読み込み直しは reload）。ssp-gap では ⛔ だが SSP は送っているので足すだけ
-- OnNotifyPluginFailure — \![notifyplugin] を受けたら notfound で送る（いまは黙って捨てている。ssp-gap では ⛔）
-- OnRaisePluginFailure — プラグインが無いので、\![raiseplugin] / \![timerraiseplugin] を受けたら notfound で送ればよい（いまは黙って捨てている。ssp-gap では ⛔）
+### 🔨 作る（27）
 - OnArchiveViewerOpen — 答えが無い zip などを OnPictureViewerOpen と同じく、ほかのアプリで開いて送る（dropDefault に足す。ssp-gap では ⛔）
-- OnFileDrop — OnFileDrop2 と OnFileDropEx に答えが無いとき、古いゴースト向けに1ファイルずつ送る（いまは送っていない）
-- OnFileDropped — OnFileDrop の後に送る古い通知。OnFileDrop と一緒に足す
 - inputbox.autocomplete — 入力の箱を開くときに聞き、返った候補（バイト値1区切り）を InputBalloon の入力欄の下に出す
 - OnInstallReroute — accept で名指しされたゴーストが一緒に起動していたら、そちらへ入れて以降のイベントもそちらに送る（いまは OnInstallRefuse）
 - OnMouseDoubleClickEx — 2本指で2回続けて叩いたとき（とマウスの中・戻る・進むボタン）に middle などで送る

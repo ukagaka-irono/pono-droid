@@ -1431,14 +1431,14 @@ list/shiori-event/biff/OnBIFFComplete.md	DONE	OnBIFFComplete	実装済み
 list/shiori-event/biff/OnBIFFFailure.md	DONE	OnBIFFFailure	実装済み
 list/shiori-event/biff/index.md	NA	メールチェックイベント	目次のページ
 list/shiori-event/boot-close-change/OnBalloonChange.md	DONE	OnBalloonChange	実装済み
-list/shiori-event/boot-close-change/OnBasewareUpdated.md	BUILD	OnBasewareUpdated	前に起動したときのアプリの版を覚えておき、変わっていたら OnBoot の代わりに送る（ssp-gap では ⛔）
+list/shiori-event/boot-close-change/OnBasewareUpdated.md	DONE	OnBasewareUpdated	前に起動したときと pono-droid の版が違えば OnBoot の前に送り、答えが無ければ OnBoot
 list/shiori-event/boot-close-change/OnBasewareUpdating.md	IMPOSSIBLE	OnBasewareUpdating	アプリの更新は Play ストアが行い、置き換える前にアプリへ知らせが来ない
 list/shiori-event/boot-close-change/OnBoot.md	DONE	OnBoot	実装済み
 list/shiori-event/boot-close-change/OnCacheRestore.md	IMPOSSIBLE	OnCacheRestore	ゴーストキャッシュが無い（決めたこと）
 list/shiori-event/boot-close-change/OnCacheSuspend.md	IMPOSSIBLE	OnCacheSuspend	ゴーストキャッシュが無い（決めたこと）
 list/shiori-event/boot-close-change/OnClose.md	DONE	OnClose	実装済み
 list/shiori-event/boot-close-change/OnCloseAll.md	DONE	OnCloseAll	実装済み
-list/shiori-event/boot-close-change/OnDestroy.md	BUILD	OnDestroy	SHIORI を外す直前に NOTIFY（reloadShiori のときは reload）。ssp-gap では ⛔ だが足すだけ
+list/shiori-event/boot-close-change/OnDestroy.md	DONE	OnDestroy	SHIORI を外す直前に NOTIFY（読み込み直しは reload）
 list/shiori-event/boot-close-change/OnDressupChanged.md	DONE	OnDressupChanged	実装済み
 list/shiori-event/boot-close-change/OnFirstBoot.md	DONE	OnFirstBoot	実装済み
 list/shiori-event/boot-close-change/OnFullScreenAppMinimize.md	IMPOSSIBLE	OnFullScreenAppMinimize	ほかのアプリが全画面になったことをオーバーレイから確かに知る方法が無い（決めたこと）
@@ -1448,7 +1448,7 @@ list/shiori-event/boot-close-change/OnGhostCalled.md	DONE	OnGhostCalled	実装�
 list/shiori-event/boot-close-change/OnGhostCalling.md	DONE	OnGhostCalling	実装済み
 list/shiori-event/boot-close-change/OnGhostChanged.md	DONE	OnGhostChanged	実装済み
 list/shiori-event/boot-close-change/OnGhostChanging.md	DONE	OnGhostChanging	実装済み
-list/shiori-event/boot-close-change/OnInitialize.md	BUILD	OnInitialize	SHIORI を読み込んだ直後に NOTIFY（読み込み直しは reload）。ssp-gap では ⛔ だが SSP は送っているので足すだけ
+list/shiori-event/boot-close-change/OnInitialize.md	DONE	OnInitialize	SHIORI を読み込んで知らせを送った後に NOTIFY（読み込み直しは reload）
 list/shiori-event/boot-close-change/OnOtherGhostBooted.md	DONE	OnOtherGhostBooted	実装済み
 list/shiori-event/boot-close-change/OnOtherGhostChanged.md	DONE	OnOtherGhostChanged	実装済み
 list/shiori-event/boot-close-change/OnOtherGhostClosed.md	DONE	OnOtherGhostClosed	実装済み
@@ -1489,16 +1489,16 @@ list/shiori-event/dialogbox/OnSystemDialog.md	DONE	OnSystemDialog	実装済み
 list/shiori-event/dialogbox/OnSystemDialogCancel.md	DONE	OnSystemDialogCancel	実装済み
 list/shiori-event/dialogbox/index.md	NA	ダイアログボックスイベント	目次のページ
 list/shiori-event/event-send-failure/OnNotifyOtherFailure.md	DONE	OnNotifyOtherFailure	実装済み
-list/shiori-event/event-send-failure/OnNotifyPluginFailure.md	BUILD	OnNotifyPluginFailure	\![notifyplugin] を受けたら notfound で送る（いまは黙って捨てている。ssp-gap では ⛔）
+list/shiori-event/event-send-failure/OnNotifyPluginFailure.md	DONE	OnNotifyPluginFailure	プラグインは無いので、\![notifyplugin] / \![timernotifyplugin] は notfound で送る
 list/shiori-event/event-send-failure/OnRaiseOtherFailure.md	DONE	OnRaiseOtherFailure	実装済み
-list/shiori-event/event-send-failure/OnRaisePluginFailure.md	BUILD	OnRaisePluginFailure	プラグインが無いので、\![raiseplugin] / \![timerraiseplugin] を受けたら notfound で送ればよい（いまは黙って捨てている。ssp-gap では ⛔）
+list/shiori-event/event-send-failure/OnRaisePluginFailure.md	DONE	OnRaisePluginFailure	プラグインは無いので、\![raiseplugin] / \![timerraiseplugin] は notfound で送る
 list/shiori-event/event-send-failure/index.md	NA	イベント送信失敗イベント	目次のページ
 list/shiori-event/file-drop/OnArchiveViewerOpen.md	BUILD	OnArchiveViewerOpen	答えが無い zip などを OnPictureViewerOpen と同じく、ほかのアプリで開いて送る（dropDefault に足す。ssp-gap では ⛔）
 list/shiori-event/file-drop/OnDirectoryDrop.md	IMPOSSIBLE	OnDirectoryDrop	Android の共有ではフォルダーを渡せない
-list/shiori-event/file-drop/OnFileDrop.md	BUILD	OnFileDrop	OnFileDrop2 と OnFileDropEx に答えが無いとき、古いゴースト向けに1ファイルずつ送る（いまは送っていない）
+list/shiori-event/file-drop/OnFileDrop.md	DONE	OnFileDrop	OnFileDrop2 と OnFileDropEx に答えが無ければ、1ファイルずつ送る
 list/shiori-event/file-drop/OnFileDrop2.md	DONE	OnFileDrop2	実装済み
 list/shiori-event/file-drop/OnFileDropEx.md	DONE	OnFileDropEx	実装済み
-list/shiori-event/file-drop/OnFileDropped.md	BUILD	OnFileDropped	OnFileDrop の後に送る古い通知。OnFileDrop と一緒に足す
+list/shiori-event/file-drop/OnFileDropped.md	DONE	OnFileDropped	OnFileDrop の後に1ファイルずつ NOTIFY
 list/shiori-event/file-drop/OnFileDropping.md	IMPOSSIBLE	OnFileDropping	落とす前のドラッグが無い。共有で渡すだけ（決めたこと）
 list/shiori-event/file-drop/OnMediaPlayerOpen.md	DONE	OnMediaPlayerOpen	実装済み
 list/shiori-event/file-drop/OnNarCreated.md	DONE	OnNarCreated	実装済み

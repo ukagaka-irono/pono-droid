@@ -708,6 +708,14 @@ class ScriptPlayer(
                     !host.setOption(scope, a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
                 }
                 // ウィンドウの重なりや他のゴースト・プラグインなど、pono-droid に無いものは黙って飛ばす
+                // pono-droid にプラグインは無いので、どれも見つからなかったと知らせる
+                "raiseplugin", "notifyplugin" -> if (a.size >= 3) {
+                    host.raise(pluginFailure(a[0]), listOf("notfound", a[1], a[2]) + a.drop(3))
+                }
+                // \![timerraiseplugin,ミリ秒,回数,プラグイン,イベント,...]
+                "timerraiseplugin", "timernotifyplugin" -> if (a.size >= 5) {
+                    host.raise(pluginFailure(a[0]), listOf("notfound", a[3], a[4]) + a.drop(5))
+                }
                 in silentCommands -> {}
                 else -> host.unknownTag(token)
             }
@@ -870,10 +878,10 @@ class ScriptPlayer(
     private val layoutOnlyTags = setOf("C", "_e")
 
     /** `\![コマンド,...]` のうち、pono-droid に無い仕組み（ウィンドウの重なり・効果・他のゴースト・プラグイン）向けのもの */
-    private val silentCommands = setOf(
-        "effect", "effect2", "filter",
-        "raiseplugin", "timerraiseplugin", "notifyplugin", "timernotifyplugin",
-    )
+    private val silentCommands = setOf("effect", "effect2", "filter")
+
+    /** raiseplugin などが失敗したときのイベント */
+    private fun pluginFailure(command: String) = if ("notify" in command) "OnNotifyPluginFailure" else "OnRaisePluginFailure"
 
 
     private val silentExecutes = setOf("resetballoonpos")

@@ -513,6 +513,10 @@ class GhostController(
             val profile = ghost.loadProfile()
             val firstBoot = profile.getProperty("booted") == null
             profile.setProperty("booted", "1")
+            // 前に起動したときと pono-droid の版が違えば、OnBoot の前に OnBasewareUpdated
+            val lastVersion = profile.getProperty(PROFILE_BASEWARE_VERSION)
+            val updated = !firstBoot && lastVersion != null && lastVersion != basewareVersion
+            profile.setProperty(PROFILE_BASEWARE_VERSION, basewareVersion)
             history?.ghostBooted(ghost.dir.name)
             balloon?.let { history?.balloonUsed(it.dir.name) }
             ghost.saveProfile(profile)
@@ -539,6 +543,8 @@ class GhostController(
                 firstBoot -> request("OnFirstBoot", listOf("0"))
                 changed != null -> changed
                 called != null -> called
+                updated -> request("OnBasewareUpdated", listOf(basewareVersion.takeWhile { it.isDigit() || it == '.' }, basewareVersion))
+                    ?: request("OnBoot", listOf(shell.name, "", "", "", "", "", "", ""))
                 else -> request("OnBoot", listOf(shell.name, "", "", "", "", "", "", ""))
             }
             startTimer()
@@ -697,7 +703,8 @@ class GhostController(
     }
 
     /** SHIORI を読み込み、起動時の NOTIFY を送る。 */
-    private suspend fun loadShiori(): Boolean {
+    /** @param reload 読み込み直し（OnInitialize の Reference0 が reload になる） */
+    private suspend fun loadShiori(reload: Boolean = false): Boolean {
         val shiori = shioriFactory.create(ghost.shioriName, ghost.masterDir)
         if (shiori == null) {
             platform.onError("${ghost.name}: ${ghost.shioriName} は未対応です（YAYA・里々・華和梨・Kagari に対応）")
@@ -740,6 +747,8 @@ class GhostController(
             homeUrlOverride = s.get("homeurl")?.value?.trim()?.takeIf { it.isNotEmpty() }
             s.get("username")?.value?.trim()?.takeIf { it.isNotEmpty() }?.let { userName = it }
             notifyEnvironment(s)
+            // 起動した（読み込み直した）。SSP と同じく、ほかの知らせの後に送る
+            s.notify("OnInitialize", if (reload) "reload" else "")
         }
         if (notified.isFailure) {
             session = null
@@ -1642,11 +1651,16 @@ class GhostController(
     }
 
     private suspend fun reloadShiori() {
-        requestLock.withLock {
-            session?.unload()
-            session = null
-        }
-        loadShiori()
+        requestLock.withLock { unloadSession(reload = true) }
+        loadShiori(reload = true)
+    }
+
+    /** SHIORI を外す。外す前に OnDestroy を送る（読み込み直しなら Reference0 が reload） */
+    private suspend fun unloadSession(reload: Boolean = false) {
+        val s = session ?: return
+        runCatching { s.notify("OnDestroy", if (reload) "reload" else "") }
+        s.unload()
+        session = null
     }
 
     // ---- \![execute,http-*] / rss-* / ical-* ----
@@ -2497,8 +2511,7 @@ class GhostController(
         timers.values.forEach { it.cancel() }
         timers.clear()
         platform.stopSound()
-        session?.unload()
-        session = null
+        unloadSession()
     }
 
     /**
@@ -3673,7 +3686,11 @@ class GhostController(
         lastUserActivity = System.currentTimeMillis()
         val refs = listOf(paths.joinToString("\u0001"), scopeId.toString(), mimeTypes.joinToString("\u0001"))
         scope.launch {
-            val script = request("OnFileDrop2", refs) ?: request("OnFileDropEx", refs)
+            // それでも答えが無ければ、もっと古いゴースト向けに1つずつ OnFileDrop と OnFileDropped
+            val script = request("OnFileDrop2", refs) ?: request("OnFileDropEx", refs) ?: paths.withIndex().firstNotNullOfOrNull { (i, p) ->
+                val one = listOf(p, scopeId.toString(), mimeTypes.getOrNull(i).orEmpty())
+                request("OnFileDrop", one).also { notify("OnFileDropped", one) }
+            }
             if (script == null) {
                 // 答えが無ければ SSP のいつもの扱い（.nar を入れる・画像や音を開く）
                 dropDefault(paths, mimeTypes, scopeId)
@@ -5721,10 +5738,7 @@ class GhostController(
         override fun setShioriLoaded(loaded: Boolean) {
             scope.launch {
                 if (!loaded) {
-                    requestLock.withLock {
-                        session?.unload()
-                        session = null
-                    }
+                    requestLock.withLock { unloadSession() }
                 } else if (session == null) {
                     loadShiori()
                 }
@@ -5876,6 +5890,9 @@ class GhostController(
 
         /** \![set,balloonoffset] でずらせる量の上限（シェル画像のピクセル） */
         const val MAX_BALLOON_OFFSET = 2000
+
+        /** 前に起動したときの pono-droid の版（OnBasewareUpdated） */
+        private const val PROFILE_BASEWARE_VERSION = "basewareversion"
 
         /** descript.txt の menu.font.height の上限 */
         private const val MAX_MENU_FONT = 72
