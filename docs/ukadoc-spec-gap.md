@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1169・一部だけ 62・作る 200・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1180・一部だけ 62・作る 189・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -436,9 +436,9 @@
 
 ## SHIORI イベント
 
-済み 233 項目。
+済み 244 項目。
 
-### 🔨 作る（27）
+### 🔨 作る（16）
 - OnArchiveViewerOpen — 答えが無い zip などを OnPictureViewerOpen と同じく、ほかのアプリで開いて送る（dropDefault に足す。ssp-gap では ⛔）
 - inputbox.autocomplete — 入力の箱を開くときに聞き、返った候補（バイト値1区切り）を InputBalloon の入力欄の下に出す
 - OnInstallReroute — accept で名指しされたゴーストが一緒に起動していたら、そちらへ入れて以降のイベントもそちらに送る（いまは OnInstallRefuse）
@@ -447,20 +447,9 @@
 - OnMouseMultipleClickEx — 2本指で3回以上続けて叩いたとき。答えが無ければ ClickEx / DoubleClickEx へ
 - OnUpdateProcessExec — メニュー・アプリの「更新」から始めるとき最初に送り、答えがあればそれを流して標準の更新はしない
 - OnUpdateResultExplorer — アプリのゴースト一覧の「更新」から始めたときは OnUpdateResult の代わりにこれを送る
-- balloonpathlist — 起動時にバルーンの置き場のパスを NOTIFY
-- capability — 起動時に pono-droid が扱う SHIORI のヘッダ（request.* / response.*）を NOTIFY
-- configuredbiffname — 設定したメールのアカウント名を起動時に NOTIFY（いまは1つだけ）
 - enable_log — 開発用の画面に「SHIORI のログ」の入り切りを足し、変えたら NOTIFY
-- ghostpathlist — 起動時にゴーストの置き場のパスを NOTIFY
-- installedballoonname — 起動時に入っているバルーンの名前を NOTIFY
-- installedghostname — 起動時に repository の一覧から NOTIFY
-- installedkeroname — installedghostname の前に、同じ並びで kero.name を NOTIFY
-- installedsakuraname — installedghostname の前に、同じ並びで sakura.name を NOTIFY
-- installedshellname — 起動時にこのゴーストのシェルの名前を NOTIFY
-- otherghostname — 一緒に起動しているゴーストの名前とサーフェスを起動時と増減したときに NOTIFY
 - rateofusegraph — 名前だけ見つかったが NOTIFY は送っていない。使用率を出すとき（\![open,rateofusegraph]・メニュー）に history.usage から送る
 - OnDesktopWallpaperChange — WallpaperManager の色が変わった知らせで送る（Reference2 のパスは空、きっかけは unknown）。ssp-gap では ⛔
-- OnDisplayChangeEx — 画面1枚分だけ送る（例 0,0,幅,高さ,32,1,unknown,0）。起動時 NOTIFY と回転のとき。ssp-gap では ⛔
 - OnMusicPlayEx — 🔒 通知へのアクセスを許したときだけ MediaSessionManager で曲名・アーティスト・album・duration などを送る。ssp-gap では ⛔
 - OnSoundSpectrum — \_v の --spectrum。自分で鳴らす音を MediaExtractor / MediaCodec で読んで帯域ごとの音量を出す（Visualizer はマイクの許可が要る）。ssp-gap の ⛔ の理由は違う
 - OnVideoPlayEx — 🔒 OnMusicPlayEx と同じ仕組みで、動画のセッションのときに送る。ssp-gap では ⛔

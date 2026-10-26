@@ -1612,28 +1612,28 @@ list/shiori-event/notify/OnNotifyOSInfo.md	DONE	OnNotifyOSInfo	実装済み
 list/shiori-event/notify/OnNotifySelfInfo.md	DONE	OnNotifySelfInfo	実装済み
 list/shiori-event/notify/OnNotifyShellInfo.md	DONE	OnNotifyShellInfo	実装済み
 list/shiori-event/notify/OnNotifyUserInfo.md	DONE	OnNotifyUserInfo	実装済み
-list/shiori-event/notify/balloonpathlist.md	BUILD	balloonpathlist	起動時にバルーンの置き場のパスを NOTIFY
+list/shiori-event/notify/balloonpathlist.md	DONE	balloonpathlist	起動時にバルーンの置き場の絶対パスを NOTIFY
 list/shiori-event/notify/basewareversion.md	DONE	basewareversion	決まった値で送る
 list/shiori-event/notify/calendarpluginpathlist.md	IMPOSSIBLE	calendarpluginpathlist	カレンダーのプラグインは作らない（決めたこと）
 list/shiori-event/notify/calendarskinpathlist.md	IMPOSSIBLE	calendarskinpathlist	カレンダーの画面が無い（決めたこと）
-list/shiori-event/notify/capability.md	BUILD	capability	起動時に pono-droid が扱う SHIORI のヘッダ（request.* / response.*）を NOTIFY
-list/shiori-event/notify/configuredbiffname.md	BUILD	configuredbiffname	設定したメールのアカウント名を起動時に NOTIFY（いまは1つだけ）
+list/shiori-event/notify/capability.md	DONE	capability	起動時に、送る request.* と読む response.* のヘッダ名（小文字）を NOTIFY
+list/shiori-event/notify/configuredbiffname.md	DONE	configuredbiffname	起動時に設定したメールのアカウント名を NOTIFY
 list/shiori-event/notify/enable_debug.md	DONE	enable_debug	\![set,shioridebugmode] で送る
 list/shiori-event/notify/enable_log.md	BUILD	enable_log	開発用の画面に「SHIORI のログ」の入り切りを足し、変えたら NOTIFY
-list/shiori-event/notify/ghostpathlist.md	BUILD	ghostpathlist	起動時にゴーストの置き場のパスを NOTIFY
+list/shiori-event/notify/ghostpathlist.md	DONE	ghostpathlist	起動時にゴーストの置き場の絶対パスを NOTIFY
 list/shiori-event/notify/headlinepathlist.md	IMPOSSIBLE	headlinepathlist	ヘッドラインセンサーは作らない（決めたこと）
 list/shiori-event/notify/hwnd.md	IMPOSSIBLE	hwnd	Windows のウィンドウハンドルが無い
 list/shiori-event/notify/index.md	NA	Notifyイベント	目次のページ
-list/shiori-event/notify/installedballoonname.md	BUILD	installedballoonname	起動時に入っているバルーンの名前を NOTIFY
+list/shiori-event/notify/installedballoonname.md	DONE	installedballoonname	起動時に入っているバルーンの名前を NOTIFY
 list/shiori-event/notify/installedcalendarpluginname.md	IMPOSSIBLE	installedcalendarpluginname	カレンダーのプラグインは作らない（決めたこと）
 list/shiori-event/notify/installedcalendarskinname.md	IMPOSSIBLE	installedcalendarskinname	カレンダーの画面が無い（決めたこと）
-list/shiori-event/notify/installedghostname.md	BUILD	installedghostname	起動時に repository の一覧から NOTIFY
+list/shiori-event/notify/installedghostname.md	DONE	installedghostname	起動時に入っているゴーストの名前を NOTIFY（installedsakuraname / installedkeroname の後、同じ並び）
 list/shiori-event/notify/installedheadlinename.md	IMPOSSIBLE	installedheadlinename	ヘッドラインセンサーは作らない（決めたこと）
-list/shiori-event/notify/installedkeroname.md	BUILD	installedkeroname	installedghostname の前に、同じ並びで kero.name を NOTIFY
+list/shiori-event/notify/installedkeroname.md	DONE	installedkeroname	起動時に入っているゴーストの kero.name を、installedghostname の前に同じ並びで NOTIFY
 list/shiori-event/notify/installedplugin.md	IMPOSSIBLE	installedplugin	プラグインは作らない（決めたこと）
-list/shiori-event/notify/installedsakuraname.md	BUILD	installedsakuraname	installedghostname の前に、同じ並びで sakura.name を NOTIFY
-list/shiori-event/notify/installedshellname.md	BUILD	installedshellname	起動時にこのゴーストのシェルの名前を NOTIFY
-list/shiori-event/notify/otherghostname.md	BUILD	otherghostname	一緒に起動しているゴーストの名前とサーフェスを起動時と増減したときに NOTIFY
+list/shiori-event/notify/installedsakuraname.md	DONE	installedsakuraname	起動時に入っているゴーストの sakura.name を、installedghostname の前に同じ並びで NOTIFY
+list/shiori-event/notify/installedshellname.md	DONE	installedshellname	起動時にこのゴーストのシェルの名前を NOTIFY
+list/shiori-event/notify/otherghostname.md	DONE	otherghostname	一緒に動いているゴーストの名前と \0・\1 のサーフェスを、起動時と増減したときに NOTIFY
 list/shiori-event/notify/ownerghostname.md	DONE	ownerghostname	実装済み
 list/shiori-event/notify/pluginpathlist.md	IMPOSSIBLE	pluginpathlist	プラグインは作らない（決めたこと）
 list/shiori-event/notify/rateofusegraph.md	BUILD	rateofusegraph	名前だけ見つかったが NOTIFY は送っていない。使用率を出すとき（\![open,rateofusegraph]・メニュー）に history.usage から送る
@@ -1650,7 +1650,7 @@ list/shiori-event/os-state/OnDesktopWallpaperChange.md	BUILD	OnDesktopWallpaperC
 list/shiori-event/os-state/OnDeviceArrival.md	DONE	OnDeviceArrival	実装済み
 list/shiori-event/os-state/OnDeviceRemove.md	DONE	OnDeviceRemove	実装済み
 list/shiori-event/os-state/OnDisplayChange.md	DONE	OnDisplayChange	実装済み
-list/shiori-event/os-state/OnDisplayChangeEx.md	BUILD	OnDisplayChangeEx	画面1枚分だけ送る（例 0,0,幅,高さ,32,1,unknown,0）。起動時 NOTIFY と回転のとき。ssp-gap では ⛔
+list/shiori-event/os-state/OnDisplayChangeEx.md	DONE	OnDisplayChangeEx	画面1枚分（0,0,幅,高さ,32,1,unknown,0）。起動時は init で NOTIFY、回転などは update で GET（答えが無ければ OnDisplayChange）
 list/shiori-event/os-state/OnDisplayHandover.md	IMPOSSIBLE	OnDisplayHandover	オーバーレイは1つの画面にしか出ない（決めたこと）
 list/shiori-event/os-state/OnDisplayPowerStatus.md	DONE	OnDisplayPowerStatus	実装済み
 list/shiori-event/os-state/OnMemoryLoadHigh.md	DONE	OnMemoryLoadHigh	実装済み

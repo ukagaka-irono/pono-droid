@@ -581,7 +581,10 @@ class GhostController(
 
     /** ほかのゴーストから届いたイベント。話している最中なら、そのイベントでは話さない。終わろうとしているなら受けない */
     private fun fromOther(event: String, references: List<String>) {
-        if (!closing) raise(event, references, userInitiated = false)
+        if (closing) return
+        raise(event, references, userInitiated = false)
+        // 一緒に動いているゴーストが増えたり減ったりしたら、otherghostname を送り直す
+        if (event in OTHER_GHOST_CHANGES) notify("otherghostname", otherGhostNames())
     }
 
     /**
@@ -759,6 +762,35 @@ class GhostController(
         return true
     }
 
+    /**
+     * 起動時に、入っているゴースト（sakura.name・kero.name・名前を同じ並びで、名前より先に）・このゴーストのシェル・バルーン、
+     * 置き場のパス、扱える SHIORI のヘッダ、メールのアカウント、一緒に動いているゴーストを知らせる
+     */
+    private suspend fun notifyInstalled(s: ShioriSession) {
+        val ghosts = repository?.list().orEmpty()
+        if (ghosts.isNotEmpty()) {
+            s.notify("installedsakuraname", *ghosts.map { it.sakuraName }.toTypedArray())
+            s.notify("installedkeroname", *ghosts.map { it.keroName }.toTypedArray())
+            s.notify("installedghostname", *ghosts.map { it.name }.toTypedArray())
+        }
+        ghost.shellDirs.takeIf { it.isNotEmpty() }?.let { dirs -> s.notify("installedshellname", *dirs.map(Shell::nameOf).toTypedArray()) }
+        repository?.balloons?.list()?.takeIf { it.isNotEmpty() }?.let { list -> s.notify("installedballoonname", *list.map { it.name }.toTypedArray()) }
+        repository?.root?.let { s.notify("ghostpathlist", it.absolutePath + "/") }
+        repository?.balloons?.root?.let { s.notify("balloonpathlist", it.absolutePath + "/") }
+        s.notify("capability", *CAPABILITIES.toTypedArray())
+        platform.mailAccounts().takeIf { it.isNotEmpty() }?.let { list -> s.notify("configuredbiffname", *list.map { it.name }.toTypedArray()) }
+        otherGhostNames().takeIf { it.isNotEmpty() }?.let { s.notify("otherghostname", *it.toTypedArray()) }
+    }
+
+    /** 一緒に動いているほかのゴーストの、本体側の名前・\0 のサーフェス・\1 のサーフェス（0x01 区切り） */
+    private fun otherGhostNames(): List<String> = hub?.others(this).orEmpty().filter { !it.closing }.map { o ->
+        val chars = o.state.value.characters
+        listOf(o.ghost.sakuraName, (chars[0]?.surface ?: -1).toString(), (chars[1]?.surface ?: -1).toString()).joinToString("\u0001")
+    }
+
+    /** OnDisplayChangeEx の画面1枚分（左,上,右,下,色の深さ,主な画面か,タスクバーの位置,区切り）。タスクバーは無い */
+    private fun displayRect(width: Int, height: Int) = "0,0,$width,$height,32,1,unknown,0"
+
     /** SSP が起動時に NOTIFY で伝える、シェル・バルーン・着せ替え・ユーザー・端末の情報 */
     private suspend fun notifyEnvironment(s: ShioriSession) {
         s.notify(
@@ -769,6 +801,7 @@ class GhostController(
         val dressup = dressupInfo()
         if (dressup.isNotEmpty()) s.notify("OnNotifyDressupInfo", *dressup.toTypedArray())
         s.notify("OnNotifyUserInfo", userName, "", "", "undef")
+        notifyInstalled(s)
         // Owned SSTP の ID（起動ごとに替わる）
         s.notify("uniqueid", uniqueId)
         // 今日の予定（ゴースト用の予定表と、許していれば端末のカレンダー）
@@ -793,6 +826,7 @@ class GhostController(
                 (d.uptimeSeconds / 60).toString(),
             )
             s.notify("OnDisplayChange", "32", d.screenWidth.toString(), d.screenHeight.toString())
+            s.notify("OnDisplayChangeEx", "init", displayRect(d.screenWidth, d.screenHeight))
         }
         val tz = TimeZone.getDefault()
         val now = Date()
@@ -3739,9 +3773,16 @@ class GhostController(
         else -> "application/octet-stream"
     }
 
-    /** 画面の向きや大きさが変わった */
+    /** 画面の向きや大きさが変わった。OnDisplayChangeEx（update）に答えが無ければ、古い OnDisplayChange */
     fun onDisplayChanged(width: Int, height: Int) {
-        raise("OnDisplayChange", listOf("32", width.toString(), height.toString()), userInitiated = false)
+        scope.launch {
+            val script = request("OnDisplayChangeEx", listOf("update", displayRect(width, height)))
+                ?: request("OnDisplayChange", listOf("32", width.toString(), height.toString()))
+                ?: return@launch
+            if (_state.value.talking || _state.value.waitingChoice) return@launch
+            cancelScript()
+            runScript(script)
+        }
     }
 
     // ---- 入力の箱 ----
@@ -5890,6 +5931,17 @@ class GhostController(
 
         /** \![set,balloonoffset] でずらせる量の上限（シェル画像のピクセル） */
         const val MAX_BALLOON_OFFSET = 2000
+
+        /** 一緒に動いているゴーストが増減したことを知らせるイベント（otherghostname を送り直す） */
+        private val OTHER_GHOST_CHANGES = setOf("OnOtherGhostBooted", "OnOtherGhostClosed", "OnOtherGhostChanged", "OnOtherGhostVanished")
+
+        /** capability で知らせる、pono-droid が送る（request.*）・読む（response.*）SHIORI/3.0 のヘッダ */
+        val CAPABILITIES = listOf(
+            "request.charset", "request.sender", "request.sendertype", "request.securitylevel", "request.securityorigin",
+            "request.status", "request.id", "request.baseid", "request.age", "request.surface", "request.reference",
+            "response.value", "response.charset", "response.errorlevel", "response.errordescription", "response.valuenotify",
+            "response.balloonoffset", "response.securitylevel", "response.reference",
+        )
 
         /** 前に起動したときの pono-droid の版（OnBasewareUpdated） */
         private const val PROFILE_BASEWARE_VERSION = "basewareversion"
