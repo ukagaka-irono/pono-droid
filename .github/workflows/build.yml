@@ -45,6 +45,22 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
+      # 落ちたテストを注釈にして出す（ログを開かなくても、どのテストがなぜ落ちたか分かるように）
+      - name: Show failed tests
+        if: failure()
+        run: |
+          python3 - <<'EOF'
+          import glob, xml.etree.ElementTree as E
+          paths = glob.glob('baseware/build/test-results/test/*.xml') + glob.glob('app/build/test-results/testDebugUnitTest/*.xml')
+          for p in paths:
+              for tc in E.parse(p).getroot().iter('testcase'):
+                  for x in tc:
+                      if x.tag in ('failure', 'error'):
+                          msg = (x.get('message') or '').replace('\n', ' ')[:300]
+                          where = [l.strip() for l in (x.text or '').splitlines() if 'net.pono' in l][:3]
+                          print('::error title=%s.%s::%s | %s' % (tc.get('classname').split('.')[-1], tc.get('name'), msg, ' / '.join(where)))
+          EOF
+
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v7
