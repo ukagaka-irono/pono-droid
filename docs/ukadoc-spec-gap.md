@@ -4,28 +4,26 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1283・一部だけ 52・作る 96・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1285・一部だけ 54・作る 92・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
-済み 154 項目。
+済み 156 項目。
 
-### 🔨 作る（10）
+### 🔨 作る（6）
 - craftmanurl,URL — バルーンでは使っていない。アプリのバルーンの一覧に作者の URL を出す
-- number.yb,座標 — number.y の別名として読むだけ。縦書きの意味は vertical と一緒に
 - readme.charset,文字コード — バルーンの readme と一緒に作る。TextCharsets で読む
 - readme,ファイル名 — バルーンの readme を開く所が無い（ゴーストだけ）。インストール後とバルーンの一覧から TextViewerActivity で出す
-- sstpmessage.yb,座標 — 縦書きのときだけ使う。vertical と一緒に
-- vertical,0/1 — 縦書きが無い（balloon.scope.vertical もいつも 0）。Compose に縦書きが無いので1文字ずつ並べる組版が要る
-- wordwrappoint.y,座標 — 縦書きのときだけ使う。vertical と一緒に
 - 推奨の意味 — 推奨の意味の説明。ゴーストを消すとき推奨バルーンも消すか聞く動きは recommended.ghost と一緒に作る
 - recommended.ghost,ゴースト名 — 読んでいない。ほかのゴーストで選ぶとき警告し、そのゴーストを消すとき一緒に消すか聞く
 - recommended.ghost.path,パス — recommended.ghost と一緒に。ゴーストのフォルダ名で比べる
 
-### 🔧 一部だけ（3）
+### 🔧 一部だけ（5）
 - balloons\*s.txt/balloonk\*s.txt — 画像ごとの balloons*s.txt で、文字の範囲・矢印や印の位置・windowposition を上書きする。文字の色・大きさ・書体は descript.txt のまま
 - overlay_outside_balloon,数値 — 0 ならオンライン・SSTP の印をバルーンの画像の中に収め、1 なら収めない。ウィンドウを印の分だけ広げてはいない
+- sstpmessage.yb,座標 — 縦書きのときの印の文字の終わりとして読むが、印の文字は縦書きにしていない
 - use_input_alpha,数値 — 1 なら入力の箱の画像もバルーンと同じ透明度の扱いにする。バルーン全体を半透明にする設定は pono-droid に無い
+- vertical,0/1 — 1 なら上から下へ字を送り、右から左へ列を送る（縦書き用の句読点・かっこ、長音と英数字は回す、小さい仮名は右上）。\f[align] は列の中の寄せ。選択肢の長押しのカーソル、\f[valign] の厚み方向の寄せ、印の文字と数の縦書きは無い
 
 ### ⛔ 作れない（4）
 - cursor,ファイル名 / mousecursor,ファイル名 — マウスカーソルが無い（タッチで操作する）

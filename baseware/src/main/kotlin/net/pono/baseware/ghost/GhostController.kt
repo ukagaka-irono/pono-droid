@@ -4950,7 +4950,8 @@ class GhostController(
                     "y" -> g?.balloon?.top?.toString() ?: "0"
                     "rect" -> (g?.balloon ?: ScreenRect(0, 0, 0, 0)).toString()
                     "scaling" -> formatNumber((g?.balloonScale ?: 1.0) * 100)
-                    "vertical" -> "0"
+                    // バルーンの vertical（縦書き）
+                    "vertical" -> if (balloon?.vertical == true) "1" else "0"
                     "validwidth", "validheight", "validwidth.initial", "validheight.initial", "lines", "lines.initial", "char_width",
                     "basepos.x", "basepos.y",
                     ->

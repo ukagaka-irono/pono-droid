@@ -179,10 +179,23 @@ class Balloon private constructor(val dir: File, private val base: Descript, pri
         val originY = coord("origin.y", imageHeight)
         val rectLeft = coord("validrect.left", imageWidth)
         val rectTop = coord("validrect.top", imageHeight)
-        val left = (if (fromOrigin) originX ?: rectLeft else rectLeft ?: originX) ?: DEFAULT_MARGIN
-        val top = (if (fromOrigin) originY ?: rectTop else rectTop ?: originY) ?: DEFAULT_MARGIN
-        val right = (end("wordwrappoint.x", imageWidth) ?: end("validrect.right", imageWidth)) ?: (imageWidth - DEFAULT_MARGIN)
-        val bottom = end("validrect.bottom", imageHeight) ?: (imageHeight - DEFAULT_MARGIN)
+        val left: Int
+        val top: Int
+        val right: Int
+        val bottom: Int
+        if (vertical) {
+            // 縦書きでは origin.x が1列目の右端、origin.y が字送りの始まり、折り返しは wordwrappoint.y（wordwrappoint.x は見ない）
+            left = rectLeft ?: DEFAULT_MARGIN
+            top = (if (fromOrigin) originY ?: rectTop else rectTop ?: originY) ?: DEFAULT_MARGIN
+            val rectRight = end("validrect.right", imageWidth) ?: (imageWidth - DEFAULT_MARGIN)
+            right = if (fromOrigin) originX ?: rectRight else rectRight
+            bottom = (if (fromOrigin) end("wordwrappoint.y", imageHeight) else null) ?: end("validrect.bottom", imageHeight) ?: (imageHeight - DEFAULT_MARGIN)
+        } else {
+            left = (if (fromOrigin) originX ?: rectLeft else rectLeft ?: originX) ?: DEFAULT_MARGIN
+            top = (if (fromOrigin) originY ?: rectTop else rectTop ?: originY) ?: DEFAULT_MARGIN
+            right = (end("wordwrappoint.x", imageWidth) ?: end("validrect.right", imageWidth)) ?: (imageWidth - DEFAULT_MARGIN)
+            bottom = end("validrect.bottom", imageHeight) ?: (imageHeight - DEFAULT_MARGIN)
+        }
         // 範囲がおかしいバルーンでも文字が消えないよう、画像の中に最低限の大きさは残す
         val minW = minOf(MIN_SIZE, imageWidth)
         val minH = minOf(MIN_SIZE, imageHeight)
@@ -192,6 +205,9 @@ class Balloon private constructor(val dir: File, private val base: Descript, pri
     }
 
     // ---- バルーンの置き方・見え方 ----
+
+    /** vertical が 1 なら縦書き（上から下へ字を送り、右から左へ行を送る） */
+    val vertical: Boolean get() = int("vertical") == 1
 
     /** windowposition.x / y（画像ごとの上書きと descript.txt）。x の center / top はシェルの中央上、bottom は中央下 */
     val windowPosition: BalloonWindowPosition
@@ -354,12 +370,18 @@ class Balloon private constructor(val dir: File, private val base: Descript, pri
     /** 印の文字を置く位置（sstpmessage.x / y。負なら右端・下端から）。書いてなければ null（文字の範囲の左上） */
     fun markerPosition(imageWidth: Int, imageHeight: Int): Pair<Int, Int>? = position("sstpmessage.x", "sstpmessage.y", imageWidth, imageHeight)
 
-    /** 印の文字の右の端（sstpmessage.xr）。ここで切る。書いてなければ null（画像の右端まで） */
-    fun markerEnd(imageWidth: Int): Int? = coord("sstpmessage.xr", imageWidth)
+    /** 印の文字の右の端（sstpmessage.xr）。ここで切る。縦書きでは使わない。書いてなければ null（画像の右端まで） */
+    fun markerEnd(imageWidth: Int): Int? = if (vertical) null else coord("sstpmessage.xr", imageWidth)
 
-    /** 数の右端の位置（number.x か number.xr と number.y）。書いてなければ null（文字の範囲の右下） */
+    /** 縦書きのときの、印の文字の下の端（sstpmessage.yb）。書いてなければ null */
+    fun markerEndY(imageHeight: Int): Int? = if (vertical) coord("sstpmessage.yb", imageHeight) else null
+
+    /**
+     * 数の右端の位置（number.x か number.xr と number.y）。縦書きでは x は数を置く列、y（number.yb と同じ）は数の下端。
+     * 書いてなければ null（文字の範囲の右下）
+     */
     fun numberPosition(imageWidth: Int, imageHeight: Int): Pair<Int, Int>? =
-        position(if (value("number.xr") != null) "number.xr" else "number.x", "number.y", imageWidth, imageHeight)
+        position(if (value("number.xr") != null) "number.xr" else "number.x", if (value("number.yb") != null) "number.yb" else "number.y", imageWidth, imageHeight)
 
     val markerFontHeight: Int? get() = int("sstpmessage.font.height")
     val markerColor: BalloonColor? get() = color("sstpmessage.font.color")

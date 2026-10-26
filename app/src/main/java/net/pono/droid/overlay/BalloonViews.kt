@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -387,13 +388,22 @@ fun SkinBalloon(
         // 文字の高さを測って、収まる画像を選ぶ
         val chosen = requested ?: candidates.indices.firstOrNull { i ->
             val area = candidates[i].area
-            val measured = subcompose("measure$i") { BalloonBody(items, choices, style) }
-                .first().measure(Constraints(minWidth = 0, maxWidth = (area.width * scale).toInt()))
-            measured.height <= area.height * scale
+            if (candidates[i].look.vertical) {
+                // 縦書きは列の長さを決めて組み、幅が収まるか見る
+                val measured = subcompose("measure$i") { VerticalBalloonBody(items, choices, style, (area.height * scale).toInt()) }
+                    .first().measure(Constraints())
+                measured.width <= area.width * scale
+            } else {
+                val measured = subcompose("measure$i") { BalloonBody(items, choices, style) }
+                    .first().measure(Constraints(minWidth = 0, maxWidth = (area.width * scale).toInt()))
+                measured.height <= area.height * scale
+            }
         } ?: candidates.lastIndex
         val image = candidates[chosen]
         val placeable = subcompose("balloon") {
-            SkinFrame(image, skin, scopeId, scale, scroll, onlineFrames, labels, style, clickWait, sstp) { BalloonBody(items, choices, style) }
+            SkinFrame(image, skin, scopeId, scale, scroll, onlineFrames, labels, style, clickWait, sstp) {
+                if (image.look.vertical) VerticalBalloonBody(items, choices, style, (image.area.height * scale).toInt()) else BalloonBody(items, choices, style)
+            }
         }.first().measure(Constraints())
         layout(placeable.width, placeable.height) { placeable.place(0, 0) }
     }
@@ -474,15 +484,18 @@ private fun SkinFrame(
                 b.numberFontNames,
             )
         }
+        // 縦書きは列が右から左へ増えるので、横にスクロールする（右端が始まり）
+        val vertical = look.vertical
         Box(
             Modifier
                 .offset(px(image.area.left), px(image.area.top))
                 .size(px(image.area.width), px(image.area.height))
-                .verticalScroll(scroll),
+                .let { if (vertical) it.horizontalScroll(scroll, reverseScrolling = true) else it.verticalScroll(scroll) },
+            contentAlignment = if (vertical) Alignment.TopEnd else Alignment.TopStart,
         ) {
             content()
         }
-        val page = (image.area.height * scale * 0.8f).toInt()
+        val page = ((if (vertical) image.area.width else image.area.height) * scale * 0.8f).toInt()
         // クリック待ちの印（clickwait.png など）。続きの矢印が出ているときは重ならないよう矢印を優先する
         val more = scroll.value < scroll.maxValue
         if (clickWait && !more) skin.clickWait(scopeId)?.let { mark ->
@@ -735,7 +748,7 @@ private fun BalloonText(
 
 /** \_b の画像。[dpPerPx] は画像の 1px を何 dp で描くか。読めない・大きすぎる画像は出さない */
 @Composable
-private fun BalloonPicture(path: String, opaque: Boolean, dpPerPx: Float, modifier: Modifier) {
+internal fun BalloonPicture(path: String, opaque: Boolean, dpPerPx: Float, modifier: Modifier) {
     val bitmap by produceState<ImageBitmap?>(null, path, opaque) {
         // 左上の色を透過色にする（opaque なら抜かない）。PNG にアルファがあればそれを使う
         value = withContext(Dispatchers.IO) {

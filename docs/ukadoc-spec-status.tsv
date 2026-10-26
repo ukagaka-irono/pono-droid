@@ -138,11 +138,11 @@ descript/balloon/descript-txt/number.font.name.md	DONE	number.font.name,フォ�
 descript/balloon/descript-txt/number.x.md	DONE	number.x,座標	Balloon.numberPosition（右端にそろえる）
 descript/balloon/descript-txt/number.xr.md	DONE	number.xr,座標	Balloon.numberPosition
 descript/balloon/descript-txt/number.y.md	DONE	number.y,座標	Balloon.numberPosition
-descript/balloon/descript-txt/number.yb.md	BUILD	number.yb,座標	number.y の別名として読むだけ。縦書きの意味は vertical と一緒に
+descript/balloon/descript-txt/number.yb.md	DONE	number.yb,座標	number.y と同じもの（縦書きでは数の下端）として読む
 descript/balloon/descript-txt/onlinemarker.interval.md	DONE	onlinemarker.interval,待機時間	Balloon.onlineInterval（50 ミリ秒より短くしない）
 descript/balloon/descript-txt/onlinemarker.x.md	DONE	onlinemarker.x,座標	Balloon.onlinePosition
 descript/balloon/descript-txt/onlinemarker.y.md	DONE	onlinemarker.y,座標	Balloon.onlinePosition
-descript/balloon/descript-txt/origin.x.md	DONE	origin.x,座標	負の値は右端から、--数値 は本当の負の数（縦書きの意味は vertical と一緒に）
+descript/balloon/descript-txt/origin.x.md	DONE	origin.x,座標	負の値は右端から、--数値 は本当の負の数。縦書きでは1列目の右端
 descript/balloon/descript-txt/origin.y.md	DONE	origin.y,座標	負の値は下端から、--数値 は本当の負の数
 descript/balloon/descript-txt/overlay_outside_balloon.md	PARTIAL	overlay_outside_balloon,数値	0 ならオンライン・SSTP の印をバルーンの画像の中に収め、1 なら収めない。ウィンドウを印の分だけ広げてはいない
 descript/balloon/descript-txt/paint_transparent_region_black.md	DONE	paint_transparent_region_black,数値	.pna の画像は既定で、左上の色の所を黒にしてから透明度を掛ける（0 / 1 で決められる）
@@ -158,7 +158,7 @@ descript/balloon/descript-txt/sstpmessage.font.name.md	DONE	sstpmessage.font.nam
 descript/balloon/descript-txt/sstpmessage.x.md	DONE	sstpmessage.x,座標	Balloon.markerPosition
 descript/balloon/descript-txt/sstpmessage.xr.md	DONE	sstpmessage.xr,座標	印の文字をこの位置で切る（負は右端から）
 descript/balloon/descript-txt/sstpmessage.y.md	DONE	sstpmessage.y,座標	Balloon.markerPosition
-descript/balloon/descript-txt/sstpmessage.yb.md	BUILD	sstpmessage.yb,座標	縦書きのときだけ使う。vertical と一緒に
+descript/balloon/descript-txt/sstpmessage.yb.md	PARTIAL	sstpmessage.yb,座標	縦書きのときの印の文字の終わりとして読むが、印の文字は縦書きにしていない
 descript/balloon/descript-txt/type.md	DONE	type,種別	インストールで type を見る
 descript/balloon/descript-txt/use_input_alpha.md	PARTIAL	use_input_alpha,数値	1 なら入力の箱の画像もバルーンと同じ透明度の扱いにする。バルーン全体を半透明にする設定は pono-droid に無い
 descript/balloon/descript-txt/use_self_alpha.md	DONE	use_self_alpha,値	0（既定。画像のアルファを使わない）・1 / true・full の3通り
@@ -166,12 +166,12 @@ descript/balloon/descript-txt/validrect.bottom.md	DONE	validrect.bottom,座標	0
 descript/balloon/descript-txt/validrect.left.md	DONE	validrect.left,座標	負の値は右端から、--数値 は本当の負の数
 descript/balloon/descript-txt/validrect.right.md	DONE	validrect.right,座標	0 以下は右端から
 descript/balloon/descript-txt/validrect.top.md	DONE	validrect.top,座標	負の値は下端から、--数値 は本当の負の数
-descript/balloon/descript-txt/vertical.md	BUILD	vertical,0/1	縦書きが無い（balloon.scope.vertical もいつも 0）。Compose に縦書きが無いので1文字ずつ並べる組版が要る
+descript/balloon/descript-txt/vertical.md	PARTIAL	vertical,0/1	1 なら上から下へ字を送り、右から左へ列を送る（縦書き用の句読点・かっこ、長音と英数字は回す、小さい仮名は右上）。\f[align] は列の中の寄せ。選択肢の長押しのカーソル、\f[valign] の厚み方向の寄せ、印の文字と数の縦書きは無い
 descript/balloon/descript-txt/windowposition.limit.md	DONE	windowposition.limit,0/1	0 ならバルーンのウィンドウを画面からはみ出せるようにする
 descript/balloon/descript-txt/windowposition.x.md	DONE	windowposition.x,座標	descript.txt（と画像ごとの上書き）の数値は右へずらし、center / top はシェルの中央上、bottom は中央下
 descript/balloon/descript-txt/windowposition.y.md	DONE	windowposition.y,座標	下へずらす（center / bottom の基本位置からも）
 descript/balloon/descript-txt/wordwrappoint.x.md	DONE	wordwrappoint.x,座標	Balloon.textArea の右端
-descript/balloon/descript-txt/wordwrappoint.y.md	BUILD	wordwrappoint.y,座標	縦書きのときだけ使う。vertical と一緒に
+descript/balloon/descript-txt/wordwrappoint.y.md	DONE	wordwrappoint.y,座標	縦書きのときの折り返し（無ければ validrect.bottom）
 descript/balloon/index.md	DONE	Balloon設定	*1 の座標はどれも負なら右端・下端から、--数値 は本当の負の数
 descript/balloon/recommended-ghost/caption_recommended.md	BUILD	推奨の意味	推奨の意味の説明。ゴーストを消すとき推奨バルーンも消すか聞く動きは recommended.ghost と一緒に作る
 descript/balloon/recommended-ghost/index.md	NA	descript.txt - 推奨ゴースト	一覧のページ
@@ -650,7 +650,7 @@ list/propertysystem/property-system/currentghost.balloon.scope-ID-.validheight.i
 list/propertysystem/property-system/currentghost.balloon.scope-ID-.validheight.md	DONE	currentghost.balloon.scope(ID).validheight	実装済み
 list/propertysystem/property-system/currentghost.balloon.scope-ID-.validwidth.initial.md	DONE	currentghost.balloon.scope(ID).validwidth.initial	実装済み
 list/propertysystem/property-system/currentghost.balloon.scope-ID-.validwidth.md	DONE	currentghost.balloon.scope(ID).validwidth	実装済み
-list/propertysystem/property-system/currentghost.balloon.scope-ID-.vertical.md	DONE	currentghost.balloon.scope(ID).vertical	pono-droid のバルーンは横書きだけなので 0
+list/propertysystem/property-system/currentghost.balloon.scope-ID-.vertical.md	DONE	currentghost.balloon.scope(ID).vertical	バルーンの vertical（縦書きなら 1）
 list/propertysystem/property-system/currentghost.balloon.scope-ID-.x.md	DONE	currentghost.balloon.scope(ID).x	実装済み
 list/propertysystem/property-system/currentghost.balloon.scope-ID-.y.md	DONE	currentghost.balloon.scope(ID).y	実装済み
 list/propertysystem/property-system/currentghost.md	DONE	currentghost.汎用プロパティ名	ghostProperty に回す
