@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1081・一部だけ 65・作る 285・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1124・一部だけ 66・作る 241・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -90,25 +90,12 @@
 
 ## ゴーストの descript.txt
 
-済み 30 項目。
+済み 42 項目。
 
-### 🔨 作る（30）
-- balloon.defaultsurface,数値 — \b の既定を 0 でなく descript.txt の値にする（balloonId が null のときの番号）
-- balloon.syncscale,true — バルーンの拡大率はアプリの設定でキャラクターと別。true ならキャラクターの拡大率に合わせる
-- char\*.balloon.defaultsurface,数値 — \p[N] の \b の既定（balloon.defaultsurface と同じところで）
-- char\*.seriko.alignmenttodesktop,位置情報 — \![set,alignmenttodesktop] はある。起動時の既定を descript.txt から決める（ゴースト全体＜ゴーストのスコープ＜シェル全体＜シェルのスコープ）
-- don't need bind,数値 — 1 なら着せ替えのメニューと \![bind] を止める
-- don't need seriko talk,数値 — 1 なら interval が talk の口パクを動かさない
-- don't need onmousemove,数値 — 1 なら onMouseMove（なでる）を送らない
-- kero.balloon.defaultsurface,数値 — \1 の \b の既定（balloon.defaultsurface と同じところで）
-- kero.seriko.alignmenttodesktop,位置情報 — \1 の alignmenttodesktop の既定（seriko.alignmenttodesktop と一緒に）
+### 🔨 作る（17）
 - menu.font.height,フォントサイズ — メニューはバルーンに出すので、\f[height] をメニューのスクリプトの頭に付ける（シェルの指定が先）
 - menu.font.name,フォント名 — 同じく \f[name] を付ける
-- name.allowoverride,数値 — シェルの sakura.name などを使う仕組みを作るとき、0 なら使わない
 - readme.charset,文字コード — readme は UTF-8 か CP932 の自動判定だけ。readme.charset があればそれで読む
-- sakura.balloon.defaultsurface,数値 — \0 の \b の既定（balloon.defaultsurface と同じところで）
-- sakura.seriko.alignmenttodesktop,位置情報 — \0 の alignmenttodesktop の既定（seriko.alignmenttodesktop と一緒に）
-- seriko.alignmenttodesktop,位置情報 — 既定は bottom（下の端に付けて縦に動かさない）。今は自由に動かせる。descript.txt を読んで既定にする
 - seriko.defaultsurfacedirectoryname,ディレクトリ名 — Ghost.defaultShellDir が master 決め打ち。この値のディレクトリを先に探す
 - shiori.encoding,文字コード — ShioriSession の最初の文字コードを charset でなくこれにする（Charset ヘッダが来たらそちら）
 - shiori.escape_unknown,0/1 — ShioriRequest.encode で変換できない文字を ?escape!unicode[0xABCD] にし、答えで戻す
@@ -124,9 +111,10 @@
 - recommended.balloon,バルーン名 — 既定のバルーンにし、ほかに切り替えるときに確かめる
 - recommended.balloon.path,パス — パスで探す。ほかに切り替えるときに確かめる
 
-### 🔧 一部だけ（2）
+### 🔧 一部だけ（3）
 - descript.txt（Ghostの） — 説明のページ。\ や % で始まる値を捨てる決まりはしていない（名前などをメニューのスクリプトにそのまま入れている）
 - readme,ファイル名 — メニューと \![open,readme] からは開ける。インストールしたときには開かない
+- seriko.alignmenttodesktop,位置情報 — 書いてあればその吸着にする。どこにも書いていないときは bottom でなく自由に動かせる（スマートフォンの画面なので、下の端に並べない）
 
 ### ⛔ 作れない（9）
 - cursor,ファイル名 / mousecursor,ファイル名 — マウスカーソルが無い（⛔）
@@ -152,37 +140,20 @@
 
 ## シェルの descript.txt
 
-済み 24 項目。
+済み 55 項目。
 
-### 🔨 作る（58）
-- char\*.balloon.syncscale,true — シェルの balloon.syncscale（ゴーストの指定より先）
+### 🔨 作る（27）
 - char\*.bindgroup\*.addid,ID — 着せ替えを付けたら addid のものも付け、元が全部外れたら外す（applyBind）
 - char\*.bindoption\*.group,カテゴリ名,オプション — 今は同じカテゴリから 1 つ・外せる、の決め打ち。mustselect と multiple を applyBind に入れる
-- char\*.defaultleft,X座標 — シェルの descript.txt の既定位置を読んでいない（SHIORI リソース＞シェル＞ゴーストの順にする）
-- char\*.defaulttop,Y座標 — 同上
-- char\*.defaultx,X座標 — 同上
-- char\*.defaulty,Y座標 — 同上
 - char\*.menuitem\*,ID — 着せ替えのメニューを menuitem の順に並べ、- で区切りを入れる（dressupMenu）
 - char\*.menuitemex\*,メニュー名,ID — 着せ替えのメニューにメニュー名の階層を作る（dressupMenu）
-- char\*.name,名前 — シェルの名前でゴーストの名前を上書きしていない（name.allowoverride と一緒に）
-- char\*.seriko.alignmenttodesktop,位置情報 — シェルのスコープの alignmenttodesktop（いちばん先）
 - craftman,作者名 — シェルの作者を出すところが無い。シェルの一覧に出す
 - craftmanurl,URL — 同上
 - craftmanw,作者名 — 同上
-- kero.balloon.alignment,位置情報 — \![set,balloonalign] はある。既定をこれにする（none は画面の真ん中より左なら右、右なら左）
-- kero.balloon.offsetx,座標 — \![set,balloonoffset] はある。既定をこれにする（l / r / c / b 付きも）。ssp-gap.md の ⛔ は古い
-- kero.balloon.offsety,座標 — 同上
-- kero.balloon.syncscale,true — シェルの \1 の syncscale
 - kero.bindgroup\*.addid,ID — addid（char*.bindgroup*.addid と同じ）
 - kero.bindoption\*.group,カテゴリ名,オプション — mustselect / multiple（char*.bindoption*.group と同じ）
-- kero.defaultleft,X座標 — シェルの descript.txt の既定位置を読んでいない
-- kero.defaulttop,Y座標 — 同上
-- kero.defaultx,X座標 — 同上
-- kero.defaulty,Y座標 — 同上
 - kero.menuitem\*,ID — menuitem の順と区切り（char*.menuitem* と同じ）
 - kero.menuitemex\*,メニュー名,ID — menuitemex の階層（char*.menuitemex* と同じ）
-- kero.name,名前 — シェルの kero.name でゴーストの名前を上書きしていない
-- kero.seriko.alignmenttodesktop,位置情報 — シェルの \1 の alignmenttodesktop
 - menu.background.font.color.b,数値 — SHIORI リソースのものは使う。シェルの descript.txt のものも読む（menuColors、リソースが先）
 - menu.background.font.color.g,数値 — 同上
 - menu.background.font.color.r,数値 — 同上
@@ -193,26 +164,12 @@
 - menu.foreground.font.color.r,数値 — 同上
 - readme.charset,文字コード — シェルの readme を作るとき、この文字コードで読む
 - readme,ファイル名 — シェルの readme を開くところが無い。シェルのメニューか一覧から開けるようにする
-- sakura.balloon.alignment,位置情報 — \0 の balloonalign の既定（kero.balloon.alignment と同じ）
-- sakura.balloon.offsetx,座標 — \0 の balloonoffset の既定（l / r / c / b 付きも）。ssp-gap.md の ⛔ は古い
-- sakura.balloon.offsety,座標 — 同上
-- sakura.balloon.syncscale,true — シェルの \0 の syncscale
 - sakura.bindgroup\*.addid,ID — addid
 - sakura.bindoption\*.group,カテゴリ名,オプション — mustselect / multiple
-- sakura.defaultleft,X座標 — シェルの descript.txt の既定位置を読んでいない
-- sakura.defaulttop,Y座標 — 同上
-- sakura.defaultx,X座標 — 同上
-- sakura.defaulty,Y座標 — 同上
 - sakura.menuitem\*,ID — menuitem の順と区切り
 - sakura.menuitemex\*,メニュー名,ID — menuitemex の階層
-- sakura.name,名前 — シェルの sakura.name でゴーストの名前を上書きしていない
-- sakura.name2,名前 — シェルの sakura.name2 で %selfname2 を上書きしていない
-- sakura.seriko.alignmenttodesktop,位置情報 — シェルの \0 の alignmenttodesktop
-- seriko.alignmenttodesktop,位置情報 — シェル全体の alignmenttodesktop
 - seriko.dpi,推奨DPI — シェル画像の倍率に 96 / dpi を掛ける（SurfaceRenderer と当たり判定）
 - seriko.paint_transparent_region_black,数値 — .pna のとき、左上の色の画素を黒にしてから透明度を掛ける（既定は 1 相当）。今は色のまま
-- seriko.sticky-window,スコープID,スコープID,... — \![set,sticky-window] はある。シェルの descript.txt から起動時の組を作っていない
-- seriko.zorder,スコープID,スコープID,... — \![set,zorder] はある。シェルの descript.txt から起動時の順を作っていない
 
 ### 🔧 一部だけ（4）
 - char\*.bindgroup\*.name,カテゴリ名,パーツ名,サムネイル名 — カテゴリとパーツは読む。サムネイル名は読まない（メニューは文字だけ、OnNotifyDressupInfo も空）

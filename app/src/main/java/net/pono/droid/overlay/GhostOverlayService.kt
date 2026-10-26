@@ -683,7 +683,7 @@ class GhostOverlayService : LifecycleService() {
             positionsJob?.cancel()
             positionsJob = lifecycleScope.launch {
                 c.state.map { s ->
-                    s.characters.mapValues { (_, ch) -> listOf(ch.move?.first, ch.pinned, ch.nudge?.first, ch.alignment, ch.balloonAlign, ch.balloonOffset) }
+                    s.characters.mapValues { (_, ch) -> listOf(ch.move?.first, ch.pinned, ch.nudge?.first, ch.alignment, ch.balloonAlign, ch.balloonOffset, ch.balloonOffsetRelative, ch.balloonOffsets) }
                 }
                     .distinctUntilChanged()
                     .collect { applyPositions(c) }

@@ -117,7 +117,8 @@ fun CharacterSurface(
     // 話した文字の数が増えたら talk,N の、話し終えたら yen-e のアニメーションを動かす（シェルを替えると数え直すので、減ったら合わせるだけ）
     var talked by remember { mutableIntStateOf(character.talkCount) }
     LaunchedEffect(character.talkCount) {
-        if (character.talkCount > talked && state.screenOn) animator.talk(talked, character.talkCount)
+        // descript.txt の don't need seriko talk なら口パクを動かさない
+        if (character.talkCount > talked && state.screenOn && !controller.serikoTalkDisabled) animator.talk(talked, character.talkCount)
         talked = character.talkCount
     }
     var ended by remember { mutableIntStateOf(state.scriptEnds) }
@@ -367,7 +368,7 @@ private fun TalkBalloon(
     val choices = ChoiceActions(controller::onChoice, { controller.onChoiceHover(it) }, visited)
     val labels = BalloonLabels(character.balloonMarker, character.balloonNum)
     if (skin != null) {
-        SkinBalloon(items, skin, scopeId, character.balloonId, onClick, choices, character.autoScroll, online, labels)
+        SkinBalloon(items, skin, scopeId, character.balloonId ?: character.defaultBalloonId, onClick, choices, character.autoScroll, online, labels)
     } else {
         SimpleBalloon(items, onClick, choices, character.autoScroll, online, labels)
     }

@@ -98,6 +98,8 @@ data class CharacterState(
     val binds: Set<Int> = emptySet(),
     /** \b[n] で選ばれたバルーンの番号。null なら文字の量に合わせて選ぶ、-1 ならバルーンを出さない */
     val balloonId: Int? = null,
+    /** descript.txt の balloon.defaultsurface など。\b[n] が無いときに使うバルーンの番号（書いていなければ null で、文字の量に合わせる） */
+    val defaultBalloonId: Int? = null,
     /** \![set,scaling,横,縦] の倍率（1 で等倍、負なら反転） */
     val scaleX: Float = 1f,
     val scaleY: Float = 1f,
@@ -120,7 +122,14 @@ data class CharacterState(
     val autoScroll: Boolean = true,
     /** \![set,balloonoffset,x,y]。バルーンをいつもの位置からずらす量（シェル画像のピクセル、右と下が正） */
     val balloonOffset: Pair<Int, Int>? = null,
-    /** \![set,balloonalign,...]。left / center / right / bottom ならキャラクターのその側にバルーンを出す。null ならいつもの上 */
+    /** \![set,balloonoffset,@x,@y] の @（その座標は [balloonOffsets] の既定からずらす） */
+    val balloonOffsetRelative: Pair<Boolean, Boolean> = false to false,
+    /** シェルとゴーストの descript.txt の sakura.balloon.offsetx など。バルーンを出す向きごとの既定のずれ */
+    val balloonOffsets: BalloonOffsets = BalloonOffsets(),
+    /**
+     * \![set,balloonalign,...] か descript.txt の sakura.balloon.alignment。left / center / right / bottom ならキャラクターのその側に、
+     * auto（descript.txt の none）なら画面の真ん中より左にいれば右、右にいれば左にバルーンを出す。null ならいつもの上
+     */
     val balloonAlign: String? = null,
     /** \![set,balloonmarker,文字]。バルーンに出す印の文字（SSP では SSTP の送り主を出すところ） */
     val balloonMarker: String? = null,
@@ -196,3 +205,14 @@ data class GhostState(
         return copy(characters = characters + (scope to f(current)))
     }
 }
+
+/**
+ * バルーンを出す向きごとの既定のずれ（シェル画像のピクセル）。x はどの向きでもシェルに近づく向きが正
+ * （左に出すときは右、右に出すときは左、上と下では右）、y は下が正
+ */
+data class BalloonOffsets(
+    val left: Pair<Int, Int> = 0 to 0,
+    val right: Pair<Int, Int> = 0 to 0,
+    val center: Pair<Int, Int> = 0 to 0,
+    val bottom: Pair<Int, Int> = 0 to 0,
+)

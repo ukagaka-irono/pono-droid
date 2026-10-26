@@ -34,6 +34,7 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import net.pono.baseware.ghost.BalloonOffsets
 import net.pono.baseware.ghost.DefaultPosition
 import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.ghost.ScreenRect
@@ -153,7 +154,9 @@ class CharacterWindow(
         }
         balloonView.setContent {
             FitWindow(corner, onSize = { w, h -> resize(balloonView, balloonParams, w, h) }) {
-                CompositionLocalProvider(LocalBalloonScale provides balloonScale.floatValue) {
+                // descript.txt の balloon.syncscale が true なら、バルーンもキャラクターの大きさに合わせる
+                val bs = if (controller.balloonSyncScale(scopeId)) scale.floatValue else balloonScale.floatValue
+                CompositionLocalProvider(LocalBalloonScale provides bs) {
                     CharacterBalloon(scopeId, controller, balloonSkin)
                 }
             }
@@ -238,18 +241,41 @@ class CharacterWindow(
     }
 
     /**
-     * バルーンのウィンドウをサーフェスに合わせる。いつもは真上で、\![set,balloonalign] なら左・右（上の端をそろえる）・
-     * 真ん中の上・下に置き、\![set,balloonoffset] の分（シェル画像のピクセル）だけずらす
+     * バルーンのウィンドウをサーフェスに合わせる。いつもは真上で、\![set,balloonalign] や descript.txt の balloon.alignment なら
+     * 左・右（上の端をそろえる）・真ん中の上・下に置く（auto は画面の真ん中より左にいれば右、右にいれば左）。
+     * descript.txt の balloon.offsetx などの、その向きの既定のずれと \![set,balloonoffset] の分（シェル画像のピクセル）だけずらす
      */
     private fun placeBalloon(add: Boolean = false) {
         val c = controller.state.value.characters[scopeId]
         val pxPerImagePx = scale.floatValue * context.resources.displayMetrics.density
-        val (ox, oy) = c?.balloonOffset?.let { (x, y) -> (x * pxPerImagePx).toInt() to (y * pxPerImagePx).toInt() } ?: (0 to 0)
         val sw = if (params.width > 0) params.width else surfaceView.width
         val bw = balloonParams.width.coerceAtLeast(0)
         val bh = balloonParams.height.coerceAtLeast(0)
+        val align = when (c?.balloonAlign) {
+            "auto" -> {
+                val screenWidth = context.resources.displayMetrics.widthPixels
+                val center = if (alignEnd) screenWidth - params.x - sw / 2 else params.x + sw / 2
+                if (center < screenWidth / 2) "right" else "left"
+            }
+            else -> c?.balloonAlign
+        }
+        // 既定のずれは、x がシェルに近づく向きで正（右に出すときは左向き）。ここでは右向きを正にする
+        val defaults = c?.balloonOffsets ?: BalloonOffsets()
+        val (dx, dy) = when (align) {
+            "left" -> defaults.left
+            "right" -> defaults.right.let { (x, y) -> -x to y }
+            "bottom" -> defaults.bottom
+            else -> defaults.center
+        }
+        // \![set,balloonoffset] があればそれ（@ 付きの座標は既定からずらす）
+        val script = c?.balloonOffset
+        val relative = c?.balloonOffsetRelative ?: (false to false)
+        val offX = if (script == null) dx else if (relative.first) dx + script.first else script.first
+        val offY = if (script == null) dy else if (relative.second) dy + script.second else script.second
+        val ox = (offX * pxPerImagePx).toInt()
+        val oy = (offY * pxPerImagePx).toInt()
         // x はウィンドウを寄せた側（\0 などは右、\1 は左）の端からの距離、y は下の端からの距離
-        val (x, y) = when (c?.balloonAlign) {
+        val (x, y) = when (align) {
             "center" -> params.x + (sw - bw) / 2 to params.y + surfaceHeight
             "bottom" -> params.x + (sw - bw) / 2 to params.y - bh
             "left" -> (if (alignEnd) params.x + sw else params.x - bw) to params.y + surfaceHeight - bh

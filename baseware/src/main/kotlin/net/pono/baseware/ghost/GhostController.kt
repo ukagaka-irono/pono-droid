@@ -489,6 +489,7 @@ class GhostController(
         _state.update { it.copy(loading = "読み込み中…") }
         scope.launch {
             resetSurfaces()
+            applyWindowDefaults()
             val loaded = try {
                 loadShiori()
             } finally {
@@ -1538,13 +1539,28 @@ class GhostController(
 
     /** キャラクターの名前（呼びかけを見分けるため）。長い名前から順に */
     private fun characterNames(): List<Pair<Int, String>> = characterScopes.mapNotNull { s ->
-        val name = when (s) {
+        characterName(s).trim().takeIf { it.isNotEmpty() }?.let { s to it }
+    }.sortedByDescending { it.second.length }
+
+    /**
+     * キャラクターの名前。シェルの descript.txt の sakura.name / kero.name / charN.name があればそちら
+     * （ゴーストの name.allowoverride が 0 なら使わない）。ゴーストを見分けるとき（SSTP など）はゴーストの名前のまま
+     */
+    private fun characterName(scope: Int): String {
+        val key = "${Shell.scopeName(scope)}.name"
+        if (nameOverride) shell.descript[key]?.takeIf { it.isNotBlank() }?.let { return it }
+        return when (scope) {
             0 -> ghost.sakuraName
             1 -> ghost.keroName
-            else -> ghost.descript["char$s.name"].orEmpty()
-        }.trim()
-        name.takeIf { it.isNotEmpty() }?.let { s to it }
-    }.sortedByDescending { it.second.length }
+            else -> ghost.descript[key].orEmpty()
+        }
+    }
+
+    /** %selfname2。シェルの sakura.name2、ゴーストの sakura.name2、本体側の名前の順 */
+    private fun selfName2(): String =
+        (if (nameOverride) shell.descript["sakura.name2"]?.takeIf { it.isNotBlank() } else null) ?: ghost.descript["sakura.name2"] ?: characterName(0)
+
+    private val nameOverride: Boolean get() = ghost.descript.int("name.allowoverride") != 0
 
     /**
      * 声を聞き取った（[text]）。キャラクターの名前で呼びかけたら OnVoiceRecognitionWord（Reference1 は名前そのもの）、
@@ -2701,6 +2717,7 @@ class GhostController(
             ghost.selectShell(dir.name)
             shell = next
             resetSurfaces()
+            applyWindowDefaults()
             platform.onShellChanged(next)
             notify("OnNotifyShellInfo", listOf(next.name, dir.absolutePath + "/", next.surfaceIds().joinToString(",")))
             dressupInfo().takeIf { it.isNotEmpty() }?.let { notify("OnNotifyDressupInfo", it) }
@@ -2794,6 +2811,8 @@ class GhostController(
      */
     fun onMouseMove(scopeId: Int, x: Int, y: Int, collision: String?) {
         if (touchBlocked()) return
+        // descript.txt の don't need onmousemove
+        if (ghost.descript.int("don't need onmousemove") == 1) return
         lastUserActivity = System.currentTimeMillis()
         if (mouseMoveInFlight) return
         mouseMoveInFlight = true
@@ -3168,14 +3187,14 @@ class GhostController(
     }
 
     /**
-     * 最初の位置。SHIORI リソースの sakura.defaultx / defaulty / defaultleft / defaulttop（無ければゴーストの descript.txt）。
+     * 最初の位置。SHIORI リソースの sakura.defaultx / defaulty / defaultleft / defaulttop（無ければシェルの、次にゴーストの descript.txt）。
      * キャラクターごとに、決まっているものだけ持つ
      */
     private suspend fun loadDefaultPositions(): Map<Int, DefaultPosition> {
         val out = HashMap<Int, DefaultPosition>()
         for (scopeId in characterScopes) {
             val name = Shell.scopeName(scopeId)
-            suspend fun value(key: String) = ScreenCoordinate.parse(resource("$name.$key") ?: ghost.descript["$name.$key"])
+            suspend fun value(key: String) = ScreenCoordinate.parse(resource("$name.$key") ?: shell.descript["$name.$key"] ?: ghost.descript["$name.$key"])
             val pos = DefaultPosition(value("defaultx"), value("defaulty"), value("defaultleft"), value("defaulttop"))
             if (!pos.isEmpty) out[scopeId] = pos
         }
@@ -3239,7 +3258,7 @@ class GhostController(
             sb.append("\\q[${caption("ポータル", "$scopeName.portalbuttoncaption", "portalrootbutton.caption")},pono:sites,portal,$scopeId]\\n")
         }
         if (!short) sb.append("\\q[ゴーストのメニュー（中クリック）,pono:middle,$scopeId]\\n")
-        if (shell.bindGroups(bindScope).isNotEmpty() && bindMenu(bindScope) != "hidden") {
+        if (!bindDisabled && shell.bindGroups(bindScope).isNotEmpty() && bindMenu(bindScope) != "hidden") {
             sb.append("\\q[${caption("きせかえ", "dressuprootbutton.caption")},pono:dressup,$bindScope]\\n")
         }
         if (!short) {
@@ -4236,17 +4255,89 @@ class GhostController(
         surfaceRestoreJob = null
     }
 
+    /** descript.txt の don't need bind が 1 なら着せ替えを使わない（メニューにも出さず、\![bind] も効かない） */
+    private val bindDisabled: Boolean get() = ghost.descript.int("don't need bind") == 1
+
+    /** descript.txt の don't need seriko talk が 1 なら、interval が talk のアニメーション（口パク）を動かさない */
+    val serikoTalkDisabled: Boolean get() = ghost.descript.int("don't need seriko talk") == 1
+
+    /** バルーンの拡大率をキャラクターに合わせるか（シェルの sakura.balloon.syncscale などか、ゴーストの balloon.syncscale が true） */
+    fun balloonSyncScale(scope: Int): Boolean =
+        listOf(shell.descript["${Shell.scopeName(scope)}.balloon.syncscale"], ghost.descript["balloon.syncscale"]).any { it?.trim()?.lowercase() == "true" }
+
+    /** \b[n] が無いときのバルーンの番号。ゴーストの descript.txt の sakura.balloon.defaultsurface など、次に balloon.defaultsurface */
+    private fun defaultBalloonId(scope: Int): Int? =
+        (ghost.descript.int("${Shell.scopeName(scope)}.balloon.defaultsurface") ?: ghost.descript.int("balloon.defaultsurface"))?.takeIf { it >= 0 }
+
+    /** \![set,alignmenttodesktop] で決めたもの（"free" は自由）。default で消すと descript.txt の既定に戻る */
+    private val scriptAlignment = HashMap<Int, String>()
+
+    private fun alignmentOf(scope: Int): String? = (scriptAlignment[scope] ?: defaultAlignment(scope))?.takeIf { it != "free" }
+
+    /**
+     * descript.txt の alignmenttodesktop。シェルのスコープ＞シェル全体＞ゴーストのスコープ＞ゴースト全体の順。
+     * どこにも書いていなければ自由に動かせる（SSP の既定の bottom は机の下の端に並べるためのもので、スマートフォンの画面ではそうしない）
+     */
+    private fun defaultAlignment(scope: Int): String? {
+        val key = "${Shell.scopeName(scope)}.seriko.alignmenttodesktop"
+        return listOf(shell.descript[key], shell.descript["seriko.alignmenttodesktop"], ghost.descript[key], ghost.descript["seriko.alignmenttodesktop"])
+            .firstNotNullOfOrNull { v -> v?.trim()?.lowercase()?.takeIf { it in ALIGNMENTS } }
+    }
+
+    /** \![set,balloonalign] で決めたもの。none で消すと descript.txt の既定に戻る */
+    private val scriptBalloonAlign = HashMap<Int, String>()
+
+    private fun balloonAlignOf(scope: Int): String? = scriptBalloonAlign[scope] ?: defaultBalloonAlign(scope)
+
+    /** シェルの、次にゴーストの descript.txt の sakura.balloon.alignment など。none は画面の位置で左右を決める（auto） */
+    private fun defaultBalloonAlign(scope: Int): String? {
+        val key = "${Shell.scopeName(scope)}.balloon.alignment"
+        return when ((shell.descript[key] ?: ghost.descript[key])?.trim()?.lowercase()) {
+            "none" -> "auto"
+            "left" -> "left"
+            "right" -> "right"
+            else -> null
+        }
+    }
+
+    /**
+     * シェルの、次にゴーストの descript.txt の sakura.balloon.offsetx / offsety と、向きを付けた offsetxl / xr / xc / xb など。
+     * 足元（b）が無ければ頭上・足元（c）、それも無ければ向きなし。左右と頭上・足元は向きなしを使う。x と y は別々に決める
+     */
+    private fun balloonOffsets(scope: Int): BalloonOffsets {
+        val name = Shell.scopeName(scope)
+        fun value(axis: String, vararg suffixes: String): Int {
+            for (s in suffixes) {
+                val key = "$name.balloon.offset$axis$s"
+                (shell.descript.int(key) ?: ghost.descript.int(key))?.let { return it.coerceIn(-MAX_BALLOON_OFFSET, MAX_BALLOON_OFFSET) }
+            }
+            return 0
+        }
+        fun of(vararg suffixes: String) = value("x", *suffixes) to value("y", *suffixes)
+        return BalloonOffsets(left = of("l", ""), right = of("r", ""), center = of("c", ""), bottom = of("b", "c", ""))
+    }
+
+    /** シェルの descript.txt の seriko.zorder と seriko.sticky-window を、タグを使わなくても初めから効かせる */
+    private fun applyWindowDefaults() {
+        shell.descript["seriko.zorder"]?.takeIf { it.isNotBlank() }?.let { setZorder(it.split(',')) }
+        shell.descript["seriko.sticky-window"]?.takeIf { it.isNotBlank() }?.let { setSticky(it.split(',')) }
+    }
+
     private fun resetSurfaces() {
         _state.update {
             GhostState(
                 characters = characterScopes.associateWith { scope ->
                     CharacterState(
                         scope, defaultSurface(scope),
-                        binds = shell.bindGroups(scope).filter { g -> g.default }.map { g -> g.id }.toSet(),
-                        // 画面の端への吸着やバルーンの置き方・印もゴーストが終わるまで続く
-                        alignment = it.characters[scope]?.alignment,
+                        binds = if (bindDisabled) emptySet() else shell.bindGroups(scope).filter { g -> g.default }.map { g -> g.id }.toSet(),
+                        defaultBalloonId = defaultBalloonId(scope),
+                        // スクリプトで決めた画面の端への吸着やバルーンの置き方・印はゴーストが終わるまで続く。決めていなければ
+                        // （シェルが替わったら新しいシェルの）descript.txt の既定
+                        alignment = alignmentOf(scope),
                         balloonOffset = it.characters[scope]?.balloonOffset,
-                        balloonAlign = it.characters[scope]?.balloonAlign,
+                        balloonOffsetRelative = it.characters[scope]?.balloonOffsetRelative ?: (false to false),
+                        balloonOffsets = balloonOffsets(scope),
+                        balloonAlign = balloonAlignOf(scope),
                         balloonMarker = it.characters[scope]?.balloonMarker,
                         balloonNum = it.characters[scope]?.balloonNum,
                     )
@@ -4481,7 +4572,7 @@ class GhostController(
                 val scope = m.groupValues[1].toIntOrNull() ?: return null
                 val g = platform.windowGeometry(scope)
                 when (m.groupValues[2]) {
-                    "num" -> (s.characters[scope]?.balloonId ?: 0).toString()
+                    "num" -> (s.characters[scope]?.let { it.balloonId ?: it.defaultBalloonId } ?: 0).toString()
                     "count" -> (balloon?.images(scope)?.size ?: 1).toString()
                     "x" -> g?.balloon?.left?.toString() ?: "0"
                     "y" -> g?.balloon?.top?.toString() ?: "0"
@@ -4504,7 +4595,7 @@ class GhostController(
                 when (m.groupValues[2]) {
                     "surface.num" -> (s.characters[scope]?.surface ?: -1).toString()
                     "seriko.defaultsurface" -> defaultSurface(scope).toString()
-                    "name" -> if (scope == 0) ghost.sakuraName else if (scope == 1) ghost.keroName else ghost.descript["char$scope.name"].orEmpty()
+                    "name" -> characterName(scope)
                     "scaling" -> formatNumber((platform.windowGeometry(scope)?.scale ?: 1.0) * 100)
                     "rect" -> (platform.windowGeometry(scope)?.surface ?: ScreenRect(0, 0, 0, 0)).toString()
                     // 基準点（ふつうはサーフェスの下の真ん中）
@@ -4984,6 +5075,7 @@ class GhostController(
         override fun bind(scope: Int, category: String, part: String, on: Boolean?) = bind(scope, category, part, on, noEvent = false)
 
         override fun bind(scope: Int, category: String, part: String, on: Boolean?, noEvent: Boolean) {
+            if (bindDisabled) return
             val groups = shell.bindGroups(scope).filter { it.category == category }
             if (part.isNotEmpty()) {
                 val group = groups.firstOrNull { it.part == part } ?: return
@@ -5080,12 +5172,13 @@ class GhostController(
                 "sticky-window" -> setSticky(args)
                 // \![set,alignmenttodesktop,top|bottom|left|right|free|default]。古い alignmentondesktop も同じ
                 "alignmenttodesktop", "alignmentondesktop" -> {
-                    val edge = when (val a = args.firstOrNull()?.trim()?.lowercase()) {
-                        "top", "bottom", "left", "right" -> a
-                        "free", "default" -> null
+                    when (val a = args.firstOrNull()?.trim()?.lowercase()) {
+                        "top", "bottom", "left", "right", "free" -> scriptAlignment[scope] = a
+                        // default は descript.txt の既定に戻す
+                        "default" -> scriptAlignment.remove(scope)
                         else -> return false
                     }
-                    _state.update { it.update(scope) { c -> c.copy(alignment = edge) } }
+                    _state.update { it.update(scope) { c -> c.copy(alignment = alignmentOf(scope)) } }
                 }
                 // \![set,autoscroll,disable|enable]
                 "autoscroll" -> {
@@ -5096,22 +5189,24 @@ class GhostController(
                     }
                     _state.update { it.update(scope) { c -> c.copy(autoScroll = on) } }
                 }
-                // \![set,balloonoffset,x,y]。@ 付きは既定の位置から（pono-droid の既定はずらさない位置なので、どちらも同じ）
+                // \![set,balloonoffset,x,y]。@ 付きは descript.txt の既定のずれからさらにずらす
                 "balloonoffset" -> {
                     fun coord(i: Int) = args.getOrNull(i)?.trim()?.removePrefix("@")?.toIntOrNull()
+                    fun relative(i: Int) = args.getOrNull(i)?.trim()?.startsWith("@") == true
                     val x = coord(0) ?: return false
                     val y = coord(1) ?: 0
                     fun clamp(v: Int) = v.coerceIn(-MAX_BALLOON_OFFSET, MAX_BALLOON_OFFSET)
-                    _state.update { it.update(scope) { c -> c.copy(balloonOffset = clamp(x) to clamp(y)) } }
+                    _state.update { it.update(scope) { c -> c.copy(balloonOffset = clamp(x) to clamp(y), balloonOffsetRelative = relative(0) to relative(1)) } }
                 }
                 // \![set,balloonalign,left|center|top|right|bottom|none]
                 "balloonalign" -> {
-                    val align = when (val a = args.firstOrNull()?.trim()?.lowercase()) {
-                        "left", "right", "bottom" -> a
-                        "center", "top" -> "center"
-                        else -> null
+                    when (val a = args.firstOrNull()?.trim()?.lowercase()) {
+                        "left", "right", "bottom" -> scriptBalloonAlign[scope] = a
+                        "center", "top" -> scriptBalloonAlign[scope] = "center"
+                        // none などは descript.txt の既定に戻す
+                        else -> scriptBalloonAlign.remove(scope)
                     }
-                    _state.update { it.update(scope) { c -> c.copy(balloonAlign = align) } }
+                    _state.update { it.update(scope) { c -> c.copy(balloonAlign = balloonAlignOf(scope)) } }
                 }
                 // \![set,balloonmarker,文字]。空なら消す
                 "balloonmarker" -> {
@@ -5547,9 +5642,9 @@ class GhostController(
             val now = Calendar.getInstance()
             return when (name) {
                 "username" -> userName
-                "selfname" -> ghost.sakuraName
-                "selfname2" -> ghost.descript["sakura.name2"] ?: ghost.sakuraName
-                "keroname" -> ghost.keroName
+                "selfname" -> characterName(0)
+                "selfname2" -> selfName2()
+                "keroname" -> characterName(1)
                 "year" -> now.get(Calendar.YEAR).toString()
                 "month" -> (now.get(Calendar.MONTH) + 1).toString()
                 "day" -> now.get(Calendar.DAY_OF_MONTH).toString()
@@ -5667,6 +5762,9 @@ class GhostController(
 
         /** \![set,balloonoffset] でずらせる量の上限（シェル画像のピクセル） */
         const val MAX_BALLOON_OFFSET = 2000
+
+        /** descript.txt の seriko.alignmenttodesktop に書ける値 */
+        private val ALIGNMENTS = setOf("top", "bottom", "left", "right", "free")
 
         /** コミュニケート（答えの Reference0）でやりとりを続ける回数の上限（2体が答え続けないように） */
         const val MAX_COMMUNICATE_AGE = 10
