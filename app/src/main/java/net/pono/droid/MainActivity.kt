@@ -182,7 +182,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                 Button(onClick = { importNar.launch(arrayOf("*/*")) }, enabled = !installing) {
                     Text(if (installing) "インストール中…" else ".nar をインストール")
                 }
-                OutlinedButton(onClick = { GhostOverlayService.update(context) }) { Text("更新") }
+                OutlinedButton(onClick = { GhostOverlayService.update(context, explorer = true) }) { Text("更新") }
                 OutlinedButton(onClick = { GhostOverlayService.stop(context) }) { Text("終了") }
             }
             if (installing) LinearProgressIndicator(Modifier.fillMaxWidth())

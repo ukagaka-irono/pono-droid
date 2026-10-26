@@ -116,7 +116,8 @@ class GhostOverlayService : LifecycleService() {
         when (intent?.action) {
             // 動いているゴーストをすべて終える（それぞれに OnCloseAll）
             ACTION_STOP -> if (controllers.isEmpty()) stopSelf() else controllers.forEach { it.close() }
-            ACTION_UPDATE -> mainController?.networkUpdate() ?: toast("ゴーストが起動していません")
+            // アプリのゴースト一覧から始めたものは OnUpdateResultExplorer で結果を送る
+            ACTION_UPDATE -> mainController?.networkUpdate(explorer = intent.getBooleanExtra(EXTRA_EXPLORER, false)) ?: toast("ゴーストが起動していません")
             ACTION_SHOW -> controllers.forEach { it.restoreWindows("user") }
             ACTION_TRAY_CLICK, ACTION_TRAY_DISMISS -> {
                 val title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
@@ -1409,6 +1410,7 @@ class GhostOverlayService : LifecycleService() {
         private const val ACTION_START_BESIDE = "net.pono.droid.START_BESIDE"
         private const val ACTION_STOP = "net.pono.droid.STOP"
         private const val ACTION_UPDATE = "net.pono.droid.UPDATE"
+        private const val EXTRA_EXPLORER = "explorer"
         private const val ACTION_SHOW = "net.pono.droid.SHOW"
 
         /** OnNotifyFontInfo で伝えるフォントの数の上限 */
@@ -1500,9 +1502,9 @@ class GhostOverlayService : LifecycleService() {
             context.startService(Intent(context, GhostOverlayService::class.java).setAction(ACTION_STOP))
         }
 
-        /** 起動中のゴースト（最初に起動したもの）のネットワーク更新 */
-        fun update(context: Context) {
-            context.startService(Intent(context, GhostOverlayService::class.java).setAction(ACTION_UPDATE))
+        /** 起動中のゴースト（最初に起動したもの）のネットワーク更新。アプリのゴースト一覧からなら [explorer] */
+        fun update(context: Context, explorer: Boolean = false) {
+            context.startService(Intent(context, GhostOverlayService::class.java).setAction(ACTION_UPDATE).putExtra(EXTRA_EXPLORER, explorer))
         }
     }
 }

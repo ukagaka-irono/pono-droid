@@ -147,6 +147,18 @@ class MultiGhostTest {
     }
 
     @Test
+    fun extPropertiesGoToTheOtherGhost() = run {
+        // activeghostlist(…).ext.名前 は、そのゴーストに property.get / property.set で聞く・頼む
+        val a = boot("a", mapOf("OnSet" to """\0\![set,property,activeghostlist(びい).ext.mood,はれ]\e""", "OnGet" to """\0\![get,property,OnGot,activeghostlist(びい).ext.mood]\e"""))
+        val b = boot("b", mapOf("property.get" to "くもり"), headers = mapOf("property.set" to emptyMap()))
+        a.c.raise("OnSet", emptyList())
+        assertEquals(listOf("mood", "はれ"), b.shiori.awaitEvent("property.set"))
+        a.c.raise("OnGet", emptyList())
+        assertEquals(listOf("mood"), b.shiori.awaitEvent("property.get"))
+        assertEquals(listOf("くもり"), a.shiori.awaitEvent("OnGot"))
+    }
+
+    @Test
     fun responseReference0TalksToTheOtherGhost() = run {
         // A の答えの Reference0 が B の本体側の名前なら、B に OnCommunicate が届く
         val a = boot("a", mapOf("OnTalk" to """\0\s[5]Bさん元気？\e"""), headers = mapOf("OnTalk" to mapOf("Reference0" to "びい", "Reference1" to "おまけ")))

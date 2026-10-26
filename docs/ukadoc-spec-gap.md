@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1198・一部だけ 62・作る 171・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1203・一部だけ 63・作る 165・作れない 281・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -374,8 +374,7 @@
 
 済み 149 項目。
 
-### 🔨 作る（27）
-- activeghostlist(ゴースト名/本体側名/パス).ext.拡張プロパティ名 — ext.名前 を相手の SHIORI に property.get / property.set で聞く・書く（shiori.変数名 と同じ道筋で作れる）
+### 🔨 作る（26）
 - activeghostlist.index(ID).ext.拡張プロパティ名 — 上の ext と同じ。index(ID) で選んだゴーストの SHIORI に property.get / set
 - thumbnail — そのフォルダの thumbnail.png（ゴースト・シェル・バルーン）のパスを返す
 - update_result — ネットワーク更新の最後の結果をゴーストごとに profile に残して返す
@@ -403,7 +402,8 @@
 - meta.track — meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
 - meta.year — meta.* は無い。MediaMetadataRetriever でタグを読み、無ければ取得失敗にする
 
-### 🔧 一部だけ（6）
+### 🔧 一部だけ（7）
+- activeghostlist(ゴースト名/本体側名/パス).ext.拡張プロパティ名 — 読むと相手に property.get、書くと property.set を送る（\![get,property] など待てるところだけ。%property[…] はその場で答えが要るので空）
 - currentghost.scope(ID).animation.num — 動いているアニメーションの ID の一覧でなく、そのサーフェスの定義の数を返している。SET（\i と同じに動かす）も無い
 - craftmanurl — ゴーストだけ。バルーンとシェルの descript.txt の craftmanurl を返さない
 - craftmanw — ゴーストとバルーンだけ。シェルの craftmanw を返さない
@@ -436,25 +436,20 @@
 
 ## SHIORI イベント
 
-済み 244 項目。
+済み 249 項目。
 
-### 🔨 作る（16）
-- OnArchiveViewerOpen — 答えが無い zip などを OnPictureViewerOpen と同じく、ほかのアプリで開いて送る（dropDefault に足す。ssp-gap では ⛔）
+### 🔨 作る（11）
 - inputbox.autocomplete — 入力の箱を開くときに聞き、返った候補（バイト値1区切り）を InputBalloon の入力欄の下に出す
 - OnInstallReroute — accept で名指しされたゴーストが一緒に起動していたら、そちらへ入れて以降のイベントもそちらに送る（いまは OnInstallRefuse）
 - OnMouseDoubleClickEx — 2本指で2回続けて叩いたとき（とマウスの中・戻る・進むボタン）に middle などで送る
 - OnMouseHover — マウスやペンのホバー（ACTION_HOVER_MOVE）が止まったときに送る。指では起きない
 - OnMouseMultipleClickEx — 2本指で3回以上続けて叩いたとき。答えが無ければ ClickEx / DoubleClickEx へ
-- OnUpdateProcessExec — メニュー・アプリの「更新」から始めるとき最初に送り、答えがあればそれを流して標準の更新はしない
-- OnUpdateResultExplorer — アプリのゴースト一覧の「更新」から始めたときは OnUpdateResult の代わりにこれを送る
 - enable_log — 開発用の画面に「SHIORI のログ」の入り切りを足し、変えたら NOTIFY
 - rateofusegraph — 名前だけ見つかったが NOTIFY は送っていない。使用率を出すとき（\![open,rateofusegraph]・メニュー）に history.usage から送る
 - OnDesktopWallpaperChange — WallpaperManager の色が変わった知らせで送る（Reference2 のパスは空、きっかけは unknown）。ssp-gap では ⛔
 - OnMusicPlayEx — 🔒 通知へのアクセスを許したときだけ MediaSessionManager で曲名・アーティスト・album・duration などを送る。ssp-gap では ⛔
 - OnSoundSpectrum — \_v の --spectrum。自分で鳴らす音を MediaExtractor / MediaCodec で読んで帯域ごとの音量を出す（Visualizer はマイクの許可が要る）。ssp-gap の ⛔ の理由は違う
 - OnVideoPlayEx — 🔒 OnMusicPlayEx と同じ仕組みで、動画のセッションのときに送る。ssp-gap では ⛔
-- property.get — activeghostlist(...).ext.名前 を読んだとき相手のゴーストに送る（.ext はまだ無い）
-- property.set — activeghostlist(...).ext.名前 に書いたとき相手のゴーストに送り、204 なら成功
 
 ### 🔧 一部だけ（1）
 - OnMusicPlay — SSTP の GIVE Song だけ。端末で鳴っている曲（MediaSession）からは送らない

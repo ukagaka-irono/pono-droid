@@ -943,9 +943,11 @@ class GhostController(
      * SSP と同じ流れでネットワーク更新する（\![updatebymyself]・メニュー・通知）。ゴーストは OnUpdateBegin → OnUpdateReady →
      * OnUpdateComplete / OnUpdateFailure、シェルとバルーンは OnUpdateOther*。辞書が変わったら SHIORI を読み込み直してから Complete を送る。
      * 最後に結果をまとめて OnUpdateResult（checkonly なら OnUpdateCheckResult）を送る。[options] は checkonly / testonly / recovery、
-     * [reason] は SSP の更新実行理由（script / user）。シェルの変更は次の起動から反映される
+     * [reason] は SSP の更新実行理由（script / user）。シェルの変更は次の起動から反映される。
+     * メニューやアプリから始めたとき（manual）は先に OnUpdateProcessExec を聞き、答えがあればそれを流して標準の更新はしない。
+     * [explorer] はアプリのゴースト一覧から始めたもので、結果は OnUpdateResult の代わりに OnUpdateResultExplorer
      */
-    fun networkUpdate(types: List<String> = listOf("ghost"), options: Set<String> = emptySet(), reason: String = "manual") {
+    fun networkUpdate(types: List<String> = listOf("ghost"), options: Set<String> = emptySet(), reason: String = "manual", explorer: Boolean = false) {
         val targets = types.mapNotNull { type ->
             when (type) {
                 "ghost" -> UpdateTarget("ghost", ghost.name, ghost.dir, homeUrlOverride ?: ghost.descript["homeurl"])
@@ -954,7 +956,15 @@ class GhostController(
                 else -> null
             }
         }
-        runUpdates(targets, options, reason, extended = false)
+        if (reason != "manual") return runUpdates(targets, options, reason, extended = false)
+        scope.launch {
+            request("OnUpdateProcessExec", listOf("manual"))?.let { script ->
+                cancelScript()
+                runScript(script)
+                return@launch
+            }
+            runUpdates(targets, options, reason, extended = false, explorer = explorer)
+        }
     }
 
     /** other_homeurl_override（種類, 名前, 作者, フォルダ名, 本来の homeurl）。空や答えが無ければ null（替えない） */
@@ -983,7 +993,7 @@ class GhostController(
         if (targets.isNotEmpty()) runUpdates(targets, options, "script", extended = true)
     }
 
-    private fun runUpdates(targets: List<UpdateTarget>, options: Set<String>, reason: String, extended: Boolean) {
+    private fun runUpdates(targets: List<UpdateTarget>, options: Set<String>, reason: String, extended: Boolean, explorer: Boolean = false) {
         if (closing || targets.isEmpty()) return
         // もう更新しているなら、二重に始めずに executing で知らせる
         if (updating) {
@@ -1011,6 +1021,7 @@ class GhostController(
                 check && extended -> "OnUpdateCheckResultEx"
                 check -> "OnUpdateCheckResult"
                 extended -> "OnUpdateResultEx"
+                explorer -> "OnUpdateResultExplorer"
                 else -> "OnUpdateResult"
             }
             raise(summary, results, userInitiated = false)
@@ -2474,6 +2485,9 @@ class GhostController(
             first.name.lowercase().endsWith(".nar") -> installNar(first)
             mime.startsWith("image/") -> if (platform.openFile(first, mime)) raise("OnPictureViewerOpen", refs, userInitiated = false)
             mime.startsWith("audio/") || mime.startsWith("video/") -> if (platform.openFile(first, mime)) raise("OnMediaPlayerOpen", refs, userInitiated = false)
+            // zip などの書庫は、書庫を開けるアプリで開く
+            mime in ARCHIVE_TYPES || first.extension.lowercase() in ARCHIVE_EXTENSIONS ->
+                if (platform.openFile(first, mime.takeIf { it in ARCHIVE_TYPES } ?: "application/zip")) raise("OnArchiveViewerOpen", refs, userInitiated = false)
         }
     }
 
@@ -4763,7 +4777,8 @@ class GhostController(
 
     /** SHIORI に聞かないと分からない名前（ghostlist / activeghostlist / currentghost の shiori.変数名） */
     private fun asksShiori(name: String): Boolean =
-        ".shiori." in name && (name.startsWith("ghostlist") || name.startsWith("activeghostlist") || name.startsWith("currentghost.shiori."))
+        (".shiori." in name && (name.startsWith("ghostlist") || name.startsWith("activeghostlist") || name.startsWith("currentghost.shiori."))) ||
+            (".ext." in name && name.startsWith("activeghostlist"))
 
     /** [property] と同じだが、shiori.変数名 はそのゴーストの SHIORI に聞く */
     private suspend fun propertyAsking(name: String): String? = if (asksShiori(name)) shioriProperty(name) else property(name)
@@ -4782,6 +4797,11 @@ class GhostController(
             val prefix = if (name.startsWith("activeghostlist")) "activeghostlist" else "ghostlist"
             val items = if (prefix == "activeghostlist") hub?.running?.map { it.ghost } ?: listOf(ghost) else repository?.list() ?: listOf(ghost)
             val (g, key) = listItem(name.removePrefix(prefix), items, ghost) { g, k, i -> ghostProperty(g, k, i) } ?: return null
+            // activeghostlist(…).ext.名前 は、そのゴーストに property.get で聞く
+            if (prefix == "activeghostlist" && key.startsWith("ext.")) {
+                val ext = key.removePrefix("ext.").takeIf { it.isNotEmpty() } ?: return null
+                return runningController(g)?.request("property.get", listOf(ext), translate = false)
+            }
             if (!key.startsWith("shiori.")) return null
             target = g
             variable = key.removePrefix("shiori.")
@@ -4790,6 +4810,29 @@ class GhostController(
         val dir = target.dir.canonicalFile
         val c = if (dir == ghost.dir.canonicalFile) this else hub?.others(this)?.firstOrNull { it.ghost.dir.canonicalFile == dir } ?: return null
         return c.shioriValue(variable)
+    }
+
+    /** 動いているゴースト [g] のコントローラ（自分か、一緒に動いているもの） */
+    private fun runningController(g: Ghost): GhostController? {
+        val dir = g.dir.canonicalFile
+        return if (dir == ghost.dir.canonicalFile) this else hub?.others(this)?.firstOrNull { it.ghost.dir.canonicalFile == dir }
+    }
+
+    /**
+     * activeghostlist(…).ext.名前 に書く。そのゴーストに property.set（名前, 値）を送る。動いていなければ false。
+     * 答え（204 なら成功）は待たない
+     */
+    private fun setExtProperty(name: String, value: String): Boolean {
+        val (g, key) = listItem(name.removePrefix("activeghostlist"), hub?.running?.map { it.ghost } ?: listOf(ghost), ghost) { g, k, i ->
+            ghostProperty(g, k, i)
+        } ?: return false
+        val ext = key.removePrefix("ext.").takeIf { key.startsWith("ext.") && it.isNotEmpty() } ?: return false
+        val c = runningController(g) ?: return false
+        scope.launch {
+            val status = c.requestResponse("property.set", listOf(ext, value), ShioriMethod.GET, RequestOrigin.INTERNAL)?.statusCode
+            if (status != 204) platform.log("property.set が失敗しました（$status）: $name")
+        }
+        return true
     }
 
     /** SHIORI に [id] を GET で聞いた答え（スクリプトとしては使わないので OnTranslate に通さない） */
@@ -5111,6 +5154,7 @@ class GhostController(
      * 出し方、sticky-window と zorder、ツールチップ、音の位置・再生・一時停止、マウスカーソル（覚えるだけ）。扱えたら true
      */
     fun setProperty(name: String, value: String): Boolean {
+        if (name.trim().startsWith("activeghostlist") && ".ext." in name) return setExtProperty(name.trim(), value)
         val key = name.trim().removePrefix("currentghost.")
         if (!name.trim().startsWith("currentghost.")) return false
         when {
@@ -6027,6 +6071,13 @@ class GhostController(
 
         /** \![set,balloonoffset] でずらせる量の上限（シェル画像のピクセル） */
         const val MAX_BALLOON_OFFSET = 2000
+
+        /** OnArchiveViewerOpen で開く書庫 */
+        private val ARCHIVE_TYPES = setOf(
+            "application/zip", "application/x-zip-compressed", "application/x-7z-compressed", "application/x-rar-compressed",
+            "application/vnd.rar", "application/x-lzh-compressed", "application/x-tar", "application/gzip",
+        )
+        private val ARCHIVE_EXTENSIONS = setOf("zip", "7z", "rar", "lzh", "tar", "gz", "tgz")
 
         /** メニューの「キャラクターの大きさ」の倍率（パーセント）と、「その他」のスライダーの範囲・入力の箱の ID */
         private val SCALE_STEPS = listOf(50, 75, 100, 150, 200)

@@ -619,7 +619,7 @@ list/plugin-event/plugin-event/property.get.md	IMPOSSIBLE	property.get	プラグ
 list/plugin-event/plugin-event/property.set.md	IMPOSSIBLE	property.set	プラグインに送るもの。プラグインは作らない
 list/plugin-event/plugin-event/version.md	IMPOSSIBLE	version	プラグインに送るもの。プラグインは作らない
 list/propertysystem/index.md	NA	プロパティシステム	目次のページ
-list/propertysystem/property-system/activeghostlist-.ext.md	BUILD	activeghostlist(ゴースト名/本体側名/パス).ext.拡張プロパティ名	ext.名前 を相手の SHIORI に property.get / property.set で聞く・書く（shiori.変数名 と同じ道筋で作れる）
+list/propertysystem/property-system/activeghostlist-.ext.md	PARTIAL	activeghostlist(ゴースト名/本体側名/パス).ext.拡張プロパティ名	読むと相手に property.get、書くと property.set を送る（\![get,property] など待てるところだけ。%property[…] はその場で答えが要るので空）
 list/propertysystem/property-system/activeghostlist.current.md	DONE	activeghostlist.current.汎用プロパティ名	自分を返す
 list/propertysystem/property-system/activeghostlist.index-ID-.ext.md	BUILD	activeghostlist.index(ID).ext.拡張プロパティ名	上の ext と同じ。index(ID) で選んだゴーストの SHIORI に property.get / set
 list/propertysystem/property-system/activeghostlist.index-ID.md	DONE	activeghostlist.index(ID).汎用プロパティ名	動いているゴーストの並びから選ぶ
@@ -1493,7 +1493,7 @@ list/shiori-event/event-send-failure/OnNotifyPluginFailure.md	DONE	OnNotifyPlugi
 list/shiori-event/event-send-failure/OnRaiseOtherFailure.md	DONE	OnRaiseOtherFailure	実装済み
 list/shiori-event/event-send-failure/OnRaisePluginFailure.md	DONE	OnRaisePluginFailure	プラグインは無いので、\![raiseplugin] / \![timerraiseplugin] は notfound で送る
 list/shiori-event/event-send-failure/index.md	NA	イベント送信失敗イベント	目次のページ
-list/shiori-event/file-drop/OnArchiveViewerOpen.md	BUILD	OnArchiveViewerOpen	答えが無い zip などを OnPictureViewerOpen と同じく、ほかのアプリで開いて送る（dropDefault に足す。ssp-gap では ⛔）
+list/shiori-event/file-drop/OnArchiveViewerOpen.md	DONE	OnArchiveViewerOpen	答えの無い zip などを書庫を開けるアプリで開いて送る（\![execute,dropdefault,file] でも）
 list/shiori-event/file-drop/OnDirectoryDrop.md	IMPOSSIBLE	OnDirectoryDrop	Android の共有ではフォルダーを渡せない
 list/shiori-event/file-drop/OnFileDrop.md	DONE	OnFileDrop	OnFileDrop2 と OnFileDropEx に答えが無ければ、1ファイルずつ送る
 list/shiori-event/file-drop/OnFileDrop2.md	DONE	OnFileDrop2	実装済み
@@ -1592,11 +1592,11 @@ list/shiori-event/network-update/OnUpdateOtherBegin.md	DONE	OnUpdateOtherBegin	�
 list/shiori-event/network-update/OnUpdateOtherComplete.md	DONE	OnUpdateOtherComplete	シェルとバルーンの更新で "${prefix}..." として送っている
 list/shiori-event/network-update/OnUpdateOtherFailure.md	DONE	OnUpdateOtherFailure	シェルとバルーンの更新で "${prefix}..." として送っている
 list/shiori-event/network-update/OnUpdateOtherReady.md	DONE	OnUpdateOtherReady	シェルとバルーンの更新で "${prefix}..." として送っている
-list/shiori-event/network-update/OnUpdateProcessExec.md	BUILD	OnUpdateProcessExec	メニュー・アプリの「更新」から始めるとき最初に送り、答えがあればそれを流して標準の更新はしない
+list/shiori-event/network-update/OnUpdateProcessExec.md	DONE	OnUpdateProcessExec	メニュー・アプリの「更新」から始めるとき最初に manual で送り、答えがあればそれを流して標準の更新はしない
 list/shiori-event/network-update/OnUpdateReady.md	DONE	OnUpdateReady	実装済み
 list/shiori-event/network-update/OnUpdateResult.md	DONE	OnUpdateResult	実装済み
 list/shiori-event/network-update/OnUpdateResultEx.md	DONE	OnUpdateResultEx	実装済み
-list/shiori-event/network-update/OnUpdateResultExplorer.md	BUILD	OnUpdateResultExplorer	アプリのゴースト一覧の「更新」から始めたときは OnUpdateResult の代わりにこれを送る
+list/shiori-event/network-update/OnUpdateResultExplorer.md	DONE	OnUpdateResultExplorer	アプリのゴースト一覧の「更新」から始めたときは OnUpdateResult の代わりにこれ
 list/shiori-event/network-update/caption_updateorder.md	NA	ネットワーク更新イベントの発生順序	順序の説明。OnUpdateProcessExec 以外はこの順で送っている
 list/shiori-event/network-update/caption_updatereason.md	DONE	ネットワーク更新理由	メニューと「更新」は manual、スクリプトは script（自動更新の設定は無いので auto は来ない）
 list/shiori-event/network-update/caption_updateresultcomplete.md	DONE	ネットワーク更新成功理由	none / changed を送る
@@ -1726,8 +1726,8 @@ list/shiori-event/other/OnVideoPlayEx.md	BUILD	OnVideoPlayEx	🔒 OnMusicPlayEx 
 list/shiori-event/other/caption_archive_error_codes.md	DONE	アーカイブ操作エラーコード	決まった値で送る
 list/shiori-event/other/caption_musicplayex_codes.md	NA	OnMusicPlayExの拡張情報リスト	OnMusicPlayEx の値の表
 list/shiori-event/other/index.md	NA	その他イベント	目次のページ
-list/shiori-event/other/property.get.md	BUILD	property.get	activeghostlist(...).ext.名前 を読んだとき相手のゴーストに送る（.ext はまだ無い）
-list/shiori-event/other/property.set.md	BUILD	property.set	activeghostlist(...).ext.名前 に書いたとき相手のゴーストに送り、204 なら成功
+list/shiori-event/other/property.get.md	DONE	property.get	activeghostlist(…).ext.名前 を \![get,property] などで読むと、そのゴーストに送って答えを使う
+list/shiori-event/other/property.set.md	DONE	property.set	activeghostlist(…).ext.名前 に書くとそのゴーストに送る（答えが 204 でなければログに残す）
 list/shiori-event/overlap/OnOffscreen.md	DONE	OnOffscreen	実装済み
 list/shiori-event/overlap/OnOtherOffscreen.md	DONE	OnOtherOffscreen	実装済み
 list/shiori-event/overlap/OnOtherOverlap.md	DONE	OnOtherOverlap	実装済み
