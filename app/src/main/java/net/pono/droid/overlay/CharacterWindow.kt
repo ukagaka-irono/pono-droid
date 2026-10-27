@@ -188,6 +188,8 @@ class CharacterWindow(
             if (view.isAttachedToWindow) windowManager.updateViewLayout(view, p)
             // 横や下に置くバルーンは、自分の大きさで位置が変わる
             if (view === balloonView && controller.state.value.characters[scopeId]?.balloonAlign != null) placeBalloon()
+            // サーフェスの大きさが決まったら（作り直したウィンドウでは最初は 0）、バルーンもその横・上に置き直す
+            if (view === surfaceView) placeBalloon()
         }
     }
 

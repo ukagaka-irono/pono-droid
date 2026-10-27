@@ -127,8 +127,10 @@ class MenuResourcesTest {
         withTimeout(5000) { c.state.first { _ -> c.choices().any { it.choice.title == "● サウンドを鳴らさない" } } }
         // 大きさの下位メニュー（今の大きさに印）
         c.onChoice(Choice("キャラクターの大きさ", "pono:scale", listOf("0")))
-        withTimeout(5000) { c.state.first { _ -> c.choices().any { it.choice.title == "● 100%" } } }
-        assertTrue(c.choices().any { it.choice.id == "pono:scaleother" })
+        // 選択肢は順に足されるので、「その他」まで出るのを待つ
+        withTimeout(5000) {
+            c.state.first { _ -> c.choices().any { it.choice.title == "● 100%" } && c.choices().any { it.choice.id == "pono:scaleother" } }
+        }
     }
 
     @Test
