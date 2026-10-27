@@ -17,10 +17,12 @@ open class ShioriService : Service() {
     private var nextHandle = 1L
 
     private val binder = object : IShioriService.Stub() {
-        override fun load(engine: String, dir: String): Long = synchronized(lock) {
+        override fun load(engine: String, dir: String, host: IShioriHost?): Long = synchronized(lock) {
             val kind = runCatching { ShioriEngine.valueOf(engine) }.getOrNull() ?: return 0
             val masterDir = File(dir)
             val shiori = NativeShiori(kind, NativeShiori.Sandbox.forGhost(this@ShioriService, masterDir))
+            // 内蔵 SAORI の要求は、そのゴーストの本体へ（本体のプロセスは、この呼び出しを待っているスレッドで答える）
+            if (host != null) shiori.setSaoriHandler { request, module -> host.saori(request, module) ?: ByteArray(0) }
             if (!shiori.load(masterDir)) return 0
             val handle = nextHandle++
             shioris[handle] = shiori

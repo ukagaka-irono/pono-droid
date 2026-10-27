@@ -6,6 +6,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import net.pono.baseware.saori.SaoriRequest
+import net.pono.baseware.saori.SaoriResponse
 import net.pono.baseware.text.TextCharsets
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -124,6 +126,12 @@ class SstpServer(
             }
             if (head.isEmpty()) return
             val firstLine = head.decodeToString().substringBefore("\r\n")
+            // SAORI over DirectSSTP は Direct SSTP だけ（ソケットでは受けない）
+            directSstpOnly(head)?.let {
+                output.write(it)
+                output.flush()
+                return
+            }
             if (firstLine.startsWith("POST ") || firstLine.startsWith("GET ") || firstLine.startsWith("OPTIONS ")) {
                 if (!serveHttp(head, input, output)) return
                 continue
@@ -176,6 +184,10 @@ class SstpServer(
             reply("403 Forbidden", ByteArray(0))
             return false
         }
+        directSstpOnly(body)?.let {
+            reply("200 OK", it)
+            return keepAlive
+        }
         val request = parse(body)
         val out = ByteArrayOutputStream()
         if (request == null) {
@@ -185,6 +197,12 @@ class SstpServer(
         }
         reply("200 OK", out.toByteArray())
         return keepAlive
+    }
+
+    /** SAORI/1.0 の要求なら、400（direct sstp only）の SAORI/1.0 の応答。SSTP なら null */
+    private fun directSstpOnly(bytes: ByteArray): ByteArray? {
+        val req = SaoriRequest.parse(bytes) ?: return null
+        return SaoriResponse.error(400, "direct sstp only").encode(req.charset)
     }
 
     private fun isLocalOrigin(origin: String): Boolean {

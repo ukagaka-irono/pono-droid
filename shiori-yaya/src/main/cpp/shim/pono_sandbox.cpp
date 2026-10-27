@@ -2,11 +2,13 @@
 // リンク時の -Wl,--wrap で横取りして、できることを絞る。サブモジュールは書き換えない。
 //   - dlopen / fork / exec / system / popen / chdir: いつも失敗にする。LOADLIB / REQUESTLIB / EXECUTE、
 //     里々・華和梨の SAORI、Lua の C モジュールや os.execute で、ゴースト同梱のネイティブコードやシェルが
-//     動かないようにする（Android に SAORI は無いので困らない）
+//     動かないようにする（Android に SAORI は無いので困らない）。ただし本体の内蔵モジュール（internal_*）の名前の
+//     dlopen は、本体に要求を渡す関数（pono_saori.cpp）を返す（YAYA の LOADLIB / FUNCTIONEX と華和梨の SAORI から使える）
 //   - パスを取る関数: ゴーストのディレクトリ（allow）の外への書き込みと、
 //     アプリの領域（protect）の読み取りを EACCES にする。システムのファイルを読むのは許す
 //     （タイムゾーンやロケールのため）。fd を取る関数は、開けた時点で検査済みなので触らない
 #include "pono_sandbox.h"
+#include "pono_saori.h"
 
 #include <android/log.h>
 #include <dirent.h>
@@ -137,6 +139,86 @@ bool WritesWith(int flags) {
 
 }  // namespace
 
+// 内蔵モジュール 1 つ分の「ライブラリ」。dlopen はこれのアドレスを返し、dlsym はモジュールごとの関数を返す
+namespace {
+
+const int kSaoriSlots = 16;
+
+struct SaoriSlot {
+    char name[64];
+};
+
+std::mutex g_saori_lock;
+SaoriSlot g_saori_slots[kSaoriSlots];
+int g_saori_used = 0;
+
+SaoriSlot *SaoriSlotFor(const char *module) {
+    std::lock_guard<std::mutex> guard(g_saori_lock);
+    for (int i = 0; i < g_saori_used; ++i) {
+        if (strcmp(g_saori_slots[i].name, module) == 0) return &g_saori_slots[i];
+    }
+    if (g_saori_used >= kSaoriSlots) return nullptr;
+    SaoriSlot *slot = &g_saori_slots[g_saori_used++];
+    strncpy(slot->name, module, sizeof(slot->name) - 1);
+    return slot;
+}
+
+int SaoriSlotIndex(void *handle) {
+    SaoriSlot *p = static_cast<SaoriSlot *>(handle);
+    return p >= g_saori_slots && p < g_saori_slots + kSaoriSlots ? static_cast<int>(p - g_saori_slots) : -1;
+}
+
+// SAORI の約束どおり、入力はこちらで free し、応答は malloc したものを返す（呼んだ側が free する）
+char *SaoriRequest(int n, char *h, long *len) {
+    long outLen = 0;
+    char *out = pono_saori_direct(g_saori_slots[n].name, h, *len, &outLen);
+    free(h);
+    if (out == nullptr) {
+        static const char kFailure[] = "SAORI/1.0 500 Internal Server Error\r\nCharset: UTF-8\r\n\r\n";
+        out = strdup(kFailure);
+        outLen = out != nullptr ? static_cast<long>(sizeof(kFailure) - 1) : 0;
+    }
+    *len = outLen;
+    return out;
+}
+
+// YAYA（POSIX）の <名前>_saori_load / unload / request（ID 付き）
+template <int N> long SaoriLoadWithId(char *h, long) {
+    free(h);
+    return N + 1;
+}
+template <int N> int SaoriUnloadWithId(long) { return 1; }
+template <int N> char *SaoriRequestWithId(long, char *h, long *len) { return SaoriRequest(N, h, len); }
+
+// 華和梨などの load / unload / request
+template <int N> int SaoriLoad(char *h, long) {
+    free(h);
+    return 1;
+}
+template <int N> int SaoriUnload() { return 1; }
+template <int N> char *SaoriRequestPlain(char *h, long *len) { return SaoriRequest(N, h, len); }
+
+#define PONO_SAORI_SLOTS(F) F(0), F(1), F(2), F(3), F(4), F(5), F(6), F(7), F(8), F(9), F(10), F(11), F(12), F(13), F(14), F(15)
+#define PONO_LOAD_ID(n) reinterpret_cast<void *>(&SaoriLoadWithId<n>)
+#define PONO_UNLOAD_ID(n) reinterpret_cast<void *>(&SaoriUnloadWithId<n>)
+#define PONO_REQUEST_ID(n) reinterpret_cast<void *>(&SaoriRequestWithId<n>)
+#define PONO_LOAD(n) reinterpret_cast<void *>(&SaoriLoad<n>)
+#define PONO_UNLOAD(n) reinterpret_cast<void *>(&SaoriUnload<n>)
+#define PONO_REQUEST(n) reinterpret_cast<void *>(&SaoriRequestPlain<n>)
+void *const kLoadWithId[kSaoriSlots] = {PONO_SAORI_SLOTS(PONO_LOAD_ID)};
+void *const kUnloadWithId[kSaoriSlots] = {PONO_SAORI_SLOTS(PONO_UNLOAD_ID)};
+void *const kRequestWithId[kSaoriSlots] = {PONO_SAORI_SLOTS(PONO_REQUEST_ID)};
+void *const kLoad[kSaoriSlots] = {PONO_SAORI_SLOTS(PONO_LOAD)};
+void *const kUnload[kSaoriSlots] = {PONO_SAORI_SLOTS(PONO_UNLOAD)};
+void *const kRequest[kSaoriSlots] = {PONO_SAORI_SLOTS(PONO_REQUEST)};
+
+bool EndsWith(const char *s, const char *tail) {
+    size_t a = strlen(s), b = strlen(tail);
+    return a >= b && strcmp(s + a - b, tail) == 0;
+}
+
+}  // namespace
+
 extern "C" {
 
 void pono_sandbox_allow(const char *dir) {
@@ -168,13 +250,29 @@ void pono_sandbox_protect(const char *dir) {
 // ---- ネイティブコードとプロセス ----
 
 void *__wrap_dlopen(const char *name, int) {
+    char module[64];
+    if (name != nullptr && pono_saori_module_name(name, module, sizeof(module))) {
+        SaoriSlot *slot = SaoriSlotFor(module);
+        if (slot != nullptr) return slot;
+    }
     Denied("dlopen", name);
     return nullptr;
 }
 
-void *__wrap_dlsym(void *, const char *) {
+void *__wrap_dlsym(void *handle, const char *symbol) {
+    int n = SaoriSlotIndex(handle);
+    if (n < 0 || symbol == nullptr) return nullptr;
+    if (strcmp(symbol, "load") == 0) return kLoad[n];
+    if (strcmp(symbol, "unload") == 0) return kUnload[n];
+    if (strcmp(symbol, "request") == 0) return kRequest[n];
+    if (EndsWith(symbol, "_saori_load")) return kLoadWithId[n];
+    if (EndsWith(symbol, "_saori_unload")) return kUnloadWithId[n];
+    if (EndsWith(symbol, "_saori_request")) return kRequestWithId[n];
     return nullptr;
 }
+
+// 開けるのは内蔵モジュールだけなので、閉じるものも無い
+int __wrap_dlclose(void *handle) { return SaoriSlotIndex(handle) >= 0 ? 0 : -1; }
 
 pid_t __wrap_fork(void) {
     Denied("fork", "");

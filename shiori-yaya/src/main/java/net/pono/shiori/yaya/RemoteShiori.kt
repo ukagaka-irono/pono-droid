@@ -26,6 +26,16 @@ class RemoteShiori(context: Context, private val engine: ShioriEngine, private v
     @Volatile private var pid = 0
     @Volatile private var onCrash: (() -> Unit)? = null
     @Volatile private var unloading = false
+    @Volatile private var saori: ((ByteArray, String?) -> ByteArray)? = null
+
+    /** :shiori から本体への窓口。SHIORI の request の途中に、それを待っているスレッドで呼ばれる */
+    private val host = object : IShioriHost.Stub() {
+        override fun saori(request: ByteArray, module: String?): ByteArray? = this@RemoteShiori.saori?.invoke(request, module)
+    }
+
+    override fun setSaoriHandler(handler: (request: ByteArray, module: String?) -> ByteArray) {
+        saori = handler
+    }
 
     private val deathRecipient = IBinder.DeathRecipient {
         service = null
@@ -54,7 +64,7 @@ class RemoteShiori(context: Context, private val engine: ShioriEngine, private v
         if (!context.bindService(Intent(context, ShioriService.forSlot(slot)), connection, Context.BIND_AUTO_CREATE)) return false
         if (!connected.await(BIND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) return false
         pid = call { it.pid } ?: 0
-        handle = call { it.load(engine.name, dir.absolutePath) } ?: 0
+        handle = call { it.load(engine.name, dir.absolutePath, host) } ?: 0
         return handle > 0
     }
 

@@ -358,6 +358,15 @@ class GhostOverlayService : LifecycleService() {
 
                     override fun soundMeta(file: File): Map<String, String> = SoundMeta.read(file, cacheDir)
 
+                    // 内蔵 SAORI（internal_crypto の Protect / Unprotect、internal_file の MediaInfo、internal_time の --tz=）
+                    override fun protectData(data: ByteArray) = SaoriPlatform.protect(data)
+
+                    override fun unprotectData(data: ByteArray) = SaoriPlatform.unprotect(data)
+
+                    override fun mediaInfo(file: File) = SaoriPlatform.mediaInfo(file)
+
+                    override fun windowsZone(name: String) = SaoriPlatform.windowsZone(name)
+
                     override fun batteryInfo(): BatteryInfo? =
                         registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.let(::batteryInfo)
 

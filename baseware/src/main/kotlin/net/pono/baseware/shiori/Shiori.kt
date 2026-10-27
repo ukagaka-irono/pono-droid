@@ -26,6 +26,12 @@ interface Shiori {
      * 別プロセスで動く実装はプロセスを止めて [setOnCrash] の流れに乗せる。同じプロセスの実装は何もできない。
      */
     fun abort() {}
+
+    /**
+     * SAORI over DirectSSTP の要求（ゴーストが内蔵モジュール internal_* を呼んだ）を渡す先。SHIORI の load / request の途中で呼ぶ。
+     * [handler] は SAORI/1.0 の要求と、Module ヘッダが無いときのモジュール名を受けて、応答を返す
+     */
+    fun setSaoriHandler(handler: (request: ByteArray, module: String?) -> ByteArray) {}
 }
 
 /** descript.txt の `shiori` 名から実装を選ぶ。対応していなければ null を返す。 */

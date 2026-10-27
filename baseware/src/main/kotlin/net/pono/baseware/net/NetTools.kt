@@ -131,8 +131,11 @@ object NetTools {
         return ArchiveResult(files, zip.length(), total)
     }
 
-    /** [source]（ファイルかフォルダ）を [zip] にまとめる（[password] があれば AES で暗号にする）。[zip] 自身は中に入れない */
-    fun compress(source: File, zip: File, password: String? = null): ArchiveResult {
+    /**
+     * [source]（ファイルかフォルダ）を [zip] にまとめる（[password] があれば AES で暗号にする）。[zip] 自身は中に入れない。
+     * [append] なら、あれば今の [zip] に足す（圧縮後の大きさは増えた分）
+     */
+    fun compress(source: File, zip: File, password: String? = null, append: Boolean = false): ArchiveResult {
         val base = source.canonicalFile
         if (!base.exists()) throw ArchiveException(if (source.path.endsWith("/")) "directory not found" else "file not found")
         val out = zip.canonicalFile
@@ -141,7 +144,8 @@ object NetTools {
         val total = files.sumOf { it.length() }
         if (total > MAX_ARCHIVE_BYTES) throw ArchiveException("invalid parameter")
         out.parentFile?.let { if (!it.isDirectory && !it.mkdirs()) throw ArchiveException("create directory failed") }
-        out.delete()
+        if (!append) out.delete()
+        val before = if (out.isFile) out.length() else 0L
         archiveErrors {
             ZipFile(out, password?.toCharArray()).use { z ->
                 for (f in files) {
@@ -157,7 +161,7 @@ object NetTools {
                 }
             }
         }
-        return ArchiveResult(files.size, out.length(), total)
+        return ArchiveResult(files.size, out.length() - before, total)
     }
 
     /** zip4j とファイルの失敗を、SSP の決まった言葉の [ArchiveException] にする */

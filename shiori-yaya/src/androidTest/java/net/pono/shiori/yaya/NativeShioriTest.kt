@@ -3,6 +3,8 @@ package net.pono.shiori.yaya
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
+import net.pono.baseware.saori.InternalSaori
+import net.pono.baseware.saori.SaoriEnv
 import net.pono.baseware.shiori.ShioriSession
 import net.pono.baseware.shiori.ShioriTimeoutException
 import net.pono.baseware.text.TextCharsets
@@ -218,6 +220,68 @@ class NativeShioriTest {
         } finally {
             session.unload()
         }
+    }
+
+    /** 内蔵 SAORI（SAORI over DirectSSTP）。辞書が internal_* を呼ぶと、setSaoriHandler の先に要求が届いて答えが戻る */
+    @Test
+    fun internalSaoriFromDictionaries() {
+        val modules = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val saori = InternalSaori(object : SaoriEnv {
+            override val ghostMaster: File? = null
+            override val ghostRoot: File? = null
+            override val random = java.security.SecureRandom()
+            override fun protect(data: ByteArray) = data
+            override fun unprotect(data: ByteArray) = data
+            override fun async(work: () -> Pair<String, List<String>>) {}
+        })
+        fun ask(engine: ShioriEngine, dir: File, charset: Charset): String? = runBlocking {
+            val shiori = NativeShiori(engine, sandbox(dir))
+            shiori.setSaoriHandler { req, module -> modules += module ?: "(header)"; saori.handle(req, module) }
+            val session = ShioriSession(shiori, charset)
+            try {
+                assertTrue("load $engine", session.load(dir))
+                session.get("OnBoot")?.value
+            } finally {
+                session.unload()
+            }
+        }
+        val sha = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+
+        // YAYA: システム辞書の FUNCTIONEX が呼ぶ LOADLIB / REQUESTLIB。拡張子なしでも .dll 付きでも
+        val yaya = File(root, "yaya-saori").apply { mkdirs() }
+        File(yaya, "yaya.txt").writeText("charset, UTF-8\r\ndic, test.dic\r\n", Charsets.US_ASCII)
+        val dic = """
+            request
+            {
+            	_crlf = CHR(13) + CHR(10)
+            	_head = 'EXECUTE SAORI/1.0' + _crlf + 'Charset: UTF-8' + _crlf + 'Sender: test' + _crlf + 'SecurityLevel: Local' + _crlf
+            	LOADLIB('internal_crypto')
+            	LOADLIB('internal_system.dll')
+            	_h = result(REQUESTLIB('internal_crypto', _head + 'Argument0: Digest' + _crlf + 'Argument1: sha256' + _crlf + 'Argument2: abc' + _crlf + _crlf))
+            	_l = result(REQUESTLIB('internal_system.dll', _head + 'Argument0: ListFunctions' + _crlf + 'Argument1: internal_jwt' + _crlf + _crlf))
+            	'SHIORI/3.0 200 OK' + _crlf + 'Charset: UTF-8' + _crlf + 'Value: ' + _h + '|' + _l + _crlf + _crlf
+            }
+
+            result
+            {
+            	_r = ''
+            	foreach SPLIT(_argv[0], CHR(13) + CHR(10)); _l {
+            		if SUBSTR(_l, 0, 8) == 'Result: ' {
+            			_r = ERASE(_l, 0, 8)
+            		}
+            	}
+            	_r
+            }
+        """.trimIndent().replace("\n", "\r\n")
+        File(yaya, "test.dic").writeText(dic, Charsets.UTF_8)
+        assertEquals("$sha|Sign,Verify", ask(ShioriEngine.YAYA, yaya, Charsets.UTF_8))
+        assertTrue("$modules", "internal_crypto" in modules && "internal_system" in modules)
+
+        // 里々: ＠SAORI に書かずに（internal_…）で呼べる
+        val satori = File(root, "satori-saori").apply { mkdirs() }
+        File(satori, "dic_test.txt").writeBytes("＊OnBoot\r\n：（internal_crypto、Digest、sha256、abc）\r\n".toByteArray(TextCharsets.CP932))
+        val value = ask(ShioriEngine.SATORI, satori, TextCharsets.CP932)
+        assertTrue("$value", value?.contains(sha) == true)
     }
 
     @Test

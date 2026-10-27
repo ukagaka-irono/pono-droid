@@ -226,7 +226,8 @@ SSP 専用のメニュー項目の名前（ヘッドライン・プラグイン�
   ほかのアプリから届いたスクリプトは \![execute] \![open,browser / file] \![change] \![vanishbymyself] \- \j などを使えない（uniqueid を付けた Owned SSTP は使える）
 - ✅ 複数ゴーストの同時起動（3 体まで）。SSTP は ReceiverGhostName / IfGhost / uniqueid の ID で宛先のゴーストに渡し、どれでもなければ最初に起動したゴーストへ
 - ⛔ SHIORI の美坂・偽林檎など（Windows の DLL。ソースが公開されていて Android 用にビルドできるものだけ作れる）
-- ⛔ SAORI・YAYA の EXECUTE・プラグイン（安全のために止めている。ゴーストに端末でプログラムを動かさせることになる）
+- ⛔ ゴースト同梱の SAORI（DLL）・YAYA の EXECUTE・プラグイン（安全のために止めている。ゴーストに端末でプログラムを動かさせることになる）。
+  本体の内蔵 SAORI（SAORI over DirectSSTP の internal_*）は ✅（[ukadoc-spec-gap.md](ukadoc-spec-gap.md)）
 - ✅ surfaces.txt: collisionex の rect / ellipse / circle / polygon、descript ブレスの collision-sort / animation-sort、animation*.collision(ex)、
   animation*.option（exclusive・background・shared-index）、animation*.name、interval の + の組み合わせと starttalk / endtalk、
   surface.append（あるサーフェスにだけ足す）、element0 による surfaceN.png の置き換え、描画メソッドの overlay-fast / interpolate / replace /

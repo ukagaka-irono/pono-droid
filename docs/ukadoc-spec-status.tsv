@@ -1705,8 +1705,8 @@ list/shiori-event/other/OnCompressArchiveFailure.md	DONE	OnCompressArchiveFailur
 list/shiori-event/other/OnEmbryoExist.md	IMPOSSIBLE	OnEmbryoExist	Windows の materia.exe
 list/shiori-event/other/OnExtractArchiveComplete.md	DONE	OnExtractArchiveComplete	base + "Complete" で送っている
 list/shiori-event/other/OnExtractArchiveFailure.md	DONE	OnExtractArchiveFailure	base + "Failure" で送っている。理由の言葉はエラーコードの行
-list/shiori-event/other/OnInternalSaoriComplete.md	IMPOSSIBLE	OnInternalSaoriComplete	SAORI は止めている（決めたこと）
-list/shiori-event/other/OnInternalSaoriFailure.md	IMPOSSIBLE	OnInternalSaoriFailure	SAORI は止めている（決めたこと）
+list/shiori-event/other/OnInternalSaoriComplete.md	DONE	OnInternalSaoriComplete	内蔵 SAORI の --async の結果（識別子が On で始まらないとき）
+list/shiori-event/other/OnInternalSaoriFailure.md	DONE	OnInternalSaoriFailure	内蔵 SAORI の --async の結果（識別子が On で始まらないとき）
 list/shiori-event/other/OnKeyPress.md	IMPOSSIBLE	OnKeyPress	オーバーレイがキーを受けると、ほかのアプリへの入力を横取りする（決めたこと）
 list/shiori-event/other/OnLanguageChange.md	DONE	OnLanguageChange	実装済み
 list/shiori-event/other/OnMusicPlay.md	PARTIAL	OnMusicPlay	SSTP の GIVE Song だけ。端末で鳴っている曲（MediaSession）からは送らない
@@ -1968,59 +1968,59 @@ spec/fmo-mutex/index.md	IMPOSSIBLE	FMO/Mutex	Windows だけの仕組み
 spec/fmo-mutex/mutex.md	IMPOSSIBLE	Mutex	Windows の名前つき Mutex（ssp / sakura）。ほかのアプリから見る手段が無い
 spec/headline.md	IMPOSSIBLE	HEADLINE/2.0	ヘッドラインは Windows の DLL。決めたとおり作らない
 spec/plugin.md	IMPOSSIBLE	PLUGIN/2.0	プラグインは Windows の DLL。決めたとおり作らない
-spec/saori-ex/async.md	BUILD	非同期の呼び出し	--async で 204 を返し、あとで OnInternalSaoriComplete / Failure（または識別子）を送る。ssp-gap.md の ⛔ を直す
-spec/saori-ex/chapter0.md	BUILD	SAORI over DirectSSTP	内蔵モジュールの入口。:shiori プロセスの YAYA の LOADLIB / REQUESTLIB と里々の SendSaoriDirectSSTP で internal_* を本体に回す
-spec/saori-ex/compat.md	BUILD	互換モジュール	string・textcopy・clipcopy・httpc・mciaudio などを DLL 名で内蔵に差し替える（読み込みは止めたまま）
-spec/saori-ex/directsstp.md	BUILD	SAORI over DirectSSTP	WM_COPYDATA の代わりに IShioriService にコールバックを足し、SAORI/1.0 の要求を本体で答える。ソケットの SAORI は 400 direct sstp only
-spec/saori-ex/index.md	BUILD	SAORI over DirectSSTP	内蔵モジュールの一覧。chapter0 と同じ
-spec/saori-ex/internal.md	BUILD	内蔵モジュールの共通規約	位置引数と --オプション、--名前-in / --out の形式、ErrorDescription の共通部分を作る
-spec/saori-ex/internal_crypto/index.md	BUILD	internal_crypto	アルゴリズム名の読み方（ハイフン・大文字小文字を見ない）を共通で作る
-spec/saori-ex/internal_crypto/internal_crypto.Compare.md	BUILD	Compare	MessageDigest.isEqual で比べる
-spec/saori-ex/internal_crypto/internal_crypto.Decrypt.md	BUILD	Decrypt	javax.crypto（AES-GCM / CBC / CTR、ChaCha20）で作れる
-spec/saori-ex/internal_crypto/internal_crypto.DeriveKey.md	BUILD	DeriveKey	PBKDF2・HKDF は JCA、scrypt・argon2id は BouncyCastle
-spec/saori-ex/internal_crypto/internal_crypto.Digest.md	BUILD	Digest	MessageDigest。sha3・blake2 は BouncyCastle。--data-in=file はゴーストのフォルダの中だけ
-spec/saori-ex/internal_crypto/internal_crypto.Encrypt.md	BUILD	Encrypt	javax.crypto で作れる。nonce は SecureRandom
-spec/saori-ex/internal_crypto/internal_crypto.GenerateKeyPair.md	BUILD	GenerateKeyPair	KeyPairGenerator（Ed25519・P-256・RSA）。secp256k1 は BouncyCastle
-spec/saori-ex/internal_crypto/internal_crypto.HMAC.md	BUILD	HMAC	javax.crypto.Mac で作れる
-spec/saori-ex/internal_crypto/internal_crypto.HashPassword.md	BUILD	HashPassword	argon2id・scrypt・bcrypt・crypt 系は BouncyCastle か自前。PHC 文字列で返す
-spec/saori-ex/internal_crypto/internal_crypto.KeyAgreement.md	BUILD	KeyAgreement	secp256k1 の ECDH を BouncyCastle で
-spec/saori-ex/internal_crypto/internal_crypto.Protect.md	BUILD	Protect	DPAPI の代わりに Android Keystore の鍵で包む。--scope=machine も同じ扱い
-spec/saori-ex/internal_crypto/internal_crypto.Sign.md	BUILD	Sign	Signature（Ed25519・ES256・RS256・PS256）。bip340 は BouncyCastle か自前
-spec/saori-ex/internal_crypto/internal_crypto.TOTP.md	BUILD	TOTP	HMAC と時刻で作れる
-spec/saori-ex/internal_crypto/internal_crypto.Unprotect.md	BUILD	Unprotect	Android Keystore の鍵でほどく
-spec/saori-ex/internal_crypto/internal_crypto.Verify.md	BUILD	Verify	Signature で作れる
-spec/saori-ex/internal_crypto/internal_crypto.VerifyPassword.md	BUILD	VerifyPassword	HashPassword と同じ部品で照合
-spec/saori-ex/internal_crypto/internal_crypto_cipher.md	BUILD	共通鍵暗号（Encrypt / Decrypt）	暗号文の形（nonce＋暗号文＋タグ）、--iv / --pack=none
-spec/saori-ex/internal_crypto/internal_crypto_pkey.md	BUILD	公開鍵暗号（GenerateKeyPair / Sign / Verify / KeyAgreement）	DER / 1行の PEM の鍵の読み書き、bech32 の鍵
-spec/saori-ex/internal_data/index.md	BUILD	internal_data	internal_data の入口
-spec/saori-ex/internal_data/internal_data.Compress.md	BUILD	Compress	java.util.zip（deflate / zlib / gzip）で作れる
-spec/saori-ex/internal_data/internal_data.Convert.md	BUILD	Convert	hex・base64・base32・url・bech32 の変換
-spec/saori-ex/internal_data/internal_data.Decompress.md	BUILD	Decompress	java.util.zip で作れる。展開後の大きさに上限を置く
-spec/saori-ex/internal_file/index.md	BUILD	internal_file	internal_file の入口
-spec/saori-ex/internal_file/internal_file.CompressArchive.md	BUILD	CompressArchive	中身は \![execute,compressarchive] のものを使える。入口が無い
-spec/saori-ex/internal_file/internal_file.ExtractArchive.md	BUILD	ExtractArchive	中身は \![execute,extractarchive] のものを使える。入口が無い
-spec/saori-ex/internal_file/internal_file.MediaInfo.md	BUILD	MediaInfo	MediaMetadataRetriever と ExifInterface・BitmapFactory の大きさで読む（app 側）
-spec/saori-ex/internal_file/internal_file_impl.md	BUILD	MediaInfoを実装するベースウェア向けの注記	ほかの OS 向けの注記。取れない値は空にする決まりを守る
-spec/saori-ex/internal_jwt/index.md	BUILD	internal_jwt	internal_jwt の入口
-spec/saori-ex/internal_jwt/internal_jwt.Sign.md	BUILD	Sign	HS* は Mac、RS256 / PS256 / ES256 / EdDSA は internal_crypto の署名を使う
-spec/saori-ex/internal_jwt/internal_jwt.Verify.md	BUILD	Verify	署名と exp / nbf を確かめる
-spec/saori-ex/internal_random/index.md	BUILD	internal_random	internal_random の入口
-spec/saori-ex/internal_random/internal_random.Bytes.md	BUILD	Bytes	SecureRandom で作れる
-spec/saori-ex/internal_random/internal_random.Number.md	BUILD	Number	SecureRandom で作れる
-spec/saori-ex/internal_random/internal_random.UUID.md	BUILD	UUID	v4 は UUID.randomUUID、v7 は時刻と SecureRandom で組む
-spec/saori-ex/internal_system/index.md	BUILD	internal_system	internal_system の入口
-spec/saori-ex/internal_system/internal_system.ListFunctions.md	BUILD	ListFunctions	作ったモジュールの関数の一覧を返す
-spec/saori-ex/internal_system/internal_system.ListModules.md	BUILD	ListModules	作ったモジュールの一覧。里々はこれで内蔵かどうかを決める
-spec/saori-ex/internal_text/index.md	BUILD	internal_text	internal_text の入口
-spec/saori-ex/internal_text/internal_text.Normalize.md	BUILD	Normalize	java.text.Normalizer で作れる
-spec/saori-ex/internal_time/datetime-argument.md	BUILD	日時の引数	エポック秒と ISO 8601 の読み方
-spec/saori-ex/internal_time/index.md	BUILD	internal_time	internal_time の入口
-spec/saori-ex/internal_time/internal_time.Add.md	BUILD	Add	java.time で作れる
-spec/saori-ex/internal_time/internal_time.Diff.md	BUILD	Diff	java.time で作れる
-spec/saori-ex/internal_time/internal_time.Format.md	BUILD	Format	java.time で作れる
-spec/saori-ex/internal_time/zone-tz.md	BUILD	ゾーン（--tz=）	ZoneId で作れる（端末のタイムゾーンの一覧）
+spec/saori-ex/async.md	DONE	非同期の呼び出し	--async= で 204 を返し、結果は OnInternalSaoriComplete / Failure（識別子が On で始まればその名前と＋Failure）で届ける。同時に動くのは CPU の数（2～4）まで。SHIORI を読み込み直したら届けない
+spec/saori-ex/chapter0.md	DONE	SAORI over DirectSSTP	YAYA の FUNCTIONEX / LOADLIB（拡張子なしの internal_* を DLL として読ませるビルドのときのパッチと、dlopen の差し替え）と里々の（internal_…）から、本体の内蔵モジュールを呼べる
+spec/saori-ex/compat.md	BUILD	互換モジュール	内蔵モジュール（internal_*）は済み。互換モジュール（houchi・clipcopy・textcopy・saori_ip・saori_cpuid・mciaudio・cpuusage・httpc・string・hanayu）は、原作の SAORI の動きを1つずつ作る必要があり、まだ
+spec/saori-ex/directsstp.md	DONE	SAORI over DirectSSTP	WM_COPYDATA の代わりに、:shiori のプロセスから AIDL のコールバック（IShioriHost）で呼び出し元のゴーストの本体へ渡す。ソケットと SSTP over HTTP の SAORI/1.0 は 400 direct sstp only。GET Version は Result: pono-droid Internal
+spec/saori-ex/index.md	DONE	SAORI over DirectSSTP	YAYA の FUNCTIONEX / LOADLIB（拡張子なしの internal_* を DLL として読ませるビルドのときのパッチと、dlopen の差し替え）と里々の（internal_…）から、本体の内蔵モジュールを呼べる
+spec/saori-ex/internal.md	DONE	内蔵モジュールの共通規約	位置引数と --オプション（後のものが有効・知らないものは 400）、--名前-in=（text・hex・base64(url)・base32・url・bech32・file）と --out=、ErrorDescription
+spec/saori-ex/internal_crypto/index.md	DONE	internal_crypto	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto.Compare.md	DONE	Compare	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto.Decrypt.md	DONE	Decrypt	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto.DeriveKey.md	DONE	DeriveKey	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto.Digest.md	DONE	Digest	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto.Encrypt.md	DONE	Encrypt	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto.GenerateKeyPair.md	DONE	GenerateKeyPair	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto.HMAC.md	DONE	HMAC	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto.HashPassword.md	DONE	HashPassword	argon2id・scrypt・pbkdf2 は BouncyCastle、bcrypt は OpenBSDBCrypt、SHA-crypt・MD5-crypt・apr1・DES と BSDi の拡張 DES の crypt(3) は自前（OpenSSL と Perl の crypt で確かめた）
+spec/saori-ex/internal_crypto/internal_crypto.KeyAgreement.md	DONE	KeyAgreement	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto.Protect.md	DONE	Protect	DPAPI の代わりに Android Keystore の AES 鍵（取り出せない）で包む。--scope=machine も同じ。アプリを入れ直したり別の端末に移したりすると戻せない
+spec/saori-ex/internal_crypto/internal_crypto.Sign.md	DONE	Sign	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto.TOTP.md	DONE	TOTP	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto.Unprotect.md	DONE	Unprotect	DPAPI の代わりに Android Keystore の AES 鍵（取り出せない）で包む。--scope=machine も同じ。アプリを入れ直したり別の端末に移したりすると戻せない
+spec/saori-ex/internal_crypto/internal_crypto.Verify.md	DONE	Verify	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto.VerifyPassword.md	DONE	VerifyPassword	argon2id・scrypt・pbkdf2 は BouncyCastle、bcrypt は OpenBSDBCrypt、SHA-crypt・MD5-crypt・apr1・DES と BSDi の拡張 DES の crypt(3) は自前（OpenSSL と Perl の crypt で確かめた）
+spec/saori-ex/internal_crypto/internal_crypto_cipher.md	DONE	共通鍵暗号（Encrypt / Decrypt）	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_crypto/internal_crypto_pkey.md	DONE	公開鍵暗号（GenerateKeyPair / Sign / Verify / KeyAgreement）	BouncyCastle の軽量 API（端末の Android の版によらず同じ）
+spec/saori-ex/internal_data/index.md	DONE	internal_data	java.util.zip と自前の形式の変換（hex・base64・base32・url・bech32）
+spec/saori-ex/internal_data/internal_data.Compress.md	DONE	Compress	java.util.zip と自前の形式の変換（hex・base64・base32・url・bech32）
+spec/saori-ex/internal_data/internal_data.Convert.md	DONE	Convert	java.util.zip と自前の形式の変換（hex・base64・base32・url・bech32）
+spec/saori-ex/internal_data/internal_data.Decompress.md	PARTIAL	Decompress	gzip（複数のメンバーも）・zlib・deflate は済み。brotli と zstd の展開は部品（ライブラリ）が要るので、まだ 400 unsupported algorithm
+spec/saori-ex/internal_file/index.md	DONE	internal_file	\![execute,extractarchive / compressarchive] と同じ zip4j。読み書きはゴーストのフォルダの中だけ（外は 400 path not allowed）
+spec/saori-ex/internal_file/internal_file.CompressArchive.md	PARTIAL	CompressArchive	overwrite・append・--password は済み。lzma とヘッダの暗号化（headerencrypt）は zip4j に無いので 500 unknown method
+spec/saori-ex/internal_file/internal_file.ExtractArchive.md	DONE	ExtractArchive	\![execute,extractarchive / compressarchive] と同じ zip4j。読み書きはゴーストのフォルダの中だけ（外は 400 path not allowed）
+spec/saori-ex/internal_file/internal_file.MediaInfo.md	DONE	MediaInfo	画像は BitmapFactory で大きさだけ、音声・動画は MediaMetadataRetriever（comment は取れないので空）。改行は 0x01、知らないキーは空
+spec/saori-ex/internal_file/internal_file_impl.md	DONE	MediaInfoを実装するベースウェア向けの注記	画像は BitmapFactory で大きさだけ、音声・動画は MediaMetadataRetriever（comment は取れないので空）。改行は 0x01、知らないキーは空
+spec/saori-ex/internal_jwt/index.md	DONE	internal_jwt	HS* は HMAC、RS256 / PS256 / ES256 / EdDSA は internal_crypto の署名。alg のすり替え・crit・exp / nbf と leeway
+spec/saori-ex/internal_jwt/internal_jwt.Sign.md	DONE	Sign	HS* は HMAC、RS256 / PS256 / ES256 / EdDSA は internal_crypto の署名。alg のすり替え・crit・exp / nbf と leeway
+spec/saori-ex/internal_jwt/internal_jwt.Verify.md	DONE	Verify	HS* は HMAC、RS256 / PS256 / ES256 / EdDSA は internal_crypto の署名。alg のすり替え・crit・exp / nbf と leeway
+spec/saori-ex/internal_random/index.md	DONE	internal_random	SecureRandom（偏りのない範囲・UUID v4 / v7）
+spec/saori-ex/internal_random/internal_random.Bytes.md	DONE	Bytes	SecureRandom（偏りのない範囲・UUID v4 / v7）
+spec/saori-ex/internal_random/internal_random.Number.md	DONE	Number	SecureRandom（偏りのない範囲・UUID v4 / v7）
+spec/saori-ex/internal_random/internal_random.UUID.md	DONE	UUID	SecureRandom（偏りのない範囲・UUID v4 / v7）
+spec/saori-ex/internal_system/index.md	DONE	internal_system	作ったモジュールと関数の一覧（里々はこれで内蔵かどうかを決める）
+spec/saori-ex/internal_system/internal_system.ListFunctions.md	DONE	ListFunctions	作ったモジュールと関数の一覧（里々はこれで内蔵かどうかを決める）
+spec/saori-ex/internal_system/internal_system.ListModules.md	DONE	ListModules	作ったモジュールと関数の一覧（里々はこれで内蔵かどうかを決める）
+spec/saori-ex/internal_text/index.md	DONE	internal_text	java.text.Normalizer。対になっていないサロゲートは 400 invalid encoding
+spec/saori-ex/internal_text/internal_text.Normalize.md	DONE	Normalize	java.text.Normalizer。対になっていないサロゲートは 400 invalid encoding
+spec/saori-ex/internal_time/datetime-argument.md	DONE	日時の引数	java.time。Windows のタイムゾーン名は ICU（Unicode CLDR の対応表）で IANA の名前に引き直す
+spec/saori-ex/internal_time/index.md	DONE	internal_time	java.time。Windows のタイムゾーン名は ICU（Unicode CLDR の対応表）で IANA の名前に引き直す
+spec/saori-ex/internal_time/internal_time.Add.md	DONE	Add	java.time。Windows のタイムゾーン名は ICU（Unicode CLDR の対応表）で IANA の名前に引き直す
+spec/saori-ex/internal_time/internal_time.Diff.md	DONE	Diff	java.time。Windows のタイムゾーン名は ICU（Unicode CLDR の対応表）で IANA の名前に引き直す
+spec/saori-ex/internal_time/internal_time.Format.md	DONE	Format	java.time。Windows のタイムゾーン名は ICU（Unicode CLDR の対応表）で IANA の名前に引き直す
+spec/saori-ex/internal_time/zone-tz.md	DONE	ゾーン（--tz=）	java.time。Windows のタイムゾーン名は ICU（Unicode CLDR の対応表）で IANA の名前に引き直す
 spec/saori-ex/saori.md	NA	SAORI/1.0の概要	SAORI/1.0 の説明。DLL の SAORI は作らないが、内蔵モジュールの要求の形として使う
-spec/saori-ex/sender.md	BUILD	送信側の手順	YAYA の FUNCTIONEX と里々の（internal_…）がそのまま本体に届くようにする
+spec/saori-ex/sender.md	DONE	送信側の手順	YAYA と里々は辞書のまま本体に届く（YAYA は dlopen の差し替え、里々はビルドのときのパッチで POSIX でも SAORI over DirectSSTP を有効にする）
 spec/shiori3/capability.md	NA	実装対応状況の検知	NOTIFY capability のページへの案内。中身はイベントの組で見る
 spec/shiori3/chapter0.md	DONE	SHIORI/3.0	SHIORI/3.0 の GET / NOTIFY でやりとりしている
 spec/shiori3/index.md	DONE	SHIORI/3.0	SHIORI/3.0 の GET / NOTIFY でやりとりしている

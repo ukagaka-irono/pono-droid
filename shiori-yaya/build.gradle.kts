@@ -10,6 +10,57 @@ plugins {
 val yayaDir = layout.projectDirectory.dir("src/main/cpp/yaya")
 val generatedDir = layout.buildDirectory.dir("generated/yaya")
 
+/**
+ * 写したソースに当てるパッチ（サブモジュールは書き換えない）。[needle] がちょうど [expected] 回あることを確かめてから置き換える。
+ * 改行は LF でも CRLF でもよい（[needle] と [replacement] は LF で書く）
+ */
+fun patchSource(text: String, name: String, needle: String, replacement: String, expected: Int = 1): String {
+    val crlf = "\r\n" in text
+    val n = if (crlf) needle.replace("\n", "\r\n") else needle
+    val r = if (crlf) replacement.replace("\n", "\r\n") else replacement
+    val count = text.split(n).size - 1
+    if (count != expected) throw GradleException("patch: '${needle.lineSequence().first()}' appears $count times in $name (expected $expected)")
+    return text.replace(n, r)
+}
+
+/** [needle] の [indices] 番目（0 から）の出現だけを [replacement] にする。全部で [total] 回あるはず */
+fun patchOccurrences(text: String, name: String, needle: String, replacement: String, total: Int, indices: Set<Int>): String {
+    val parts = text.split(needle)
+    if (parts.size - 1 != total) throw GradleException("patch: '$needle' appears ${parts.size - 1} times in $name (expected $total)")
+    val sb = StringBuilder(parts[0])
+    for (i in 1 until parts.size) sb.append(if (i - 1 in indices) replacement else needle).append(parts[i])
+    return sb.toString()
+}
+
+// YAYA: 拡張子の無い SAORI は SAORI-basic（実行ファイル）として扱われるが、internal_* は本体の内蔵モジュール
+// （SAORI over DirectSSTP）なので DLL として読ませる。読む dlopen は shim/pono_sandbox.cpp が本体に渡す
+fun patchYaya(name: String, text: String): String = when (name) {
+    "lib1.cpp" -> patchSource(
+        text, name,
+        """	if ( ext == L".so" || ext == L".dylib" || ext == L".bundle" ) {
+		return false;
+	}
+""",
+        """	if ( ext == L".so" || ext == L".dylib" || ext == L".bundle" ) {
+		return false;
+	}
+	// pono-droid: 拡張子の無い internal_* は本体の内蔵モジュール（SAORI over DirectSSTP）
+	if ( ext.empty() && fname.size() > 9 ) {
+		yaya::string_t head = fname.substr(0, 9);
+		for ( size_t i = 0; i < head.size(); ++i ) {
+			if ( head[i] >= L'A' && head[i] <= L'Z' ) {
+				head[i] = static_cast<yaya::char_t>(head[i] - L'A' + L'a');
+			}
+		}
+		if ( head == L"internal_" ) {
+			return false;
+		}
+	}
+""",
+    )
+    else -> text
+}
+
 // YAYA のソースは Shift_JIS(CP932) なので、clang に渡す前に UTF-8 へ変換する。
 // #line で元のファイルを指すので、エラー位置はサブモジュール側のファイルになる。
 val convertYayaSources = tasks.register("convertYayaSources") {
@@ -27,8 +78,59 @@ val convertYayaSources = tasks.register("convertYayaSources") {
                 .onUnmappableCharacter(CodingErrorAction.REPORT)
                 .decode(ByteBuffer.wrap(src.readBytes()))
             val path = src.absolutePath.replace('\\', '/')
-            out.resolve(src.name).writeText("#line 1 \"$path\"\n$text", Charsets.UTF_8)
+            out.resolve(src.name).writeText("#line 1 \"$path\"\n${patchYaya(src.name, text.toString())}", Charsets.UTF_8)
         }
+    }
+}
+
+// 里々: SAORI over DirectSSTP（本体の内蔵モジュール internal_* を ＠SAORI に書かずに呼ぶ）は Windows の WM_COPYDATA で
+// 送るので POSIX では外してある。PONO_SAORI_DIRECT のときは有効にし、送る先を shim/pono_saori.cpp（本体）にする
+fun patchSatori(path: String, text: String): String {
+    val enable = "#if !defined(POSIX) || defined(PONO_SAORI_DIRECT)"
+    return when (path) {
+        // 0 番目は windows.h なのでそのまま
+        "satori/shiori_plugin.h" -> patchOccurrences(text, path, "#ifndef POSIX", enable, total = 4, indices = setOf(1, 2, 3))
+        // 5 番目は Windows の .dl2 の名前の付け替えなのでそのまま
+        "satori/shiori_plugin.cpp" -> patchOccurrences(text, path, "#ifndef POSIX", enable, total = 6, indices = setOf(0, 1, 2, 3, 4))
+        "satori/SaoriClient.cpp", "satori/SaoriClient.h" -> patchOccurrences(text, path, "#ifndef POSIX", enable, total = 1, indices = setOf(0))
+        "satori/satori.h" -> patchSource(
+            patchSource(text, path, "#ifndef SATORI_H\n#define SATORI_H\n", "#ifndef SATORI_H\n#define SATORI_H\n#ifdef PONO_SAORI_DIRECT\n#include \"pono_saori.h\"\n#endif\n"),
+            path,
+            """	bool	CanSendSaoriDirectSSTP() const
+	{
+""",
+            """	bool	CanSendSaoriDirectSSTP() const
+	{
+#ifdef PONO_SAORI_DIRECT
+		if ( pono_saori_direct_available() ) {
+			return true;
+		}
+#endif
+""",
+        )
+        "satori/satori_builtin.cpp" -> patchSource(
+            text, path,
+            """bool Satori::SendSaoriDirectSSTP(const std::string& i_request, std::string& o_response)
+{
+	o_response.erase();
+""",
+            """bool Satori::SendSaoriDirectSSTP(const std::string& i_request, std::string& o_response)
+{
+	o_response.erase();
+#ifdef PONO_SAORI_DIRECT
+	{
+		long out_len = 0;
+		char* out = pono_saori_direct(NULL, i_request.data(), (long)i_request.size(), &out_len);
+		if ( out != NULL ) {
+			o_response.assign(out, out_len);
+			free(out);
+			return true;
+		}
+	}
+#endif
+""",
+        )
+        else -> text
     }
 }
 
@@ -50,11 +152,13 @@ val convertSatoriSources = tasks.register("convertSatoriSources") {
                 .onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT)
                 .decode(ByteBuffer.wrap(src.readBytes()))
-            val dest = out.resolve(src.relativeTo(root).path)
+            val rel = src.relativeTo(root).invariantSeparatorsPath
+            val dest = out.resolve(rel)
             dest.parentFile.mkdirs()
             val path = src.absolutePath.replace('\\', '/')
+            val patched = patchSatori(rel, text.toString())
             // ヘッダに #line を入れると #pragma once が効かなくなることがあるので、.cpp だけに付ける
-            dest.writeText(if (src.extension == "cpp") "#line 1 \"$path\"\n$text" else text.toString(), Charsets.UTF_8)
+            dest.writeText(if (src.extension == "cpp") "#line 1 \"$path\"\n$patched" else patched, Charsets.UTF_8)
         }
     }
 }

@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1286・一部だけ 54・作る 92・作れない 280・ベースウェアのことではない 338
+全 2050 項目: 済み 1337・一部だけ 56・作る 41・作れない 278・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -352,7 +352,7 @@
 
 ## SHIORI イベント
 
-済み 249 項目。
+済み 251 項目。
 
 ### 🔨 作る（11）
 - inputbox.autocomplete — 入力の箱を開くときに聞き、返った候補（バイト値1区切り）を InputBalloon の入力欄の下に出す
@@ -370,7 +370,7 @@
 ### 🔧 一部だけ（1）
 - OnMusicPlay — SSTP の GIVE Song だけ。端末で鳴っている曲（MediaSession）からは送らない
 
-### ⛔ 作れない（55）
+### ⛔ 作れない（53）
 - OnBasewareUpdating — アプリの更新は Play ストアが行い、置き換える前にアプリへ知らせが来ない
 - OnCacheRestore — ゴーストキャッシュが無い（決めたこと）
 - OnCacheSuspend — ゴーストキャッシュが無い（決めたこと）
@@ -419,8 +419,6 @@
 - OnTabletMode — Windows のタブレットモード（決めたこと）
 - OnWindowModeChange — SSP のコンテナに出すモードが無い。いつも normal（決めたこと）
 - OnEmbryoExist — Windows の materia.exe
-- OnInternalSaoriComplete — SAORI は止めている（決めたこと）
-- OnInternalSaoriFailure — SAORI は止めている（決めたこと）
 - OnKeyPress — オーバーレイがキーを受けると、ほかのアプリへの入力を横取りする（決めたこと）
 - OnNekodorifExist — Windows の猫どりふ
 - OnSNTPCorrect — アプリは端末の時計を直せない。ずれを測るだけ
@@ -555,63 +553,14 @@
 
 ## 仕様（SSTP・SHIORI/3.0・SAORI・更新ファイルなど）
 
-済み 17 項目。
+済み 66 項目。
 
-### 🔨 作る（52）
-- 非同期の呼び出し — --async で 204 を返し、あとで OnInternalSaoriComplete / Failure（または識別子）を送る。ssp-gap.md の ⛔ を直す
-- SAORI over DirectSSTP — 内蔵モジュールの入口。:shiori プロセスの YAYA の LOADLIB / REQUESTLIB と里々の SendSaoriDirectSSTP で internal_* を本体に回す
-- 互換モジュール — string・textcopy・clipcopy・httpc・mciaudio などを DLL 名で内蔵に差し替える（読み込みは止めたまま）
-- SAORI over DirectSSTP — WM_COPYDATA の代わりに IShioriService にコールバックを足し、SAORI/1.0 の要求を本体で答える。ソケットの SAORI は 400 direct sstp only
-- SAORI over DirectSSTP — 内蔵モジュールの一覧。chapter0 と同じ
-- 内蔵モジュールの共通規約 — 位置引数と --オプション、--名前-in / --out の形式、ErrorDescription の共通部分を作る
-- internal_crypto — アルゴリズム名の読み方（ハイフン・大文字小文字を見ない）を共通で作る
-- Compare — MessageDigest.isEqual で比べる
-- Decrypt — javax.crypto（AES-GCM / CBC / CTR、ChaCha20）で作れる
-- DeriveKey — PBKDF2・HKDF は JCA、scrypt・argon2id は BouncyCastle
-- Digest — MessageDigest。sha3・blake2 は BouncyCastle。--data-in=file はゴーストのフォルダの中だけ
-- Encrypt — javax.crypto で作れる。nonce は SecureRandom
-- GenerateKeyPair — KeyPairGenerator（Ed25519・P-256・RSA）。secp256k1 は BouncyCastle
-- HMAC — javax.crypto.Mac で作れる
-- HashPassword — argon2id・scrypt・bcrypt・crypt 系は BouncyCastle か自前。PHC 文字列で返す
-- KeyAgreement — secp256k1 の ECDH を BouncyCastle で
-- Protect — DPAPI の代わりに Android Keystore の鍵で包む。--scope=machine も同じ扱い
-- Sign — Signature（Ed25519・ES256・RS256・PS256）。bip340 は BouncyCastle か自前
-- TOTP — HMAC と時刻で作れる
-- Unprotect — Android Keystore の鍵でほどく
-- Verify — Signature で作れる
-- VerifyPassword — HashPassword と同じ部品で照合
-- 共通鍵暗号（Encrypt / Decrypt） — 暗号文の形（nonce＋暗号文＋タグ）、--iv / --pack=none
-- 公開鍵暗号（GenerateKeyPair / Sign / Verify / KeyAgreement） — DER / 1行の PEM の鍵の読み書き、bech32 の鍵
-- internal_data — internal_data の入口
-- Compress — java.util.zip（deflate / zlib / gzip）で作れる
-- Convert — hex・base64・base32・url・bech32 の変換
-- Decompress — java.util.zip で作れる。展開後の大きさに上限を置く
-- internal_file — internal_file の入口
-- CompressArchive — 中身は \![execute,compressarchive] のものを使える。入口が無い
-- ExtractArchive — 中身は \![execute,extractarchive] のものを使える。入口が無い
-- MediaInfo — MediaMetadataRetriever と ExifInterface・BitmapFactory の大きさで読む（app 側）
-- MediaInfoを実装するベースウェア向けの注記 — ほかの OS 向けの注記。取れない値は空にする決まりを守る
-- internal_jwt — internal_jwt の入口
-- Sign — HS* は Mac、RS256 / PS256 / ES256 / EdDSA は internal_crypto の署名を使う
-- Verify — 署名と exp / nbf を確かめる
-- internal_random — internal_random の入口
-- Bytes — SecureRandom で作れる
-- Number — SecureRandom で作れる
-- UUID — v4 は UUID.randomUUID、v7 は時刻と SecureRandom で組む
-- internal_system — internal_system の入口
-- ListFunctions — 作ったモジュールの関数の一覧を返す
-- ListModules — 作ったモジュールの一覧。里々はこれで内蔵かどうかを決める
-- internal_text — internal_text の入口
-- Normalize — java.text.Normalizer で作れる
-- 日時の引数 — エポック秒と ISO 8601 の読み方
-- internal_time — internal_time の入口
-- Add — java.time で作れる
-- Diff — java.time で作れる
-- Format — java.time で作れる
-- ゾーン（--tz=） — ZoneId で作れる（端末のタイムゾーンの一覧）
-- 送信側の手順 — YAYA の FUNCTIONEX と里々の（internal_…）がそのまま本体に届くようにする
+### 🔨 作る（1）
+- 互換モジュール — 内蔵モジュール（internal_*）は済み。互換モジュール（houchi・clipcopy・textcopy・saori_ip・saori_cpuid・mciaudio・cpuusage・httpc・string・hanayu）は、原作の SAORI の動きを1つずつ作る必要があり、まだ
 
-### 🔧 一部だけ（7）
+### 🔧 一部だけ（9）
+- Decompress — gzip（複数のメンバーも）・zlib・deflate は済み。brotli と zstd の展開は部品（ライブラリ）が要るので、まだ 400 unsupported algorithm
+- CompressArchive — overwrite・append・--password は済み。lzma とヘッダの暗号化（headerencrypt）は zip4j に無いので 500 unknown method
 - response — ValueNotify・SecurityLevel・ErrorLevel / ErrorDescription・BalloonOffset・Reference0 のコミュニケート（Age）・X-SSTP-PassThru-* は扱う。Marker と MarkerSend はバルーンの印がまだ無いので出さない
 - 概要 — 9801 だけで待つ。SSP の 9821 では待たない
 - 生成処理 — 作る一覧が UTF-8 なのに charset を書かない（dau の先頭の charset=、txt の charset, 行）。SSP は Shift_JIS と読む。date= も無い

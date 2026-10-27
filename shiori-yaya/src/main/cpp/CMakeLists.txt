@@ -16,13 +16,13 @@ project(shiori LANGUAGES C CXX)
 # エンジンが呼ぶ libc の関数を shim/pono_sandbox.cpp の __wrap_ 版に差し替える（ゴーストにできることを絞る）。
 # エンジンが使っていない関数を並べても害は無い
 set(PONO_WRAPPED_SYMBOLS
-    dlopen dlsym fork vfork chdir system popen execv execve execvp execl execlp execle posix_spawn posix_spawnp
+    dlopen dlsym dlclose fork vfork chdir system popen execv execve execvp execl execlp execle posix_spawn posix_spawnp
     open __open_2 openat __openat_2 fopen freopen opendir stat lstat access readlink
     unlink remove rename mkdir rmdir utimes truncate mkstemp tmpfile)
 list(TRANSFORM PONO_WRAPPED_SYMBOLS PREPEND "-Wl,--wrap=")
 
 # 自前のコード（サンドボックスと JNI）。NDK 既定の警告（-Werror=format-security など）のまま
-add_library(pono_sandbox OBJECT shim/pono_sandbox.cpp)
+add_library(pono_sandbox OBJECT shim/pono_sandbox.cpp shim/pono_saori.cpp)
 set_target_properties(pono_sandbox PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_options(pono_sandbox PRIVATE -fvisibility=hidden)
 
@@ -98,7 +98,8 @@ set_source_files_properties(${SATORI_SOURCES} PROPERTIES GENERATED TRUE COMPILE_
 add_library(satori SHARED ${SATORI_SOURCES} $<TARGET_OBJECTS:pono_iconv> jni_satori.cpp)
 # shim を先に置き、<iconv.h> を CP932 対応の自前実装に差し替える
 target_include_directories(satori PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/shim ${SATORI_GENERATED_DIR}/satori ${SATORI_GENERATED_DIR}/_)
-target_compile_definitions(satori PRIVATE POSIX SATORI_DLL _FILE_OFFSET_BITS=64)
+# PONO_SAORI_DIRECT: 本体の内蔵モジュール（SAORI over DirectSSTP）を呼べるようにする（build.gradle.kts のパッチ）
+target_compile_definitions(satori PRIVATE POSIX SATORI_DLL PONO_SAORI_DIRECT _FILE_OFFSET_BITS=64)
 # YAYA と同じく、Android に無い shm_open などを補うヘッダを先に読ませる
 target_compile_options(satori PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=c++11 -include ${CMAKE_CURRENT_SOURCE_DIR}/shim/android_compat.h>)
 pono_shiori_library(satori)

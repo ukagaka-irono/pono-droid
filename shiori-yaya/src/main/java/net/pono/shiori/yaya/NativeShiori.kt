@@ -127,20 +127,27 @@ class NativeShiori(private val engine: ShioriEngine, private val sandbox: Sandbo
 
     private val native: NativeBinding by lazy { engine.binding() }
     private var id = 0L
+    private var saori: ((ByteArray, String?) -> ByteArray?)? = null
+
+    override fun setSaoriHandler(handler: (request: ByteArray, module: String?) -> ByteArray) {
+        saori = handler
+    }
 
     override fun load(dir: File): Boolean {
         check(id == 0L) { "already loaded" }
         // POSIX 版の SHIORI のパスは UTF-8 で、末尾の / が要る
-        id = native.load(
-            (dir.absolutePath.trimEnd('/') + "/").toByteArray(Charsets.UTF_8),
-            sandbox.allowedDir.absolutePath.toByteArray(Charsets.UTF_8),
-            sandbox.protectedDir?.absolutePath?.toByteArray(Charsets.UTF_8) ?: ByteArray(0),
-        )
+        id = SaoriBridge.with(saori) {
+            native.load(
+                (dir.absolutePath.trimEnd('/') + "/").toByteArray(Charsets.UTF_8),
+                sandbox.allowedDir.absolutePath.toByteArray(Charsets.UTF_8),
+                sandbox.protectedDir?.absolutePath?.toByteArray(Charsets.UTF_8) ?: ByteArray(0),
+            )
+        }
         return id > 0
     }
 
     override fun request(request: ByteArray): ByteArray? =
-        if (id > 0) native.request(id, request) else null
+        if (id > 0) SaoriBridge.with(saori) { native.request(id, request) } else null
 
     override fun unload() {
         if (id > 0) {

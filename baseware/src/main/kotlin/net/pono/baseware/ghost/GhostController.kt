@@ -17,6 +17,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import net.pono.baseware.saori.InternalSaori
+import net.pono.baseware.saori.MediaInfo
+import net.pono.baseware.saori.SaoriEnv
+import net.pono.baseware.saori.SaoriException
 import net.pono.baseware.balloon.Balloon
 import net.pono.baseware.net.FeedParser
 import net.pono.baseware.net.FileWatch
@@ -317,6 +321,18 @@ interface GhostPlatform {
      * 無いものは入れない（そのプロパティは無いことになる）。artwork は画像を書き出したファイルのパス
      */
     fun soundMeta(file: File): Map<String, String> = emptyMap()
+
+    /** 内蔵 SAORI の internal_crypto の Protect。データをこの端末のこのアプリの鍵で包む。包めなければ null */
+    fun protectData(data: ByteArray): ByteArray? = null
+
+    /** [protectData] で包んだものを戻す（Unprotect）。戻せなければ null */
+    fun unprotectData(data: ByteArray): ByteArray? = null
+
+    /** 内蔵 SAORI の internal_file の MediaInfo。音声・動画・画像のタグ・長さ・大きさを、再生の準備をせずに読む。読めなければ null */
+    fun mediaInfo(file: File): MediaInfo? = null
+
+    /** Windows のタイムゾーン名（Tokyo Standard Time など）を IANA の名前にする（internal_time の --tz=）。知らなければ null */
+    fun windowsZone(name: String): String? = null
 
     /** メールを確かめるアカウント（アプリの設定で入れたもの。最初は無い） */
     fun mailAccounts(): List<MailAccount> = emptyList()
@@ -742,6 +758,8 @@ class GhostController(
             platform.onError("${ghost.name}: ${ghost.shioriName} は未対応です（YAYA・里々・華和梨・Kagari に対応）")
             return false
         }
+        // 辞書が読み込みの途中でも内蔵 SAORI を呼べるように、読み込む前に教える
+        shiori.setSaoriHandler { request, module -> saori(request, module) }
         // descript.txt の shiori.forceencoding（Charset ヘッダを見ない）、shiori.encoding（最初の文字コード）、charset の順
         val forced = ghost.descript["shiori.forceencoding"]?.let(TextCharsets::resolve)
         val initial = forced ?: ghost.descript["shiori.encoding"]?.let(TextCharsets::resolve) ?: ghost.charset
@@ -1739,6 +1757,8 @@ class GhostController(
     /** SHIORI を外す。外す前に OnDestroy を送る（読み込み直しなら Reference0 が reload） */
     private suspend fun unloadSession(reload: Boolean = false) {
         val s = session ?: return
+        // 内蔵 SAORI の --async の結果は、外した SHIORI には届けない
+        shioriGeneration++
         runCatching { s.notify("OnDestroy", if (reload) "reload" else "") }
         s.unload()
         session = null
@@ -2346,6 +2366,39 @@ class GhostController(
         }
         return if (event.isEmpty()) job else null
     }
+
+    // ---- 内蔵 SAORI（SAORI over DirectSSTP の internal_*） ----
+
+    /** SHIORI を読み込み直すたびに増える（--async の結果を、呼んだ SHIORI にだけ届けるため） */
+    @Volatile private var shioriGeneration = 0
+
+    /** 同時に動かす --async の処理の数（SSP と同じく CPU の数ほど、2～4）。超えた分は順番を待つ */
+    private val saoriDispatcher = Dispatchers.Default.limitedParallelism(Runtime.getRuntime().availableProcessors().coerceIn(2, 4))
+
+    private val internalSaori = InternalSaori(object : SaoriEnv {
+        override val ghostMaster: File get() = ghost.masterDir
+        override val ghostRoot: File get() = ghost.dir
+        override val random = java.security.SecureRandom()
+        override fun windowsZone(name: String) = platform.windowsZone(name)
+        override fun protect(data: ByteArray) = platform.protectData(data) ?: throw SaoriException.fail("internal error")
+        override fun unprotect(data: ByteArray) = platform.unprotectData(data)
+        override fun mediaInfo(file: File) = platform.mediaInfo(file)
+
+        override fun async(work: () -> Pair<String, List<String>>) {
+            val generation = shioriGeneration
+            scope.launch {
+                val (event, refs) = withContext(saoriDispatcher) { work() }
+                // 結果が届く前にゴーストが終わった（SHIORI を読み込み直した）なら送らない
+                if (generation == shioriGeneration && !closing) deliverLater(event, refs)
+            }
+        }
+    })
+
+    /**
+     * SHIORI から届いた SAORI/1.0 の要求（SAORI over DirectSSTP）に、内蔵モジュールで答える。[module] は Module ヘッダが無いときの
+     * モジュールの名前（YAYA が DLL として読んだもの）。SHIORI の request の途中に、どのスレッドからでも呼ばれる
+     */
+    fun saori(request: ByteArray, module: String? = null): ByteArray = internalSaori.handle(request, module)
 
     // ---- 時刻合わせ（\7 / \![executesntp]） ----
 

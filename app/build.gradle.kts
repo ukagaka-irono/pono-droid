@@ -98,6 +98,29 @@ abstract class GenerateLicenseAssets : DefaultTask() {
                 "Zip4j", "Apache-2.0", "https://github.com/srikanth-lingala/zip4j",
                 "Copyright 2010 Srikanth Reddy Lingala\n\nLicensed under the Apache License, Version 2.0.",
             ),
+            // 文面は jar の中の org.bouncycastle.LICENSE（licenseText）と同じ
+            Entry(
+                "Bouncy Castle", "MIT", "https://www.bouncycastle.org/",
+                """
+                Copyright (c) 2000-2023 The Legion of the Bouncy Castle Inc. (https://www.bouncycastle.org)
+
+                Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+                and associated documentation files (the "Software"), to deal in the Software without restriction,
+                including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+                and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
+                subject to the following conditions:
+
+                The above copyright notice and this permission notice shall be included in all copies or substantial
+                portions of the Software.
+
+                THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+                INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+                PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+                LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+                OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+                DEALINGS IN THE SOFTWARE.
+                """.trimIndent(),
+            ),
             Entry(
                 "LLVM libc++", "Apache-2.0 WITH LLVM-exception", "https://libcxx.llvm.org/",
                 "Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.\n" +

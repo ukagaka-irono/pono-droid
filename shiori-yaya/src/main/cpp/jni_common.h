@@ -17,6 +17,7 @@
 #include <string>
 
 #include "shim/pono_sandbox.h"
+#include "shim/pono_saori.h"
 
 namespace pono {
 
@@ -35,6 +36,7 @@ public:
     jlong Load(JNIEnv *env, jbyteArray dir, jbyteArray allowedDir, jbyteArray protectedDir) {
         // エンジンはスレッドセーフではないので、呼び出しを1つずつにする
         std::lock_guard<std::mutex> guard(lock_);
+        pono_saori_attach(env);
         std::string allowed = ToString(env, allowedDir);
         std::string guarded = ToString(env, protectedDir);
         if (!guarded.empty()) pono_sandbox_protect(guarded.c_str());
@@ -59,6 +61,7 @@ public:
 
     jbyteArray Request(JNIEnv *env, jlong handle, jbyteArray req) {
         std::lock_guard<std::mutex> guard(lock_);
+        pono_saori_attach(env);
         jsize len;
         char *in = CopyToMalloc(env, req, &len);
         if (in == nullptr) return nullptr;
