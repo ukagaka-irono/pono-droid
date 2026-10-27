@@ -320,6 +320,9 @@ interface ScriptHost {
     /** `\![moveasync,cancel]`。動いている途中のキャラクターを、どれもその場で止める */
     fun cancelMove() {}
 
+    /** `\![set,alpha / scaling,…,--wait]`。そのキャラクターの [name] がだんだん変わり終わるまで待つ */
+    suspend fun awaitTransition(scope: Int, name: String) {}
+
     /** `\![set,position,x,y,スコープ]`。[x] / [y] に固定してドラッグさせない。null なら固定をやめる（`\![reset,position]`） */
     fun setPosition(scope: Int, x: Int?, y: Int?) {}
 
@@ -728,8 +731,7 @@ class ScriptPlayer(
                     a[1].lowercase() == "property" -> if (a.size < 3 || !host.setProperty(a[2], a.getOrNull(3).orEmpty())) host.unknownTag(token)
                     !host.setOption(scope, a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
                     // \![set,alpha / scaling,…,--time=ミリ秒,--wait] は、変わり終わるまで待つ
-                    !quick && a.drop(2).any { it.trim().equals("--wait", ignoreCase = true) } ->
-                        transitionTime(a[1].lowercase(), a.drop(2))?.takeIf { it > 0 }?.let { delay(it) }
+                    !quick && a.drop(2).any { it.trim().equals("--wait", ignoreCase = true) } -> host.awaitTransition(scope, a[1].lowercase())
                 }
                 // ウィンドウの重なりや他のゴースト・プラグインなど、pono-droid に無いものは黙って飛ばす
                 // pono-droid にプラグインは無いので、どれも見つからなかったと知らせる

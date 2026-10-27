@@ -5935,6 +5935,10 @@ class GhostController(
             _state.update { it.update(scope) { c -> c.copy(move = ++animationCounter to command) } }
         }
 
+        override suspend fun awaitTransition(scope: Int, name: String) {
+            transitions[scope to name]?.join()
+        }
+
         override fun cancelMove() {
             // 時間 0 で今いる所へ動かす（動いている途中のものは止まる）
             for (s in _state.value.characters.keys) move(s, MoveCommand.STAY)
