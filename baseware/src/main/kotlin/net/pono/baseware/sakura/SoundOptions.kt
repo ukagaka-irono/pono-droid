@@ -3,7 +3,10 @@ package net.pono.baseware.sakura
 /**
  * `\![sound,play / loop / load / option,ファイル,オプション...]` のオプション（SSP と同じ）。
  * [volume] は 0〜100、[balance] は -100（左）〜100（右）、[rate] は 100 が普通の速さ、[seekMs] は再生を始める位置（ミリ秒）で、
- * [seekRelative] なら今の位置からの相対（負でもよい）
+ * [seekRelative] なら今の位置からの相対（負でもよい）。
+ * [spectrumMs] は OnSoundSpectrum を送る間隔（20〜1000。0 で止める）、[spectrumBands] は帯域の数（0・5・10・15・31）、
+ * [spectrumHoldMs] はピークホールドの時間（0〜10000）。[window] は --window（pono-droid には再生のウインドウが無いので読むだけ）、
+ * [soundOnly] は --sound-only（pono-droid は動画もいつも音だけ鳴らす）
  */
 data class SoundOptions(
     val volume: Int? = null,
@@ -11,6 +14,11 @@ data class SoundOptions(
     val rate: Int? = null,
     val seekMs: Long? = null,
     val seekRelative: Boolean = false,
+    val spectrumMs: Int? = null,
+    val spectrumBands: Int? = null,
+    val spectrumHoldMs: Int? = null,
+    val window: Boolean? = null,
+    val soundOnly: Boolean? = null,
 ) {
     val isEmpty: Boolean get() = this == SoundOptions()
 
@@ -31,10 +39,22 @@ data class SoundOptions(
                         val relative = value.startsWith("@")
                         o.copy(seekMs = seekTime(value.removePrefix("@"), relative), seekRelative = relative)
                     }
+                    // 範囲の外は端に丸める（0 は止める）
+                    "spectrum" -> value.toIntOrNull()?.let { o.copy(spectrumMs = if (it <= 0) 0 else it.coerceIn(20, 1000)) } ?: o
+                    "spectrum-bands" -> value.toIntOrNull()?.let { o.copy(spectrumBands = SoundSpectrum.nearestBands(it)) } ?: o
+                    "spectrum-hold" -> value.toIntOrNull()?.let { o.copy(spectrumHoldMs = it.coerceIn(0, 10_000)) } ?: o
+                    "window" -> flag(value)?.let { o.copy(window = it) } ?: o
+                    "sound-only" -> flag(value)?.let { o.copy(soundOnly = it) } ?: o
                     else -> o
                 }
             }
             return o
+        }
+
+        private fun flag(value: String): Boolean? = when (value.lowercase()) {
+            "true", "on", "1" -> true
+            "false", "off", "0" -> false
+            else -> null
         }
 
         /**

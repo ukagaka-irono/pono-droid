@@ -21,7 +21,7 @@ class SoundSpeechTest {
     @Test
     fun soundOptionsAreParsedLikeSsp() {
         assertEquals(
-            SoundOptions(volume = 100, balance = -100, rate = 150, seekMs = 90_500),
+            SoundOptions(volume = 100, balance = -100, rate = 150, seekMs = 90_500, window = true),
             SoundOptions.parse(listOf("--volume=150", "--balance=-300", "--rate=150", "--seektime=1:30.5", "--window=true")),
         )
         assertEquals(90_500L, SoundOptions.seekTime("90500"))

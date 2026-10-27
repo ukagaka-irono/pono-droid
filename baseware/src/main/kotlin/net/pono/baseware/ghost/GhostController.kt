@@ -1603,6 +1603,19 @@ class GhostController(
     /** ループの音が最後まで鳴り、頭に戻る（OnSoundLoop） */
     fun onSoundLooped(file: File) = raise("OnSoundLoop", listOf(soundName(file)), userInitiated = false)
 
+    /**
+     * --spectrum= の音のスペクトラム（OnSoundSpectrum）。Reference は ファイル名, 帯域の数, チャンネルごとの全体のレベル, そのピーク,
+     * 帯域ごとのレベル, そのピーク（どれも 0x01 区切り）, 再生位置（ミリ秒）
+     */
+    fun onSoundSpectrum(file: File, bands: Int, frame: net.pono.baseware.sakura.SoundSpectrum.Frame, positionMs: Long) {
+        fun join(v: List<Int>) = v.joinToString("\u0001")
+        raise(
+            "OnSoundSpectrum",
+            listOf(soundName(file), bands.toString(), join(frame.channels), join(frame.channelPeaks), join(frame.bands), join(frame.bandPeaks), positionMs.toString()),
+            userInitiated = false,
+        )
+    }
+
     /** 音を鳴らせなかった（OnSoundError）。[code] は Android の再生のエラーの番号 */
     fun onSoundError(file: File, code: Int, message: String) =
         raise("OnSoundError", listOf("play", code.toString(), soundName(file), message), userInitiated = false)

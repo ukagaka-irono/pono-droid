@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1362・一部だけ 34・作る 38・作れない 278・ベースウェアのことではない 338
+全 2050 項目: 済み 1366・一部だけ 32・作る 36・作れない 278・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -229,20 +229,15 @@
 
 ## さくらスクリプト
 
-済み 334 項目。
+済み 337 項目。
 
-### 🔨 作る（1）
-- sound の --spectrum= で通知される帯域とレベル \[2.9.18\] — MediaCodec で波形を取り出して FFT し OnSoundSpectrum を送る（Visualizer はマイクの許可が要るので使わない）
-
-### 🔧 一部だけ（8）
+### 🔧 一部だけ（6）
 - \_l[x,y] — x が数のときに次の列にするだけ。y・centerx / centery・em / lh / %・@ の相対を扱わない
 - 補足 — オプションと data:…;base64 は済み。残りは Windows の exe / dll のリソースと --source=（TIFF のページ・PSD のレイヤー・アイコン）で、Android では読めない
 - \![execute,install,url,URL,種別] — 種別は nar だけ。homeurl（そこから更新）・ical（予定表として購読）・ssf を作れる。feed はヘッドラインなので作らない
 - http/rss/ical/websocket オプション — --log=（送ったものと返ってきたものを ghost/master/var/ のファイルに足す）は済み。--insecure だけは安全のため使わない（証明書をいつも確かめる）
-- \!\...\] — --sound-only（動画の音だけ）と --spectrum 系が無い
-- \!\...\] — --spectrum 系の開始・止める・間隔の変更が無い
-- \!\...\] — --volume / --balance / --rate / --seektime はある。--window と --spectrum 系が無い
-- sound play/load/option のオプション — --window・--sound-only・--spectrum / --spectrum-bands / --spectrum-hold が無い
+- \!\...\] — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
+- sound play/load/option のオプション — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
 
 ### ⛔ 作れない（31）
 - \f[anchormethod,描画方法] — Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）
@@ -327,9 +322,9 @@
 
 ## SHIORI イベント
 
-済み 251 項目。
+済み 252 項目。
 
-### 🔨 作る（11）
+### 🔨 作る（10）
 - inputbox.autocomplete — 入力の箱を開くときに聞き、返った候補（バイト値1区切り）を InputBalloon の入力欄の下に出す
 - OnInstallReroute — accept で名指しされたゴーストが一緒に起動していたら、そちらへ入れて以降のイベントもそちらに送る（いまは OnInstallRefuse）
 - OnMouseDoubleClickEx — 2本指で2回続けて叩いたとき（とマウスの中・戻る・進むボタン）に middle などで送る
@@ -339,7 +334,6 @@
 - rateofusegraph — 名前だけ見つかったが NOTIFY は送っていない。使用率を出すとき（\![open,rateofusegraph]・メニュー）に history.usage から送る
 - OnDesktopWallpaperChange — WallpaperManager の色が変わった知らせで送る（Reference2 のパスは空、きっかけは unknown）。ssp-gap では ⛔
 - OnMusicPlayEx — 🔒 通知へのアクセスを許したときだけ MediaSessionManager で曲名・アーティスト・album・duration などを送る。ssp-gap では ⛔
-- OnSoundSpectrum — \_v の --spectrum。自分で鳴らす音を MediaExtractor / MediaCodec で読んで帯域ごとの音量を出す（Visualizer はマイクの許可が要る）。ssp-gap の ⛔ の理由は違う
 - OnVideoPlayEx — 🔒 OnMusicPlayEx と同じ仕組みで、動画のセッションのときに送る。ssp-gap では ⛔
 
 ### 🔧 一部だけ（1）

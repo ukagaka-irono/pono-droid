@@ -291,6 +291,7 @@ class GhostOverlayService : LifecycleService() {
             onStop = { controller?.onSoundStopped(it) },
             onLoop = { controller?.onSoundLooped(it) },
             onError = { file, code, message -> controller?.onSoundError(file, code, message) },
+            onSpectrum = { file, bands, frame, position -> controller?.onSoundSpectrum(file, bands, frame, position) },
         )
         private val windows = mutableListOf<CharacterWindow>()
 

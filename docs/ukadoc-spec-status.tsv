@@ -1142,17 +1142,17 @@ list/sakura-script/sound/8.md	DONE	\8[ファイル名]	実装済み
 list/sakura-script/sound/_V-2.md	DONE	\_V	実装済み
 list/sakura-script/sound/_v.md	DONE	\_v[ファイル名]	実装済み
 list/sakura-script/sound/bang-sound-cdplay-No.md	IMPOSSIBLE	\![sound,cdplay,トラックNo.]	音楽 CD は Android に無い
-list/sakura-script/sound/bang-sound-load.md	PARTIAL	\!\...\]	--sound-only（動画の音だけ）と --spectrum 系が無い
+list/sakura-script/sound/bang-sound-load.md	DONE	\!\...\]	--spectrum 系を読む。--sound-only は、pono-droid が動画もいつも音だけ鳴らすので、そのとおりになる
 list/sakura-script/sound/bang-sound-loop.md	DONE	\![sound,loop,ファイル名]	実装済み
-list/sakura-script/sound/bang-sound-option.md	PARTIAL	\!\...\]	--spectrum 系の開始・止める・間隔の変更が無い
+list/sakura-script/sound/bang-sound-option.md	DONE	\!\...\]	--spectrum 系を読む。--sound-only は、pono-droid が動画もいつも音だけ鳴らすので、そのとおりになる
 list/sakura-script/sound/bang-sound-pause.md	DONE	\![sound,pause,ファイル名]	実装済み
-list/sakura-script/sound/bang-sound-play.md	PARTIAL	\!\...\]	--volume / --balance / --rate / --seektime はある。--window と --spectrum 系が無い
+list/sakura-script/sound/bang-sound-play.md	PARTIAL	\!\...\]	--spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
 list/sakura-script/sound/bang-sound-resume.md	DONE	\![sound,resume,ファイル名]	実装済み
 list/sakura-script/sound/bang-sound-stop.md	DONE	\![sound,stop,ファイル名]	実装済み
 list/sakura-script/sound/bang-sound-wait.md	DONE	\![sound,wait]	実装済み
 list/sakura-script/sound/index.md	NA	サウンドコマンド	目次のページ
-list/sakura-script/sound/notes_sound.md	PARTIAL	sound play/load/option のオプション	--window・--sound-only・--spectrum / --spectrum-bands / --spectrum-hold が無い
-list/sakura-script/sound/notes_sound_spectrum.md	BUILD	sound の --spectrum= で通知される帯域とレベル \[2.9.18\]	MediaCodec で波形を取り出して FFT し OnSoundSpectrum を送る（Visualizer はマイクの許可が要るので使わない）
+list/sakura-script/sound/notes_sound.md	PARTIAL	sound play/load/option のオプション	--spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
+list/sakura-script/sound/notes_sound_spectrum.md	DONE	sound の --spectrum= で通知される帯域とレベル \[2.9.18\]	鳴らしているファイルを MediaExtractor / MediaCodec で PCM に戻し、再生位置の約 85 ミリ秒の窓を FFT して、ISO の帯域・-60dB を 0 とするレベル・500 ミリ秒の落ち方・ピークホールドで送る
 list/sakura-script/surface/4.md	DONE	\4	実装済み
 list/sakura-script/surface/5.md	DONE	\5	実装済み
 list/sakura-script/surface/__w-animation-ID.md	DONE	\__w[animation,ID]	実装済み
@@ -1718,7 +1718,7 @@ list/shiori-event/other/OnResetWindowPos.md	DONE	OnResetWindowPos	実装済み
 list/shiori-event/other/OnShellScaling.md	DONE	OnShellScaling	実装済み
 list/shiori-event/other/OnSoundError.md	DONE	OnSoundError	実装済み
 list/shiori-event/other/OnSoundLoop.md	DONE	OnSoundLoop	実装済み
-list/shiori-event/other/OnSoundSpectrum.md	BUILD	OnSoundSpectrum	\_v の --spectrum。自分で鳴らす音を MediaExtractor / MediaCodec で読んで帯域ごとの音量を出す（Visualizer はマイクの許可が要る）。ssp-gap の ⛔ の理由は違う
+list/shiori-event/other/OnSoundSpectrum.md	DONE	OnSoundSpectrum	鳴らしているファイルを MediaExtractor / MediaCodec で PCM に戻し、再生位置の約 85 ミリ秒の窓を FFT して、ISO の帯域・-60dB を 0 とするレベル・500 ミリ秒の落ち方・ピークホールドで送る
 list/shiori-event/other/OnSoundStop.md	DONE	OnSoundStop	実装済み
 list/shiori-event/other/OnTextDrop.md	DONE	OnTextDrop	実装済み
 list/shiori-event/other/OnTranslate.md	DONE	OnTranslate	実装済み
