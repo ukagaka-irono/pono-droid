@@ -257,17 +257,18 @@ class NativeShioriTest {
             	_head = 'EXECUTE SAORI/1.0' + _crlf + 'Charset: UTF-8' + _crlf + 'Sender: test' + _crlf + 'SecurityLevel: Local' + _crlf
             	LOADLIB('internal_crypto')
             	LOADLIB('internal_system.dll')
-            	_h = result(REQUESTLIB('internal_crypto', _head + 'Argument0: Digest' + _crlf + 'Argument1: sha256' + _crlf + 'Argument2: abc' + _crlf + _crlf))
-            	_l = result(REQUESTLIB('internal_system.dll', _head + 'Argument0: ListFunctions' + _crlf + 'Argument1: internal_jwt' + _crlf + _crlf))
+            	_h = saoriresult(REQUESTLIB('internal_crypto', _head + 'Argument0: Digest' + _crlf + 'Argument1: sha256' + _crlf + 'Argument2: abc' + _crlf + _crlf))
+            	_l = saoriresult(REQUESTLIB('internal_system.dll', _head + 'Argument0: ListFunctions' + _crlf + 'Argument1: internal_jwt' + _crlf + _crlf))
             	'SHIORI/3.0 200 OK' + _crlf + 'Charset: UTF-8' + _crlf + 'Value: ' + _h + '|' + _l + _crlf + _crlf
             }
 
-            result
+            saoriresult
             {
             	_r = ''
-            	foreach SPLIT(_argv[0], CHR(13) + CHR(10)); _l {
-            		if SUBSTR(_l, 0, 8) == 'Result: ' {
-            			_r = ERASE(_l, 0, 8)
+            	_lines = SPLIT(_argv[0], CHR(13) + CHR(10))
+            	foreach _lines; _x {
+            		if SUBSTR(_x, 0, 8) == 'Result: ' {
+            			_r = ERASE(_x, 0, 8)
             		}
             	}
             	_r
