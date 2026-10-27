@@ -153,7 +153,8 @@ class SerikoAnimator(private val scope: CoroutineScope) {
      * `\![anim,add,...]`。サーフェスを替えるまで、ふつうのアニメーションより上に重ねる。
      * コマが2つ以上なら、それぞれの待ち時間ごとに順に出す（最後のコマは残す）
      */
-    fun add(frames: List<PatternFrame>) {
+    /** [loop] なら止めるかサーフェスを替えるまで繰り返す（\![anim,add,…,always]） */
+    fun add(frames: List<PatternFrame>, loop: Boolean = false) {
         if (frames.isEmpty()) return
         // 重ねすぎたら古いものから上書きする（スクリプトに無数のレイヤーを作らせない）
         val layer = ADD_LAYER_BASE + addSerial++ % MAX_ADD_LAYERS
@@ -162,10 +163,12 @@ class SerikoAnimator(private val scope: CoroutineScope) {
             return
         }
         jobs += scope.launch {
-            for (f in frames) {
-                setRaw(raw + (layer to f))
-                delay(maxOf(f.waitMinMs, 16).toLong())
-            }
+            do {
+                for (f in frames) {
+                    setRaw(raw + (layer to f))
+                    delay(maxOf(f.waitMinMs, 16).toLong())
+                }
+            } while (loop)
         }
     }
 

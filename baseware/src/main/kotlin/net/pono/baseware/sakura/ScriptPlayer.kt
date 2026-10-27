@@ -317,6 +317,9 @@ interface ScriptHost {
     /** `\![move]` / `\![moveasync]`。キャラクターのウィンドウを動かす（待つのは ScriptPlayer 側） */
     fun move(scope: Int, command: MoveCommand) {}
 
+    /** `\![moveasync,cancel]`。動いている途中のキャラクターを、どれもその場で止める */
+    fun cancelMove() {}
+
     /** `\![set,position,x,y,スコープ]`。[x] / [y] に固定してドラッグさせない。null なら固定をやめる（`\![reset,position]`） */
     fun setPosition(scope: Int, x: Int?, y: Int?) {}
 
@@ -664,6 +667,8 @@ class ScriptPlayer(
                 }
                 // \![move] は動き終わるまで待ち、\![moveasync] は待たずに続ける
                 "move", "moveasync" -> {
+                    // \![moveasync,cancel] は、動いている途中のキャラクターをその場で止める
+                    if (command == "moveasync" && a.getOrNull(1)?.trim()?.lowercase() == "cancel") return host.cancelMove()
                     val move = MoveCommand.parse(a.drop(1)) ?: return host.unknownTag(token)
                     host.move(scope, move)
                     if (command == "move" && !quick && move.timeMs > 0) delay(move.timeMs)
@@ -720,6 +725,9 @@ class ScriptPlayer(
                     a[1].lowercase() == "syncobject" -> a.getOrNull(2)?.let { host.setSyncObject(it.trim(), true) }
                     a[1].lowercase() == "property" -> if (a.size < 3 || !host.setProperty(a[2], a.getOrNull(3).orEmpty())) host.unknownTag(token)
                     !host.setOption(scope, a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
+                    // \![set,alpha / scaling,…,--time=ミリ秒,--wait] は、変わり終わるまで待つ
+                    !quick && a.drop(2).any { it.trim().equals("--wait", ignoreCase = true) } ->
+                        transitionTime(a[1].lowercase(), a.drop(2))?.takeIf { it > 0 }?.let { delay(it) }
                 }
                 // ウィンドウの重なりや他のゴースト・プラグインなど、pono-droid に無いものは黙って飛ばす
                 // pono-droid にプラグインは無いので、どれも見つからなかったと知らせる
@@ -931,6 +939,24 @@ class ScriptPlayer(
 
     companion object {
         const val MAX_EMBED_DEPTH = 8
+
+        /**
+         * \![set,alpha,値,時間] / \![set,scaling,横,縦,時間] の、変わり終わるまでの時間（ミリ秒）。--time= か、後ろの位置引数（古い書き方）。
+         * 負なら 0。alpha / scaling でなければ null
+         */
+        fun transitionTime(name: String, args: List<String>): Long? {
+            val at = when (name) {
+                "alpha" -> 1
+                "scaling" -> 2
+                else -> return null
+            }
+            val option = args.map { it.trim() }.lastOrNull { it.startsWith("--time=", ignoreCase = true) }?.substringAfter('=')
+            val raw = option ?: args.map { it.trim() }.filterNot { it.startsWith("--") }.getOrNull(at)
+            return (raw?.toDoubleOrNull()?.toLong() ?: 0L).coerceIn(0L, MAX_TRANSITION_MS)
+        }
+
+        /** \![set,alpha / scaling] で変えるのにかける時間の上限 */
+        const val MAX_TRANSITION_MS = 600_000L
 
         /** SSTP で届いたスクリプトで使わせないタグ（終了・ゴーストの切り替え・ブラウザ・時計） */
         private val UNTRUSTED_TAGS = setOf("-", "+", "_+", "j", "6", "7")

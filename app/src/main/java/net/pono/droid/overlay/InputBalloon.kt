@@ -96,7 +96,7 @@ fun InputBalloon(request: InputRequest, skin: BalloonSkin?, onSubmit: (Int, Stri
     val cancel = { onCancel(request.serial) }
     val numeric = request.isNumeric
     val image by produceState<BalloonSkin.Image?>(null, skin, multiLine, numeric) {
-        value = if (skin == null || numeric) null else withContext(Dispatchers.IO) { skin.communicate(multiLine) }
+        value = if (skin == null || numeric) null else withContext(Dispatchers.IO) { skin.communicate(multiLine, request.balloonId) }
     }
 
     Column(
@@ -115,7 +115,7 @@ fun InputBalloon(request: InputRequest, skin: BalloonSkin?, onSubmit: (Int, Stri
     ) {
         val skinImage = image
         if (skinImage != null) {
-            SkinInputBox(skinImage, skin!!, text, { text = it }, request, password, multiLine, focus, submit)
+            SkinInputBox(skinImage, skin!!, text, { text = it.limitedTo(request.limit) }, request, password, multiLine, focus, submit)
             if (password) PasswordNote(Modifier.width(balloonMaxWidth()))
             InputButtons(cancel, submit, Modifier.background(Color.White.copy(alpha = 0.85f), RoundedCornerShape(12.dp)))
         } else {
@@ -258,7 +258,7 @@ private fun SimpleInputBox(
                 }
                 else -> OutlinedTextField(
                     value = text,
-                    onValueChange = { text = it },
+                    onValueChange = { text = it.limitedTo(request.limit) },
                     label = { Text(request.label(), fontSize = 11.sp) },
                     singleLine = !multiLine,
                     minLines = if (request.kind == InputRequest.Kind.TEXTAREA) 3 else 1,
@@ -313,3 +313,7 @@ private fun InputRequest.label() = when (kind) {
     InputRequest.Kind.SLIDER -> "値"
     InputRequest.Kind.TEXTAREA -> "入力（複数行）"
 }
+
+/** --limit= の文字数で切る（textareabox は改行も 1 文字）。[limit] が null なら切らない */
+private fun TextFieldValue.limitedTo(limit: Int?): TextFieldValue =
+    if (limit == null || text.length <= limit) this else copy(text = text.take(limit), selection = TextRange(minOf(selection.start, limit), minOf(selection.end, limit)))

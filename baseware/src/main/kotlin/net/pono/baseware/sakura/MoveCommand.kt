@@ -51,6 +51,9 @@ data class MoveCommand(
     }
 
     companion object {
+        /** その場にとどまる（\![moveasync,cancel] で、動いている途中のものを止める） */
+        val STAY = MoveCommand(null, null, 0, Base.Me)
+
         /** 動かすのにかける時間の上限。スクリプトがいつまでも止まらないように */
         const val MAX_TIME_MS = 10_000L
 

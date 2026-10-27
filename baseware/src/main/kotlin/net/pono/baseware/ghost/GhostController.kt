@@ -2367,6 +2367,27 @@ class GhostController(
         return if (event.isEmpty()) job else null
     }
 
+    // ---- \![set,alpha / scaling] をだんだん変える ----
+
+    /** キャラクターと項目（alpha / scaling）ごとの、変えている途中のもの。新しく頼まれたら前のものは止める */
+    private val transitions = HashMap<Pair<Int, String>, Job>()
+
+    /** [timeMs] をかけて変える。[apply] には進み具合（0 から 1）を渡す。0 ならすぐ 1 */
+    private fun transition(scopeId: Int, name: String, timeMs: Long, apply: (Float) -> Unit) {
+        transitions.remove(scopeId to name)?.cancel()
+        if (timeMs <= 0) return apply(1f)
+        transitions[scopeId to name] = scope.launch {
+            val start = System.nanoTime()
+            while (true) {
+                val t = ((System.nanoTime() - start) / 1_000_000.0 / timeMs).toFloat()
+                if (t >= 1f) break
+                apply(t)
+                delay(TRANSITION_FRAME_MS)
+            }
+            apply(1f)
+        }
+    }
+
     // ---- 内蔵 SAORI（SAORI over DirectSSTP の internal_*） ----
 
     /** SHIORI を読み込み直すたびに増える（--async の結果を、呼んだ SHIORI にだけ届けるため） */
@@ -4001,20 +4022,32 @@ class GhostController(
     fun onInputSubmit(serial: Int, text: String) {
         val request = _state.value.input?.takeIf { it.serial == serial } ?: return
         lastUserActivity = System.currentTimeMillis()
-        inputTimeout?.cancel()
-        _state.update { it.copy(input = null) }
+        if (request.noClose) {
+            // --option=noclose は出し続ける（noclear なら打った文字を残す）。開き直したことにして、箱を作り直してもらう
+            openInput(request.copy(serial = ++inputSerial, text = if (request.noClear) text else ""))
+        } else {
+            inputTimeout?.cancel()
+            _state.update { it.copy(input = null) }
+        }
         // メニューの「キャラクターの大きさ」の「その他」
+        // \![open,addressbar]。打った URL（か文字）は、共有で渡したのと同じに扱う
+        if (request.id == ADDRESSBAR_INPUT) {
+            onTextShared(text)
+            return
+        }
         if (request.id == SCALE_INPUT) {
             text.trim().toIntOrNull()?.let { platform.setCharacterScale(it.coerceIn(SCALE_MIN, SCALE_MAX)) }
             return
         }
         // ユーザーが打った文字（パスワードのこともある）はログに残さない
-        // ID が On で始まればそのイベント（Reference0 = 答え）、そうでなければ OnUserInput（ID, 答え）
+        // ID が On で始まればそのイベント（Reference0 = 答え）、そうでなければ OnUserInput（ID, 答え）。
+        // その次が補足（スライダーの「最小,最大」。ほかは空）で、--reference= の追加情報はその後ろ
         fun answer(event: String, extra: List<String> = emptyList(), sensitive: Boolean = true) {
+            val tail = if (request.references.isEmpty()) extra else extra.ifEmpty { listOf("") } + request.references
             if (request.id.startsWith("On")) {
-                raise(request.id, listOf(text) + extra, sensitive = sensitive)
+                raise(request.id, listOf(text) + tail, sensitive = sensitive)
             } else {
-                raise(event, listOf(request.id, text) + extra, sensitive = sensitive)
+                raise(event, listOf(request.id, text) + tail, sensitive = sensitive)
             }
         }
         when (request.kind) {
@@ -4024,7 +4057,12 @@ class GhostController(
             InputRequest.Kind.SLIDER -> answer("OnUserInput", listOf("${request.values.getOrNull(1) ?: 0},${request.values.getOrNull(2) ?: 0}"), sensitive = false)
             InputRequest.Kind.TEXTAREA -> {
                 val joined = text.replace("\r\n", "\n").replace('\n', '\u0001')
-                if (request.id.startsWith("On")) raise(request.id, listOf(joined), sensitive = true) else raise("OnTextAreaInput", listOf(request.id, joined), sensitive = true)
+                val tail = if (request.references.isEmpty()) emptyList() else listOf("") + request.references
+                if (request.id.startsWith("On")) {
+                    raise(request.id, listOf(joined) + tail, sensitive = true)
+                } else {
+                    raise("OnTextAreaInput", listOf(request.id, joined) + tail, sensitive = true)
+                }
             }
             InputRequest.Kind.COMMUNICATE -> raise("OnCommunicate", listOf("user", text), sensitive = true)
             InputRequest.Kind.TEACH -> raise("OnTeach", listOf(text), sensitive = true)
@@ -4037,9 +4075,22 @@ class GhostController(
         inputTimeout?.cancel()
         _state.update { it.copy(input = null) }
         val reason = if (timeout) "timeout" else "cancel"
+        // pono-droid が自分で出した箱（アドレスバー・キャラクターの大きさ）はゴーストに知らせない
+        if (request.id.startsWith("pono:")) return
         when (request.kind) {
             InputRequest.Kind.INPUT, InputRequest.Kind.PASSWORD, InputRequest.Kind.DATE, InputRequest.Kind.TIME, InputRequest.Kind.SLIDER, InputRequest.Kind.IP ->
-                raise("OnUserInputCancel", listOf(request.id, reason))
+                scope.launch {
+                    val script = request("OnUserInputCancel", listOf(request.id, reason))
+                    when {
+                        script != null -> {
+                            cancelScript()
+                            runScript(script)
+                        }
+                        // 時間切れで OnUserInputCancel に答えが無ければ、古いゴーストのために "timeout" を答えにした OnUserInput を送る
+                        timeout && request.id.startsWith("On") -> raise(request.id, listOf("timeout"), userInitiated = false)
+                        timeout -> raise("OnUserInput", listOf(request.id, "timeout"), userInitiated = false)
+                    }
+                }
             InputRequest.Kind.TEXTAREA -> raise("OnTextAreaInputCancel", listOf(request.id, reason))
             InputRequest.Kind.COMMUNICATE -> raise("OnCommunicateInputCancel", listOf("", reason))
             InputRequest.Kind.TEACH -> raise("OnTeachInputCancel", listOf("", reason))
@@ -5685,20 +5736,31 @@ class GhostController(
         }
 
         override fun setOption(scope: Int, name: String, args: List<String>): Boolean {
-            // --time などのオプションは読み飛ばす（すぐに変える）
             val numbers = args.map { it.trim() }.filterNot { it.startsWith("--") }.mapNotNull { it.toFloatOrNull() }
             when (name) {
-                // \![set,scaling,倍率] / \![set,scaling,横倍率,縦倍率]（%）。負なら反転。大きすぎる値は抑える
+                // \![set,scaling,倍率] / \![set,scaling,横倍率,縦倍率,時間]（%）。負なら反転。大きすぎる値は抑える。
+                // --time=（か 3 つ目の数）があれば、その時間をかけて変える（--wait は ScriptPlayer が待つ）
                 "scaling" -> {
                     val x = numbers.getOrNull(0) ?: return false
                     val y = numbers.getOrNull(1) ?: x
                     fun clamp(v: Float) = (v / 100f).coerceIn(-MAX_SCALING, MAX_SCALING)
-                    _state.update { it.update(scope) { c -> c.copy(scaleX = clamp(x), scaleY = clamp(y)) } }
+                    val c0 = _state.value.characters[scope]
+                    transition(scope, name, ScriptPlayer.transitionTime(name, args) ?: 0) { t ->
+                        val fx = c0?.scaleX ?: 1f
+                        val fy = c0?.scaleY ?: 1f
+                        _state.update { it.update(scope) { c -> c.copy(scaleX = fx + (clamp(x) - fx) * t, scaleY = fy + (clamp(y) - fy) * t) } }
+                    }
                 }
-                // \![set,alpha,0〜100]。負の値は「そのまま」
+                // \![set,alpha,0〜100,時間]。負の値は「そのまま」。時間は scaling と同じ
                 "alpha" -> {
                     val a = numbers.getOrNull(0) ?: return false
-                    if (a >= 0) _state.update { it.update(scope) { c -> c.copy(alpha = (a / 100f).coerceIn(0f, 1f)) } }
+                    if (a >= 0) {
+                        val from = _state.value.characters[scope]?.alpha ?: 1f
+                        val to = (a / 100f).coerceIn(0f, 1f)
+                        transition(scope, name, ScriptPlayer.transitionTime(name, args) ?: 0) { t ->
+                            _state.update { it.update(scope) { c -> c.copy(alpha = from + (to - from) * t) } }
+                        }
+                    }
                 }
                 // \![set,windowstate,minimize]。stayontop はオーバーレイがいつもいちばん上なので何もしない
                 "windowstate" -> when (args.firstOrNull()?.trim()?.lowercase()) {
@@ -5775,6 +5837,11 @@ class GhostController(
 
         override fun move(scope: Int, command: MoveCommand) {
             _state.update { it.update(scope) { c -> c.copy(move = ++animationCounter to command) } }
+        }
+
+        override fun cancelMove() {
+            // 時間 0 で今いる所へ動かす（動いている途中のものは止まる）
+            for (s in _state.value.characters.keys) move(s, MoveCommand.STAY)
         }
 
         override fun setPosition(scope: Int, x: Int?, y: Int?) {
@@ -5950,7 +6017,10 @@ class GhostController(
             fun int(i: Int) = args.getOrNull(i)?.trim()?.toIntOrNull()
             return when (val method = args.firstOrNull()?.trim()?.lowercase()) {
                 "overlay", "overlayfast", "base" -> {
-                    val frames = args.drop(1).chunked(4).mapNotNull { g ->
+                    // 最後にアニメーションタイミング（runonce / always）を書ける
+                    val timing = args.last().trim().lowercase().takeIf { it == "runonce" || it == "always" }
+                    val body = if (timing != null) args.dropLast(1) else args
+                    val frames = body.drop(1).chunked(4).mapNotNull { g ->
                         val id = g.getOrNull(0)?.trim()?.toIntOrNull() ?: return@mapNotNull null
                         val wait = g.getOrNull(3)?.trim()?.toIntOrNull()?.coerceIn(0, MAX_ADD_WAIT_MS) ?: 0
                         PatternFrame(
@@ -5958,7 +6028,7 @@ class GhostController(
                             g.getOrNull(1)?.trim()?.toIntOrNull() ?: 0, g.getOrNull(2)?.trim()?.toIntOrNull() ?: 0,
                         )
                     }.take(SurfaceDefinition.MAX_PATTERNS)
-                    if (frames.isEmpty()) null else AnimationCommand.Add(frames)
+                    if (frames.isEmpty()) null else AnimationCommand.Add(frames, loop = timing == "always")
                 }
                 "move" -> AnimationCommand.Add(listOf(PatternFrame("move", -1, 0, 0, int(1) ?: 0, int(2) ?: 0)))
                 "text" -> {
@@ -6020,6 +6090,16 @@ class GhostController(
                 "file" -> return openGhostFile(args.firstOrNull().orEmpty())
                 // ファイラーは Android に無いので、そのファイルをほかのアプリで開く
                 "explorer" -> return openGhostFile(args.firstOrNull().orEmpty())
+                // アドレスバーは URL を打つ箱。決めたら URL を渡したのと同じ（OnURLQuery、答えが無ければ .nar を入れる）
+                "addressbar" -> openInput(InputRequest(InputRequest.Kind.INPUT, ADDRESSBAR_INPUT, "", 0, ++inputSerial, placeholder = "URL"))
+                // 画像ビューア・アーカイブビューアは pono-droid に無いので、ファイルがあれば見られるほかのアプリで開く。
+                // ファイルが無ければ開くものが無いので何もしない
+                "pictureviewer", "archiveviewer" -> args.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }?.let { name ->
+                    val file = ghostPath(name)?.takeIf { it.isFile } ?: return false
+                    val mime = mimeOf(file.name).takeIf { it != "application/octet-stream" }
+                        ?: if (kind == "pictureviewer") "image/*" else "application/zip"
+                    return platform.openFile(file, mime)
+                }
                 "editor" -> {
                     val file = ghostPath(args.firstOrNull().orEmpty())?.takeIf { it.isFile } ?: return false
                     return platform.editFile(file, args.getOrNull(1)?.trim()?.toIntOrNull())
@@ -6297,6 +6377,9 @@ class GhostController(
         /** \![set,scaling] の倍率の上限（4 = 400%）。画面より大きなウィンドウを作らせない */
         const val MAX_SCALING = 4f
 
+        /** \![set,alpha / scaling] をだんだん変えるときの、1コマの間（ミリ秒） */
+        const val TRANSITION_FRAME_MS = 16L
+
         /** \![set,balloonoffset] でずらせる量の上限（シェル画像のピクセル） */
         const val MAX_BALLOON_OFFSET = 2000
 
@@ -6312,6 +6395,9 @@ class GhostController(
         private const val SCALE_MIN = 50
         private const val SCALE_MAX = 250
         private const val SCALE_INPUT = "pono:scale"
+
+        /** \![open,addressbar] の箱の ID */
+        private const val ADDRESSBAR_INPUT = "pono:addressbar"
 
         /** 一緒に動いているゴーストが増減したことを知らせるイベント（otherghostname を送り直す） */
         private val OTHER_GHOST_CHANGES = setOf("OnOtherGhostBooted", "OnOtherGhostClosed", "OnOtherGhostChanged", "OnOtherGhostVanished")

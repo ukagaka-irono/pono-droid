@@ -1081,18 +1081,18 @@ list/sakura-script/open/bang-close-dialog-ID.md	DONE	\![close,dialog,ID]	実装�
 list/sakura-script/open/bang-close-inputbox-ID.md	DONE	\![close,inputbox,ID]	実装済み
 list/sakura-script/open/bang-close-teachbox.md	DONE	\![close,teachbox]	実装済み
 list/sakura-script/open/bang-close-textareabox-ID.md	DONE	\![close,textareabox,ID]	実装済み
-list/sakura-script/open/bang-open-addressbar.md	BUILD	\![open,addressbar]	URL を打つ箱を出して、共有で URL を渡したのと同じ処理（onTextShared）に回せる。docs では ⛔ だが PC 専用ではない
+list/sakura-script/open/bang-open-addressbar.md	DONE	\![open,addressbar]	URL を打つ箱を出し、決めたら共有で URL を渡したのと同じに扱う（OnURLQuery、答えが無ければ .nar を入れる、URL でなければ OnTextDrop）
 list/sakura-script/open/bang-open-aigraph.md	DONE	\![open,aigraph]	実装済み
-list/sakura-script/open/bang-open-archiveviewer.md	BUILD	\![open,archiveviewer,(ファイル名)]	ファイルを指定されたら、ほかのアプリで開く（\![open,file] と同じ）。ビューア自体は持たない
+list/sakura-script/open/bang-open-archiveviewer.md	DONE	\![open,archiveviewer,(ファイル名)]	ビューアは持たないので、ファイルを指定されたら見られるほかのアプリで開く（ファイルが無ければ何もしない）
 list/sakura-script/open/bang-open-backlogviewer.md	DONE	\![open,backlogviewer]	実装済み
 list/sakura-script/open/bang-open-balloonexplorer.md	DONE	\![open,balloonexplorer]	実装済み
 list/sakura-script/open/bang-open-browser.md	DONE	\![open,browser,パラメータ]	実装済み
 list/sakura-script/open/bang-open-calendar.md	IMPOSSIBLE	\![open,calendar]	カレンダーの画面は作らない（決めたこと）
 list/sakura-script/open/bang-open-calendarpluginexplorer.md	IMPOSSIBLE	\![open,calendarpluginexplorer]	カレンダープラグインは DLL
 list/sakura-script/open/bang-open-calendarskinexplorer.md	IMPOSSIBLE	\![open,calendarskinexplorer]	カレンダーの画面が無い（決めたこと）
-list/sakura-script/open/bang-open-communicatebox.md	PARTIAL	\![open,communicatebox]	位置引数の文字だけ。--text= などのオプションを読まない（--text=… がそのまま入る）
+list/sakura-script/open/bang-open-communicatebox.md	DONE	\![open,communicatebox]	--text= か位置引数の文字。InputBox オプションも読む
 list/sakura-script/open/bang-open-configurationdialog-ID.md	DONE	\![open,configurationdialog,ダイアログID]	アプリの設定を開く（ダイアログ ID は使わない）
-list/sakura-script/open/bang-open-dateinput-ID.md	PARTIAL	\![open,dateinput,ID,表示時間,年,月,日,オプション]	位置引数だけ。--timeout= と --text="…" の書き方と、ほかのオプションを読まない
+list/sakura-script/open/bang-open-dateinput-ID.md	DONE	\![open,dateinput,ID,表示時間,年,月,日,オプション]	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
 list/sakura-script/open/bang-open-developer.md	DONE	\![open,developer]	実装済み
 list/sakura-script/open/bang-open-dialog-color.md	DONE	\![open,dialog,color,パラメータ]	実装済み
 list/sakura-script/open/bang-open-dialog-folder.md	DONE	\![open,dialog,folder,パラメータ]	実装済み
@@ -1106,12 +1106,12 @@ list/sakura-script/open/bang-open-file.md	DONE	\![open,file,ファイル名]	ゴ
 list/sakura-script/open/bang-open-ghostexplorer.md	DONE	\![open,ghostexplorer]	実装済み
 list/sakura-script/open/bang-open-headlinesensorexplorer.md	IMPOSSIBLE	\![open,headlinesensorexplorer]	ヘッドラインセンサーは作らない（決めたこと）
 list/sakura-script/open/bang-open-help-ID.md	DONE	\![open,help,ダイアログID]	pono-droid の説明を開く
-list/sakura-script/open/bang-open-inputbox-ID.md	PARTIAL	\![open,inputbox,ID,表示時間,テキスト,オプション,...]	--timeout= / --text= の新しい書き方と、ほかの InputBox オプションを読まない。キャンセルに答えが無いときの timeout の OnUserInput も無い
-list/sakura-script/open/bang-open-ipinput-ID-IP1-IP2-IP3-IP4.md	PARTIAL	\![open,ipinput,ID,表示時間,IP1桁目,IP2桁目,IP3桁目,IP4桁目,オプション]	--text / --timeout はある。noclose・--balloon・--reference が無い
+list/sakura-script/open/bang-open-inputbox-ID.md	DONE	\![open,inputbox,ID,表示時間,テキスト,オプション,...]	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
+list/sakura-script/open/bang-open-ipinput-ID-IP1-IP2-IP3-IP4.md	DONE	\![open,ipinput,ID,表示時間,IP1桁目,IP2桁目,IP3桁目,IP4桁目,オプション]	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
 list/sakura-script/open/bang-open-mailer.md	DONE	\![open,mailer,パラメータ]	実装済み
 list/sakura-script/open/bang-open-messenger.md	IMPOSSIBLE	\![open,messenger]	SSP のメッセンジャーが無い（決めたこと）
-list/sakura-script/open/bang-open-passwordinput-ID.md	PARTIAL	\![open,passwordinput,ID,表示時間,テキスト,オプション]	--timeout= / --text= の新しい書き方と、ほかの InputBox オプションを読まない。キャンセルに答えが無いときの timeout の OnUserInput も無い
-list/sakura-script/open/bang-open-pictureviewer.md	BUILD	\![open,pictureviewer,(ファイル名)]	画像をほかのアプリで開く（\![open,file] と同じ道筋。OnPictureViewerOpen はもうある）
+list/sakura-script/open/bang-open-passwordinput-ID.md	DONE	\![open,passwordinput,ID,表示時間,テキスト,オプション]	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
+list/sakura-script/open/bang-open-pictureviewer.md	DONE	\![open,pictureviewer,(ファイル名)]	ビューアは持たないので、ファイルを指定されたら見られるほかのアプリで開く（ファイルが無ければ何もしない）
 list/sakura-script/open/bang-open-pluginexplorer.md	IMPOSSIBLE	\![open,pluginexplorer]	プラグインは作らない（決めたこと）
 list/sakura-script/open/bang-open-rateofusegraph.md	DONE	\![open,rateofusegraph]	実装済み
 list/sakura-script/open/bang-open-rateofusegraphballoon.md	DONE	\![open,rateofusegraphballoon]	実装済み
@@ -1119,16 +1119,16 @@ list/sakura-script/open/bang-open-rateofusegraphtotal.md	DONE	\![open,rateofuseg
 list/sakura-script/open/bang-open-readme.md	DONE	\![open,readme]	実装済み
 list/sakura-script/open/bang-open-shellexplorer.md	DONE	\![open,shellexplorer]	実装済み
 list/sakura-script/open/bang-open-shiorirequest.md	DONE	\![open,shiorirequest]	実装済み
-list/sakura-script/open/bang-open-sliderinput-ID.md	PARTIAL	\![open,sliderinput,ID,表示時間,現在値,最小,最大,オプション]	位置引数だけ。--timeout= と --text="…" の書き方と、ほかのオプションを読まない
+list/sakura-script/open/bang-open-sliderinput-ID.md	DONE	\![open,sliderinput,ID,表示時間,現在値,最小,最大,オプション]	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
 list/sakura-script/open/bang-open-surfacetest.md	DONE	\![open,surfacetest]	実装済み
 list/sakura-script/open/bang-open-teachbox.md	DONE	\![open,teachbox]	実装済み
 list/sakura-script/open/bang-open-terms.md	DONE	\![open,terms]	実装済み
-list/sakura-script/open/bang-open-textareabox-ID.md	PARTIAL	\![open,textareabox,ID,表示時間,テキスト,オプション,...]	--timeout= / --text= / --limit= / --placeholder= などを読まない
-list/sakura-script/open/bang-open-timeinput-ID.md	PARTIAL	\![open,timeinput,ID,表示時間,時,分,秒,オプション]	位置引数だけ。--timeout= と --text="…" の書き方と、ほかのオプションを読まない
+list/sakura-script/open/bang-open-textareabox-ID.md	DONE	\![open,textareabox,ID,表示時間,テキスト,オプション,...]	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
+list/sakura-script/open/bang-open-timeinput-ID.md	DONE	\![open,timeinput,ID,表示時間,時,分,秒,オプション]	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
 list/sakura-script/open/index.md	NA	オープンコマンド	目次のページ
 list/sakura-script/open/j-ID.md	DONE	\j[ID]	http / https だけ。file:///（ghost/master からのファイルを開く）と mailto: が無い
-list/sakura-script/open/notes_inputbox-id.md	PARTIAL	InputBoxのID	On で始まる ID はある。--reference= の追加情報を Reference に足さない
-list/sakura-script/open/notes_inputbox-option.md	PARTIAL	InputBoxオプション	--text / --timeout は ipinput だけ。noclose / noclear・--placeholder・--balloon・--limit・--reference が無い
+list/sakura-script/open/notes_inputbox-id.md	DONE	InputBoxのID	On で始まる ID・補足・--reference= の追加情報を、仕様の Reference の位置で送る
+list/sakura-script/open/notes_inputbox-option.md	DONE	InputBoxオプション	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
 list/sakura-script/open/notes_selectfile.md	DONE	ファイルを開く / ファイルを保存 / フォルダ選択 / カラーパレット選択 パラメータ	--title / --filter / --ext / --name / --id。--dir は Android の選ぶ画面に渡せない
 list/sakura-script/property-system-operation/bang-get-property.md	DONE	\![get,property,イベント名,プロパティ名,プロパティ名,...]	実装済み
 list/sakura-script/property-system-operation/bang-set-property.md	DONE	\![set,property,プロパティ名,値]	実装済み
@@ -1156,7 +1156,7 @@ list/sakura-script/sound/notes_sound_spectrum.md	BUILD	sound の --spectrum= で
 list/sakura-script/surface/4.md	DONE	\4	実装済み
 list/sakura-script/surface/5.md	DONE	\5	実装済み
 list/sakura-script/surface/__w-animation-ID.md	DONE	\__w[animation,ID]	実装済み
-list/sakura-script/surface/bang-anim-add-overlay-ID.md	PARTIAL	\![anim,add,overlay,ID]	最後のアニメーションタイミング runonce / always を読まない
+list/sakura-script/surface/bang-anim-add-overlay-ID.md	DONE	\![anim,add,overlay,ID]	最後の runonce / always を読み、always なら止めるかサーフェスを替えるまで繰り返す
 list/sakura-script/surface/bang-anim-add-text-x-y-r-g-b.md	DONE	\![anim,add,text,x,y,横幅,縦幅,文字列,表示時間,r,g,b,文字サイズ,文字名]	実装済み
 list/sakura-script/surface/bang-anim-clear-ID.md	DONE	\![anim,clear,ID]	実装済み
 list/sakura-script/surface/bang-anim-offset-ID-x-y.md	DONE	\![anim,offset,ID,x座標,y座標]	実装済み
@@ -1172,17 +1172,17 @@ list/sakura-script/surface/bang-filter-2.md	IMPOSSIBLE	\![filter]	DLL のプラ�
 list/sakura-script/surface/bang-filter.md	IMPOSSIBLE	\![filter,プラグイン名,起動時間,パラメータ]	DLL のプラグイン
 list/sakura-script/surface/bang-lock-repaint.md	DONE	\![lock,repaint]	実装済み
 list/sakura-script/surface/bang-move.md	DONE	\![move]	実装済み
-list/sakura-script/surface/bang-moveasync.md	PARTIAL	\![moveasync]	\![moveasync,cancel] で動いている途中を止める、が無い
+list/sakura-script/surface/bang-moveasync.md	DONE	\![moveasync]	\![moveasync,cancel] で、動いている途中のキャラクターをその場で止める
 list/sakura-script/surface/bang-reset-position.md	DONE	\![reset,position]	実装済み
 list/sakura-script/surface/bang-reset-sticky-window.md	DONE	\![reset,sticky-window]	実装済み
 list/sakura-script/surface/bang-reset-zorder.md	DONE	\![reset,zorder]	実装済み
 list/sakura-script/surface/bang-set-alignmentondesktop-bottom-top.md	DONE	\![set,alignmentondesktop,bottomまたはtop]	黙って飛ばしている。alignmenttodesktop の top / bottom と同じにすればよい（SSP も同じ扱い）
 list/sakura-script/surface/bang-set-alignmenttodesktop-free.md	DONE	\![set,alignmenttodesktop,free]	実装済み
 list/sakura-script/surface/bang-set-alignmenttodesktop.md	DONE	\![set,alignmenttodesktop,方向]	実装済み
-list/sakura-script/surface/bang-set-alpha.md	PARTIAL	\![set,alpha,数値,オプション]	--time=（だんだん変える）と --wait を読まず、すぐ変える
+list/sakura-script/surface/bang-set-alpha.md	DONE	\![set,alpha,数値,オプション]	--time=（と古い書き方の位置引数）でだんだん変え、--wait なら変わり終わるまで待つ。負の時間はすぐ
 list/sakura-script/surface/bang-set-position-x-y-ID.md	DONE	\![set,position,x,y,スコープID]	実装済み
 list/sakura-script/surface/bang-set-scaling-2.md	DONE	\![set,scaling,横倍率,縦倍率]	実装済み
-list/sakura-script/surface/bang-set-scaling-3.md	PARTIAL	\![set,scaling,横倍率,縦倍率,オプション]	--time= と --wait を読まず、すぐ変える
+list/sakura-script/surface/bang-set-scaling-3.md	DONE	\![set,scaling,横倍率,縦倍率,オプション]	--time=（と古い書き方の位置引数）でだんだん変え、--wait なら変わり終わるまで待つ。負の時間はすぐ
 list/sakura-script/surface/bang-set-scaling.md	DONE	\![set,scaling,倍率]	実装済み
 list/sakura-script/surface/bang-set-sticky-window-ID-ID.md	DONE	\![set,sticky-window,スコープID,スコープID,...]	実装済み
 list/sakura-script/surface/bang-set-zorder-ID-ID.md	DONE	\![set,zorder,スコープID,スコープID,...]	実装済み

@@ -76,4 +76,81 @@ class InputBoxTest {
             scope.cancel()
         }
     }
+
+    @Test
+    fun readsInputBoxOptions() {
+        // --timeout= / --text= は位置引数の代わり。数を入れる箱の --text= はカンマ区切り
+        val box = InputRequest.fromOpenTag("inputbox", listOf("インプットテスト", "--timeout=10000", "--text=テスト入力"), 1)!!
+        assertEquals("テスト入力", box.text)
+        assertEquals(10000L, box.timeoutMs)
+        assertEquals(listOf(50, 0, 100), InputRequest.fromOpenTag("sliderinput", listOf("S", "--timeout=30000", "--text=50,0,100"), 2)?.values)
+        assertEquals(listOf(2012, 12, 23), InputRequest.fromOpenTag("dateinput", listOf("D", "--text=2012,12,23"), 3)?.values)
+        assertEquals(listOf(1, 2, 3), InputRequest.fromOpenTag("timeinput", listOf("T", "--text=1,2,3"), 4)?.values)
+        assertEquals(listOf(192, 168, 0, 1), InputRequest.fromOpenTag("ipinput", listOf("I", "--text=192.168.0.1"), 5)?.values)
+        assertEquals("テスト", InputRequest.fromOpenTag("communicatebox", listOf("--text=テスト"), 6)?.text)
+        assertEquals("テスト", InputRequest.fromOpenTag("communicatebox", listOf("テスト"), 7)?.text)
+        // ほかのオプション
+        val r = InputRequest.fromOpenTag(
+            "textareabox", listOf("OnDiary", "--limit=4", "--text=12345", "--balloon=7", "--option=noclose", "--option=noclear", "--reference=a", "--reference=b"), 8,
+        )!!
+        assertEquals("1234", r.text)
+        assertEquals(4, r.limit)
+        assertEquals(7, r.balloonId)
+        assertEquals(true, r.noClose && r.noClear)
+        assertEquals(listOf("a", "b"), r.references)
+        // 数を入れる箱に案内文は出さない
+        assertNull(InputRequest.fromOpenTag("sliderinput", listOf("S", "--placeholder=x"), 9)?.placeholder)
+    }
+
+    @Test
+    fun referencesNoCloseAndTimeoutFallback() = runBlocking {
+        val shiori = ScriptedShiori(
+            mapOf(
+                "OnFirstBoot" to """\0\![open,inputbox,Box,0,--reference=r1,--reference=r2,--option=noclose,--option=noclear]\e""",
+                "OnSlide" to """\0\![open,sliderinput,OnS,0,5,1,9,--reference=x]\e""",
+                "OnLate" to """\0\![open,inputbox,Late,100]\e""",
+                "OnBar" to """\0\![open,addressbar]\e""",
+            ),
+        )
+        val scope = testScope()
+        val controller = testController(tmp.newTestGhost(), shiori, scope)
+        suspend fun awaitInput(after: Int = 0) = withTimeout(5000) { controller.state.first { (it.input?.serial ?: 0) > after } }.input!!
+        try {
+            controller.start()
+            // OnUserInput の Reference2 は補足（空）、Reference3 から --reference=
+            val box = awaitInput()
+            controller.onInputSubmit(box.serial, "こんにちは")
+            assertEquals(listOf("Box", "こんにちは", "", "r1", "r2"), shiori.awaitEvent("OnUserInput"))
+            // noclose なら出し続け、noclear なら打った文字を残す
+            val again = awaitInput(box.serial)
+            assertEquals("Box", again.id)
+            assertEquals("こんにちは", again.text)
+            controller.onInputCancel(again.serial)
+
+            // On で始まる ID は Reference1 が補足（スライダーの最小,最大）、その後ろが --reference=
+            controller.raise("OnSlide", emptyList())
+            val slider = awaitInput(again.serial)
+            controller.onInputSubmit(slider.serial, "7")
+            assertEquals(listOf("7", "1,9", "x"), shiori.awaitEvent("OnS"))
+
+            // 時間切れで OnUserInputCancel に答えが無ければ、"timeout" の OnUserInput
+            controller.raise("OnLate", emptyList())
+            withTimeout(5000) {
+                while (shiori.events.lastOrNull { it.first == "OnUserInputCancel" }?.second != listOf("Late", "timeout")) delay(20)
+            }
+            withTimeout(5000) {
+                while (shiori.events.lastOrNull { it.first == "OnUserInput" }?.second != listOf("Late", "timeout")) delay(20)
+            }
+
+            // アドレスバーで打った文字は、共有で渡したのと同じ（URL でなければ OnTextDrop）。取り消してもゴーストには知らせない
+            controller.raise("OnBar", emptyList())
+            val bar = awaitInput(slider.serial)
+            assertEquals("URL", bar.placeholder)
+            controller.onInputSubmit(bar.serial, "メモ")
+            assertEquals(listOf("メモ", "0"), shiori.awaitEvent("OnTextDrop"))
+        } finally {
+            scope.cancel()
+        }
+    }
+
 }

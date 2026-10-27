@@ -255,8 +255,8 @@ class Balloon private constructor(val dir: File, private val base: Descript, pri
      * 入力の箱の画像。1行の箱は balloonc0.png、[multiLine]（textareabox）は balloonc5.png（無ければ balloonc0.png）。
      * 無いバルーンなら null（pono-droid の簡易な見た目で出す）
      */
-    fun communicateImage(multiLine: Boolean): File? =
-        (if (multiLine) files["balloonc5.png"] else null) ?: files["balloonc0.png"]
+    fun communicateImage(multiLine: Boolean, id: Int? = null): File? =
+        id?.let { files["balloonc$it.png"] } ?: (if (multiLine) files["balloonc5.png"] else null) ?: files["balloonc0.png"]
 
     /**
      * 入力欄を置く範囲（画像の左上からのピクセル）。画像ごとの balloonc*s.txt、なければ descript.txt の

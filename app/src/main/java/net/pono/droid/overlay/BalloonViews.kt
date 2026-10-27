@@ -867,15 +867,15 @@ class BalloonSkin(val balloon: Balloon) {
     /** SSTP の印（sstp_new.png / sstp.png など） */
     fun sstpMarker(scope: Int): ImageBitmap? = part("sstp$scope") { balloon.sstpMarkerImage(scope) }
 
-    private val communicates = HashMap<Boolean, Image?>()
+    private val communicates = HashMap<Pair<Boolean, Int?>, Image?>()
 
     /**
-     * 入力の箱の画像（balloonc0.png、[multiLine] なら balloonc5.png）。[Image.area] は入力欄の範囲。
-     * 無いバルーンか読めなければ null
+     * 入力の箱の画像（balloonc0.png、[multiLine] なら balloonc5.png。--balloon= の [id] があれば balloonc[id].png）。
+     * [Image.area] は入力欄の範囲。無いバルーンか読めなければ null
      */
     @Synchronized
-    fun communicate(multiLine: Boolean): Image? = communicates.getOrPut(multiLine) {
-        val file = balloon.communicateImage(multiLine) ?: return@getOrPut null
+    fun communicate(multiLine: Boolean, id: Int? = null): Image? = communicates.getOrPut(multiLine to id) {
+        val file = balloon.communicateImage(multiLine, id) ?: return@getOrPut null
         // 入力の箱は use_input_alpha が 1 のときだけバルーンと同じ透明度の扱いにする（0 なら画像のアルファをそのまま）
         val bmp = (if (balloon.useInputAlpha) load(file) else ImageTransparency.load(file, balloon.pnaFor(file), selfAlpha = null)) ?: return@getOrPut null
         Image(bmp.asImageBitmap(), balloon.communicateBox(file, bmp.width, bmp.height), 0, balloon.variant(file))

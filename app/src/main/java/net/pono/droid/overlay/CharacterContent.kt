@@ -104,7 +104,7 @@ fun CharacterSurface(
                 AnimationCommand.StopAll -> animator.stopRunning()
                 is AnimationCommand.Pause -> animator.pause(command.id)
                 is AnimationCommand.Resume -> animator.resume(command.id)
-                is AnimationCommand.Add -> animator.add(command.frames)
+                is AnimationCommand.Add -> animator.add(command.frames, command.loop)
                 is AnimationCommand.AddText -> texts += command
             }
             handled = serial

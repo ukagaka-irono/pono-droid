@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1337・一部だけ 56・作る 41・作れない 278・ベースウェアのことではない 338
+全 2050 項目: 済み 1354・一部だけ 42・作る 38・作れない 278・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -229,15 +229,12 @@
 
 ## さくらスクリプト
 
-済み 309 項目。
+済み 326 項目。
 
-### 🔨 作る（4）
-- \![open,addressbar] — URL を打つ箱を出して、共有で URL を渡したのと同じ処理（onTextShared）に回せる。docs では ⛔ だが PC 専用ではない
-- \![open,archiveviewer,(ファイル名)] — ファイルを指定されたら、ほかのアプリで開く（\![open,file] と同じ）。ビューア自体は持たない
-- \![open,pictureviewer,(ファイル名)] — 画像をほかのアプリで開く（\![open,file] と同じ道筋。OnPictureViewerOpen はもうある）
+### 🔨 作る（1）
 - sound の --spectrum= で通知される帯域とレベル \[2.9.18\] — MediaCodec で波形を取り出して FFT し OnSoundSpectrum を送る（Visualizer はマイクの許可が要るので使わない）
 
-### 🔧 一部だけ（30）
+### 🔧 一部だけ（16）
 - \_b\,オプション...\] — --option=… と --clipping / --scaling を読まない（opaque は位置引数のときだけ）
 - \_b\,オプション...\] — --option=foreground・fixed、--clipping / --scaling を読まない。画像はいつも文字の下
 - \_l[x,y] — x が数のときに次の列にするだけ。y・centerx / centery・em / lh / %・@ の相対を扱わない
@@ -250,24 +247,10 @@
 - http/rss/ical/websocket オプション — --log（通信の中身をファイルに残す）が無い。--insecure は安全のため使わない
 - InductionMode — induction はパッシブの残りの制限（メールを見ない・切り替えや更新や消去をさせないなど）を持たない
 - PassiveMode — タイムアウトしない・メールを見ない・cantalk 0・SSTP 409 だけ。メニュー・スクリプトブレーク・ファイルを渡す・切り替え・最小化・終了・更新・消去を止めない
-- \![open,communicatebox] — 位置引数の文字だけ。--text= などのオプションを読まない（--text=… がそのまま入る）
-- \![open,dateinput,ID,表示時間,年,月,日,オプション] — 位置引数だけ。--timeout= と --text="…" の書き方と、ほかのオプションを読まない
-- \![open,inputbox,ID,表示時間,テキスト,オプション,...] — --timeout= / --text= の新しい書き方と、ほかの InputBox オプションを読まない。キャンセルに答えが無いときの timeout の OnUserInput も無い
-- \![open,ipinput,ID,表示時間,IP1桁目,IP2桁目,IP3桁目,IP4桁目,オプション] — --text / --timeout はある。noclose・--balloon・--reference が無い
-- \![open,passwordinput,ID,表示時間,テキスト,オプション] — --timeout= / --text= の新しい書き方と、ほかの InputBox オプションを読まない。キャンセルに答えが無いときの timeout の OnUserInput も無い
-- \![open,sliderinput,ID,表示時間,現在値,最小,最大,オプション] — 位置引数だけ。--timeout= と --text="…" の書き方と、ほかのオプションを読まない
-- \![open,textareabox,ID,表示時間,テキスト,オプション,...] — --timeout= / --text= / --limit= / --placeholder= などを読まない
-- \![open,timeinput,ID,表示時間,時,分,秒,オプション] — 位置引数だけ。--timeout= と --text="…" の書き方と、ほかのオプションを読まない
-- InputBoxのID — On で始まる ID はある。--reference= の追加情報を Reference に足さない
-- InputBoxオプション — --text / --timeout は ipinput だけ。noclose / noclear・--placeholder・--balloon・--limit・--reference が無い
 - \!\...\] — --sound-only（動画の音だけ）と --spectrum 系が無い
 - \!\...\] — --spectrum 系の開始・止める・間隔の変更が無い
 - \!\...\] — --volume / --balance / --rate / --seektime はある。--window と --spectrum 系が無い
 - sound play/load/option のオプション — --window・--sound-only・--spectrum / --spectrum-bands / --spectrum-hold が無い
-- \![anim,add,overlay,ID] — 最後のアニメーションタイミング runonce / always を読まない
-- \![moveasync] — \![moveasync,cancel] で動いている途中を止める、が無い
-- \![set,alpha,数値,オプション] — --time=（だんだん変える）と --wait を読まず、すぐ変える
-- \![set,scaling,横倍率,縦倍率,オプション] — --time= と --wait を読まず、すぐ変える
 
 ### ⛔ 作れない（31）
 - \f[anchormethod,描画方法] — Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）

@@ -152,4 +152,51 @@ class ScriptAnimationTest {
         val s = c.awaitState { it.selectMode != null }
         assertEquals(SelectRect(10, 20, 30, 40), s.selectMode?.selection)
     }
+
+    @Test
+    fun addedAnimationCanLoop() = run(
+        mapOf("OnTest" to """\0\s[0]\![anim,add,overlay,100,0,0,50,101,0,0,50,always]\![anim,add,overlay,100,0,0,50,runonce]\e"""),
+    ) { c, _ ->
+        c.raise("OnTest", emptyList())
+        val adds = c.awaitState { s -> s.commands(0).count { it is AnimationCommand.Add } == 2 }.commands(0).filterIsInstance<AnimationCommand.Add>()
+        assertEquals(listOf(2, 1), adds.map { it.frames.size })
+        assertEquals(listOf(true, false), adds.map { it.loop })
+    }
+
+    @Test
+    fun alphaAndScalingChangeOverTime() = run(
+        mapOf(
+            "OnFade" to """\0\s[0]\![set,alpha,0,--time=300,--wait]消えた\e""",
+            "OnGrow" to """\0\![set,scaling,200,200,300]\e""",
+            "OnNow" to """\0\![set,alpha,100,-5]\e""",
+        ),
+    ) { c, _ ->
+        c.raise("OnFade", emptyList())
+        // 途中の値を通って、変わり終わってから続きを出す
+        c.awaitState { (it.characters[0]?.alpha ?: 1f) in 0.05f..0.95f }
+        assertEquals("", c.state.value.text(0))
+        c.awaitState { it.text(0) == "消えた" }
+        assertEquals(0f, c.state.value.characters[0]?.alpha)
+        c.raise("OnGrow", emptyList())
+        c.awaitState { (it.characters[0]?.scaleX ?: 1f) in 1.05f..1.95f }
+        c.awaitState { it.characters[0]?.scaleX == 2f && it.characters[0]?.scaleY == 2f }
+        // 負の時間はすぐ
+        c.raise("OnNow", emptyList())
+        c.awaitState { it.characters[0]?.alpha == 1f }
+    }
+
+    @Test
+    fun moveAsyncCanBeCancelled() = run(
+        mapOf(
+            "OnMove" to """\0\s[0]\1\s[10]\![moveasync,--X=100,--Y=100,--time=5000]\e""",
+            "OnStop" to """\![moveasync,cancel]\e""",
+        ),
+    ) { c, _ ->
+        c.raise("OnMove", emptyList())
+        c.awaitState { it.characters[1]?.move?.second?.timeMs == 5000L }
+        c.raise("OnStop", emptyList())
+        // どのキャラクターにも、その場にとどまる動きが届く
+        c.awaitState { s -> listOf(0, 1).all { s.characters[it]?.move?.second == net.pono.baseware.sakura.MoveCommand.STAY } }
+    }
+
 }

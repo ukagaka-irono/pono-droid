@@ -59,7 +59,8 @@ sealed interface AnimationCommand {
      * \![anim,add,overlay|overlayfast|base|move,...]。サーフェスを替えるまで重ねるコマ。
      * [frames] が2つ以上なら、それぞれの待ち時間ごとに順に出す（最後のコマは残す）
      */
-    data class Add(val frames: List<PatternFrame>) : AnimationCommand
+    /** [loop] なら最後のコマの後に最初へ戻って繰り返す（アニメーションタイミングの always） */
+    data class Add(val frames: List<PatternFrame>, val loop: Boolean = false) : AnimationCommand
 
     /** \![anim,add,text,x,y,幅,高さ,文字,表示時間,r,g,b,大きさ,フォント]。サーフェスの上に文字を出す（座標はシェル画像のピクセル） */
     data class AddText(
