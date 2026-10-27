@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
@@ -128,6 +129,22 @@ class CharacterWindow(
     /** バルーンの今の絵（\![execute,dumpballoon]）。まだ描いていなければ null */
     fun balloonBitmap(): Bitmap? = balloonView.takeIf { it.width > 0 && it.height > 0 }?.drawToBitmap()
 
+    /** バルーンに描かないもの（\![execute,dumpballoon] の --hide=）。書き出す間だけ */
+    private val hiddenLabels = mutableStateOf(emptySet<String>())
+
+    /** [hide] の印を描かずに描き直してから写す（表示に戻すのは写した後） */
+    suspend fun balloonBitmap(hide: Set<String>): Bitmap? {
+        if (hide.isEmpty()) return balloonBitmap()
+        hiddenLabels.value = hide
+        return try {
+            // 描き直されるまで2コマ待つ
+            repeat(2) { kotlinx.coroutines.android.awaitFrame() }
+            balloonBitmap()
+        } finally {
+            hiddenLabels.value = emptySet()
+        }
+    }
+
     /** ドラッグや \![move] などで動き終えた。重なりと見切れ（OnOverlap / OnOffscreen）を調べ直すのに使う */
     var onSettled: (() -> Unit)? = null
 
@@ -162,7 +179,7 @@ class CharacterWindow(
             FitWindow(corner, onSize = { w, h -> resize(balloonView, balloonParams, w, h) }) {
                 // descript.txt の balloon.syncscale が true なら、バルーンもキャラクターの大きさに合わせる
                 val bs = if (controller.balloonSyncScale(scopeId)) scale.floatValue else balloonScale.floatValue
-                CompositionLocalProvider(LocalBalloonScale provides bs) {
+                CompositionLocalProvider(LocalBalloonScale provides bs, LocalHiddenBalloonLabels provides hiddenLabels.value) {
                     CharacterBalloon(scopeId, controller, balloonSkin)
                 }
             }

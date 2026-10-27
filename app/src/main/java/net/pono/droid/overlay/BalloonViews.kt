@@ -244,6 +244,9 @@ internal fun balloonMaxWidth(): Dp {
 /** アプリの画面で変えたバルーンの大きさ（倍率） */
 val LocalBalloonScale = staticCompositionLocalOf { 1f }
 
+/** 描かない印（\![execute,dumpballoon] の --hide= の balloonmarker・balloonnum） */
+val LocalHiddenBalloonLabels = staticCompositionLocalOf { emptySet<String>() }
+
 /**
  * 文字を出している間だけ最後まで追いかける。選択肢で終わるとき（メニューなど）は先頭の問いかけを見せたいので動かさない。
  * [enabled] が false（\![set,autoscroll,disable]）なら追いかけない

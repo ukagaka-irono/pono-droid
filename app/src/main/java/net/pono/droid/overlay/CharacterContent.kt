@@ -372,7 +372,11 @@ private fun TalkBalloon(
     if (character.balloonId == -1) return
     val onClick = { controller.onBalloonClick(scopeId) }
     val choices = ChoiceActions(controller::onChoice, { controller.onChoiceHover(it) }, visited)
-    val labels = BalloonLabels(character.balloonMarker, character.balloonNum)
+    val hidden = LocalHiddenBalloonLabels.current
+    val labels = BalloonLabels(
+        character.balloonMarker.takeUnless { "balloonmarker" in hidden },
+        character.balloonNum.takeUnless { "balloonnum" in hidden },
+    )
     // 縁をつかんでバルーンを動かす（\![lock,balloonmove] や balloon.dontmove のときは動かせない）
     val onDrag: BalloonDrag? = if (character.balloonMoveLocked) null else { dx, dy, done -> controller.onBalloonDragged(scopeId, dx, dy, done) }
     if (skin != null) {
@@ -380,7 +384,8 @@ private fun TalkBalloon(
             items, skin, scopeId, character.balloonId ?: character.defaultBalloonId, onClick, choices, character.autoScroll, online, labels,
             // クリック待ちの印は最後に話したキャラクターのバルーンに、SSTP の印は届いたスクリプトの間だけ
             clickWait = waitingClick && lastTextScope == scopeId,
-            sstp = sstp,
+            // SSTP の印も balloonmarker の仲間
+            sstp = sstp && "balloonmarker" !in hidden,
             onDrag = onDrag,
         )
     } else {

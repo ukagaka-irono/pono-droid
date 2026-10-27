@@ -960,7 +960,7 @@ list/sakura-script/event/bang-set-otherghosttalk-true-false-before-after.md	DONE
 list/sakura-script/event/bang-set-othersurfacechange-true-false.md	DONE	\![set,othersurfacechange,trueかfalse]	実装済み
 list/sakura-script/event/bang-set-tasktrayicon-.ico-duration-eq-runcount-eq.md	DONE	\![set,tasktrayicon,ファイル名.ico,テキスト(,--duration=待機時間(,--runcount=繰り返し回数))]	常駐の通知に文を出す。Android の通知のアイコンは替えられない
 list/sakura-script/event/bang-set-trayballoon.md	DONE	\![set,trayballoon,オプション,オプション,オプション...]	実装済み
-list/sakura-script/event/bang-set-wallpaper.md	PARTIAL	\![set,wallpaper,ファイル名,オプション]	配置の stretch-x / stretch-y / span を読まない（center・tile・stretch・fit・fill と --color はある）
+list/sakura-script/event/bang-set-wallpaper.md	DONE	\![set,wallpaper,ファイル名,オプション]	center・tile・stretch・stretch-x・stretch-y・fit・fill と --color。span は画面が1つなので fill と同じ（SSP のウインドウモードと同じ扱い）
 list/sakura-script/event/bang-set-windowstate-bang-stayontop.md	DONE	\![set,windowstate,!stayontop]	同上（何もしない）
 list/sakura-script/event/bang-set-windowstate-minimize.md	DONE	\![set,windowstate,minimize]	実装済み
 list/sakura-script/event/bang-set-windowstate-stayontop.md	DONE	\![set,windowstate,stayontop]	オーバーレイはいつもいちばん上
@@ -1018,7 +1018,7 @@ list/sakura-script/misc/bang-execute-compressarchive.md	DONE	\![execute,compress
 list/sakura-script/misc/bang-execute-createnar.md	DONE	\![execute,createnar,出力先ファイル]	実装済み
 list/sakura-script/misc/bang-execute-createupdatedata.md	DONE	\![execute,createupdatedata,出力先ファイル]	実装済み
 list/sakura-script/misc/bang-execute-dropdefault-file-.-bang-execute-dropdefault-url-URL.md	DONE	\![execute,dropdefault,file,ファイルパス,ファイルパス...] \![execute,dropdefault,url,URL,種別]	実装済み
-list/sakura-script/misc/bang-execute-dumpballoon-ID-prefix-ID.md	PARTIAL	\![execute,dumpballoon,ディレクトリ,スコープID,prefix,イベントID]	--hide=balloonmarker,balloonnum を読まない
+list/sakura-script/misc/bang-execute-dumpballoon-ID-prefix-ID.md	DONE	\![execute,dumpballoon,ディレクトリ,スコープID,prefix,イベントID]	--hide=balloonmarker,balloonnum は、その印（SSTP の印も）を描かずに描き直してから書き出す
 list/sakura-script/misc/bang-execute-dumpsurface-ID-prefix-ID-ID.md	DONE	\![execute,dumpsurface,ディレクトリ,スコープID,サーフェスリスト,prefix,イベントID,ゼロ位置切り出し,アニメーションID]	実装済み
 list/sakura-script/misc/bang-execute-emptyrecyclebin.md	IMPOSSIBLE	\![execute,emptyrecyclebin]	Android にごみ箱が無い（決めたこと）
 list/sakura-script/misc/bang-execute-extractarchive.md	DONE	\![execute,extractarchive,ファイル名,ディレクトリ名,オプション...]	--password（AES の ZIP。zip4j）も
@@ -1067,7 +1067,7 @@ list/sakura-script/misc/bang-unload-makoto.md	IMPOSSIBLE	\![unload,makoto]	同�
 list/sakura-script/misc/bang-unload-shiori.md	DONE	\![unload,shiori]	実装済み
 list/sakura-script/misc/index.md	NA	未分類コマンド	目次のページ
 list/sakura-script/misc/m-umsg-wparam-lparam.md	IMPOSSIBLE	\m[umsg,wparam,lparam]	Windows のメッセージ
-list/sakura-script/misc/notes_executehttp.md	PARTIAL	http/rss/ical/websocket オプション	--log（通信の中身をファイルに残す）が無い。--insecure は安全のため使わない
+list/sakura-script/misc/notes_executehttp.md	PARTIAL	http/rss/ical/websocket オプション	--log=（送ったものと返ってきたものを ghost/master/var/ のファイルに足す）は済み。--insecure だけは安全のため使わない（証明書をいつも確かめる）
 list/sakura-script/misc/notes_executeical.md	DONE	iCal絞り込みオプション \[2.8.90\]	ICal で期間・展開・件数を決める
 list/sakura-script/misc/notes_executerss.md	DONE	RSS絞り込みオプション \[2.8.92\]	--from / --to / --limit を Feed.filter で絞る
 list/sakura-script/misc/notes_inductionmode.md	PARTIAL	InductionMode	induction はパッシブの残りの制限（メールを見ない・切り替えや更新や消去をさせないなど）を持たない

@@ -271,4 +271,20 @@ class HttpExecuteTest {
     fun onelineCertificateNames() {
         assertEquals("/C=JP/O=Pono, Inc./CN=e.test", UrlConnectionHttpClient.oneline("CN=e.test,O=Pono\\, Inc.,C=JP"))
     }
+
+    @Test
+    fun logWritesTheExchange() = run(
+        FakeClient(body = "こんにちは".toByteArray()),
+        mapOf("OnGet" to """\![execute,http-post,https://example.com/api,--param=a=1,--nofile=UTF-8,--log=http.log,--async=OnDone]\e"""),
+    ) { c, shiori, master ->
+        c.raise("OnGet", emptyList())
+        shiori.awaitEvent("OnDone")
+        val log = File(master, "var/http.log").readText()
+        assertTrue(log, "> POST https://example.com/api" in log)
+        assertTrue(log, "a=1" in log)
+        assertTrue(log, "< 200" in log)
+        assertTrue(log, "< Content-Type: text/plain" in log)
+        assertTrue(log, "こんにちは" in log)
+    }
+
 }

@@ -96,7 +96,7 @@ class DevToolsTest {
             return dump.surfaces.size
         }
 
-        override suspend fun dumpBalloon(scope: Int, file: File): Boolean {
+        override suspend fun dumpBalloon(scope: Int, file: File, hide: Set<String>): Boolean {
             balloons += scope to file
             return true
         }

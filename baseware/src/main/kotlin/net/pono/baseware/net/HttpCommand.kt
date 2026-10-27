@@ -37,6 +37,8 @@ data class HttpCommand(
     val expand: Boolean = false,
     val expandDays: Int? = null,
     val limit: Int? = null,
+    /** --log=ファイル名。通信の中身（送ったものと返ってきたもの）を ghost/master/var/ のそのファイルに足していく */
+    val log: String? = null,
 ) {
     /** SSP のイベント名。--async / --sync の ID が On で始まれば、成功は ID、そのほかは ID の後ろに Failure などを付けた名前 */
     fun event(suffix: String): String {
@@ -139,6 +141,7 @@ data class HttpCommand(
                     "to" -> cmd.copy(to = runCatching { LocalDate.parse(value, dateFormat) }.getOrNull())
                     "expand" -> cmd.copy(expand = true, expandDays = value.toIntOrNull()?.coerceIn(1, 1830))
                     "limit" -> cmd.copy(limit = value.toIntOrNull()?.coerceAtLeast(0))
+                    "log" -> cmd.copy(log = value.takeIf { it.isNotEmpty() })
                     else -> cmd
                 }
             }

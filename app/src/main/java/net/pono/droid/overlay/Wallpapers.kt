@@ -29,8 +29,14 @@ object Wallpapers {
             "stretch" -> canvas.drawBitmap(image, null, RectF(0f, 0f, width.toFloat(), height.toFloat()), paint)
             "center" -> canvas.drawBitmap(image, (width - w) / 2, (height - h) / 2, paint)
             else -> {
-                // fit は全体が収まるように（余白は色）、fill は画面を覆うように（はみ出しは切る）
-                val scale = if (request.position == "fit") minOf(width / w, height / h) else maxOf(width / w, height / h)
+                // fit は全体が収まるように（余白は色）、fill は画面を覆うように（はみ出しは切る）。stretch-x / stretch-y は横幅・高さを
+                // 画面に合わせて縦横比を保つ。span（複数の画面にまたがる）は画面が1つなので fill と同じ
+                val scale = when (request.position) {
+                    "fit" -> minOf(width / w, height / h)
+                    "stretch-x" -> width / w
+                    "stretch-y" -> height / h
+                    else -> maxOf(width / w, height / h)
+                }
                 val dw = w * scale
                 val dh = h * scale
                 canvas.drawBitmap(image, null, RectF((width - dw) / 2, (height - dh) / 2, (width + dw) / 2, (height + dh) / 2), paint)

@@ -422,8 +422,8 @@ class GhostOverlayService : LifecycleService() {
                         }
                     }
 
-                    override suspend fun dumpBalloon(scope: Int, file: File): Boolean {
-                        val bitmap = withContext(Dispatchers.Main) { windows.firstOrNull { it.scopeId == scope }?.balloonBitmap() } ?: return false
+                    override suspend fun dumpBalloon(scope: Int, file: File, hide: Set<String>): Boolean {
+                        val bitmap = withContext(Dispatchers.Main) { windows.firstOrNull { it.scopeId == scope }?.balloonBitmap(hide) } ?: return false
                         return withContext(Dispatchers.IO) { writePng(bitmap, file) }
                     }
 

@@ -228,7 +228,8 @@ interface GhostPlatform {
     suspend fun dumpSurfaces(dump: SurfaceDump): Int = 0
 
     /** \![execute,dumpballoon]。[scope] のバルーンの今の絵を [file] に PNG で書く。書けたら true */
-    suspend fun dumpBalloon(scope: Int, file: File): Boolean = false
+    /** [hide] は描かずに描き直すもの（balloonmarker・balloonnum） */
+    suspend fun dumpBalloon(scope: Int, file: File, hide: Set<String> = emptySet()): Boolean = false
 
     /** pono-droid の設定画面（SSP の本体設定やゴーストエクスプローラの代わり） */
     fun openSettings() {}
@@ -1834,6 +1835,7 @@ class GhostController(
         var cookies = ""
         var headerText = ""
         var code = 0
+        var responseHeaders = emptyList<Pair<String, String>>()
         val streamer = cmd.streaming?.let { HttpStreamer(it) { data -> raise(cmd.event("Streaming"), listOf(method, cmd.id, cmd.url, "", data, cookies, headerText), userInitiated = false) } }
         val limit = when {
             cmd.nofile != null -> NOFILE_MAX_BYTES
@@ -1858,6 +1860,7 @@ class GhostController(
                             request, sink, limit,
                             onResponse = { c, h ->
                                 code = c
+                                responseHeaders = h
                                 cookies = h.filter { it.first.equals("Set-Cookie", true) }.joinToString("; ") { it.second.substringBefore(';').trim() }
                                 headerText = h.joinToString("\u0001") { "${it.first}: ${it.second}" }
                                 streamer?.contentType(h.firstOrNull { it.first.equals("Content-Type", true) }?.second.orEmpty())
@@ -1880,6 +1883,10 @@ class GhostController(
             HttpOutcome.Failed("fileio")
         }
         streamer?.finish()
+        cmd.log?.let { name ->
+            val received = memory?.toByteArray() ?: part?.takeIf { it.isFile }?.let { f -> f.inputStream().use { it.readNBytes(HTTP_LOG_BODY_BYTES) } }
+            withContext(Dispatchers.IO) { writeHttpLog(name, request, code, responseHeaders, received, (outcome as? HttpOutcome.Failed)?.reason) }
+        }
         val tls = when (outcome) {
             is HttpOutcome.Response -> outcome.tls
             is HttpOutcome.Failed -> outcome.tls
@@ -1922,6 +1929,34 @@ class GhostController(
                     ?: file?.absolutePath.orEmpty()
                 cmd.event("") to listOf(method, cmd.id, cmd.url, content, outcome.code.toString(), cookies, headerText)
             }
+        }
+    }
+
+    /**
+     * http-* の --log=。送った要求（行・ヘッダ・本文）と、返ってきた答え（状態・ヘッダ・本文の始め）を ghost/master/var/[name] に足す。
+     * 本文は [HTTP_LOG_BODY_BYTES] まで（UTF-8 として読めなければ大きさだけ）
+     */
+    private fun writeHttpLog(name: String, request: HttpRequest, code: Int, headers: List<Pair<String, String>>, body: ByteArray?, failure: String?) {
+        val file = NetworkUpdater.safeFileName(name)?.let { File(ghost.masterDir, "var/$it") } ?: return platform.log("--log のファイル名にできません: $name")
+        fun text(b: ByteArray?): String {
+            if (b == null || b.isEmpty()) return ""
+            val head = b.copyOf(minOf(b.size, HTTP_LOG_BODY_BYTES))
+            return if (net.pono.baseware.text.TextCharsets.isValidUtf8(head)) String(head, Charsets.UTF_8) else "(${b.size} bytes)"
+        }
+        val sb = StringBuilder()
+        sb.append("==== ").append(java.time.OffsetDateTime.now().withNano(0)).append("\r\n")
+        sb.append("> ").append(request.method).append(' ').append(request.url).append("\r\n")
+        for ((k, v) in request.headers) sb.append("> ").append(k).append(": ").append(v).append("\r\n")
+        text(request.body).takeIf { it.isNotEmpty() }?.let { sb.append(">\r\n").append(it).append("\r\n") }
+        if (failure != null) sb.append("< (").append(failure).append(")\r\n")
+        if (code > 0) sb.append("< ").append(code).append("\r\n")
+        for ((k, v) in headers) sb.append("< ").append(k).append(": ").append(v).append("\r\n")
+        text(body).takeIf { it.isNotEmpty() }?.let { sb.append("<\r\n").append(it).append("\r\n") }
+        runCatching {
+            file.parentFile?.mkdirs()
+            // 大きくなりすぎたら作り直す
+            if (file.length() > HTTP_LOG_MAX_BYTES) file.delete()
+            file.appendText(sb.toString(), Charsets.UTF_8)
         }
     }
 
@@ -2301,7 +2336,9 @@ class GhostController(
         val job = scope.launch {
             val ok = runCatching {
                 withContext(Dispatchers.IO) { dir.mkdirs() }
-                platform.dumpBalloon(scopeId, File(dir, "$prefix$scopeId.png"))
+                // --hide=balloonmarker,balloonnum は、その印を描かずに描き直したものを書き出す
+                val hide = opts["hide"]?.split(',')?.map { it.trim().lowercase() }?.filter { it in DUMP_HIDE }?.toSet().orEmpty()
+                platform.dumpBalloon(scopeId, File(dir, "$prefix$scopeId.png"), hide)
             }.getOrDefault(false)
             if (event.isNotEmpty()) deliverLater(event, listOf(if (ok) "1" else "0"))
         }
@@ -6330,7 +6367,10 @@ class GhostController(
         private const val VOICE_FOLLOW_MS = 30_000L
         private const val MAX_VOICE_TEXT = 500
 
-        private val WALLPAPER_POSITIONS = setOf("center", "tile", "stretch", "fit", "fill")
+        private val WALLPAPER_POSITIONS = setOf("center", "tile", "stretch", "stretch-x", "stretch-y", "fit", "fill", "span")
+
+        /** \![execute,dumpballoon] の --hide= で隠せるもの */
+        private val DUMP_HIDE = setOf("balloonmarker", "balloonnum")
 
         /** SSTP の IfGhost で、ほかのゴースト向けとして扱う名前（SSP と同じ） */
         private val DEFAULT_GHOST_NAMES = setOf("さくら", "エミリ", "えみりぃ")
@@ -6399,6 +6439,10 @@ class GhostController(
 
         /** \![set,scaling] の倍率の上限（4 = 400%）。画面より大きなウィンドウを作らせない */
         const val MAX_SCALING = 4f
+
+        /** http-* の --log= に書く本文の長さと、ログのファイルの大きさの上限 */
+        const val HTTP_LOG_BODY_BYTES = 64 * 1024
+        const val HTTP_LOG_MAX_BYTES = 4L * 1024 * 1024
 
         /** \_b の data: の画像の大きさの上限 */
         const val MAX_DATA_IMAGE_BYTES = 8 * 1024 * 1024

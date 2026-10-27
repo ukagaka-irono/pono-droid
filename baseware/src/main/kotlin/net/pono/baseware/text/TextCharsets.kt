@@ -43,7 +43,7 @@ object TextCharsets {
         return charsetLine.find(head)?.let { resolve(it.groupValues[1]) }
     }
 
-    private fun isValidUtf8(bytes: ByteArray): Boolean = runCatching {
+    fun isValidUtf8(bytes: ByteArray): Boolean = runCatching {
         Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes))
     }.isSuccess
 }
