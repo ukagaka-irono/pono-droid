@@ -80,7 +80,11 @@ class GhostPackager(private val root: File) {
     fun createUpdateData(outputs: List<File>): Int {
         val standard = listOf("", "ghost/master/").flatMap { listOf(File(root, it + "updates2.dau"), File(root, it + "updates.txt")) }
         val entries = files(Purpose.UPDATE, (standard + outputs).toSet())
-        val lines = entries.map { (rel, file) -> "$rel\u0001${md5(file)}\u0001size=${file.length()}\u0001" }
+        // 一覧を作る間に消えたファイル（ほかで作っている途中のものなど）は入れない
+        val lines = entries.mapNotNull { (rel, file) ->
+            val sum = runCatching { md5(file) }.getOrNull() ?: return@mapNotNull null
+            "$rel\u0001$sum\u0001size=${file.length()}\u0001"
+        }
         for (out in outputs) {
             out.parentFile?.mkdirs()
             val dau = out.name.lowercase().endsWith(".dau")

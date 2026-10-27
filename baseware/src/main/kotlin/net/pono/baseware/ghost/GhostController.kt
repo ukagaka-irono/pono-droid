@@ -2164,7 +2164,7 @@ class GhostController(
         val given = args.map { it.trim() }.firstOrNull { it.isNotEmpty() }
         val out = if (given != null) ghostPath(given) else File(ghost.dir, GhostPackager.PONO_DIR + "/nar/${ghost.dir.name}.nar")
         if (out == null || out.isDirectory) return platform.log("nar の出力先にできません: $given")
-        scope.launch {
+        packaging {
             val refs = listOf(ghost.name, out.absolutePath, "ghost")
             deliverLater("OnNarCreating", refs)
             withContext(Dispatchers.IO) { runCatching { GhostPackager(ghost.dir).createNar(out) } }
@@ -2174,6 +2174,14 @@ class GhostController(
                 }
                 .onFailure { platform.log("nar を作れませんでした: ${it.message}") }
         }
+    }
+
+    /** nar と更新データを作るのは、スクリプトに書いた順に1つずつ（作っている途中の nar を更新データに入れない） */
+    private val packagingLock = Mutex()
+
+    private fun packaging(block: suspend () -> Unit) {
+        // 順番は、すぐに鍵の列に並ぶことで決める（Mutex は並んだ順に渡す）
+        scope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { packagingLock.withLock { block() } }
     }
 
     /**
@@ -2187,7 +2195,7 @@ class GhostController(
         } else {
             listOf(ghost.dir, ghost.masterDir).flatMap { listOf(File(it, "updates2.dau"), File(it, "updates.txt")) }
         }
-        scope.launch {
+        packaging {
             deliverLater("OnUpdatedataCreating", emptyList())
             withContext(Dispatchers.IO) { runCatching { GhostPackager(ghost.dir).createUpdateData(outputs) } }
                 .onSuccess { deliverLater("OnUpdatedataCreated", emptyList()) }
