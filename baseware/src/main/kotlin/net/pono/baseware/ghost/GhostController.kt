@@ -1,5 +1,6 @@
 package net.pono.baseware.ghost
 
+import net.pono.baseware.sakura.BalloonImageOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -2365,6 +2366,27 @@ class GhostController(
             }
         }
         return if (event.isEmpty()) job else null
+    }
+
+    /**
+     * \_b の "data:image/png;base64,…"。中身をゴーストのフォルダの pono/cache/ に書き出して、そのファイルを返す
+     * （同じ中身なら同じファイル）。base64 でない・大きすぎる・読めないなら null
+     */
+    private fun dataImage(uri: String): File? {
+        val header = uri.substringBefore(',', "")
+        if (!header.endsWith(";base64", ignoreCase = true) || !header.startsWith("data:image/", ignoreCase = true)) return null
+        val bytes = runCatching { java.util.Base64.getMimeDecoder().decode(uri.substringAfter(',')) }.getOrNull() ?: return null
+        if (bytes.isEmpty() || bytes.size > MAX_DATA_IMAGE_BYTES) return null
+        val name = java.security.MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }
+        val ext = header.removePrefix("data:image/").substringBefore(';').lowercase().filter { it.isLetterOrDigit() }.ifEmpty { "png" }
+        val file = File(ghost.dir, "${GhostPackager.PONO_DIR}/cache/$name.$ext")
+        return runCatching {
+            if (!file.isFile) {
+                file.parentFile?.mkdirs()
+                file.writeBytes(bytes)
+            }
+            file
+        }.getOrNull()
     }
 
     // ---- \![set,alpha / scaling] をだんだん変える ----
@@ -5854,9 +5876,10 @@ class GhostController(
             }
         }
 
-        override fun addImage(scope: Int, file: String, x: Int?, y: Int?, opaque: Boolean) {
-            val f = ghostFile(file) ?: return platform.log("画像が見つかりません: $file")
-            _state.update { it.update(scope) { c -> c.append(BalloonItem.Image(f.path, x, y, opaque)) } }
+        override fun addImage(scope: Int, file: String, x: Int?, y: Int?, opaque: Boolean, options: BalloonImageOptions) {
+            val f = (if (file.startsWith("data:", ignoreCase = true)) dataImage(file) else ghostFile(file))
+                ?: return platform.log("画像が見つかりません: ${file.take(80)}")
+            _state.update { it.update(scope) { c -> c.append(BalloonItem.Image(f.path, x, y, opaque, options)) } }
         }
 
         override fun setOption(name: String, args: List<String>): Boolean {
@@ -6376,6 +6399,9 @@ class GhostController(
 
         /** \![set,scaling] の倍率の上限（4 = 400%）。画面より大きなウィンドウを作らせない */
         const val MAX_SCALING = 4f
+
+        /** \_b の data: の画像の大きさの上限 */
+        const val MAX_DATA_IMAGE_BYTES = 8 * 1024 * 1024
 
         /** \![set,alpha / scaling] をだんだん変えるときの、1コマの間（ミリ秒） */
         const val TRANSITION_FRAME_MS = 16L

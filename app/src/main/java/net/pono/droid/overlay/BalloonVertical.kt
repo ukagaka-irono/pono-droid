@@ -1,5 +1,6 @@
 package net.pono.droid.overlay
 
+import net.pono.baseware.sakura.BalloonImageOptions
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -28,7 +29,7 @@ private sealed interface Cell {
     val line: Int
 
     data class Glyph(override val line: Int, val text: String, val style: TextStyle?, val choice: Int?, val rotate: Boolean, val small: Boolean) : Cell
-    data class Picture(override val line: Int, val path: String, val opaque: Boolean) : Cell
+    data class Picture(override val line: Int, val path: String, val opaque: Boolean, val options: BalloonImageOptions = BalloonImageOptions()) : Cell
 }
 
 /**
@@ -58,7 +59,7 @@ fun VerticalBalloonBody(items: List<BalloonItem>, choices: ChoiceActions, style:
                         cells += Cell.Glyph(li, g?.text ?: ch, null, k, g?.rotate == true, g?.small == true)
                     }
                 }
-                is BalloonLayout.Run.Image -> cells += Cell.Picture(li, run.path, run.opaque)
+                is BalloonLayout.Run.Image -> cells += Cell.Picture(li, run.path, run.opaque, run.options)
             }
         }
     }
@@ -69,7 +70,7 @@ fun VerticalBalloonBody(items: List<BalloonItem>, choices: ChoiceActions, style:
             for (cell in cells) {
                 when (cell) {
                     is Cell.Glyph -> VerticalGlyphCell(cell, choiceList, choices, style)
-                    is Cell.Picture -> BalloonPicture(cell.path, cell.opaque, style.spPerPx, Modifier)
+                    is Cell.Picture -> BalloonPicture(cell.path, cell.opaque, style.spPerPx, Modifier, cell.options)
                 }
             }
         },

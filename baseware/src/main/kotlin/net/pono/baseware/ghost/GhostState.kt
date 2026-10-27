@@ -1,5 +1,6 @@
 package net.pono.baseware.ghost
 
+import net.pono.baseware.sakura.BalloonImageOptions
 import net.pono.baseware.sakura.Choice
 import net.pono.baseware.sakura.ChoiceLooks
 import net.pono.baseware.sakura.MoveCommand
@@ -33,9 +34,9 @@ sealed interface BalloonItem {
 
     /**
      * \_b。[path] はゴーストのディレクトリの中の画像。[x] / [y] があればバルーンのその位置（文字の下）、
-     * 無ければ文字の中に1文字として置く。[opaque] なら左上の色を抜かない
+     * 無ければ文字の中に1文字として置く。[opaque] なら左上の色を抜かない。[options] は切り抜き・拡大縮小などの見せ方
      */
-    data class Image(val path: String, val x: Int?, val y: Int?, val opaque: Boolean) : BalloonItem
+    data class Image(val path: String, val x: Int?, val y: Int?, val opaque: Boolean, val options: BalloonImageOptions = BalloonImageOptions()) : BalloonItem
 }
 
 /** SERIKO への頼み（\i[n]、\![anim,...]）。表示する側が順番に実行する */

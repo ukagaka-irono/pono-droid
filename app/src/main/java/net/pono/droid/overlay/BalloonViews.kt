@@ -1,5 +1,6 @@
 package net.pono.droid.overlay
 
+import net.pono.baseware.sakura.BalloonImageOptions
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
@@ -350,10 +351,12 @@ fun SimpleBalloon(
             .clickable(onClick = onClick),
     ) {
         Box {
+            val s = LocalBalloonScale.current
+            val simpleStyle = BalloonTextStyle.Simple.let { it.copy(fontSize = it.fontSize * s, spPerPx = it.spPerPx * s) }
             Box(Modifier.heightIn(max = maxHeight).verticalScroll(scroll).padding(horizontal = 12.dp, vertical = 8.dp)) {
-                val s = LocalBalloonScale.current
-                BalloonBody(items, choices, BalloonTextStyle.Simple.let { it.copy(fontSize = it.fontSize * s, spPerPx = it.spPerPx * s) })
+                BalloonBody(items, choices, simpleStyle)
             }
+            Box(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) { FixedBalloonImages(items, simpleStyle) }
             if (online) SimpleOnlineMarker(Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 2.dp))
             if (!labels.isEmpty) {
                 Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 8.dp, vertical = 1.dp)) {
@@ -460,7 +463,7 @@ fun SkinBalloon(
         } ?: candidates.lastIndex
         val image = candidates[chosen]
         val placeable = subcompose("balloon") {
-            SkinFrame(image, skin, scopeId, scale, scroll, onlineFrames, labels, style, clickWait, sstp, onDrag) {
+            SkinFrame(image, skin, scopeId, scale, scroll, onlineFrames, labels, style, clickWait, sstp, onDrag, fixed = { FixedBalloonImages(items, style) }) {
                 if (image.look.vertical) VerticalBalloonBody(items, choices, style, (image.area.height * scale).toInt()) else BalloonBody(items, choices, style)
             }
         }.first().measure(Constraints())
@@ -486,6 +489,7 @@ private fun SkinFrame(
     clickWait: Boolean,
     sstp: Boolean,
     onDrag: BalloonDrag?,
+    fixed: @Composable () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -561,6 +565,8 @@ private fun SkinFrame(
         ) {
             content()
         }
+        // スクロールしても動かない画像（\_b の --option=fixed）
+        Box(Modifier.offset(px(image.area.left), px(image.area.top)).size(px(image.area.width), px(image.area.height))) { fixed() }
         val page = ((if (vertical) image.area.width else image.area.height) * scale * 0.8f).toInt()
         // クリック待ちの印（clickwait.png など）。続きの矢印が出ているときは重ならないよう矢印を優先する
         val more = scroll.value < scroll.maxValue
@@ -599,12 +605,26 @@ private fun SkinFrame(
 /** バルーンの中身。行ごとに文を並べ、\_l で分けた列は横に等分して並べる */
 @Composable
 fun BalloonBody(items: List<BalloonItem>, choices: ChoiceActions, style: BalloonTextStyle) {
-    // \_b[ファイル,x,y] の画像は文字の下に置く
+    // \_b[ファイル,x,y] の画像は文字の下（--option=foreground なら上）に置く。fixed のものはスクロールの外（[FixedBalloonImages]）
+    val placed = BalloonLayout.placedImages(items).filterNot { it.options.fixed }
     Box {
-        for (img in BalloonLayout.placedImages(items)) {
-            BalloonPicture(img.path, img.opaque, style.spPerPx, Modifier.offset((img.x * style.spPerPx).dp, (img.y * style.spPerPx).dp))
-        }
+        PlacedPictures(placed.filterNot { it.options.foreground }, style)
         BalloonLines(items, choices, style)
+        PlacedPictures(placed.filter { it.options.foreground }, style)
+    }
+}
+
+/** \_b[ファイル,x,y,--option=fixed] の画像。スクロールしても動かないよう、文字の範囲に重ねて置く */
+@Composable
+fun FixedBalloonImages(items: List<BalloonItem>, style: BalloonTextStyle) {
+    val fixed = BalloonLayout.placedImages(items).filter { it.options.fixed }
+    if (fixed.isNotEmpty()) Box { PlacedPictures(fixed, style) }
+}
+
+@Composable
+private fun PlacedPictures(images: List<BalloonLayout.PlacedImage>, style: BalloonTextStyle) {
+    for (img in images) {
+        BalloonPicture(img.path, img.opaque, style.spPerPx, Modifier.offset((img.x * style.spPerPx).dp, (img.y * style.spPerPx).dp), img.options)
     }
 }
 
@@ -718,7 +738,7 @@ private fun BalloonText(
                     ranges += start until length
                 }
                 is BalloonLayout.Run.Image -> {
-                    val (w, h) = ImageTransparency.size(java.io.File(run.path)) ?: return@forEachIndexed
+                    val (w, h) = pictureSize(run.path, run.options) ?: return@forEachIndexed
                     val id = "img$index"
                     appendInlineContent(id, "□")
                     val imageAlign = when (valign) {
@@ -728,7 +748,7 @@ private fun BalloonText(
                     }
                     inlineContent[id] = InlineTextContent(
                         with(density) { Placeholder((w * style.spPerPx).dp.toSp(), (h * style.spPerPx).dp.toSp(), imageAlign) },
-                    ) { BalloonPicture(run.path, run.opaque, style.spPerPx, Modifier) }
+                    ) { BalloonPicture(run.path, run.opaque, style.spPerPx, Modifier, run.options) }
                 }
             }
         }
@@ -814,15 +834,43 @@ private fun BalloonText(
 
 /** \_b の画像。[dpPerPx] は画像の 1px を何 dp で描くか。読めない・大きすぎる画像は出さない */
 @Composable
-internal fun BalloonPicture(path: String, opaque: Boolean, dpPerPx: Float, modifier: Modifier) {
-    val bitmap by produceState<ImageBitmap?>(null, path, opaque) {
-        // 左上の色を透過色にする（opaque なら抜かない）。PNG にアルファがあればそれを使う
+internal fun BalloonPicture(path: String, opaque: Boolean, dpPerPx: Float, modifier: Modifier, options: BalloonImageOptions = BalloonImageOptions()) {
+    val bitmap by produceState<ImageBitmap?>(null, path, opaque, options.selfAlpha, options.clip) {
+        // 左上の色を透過色にする（opaque と --option=use_self_alpha なら抜かない）。PNG にアルファがあればそれを使う
         value = withContext(Dispatchers.IO) {
-            ImageTransparency.load(java.io.File(path), null, selfAlpha = if (opaque) true else null, colorKey = !opaque)?.asImageBitmap()
+            val keep = opaque || options.selfAlpha
+            ImageTransparency.load(java.io.File(path), null, selfAlpha = if (keep) true else null, colorKey = !keep)?.let { clipped(it, options.clip) }?.asImageBitmap()
         }
     }
     val bmp = bitmap ?: return
-    Image(bmp, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = modifier.size((bmp.width * dpPerPx).dp, (bmp.height * dpPerPx).dp))
+    // --scaling= の大きさ（負なら反転）
+    val size = options.drawSize(bmp.width, bmp.height)
+    Image(
+        bmp, contentDescription = null, contentScale = ContentScale.FillBounds,
+        modifier = modifier.size((size.width * dpPerPx).dp, (size.height * dpPerPx).dp).let {
+            if (size.flipX || size.flipY) it.graphicsLayer { scaleX = if (size.flipX) -1f else 1f; scaleY = if (size.flipY) -1f else 1f } else it
+        },
+    )
+}
+
+/** --clipping= の範囲を切り抜く（画像からはみ出す分は削る） */
+private fun clipped(bitmap: Bitmap, clip: BalloonImageOptions.Clip?): Bitmap {
+    if (clip == null) return bitmap
+    val l = clip.left.coerceIn(0, bitmap.width - 1)
+    val t = clip.top.coerceIn(0, bitmap.height - 1)
+    val r = clip.right.coerceIn(l + 1, bitmap.width)
+    val b = clip.bottom.coerceIn(t + 1, bitmap.height)
+    return Bitmap.createBitmap(bitmap, l, t, r - l, b - t)
+}
+
+/** 文の中に置く画像の大きさ（切り抜きと拡大縮小の後。画像のピクセル）。読めなければ null */
+internal fun pictureSize(path: String, options: BalloonImageOptions): Pair<Int, Int>? {
+    val (w, h) = ImageTransparency.size(java.io.File(path)) ?: return null
+    val clip = options.clip
+    val cw = if (clip == null) w else (minOf(clip.right, w) - minOf(clip.left, w - 1)).coerceAtLeast(1)
+    val ch = if (clip == null) h else (minOf(clip.bottom, h) - minOf(clip.top, h - 1)).coerceAtLeast(1)
+    val size = options.drawSize(cw, ch)
+    return size.width to size.height
 }
 
 /** インストール済みのバルーンを、画面に出せる形にしたもの。画像は使うときに読み込んで覚えておく */

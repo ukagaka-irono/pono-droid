@@ -159,7 +159,7 @@ interface ScriptHost {
      * `\_b[ファイル,x,y]` / `\_b[ファイル,inline]`。バルーンに画像を置く（[x] / [y] が null なら文字の中に1文字として）。
      * [opaque] なら左上の色を抜かない
      */
-    fun addImage(scope: Int, file: String, x: Int?, y: Int?, opaque: Boolean) {}
+    fun addImage(scope: Int, file: String, x: Int?, y: Int?, opaque: Boolean, options: BalloonImageOptions = BalloonImageOptions()) {}
 
     /** `\_l[x,y]` で横の位置を指定された（同じ行で次の列に移る） */
     fun moveCursor(scope: Int, x: Int) {}
@@ -468,14 +468,16 @@ class ScriptPlayer(
                 } else {
                     a.mapNotNull { it.trim().toIntOrNull()?.takeIf { n -> n in 0..MAX_SCOPE } }.ifEmpty { listOf(0, 1) }
                 }
+                // \_b[ファイル,x,y,オプション...] / \_b[ファイル,inline,オプション...]。ファイルは "data:image/png;base64,…" でもよい
                 "_b" -> a.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }?.let { file ->
-                    val opts = a.drop(1).map { it.trim().lowercase() }
-                    val inline = opts.firstOrNull() == "inline"
+                    val rest = a.drop(1).map { it.trim() }
+                    val inline = rest.firstOrNull()?.lowercase() == "inline"
+                    val (options, opaque) = BalloonImageOptions.parse(if (inline) rest.drop(1) else rest.drop(2))
                     host.addImage(
                         scope, file,
-                        if (inline) null else opts.getOrNull(0)?.toIntOrNull() ?: 0,
-                        if (inline) null else opts.getOrNull(1)?.toIntOrNull() ?: 0,
-                        "opaque" in opts,
+                        if (inline) null else rest.getOrNull(0)?.toIntOrNull() ?: 0,
+                        if (inline) null else rest.getOrNull(1)?.toIntOrNull() ?: 0,
+                        opaque, options,
                     )
                 }
                 // \c[char,数,開始位置] / \c[line,数,開始位置] は一部だけ、\c は全部消す

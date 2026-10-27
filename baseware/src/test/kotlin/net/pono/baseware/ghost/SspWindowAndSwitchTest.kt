@@ -256,4 +256,30 @@ class SspWindowAndSwitchTest {
             scope.cancel()
         }
     }
+
+    @Test
+    fun balloonImageOptionsAndDataUri() = runBlocking {
+        val shiori = ScriptedShiori(
+            mapOf("OnFirstBoot" to """\0\_b[img/a.png,10,20,--option=fixed,--scaling=50% 50%]\_b["data:image/png;base64,iVBORw0KGgo=",inline]文"""),
+        )
+        val scope = testScope()
+        try {
+            val ghost = tmp.newTestGhost()
+            File(ghost.masterDir, "img").mkdirs()
+            File(ghost.masterDir, "img/a.png").writeBytes(byteArrayOf(1))
+            val c = testController(ghost, shiori, scope)
+            c.start()
+            c.await { it.characters[0]?.balloon?.any { i -> i is BalloonItem.Text && i.text == "文" } == true }
+            val images = c.state.value.characters[0]!!.balloon!!.filterIsInstance<BalloonItem.Image>()
+            assertEquals(true, images[0].options.fixed)
+            assertEquals(net.pono.baseware.sakura.BalloonImageOptions.Scaling.Size(50f, true, 50f, true), images[0].options.scaling)
+            // data: の画像は pono/cache に書き出したファイルにする
+            val data = File(images[1].path)
+            assertEquals("cache", data.parentFile.name)
+            assertEquals(listOf(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a), data.readBytes().map { it.toInt() and 0xff })
+        } finally {
+            scope.cancel()
+        }
+    }
+
 }

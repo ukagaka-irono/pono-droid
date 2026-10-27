@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1354・一部だけ 42・作る 38・作れない 278・ベースウェアのことではない 338
+全 2050 項目: 済み 1356・一部だけ 40・作る 38・作れない 278・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -229,16 +229,14 @@
 
 ## さくらスクリプト
 
-済み 326 項目。
+済み 328 項目。
 
 ### 🔨 作る（1）
 - sound の --spectrum= で通知される帯域とレベル \[2.9.18\] — MediaCodec で波形を取り出して FFT し OnSoundSpectrum を送る（Visualizer はマイクの許可が要るので使わない）
 
-### 🔧 一部だけ（16）
-- \_b\,オプション...\] — --option=… と --clipping / --scaling を読まない（opaque は位置引数のときだけ）
-- \_b\,オプション...\] — --option=foreground・fixed、--clipping / --scaling を読まない。画像はいつも文字の下
+### 🔧 一部だけ（14）
 - \_l[x,y] — x が数のときに次の列にするだけ。y・centerx / centery・em / lh / %・@ の相対を扱わない
-- 補足 — \_b の --option=opaque / use_self_alpha / fixed / foreground / background、--clipping、--scaling、--source と base64・URL の画像を読まない
+- 補足 — オプションと data:…;base64 は済み。残りは Windows の exe / dll のリソースと --source=（TIFF のページ・PSD のレイヤー・アイコン）で、Android では読めない
 - \![set,wallpaper,ファイル名,オプション] — 配置の stretch-x / stretch-y / span を読まない（center・tile・stretch・fit・fill と --color はある）
 - \![enter,inductionmode] — 上の InductionMode と同じ
 - \![enter,passivemode] — 上の PassiveMode の制限の多くが無い
