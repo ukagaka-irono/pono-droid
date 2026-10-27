@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1358・一部だけ 38・作る 38・作れない 278・ベースウェアのことではない 338
+全 2050 項目: 済み 1362・一部だけ 34・作る 38・作れない 278・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -229,20 +229,16 @@
 
 ## さくらスクリプト
 
-済み 330 項目。
+済み 334 項目。
 
 ### 🔨 作る（1）
 - sound の --spectrum= で通知される帯域とレベル \[2.9.18\] — MediaCodec で波形を取り出して FFT し OnSoundSpectrum を送る（Visualizer はマイクの許可が要るので使わない）
 
-### 🔧 一部だけ（12）
+### 🔧 一部だけ（8）
 - \_l[x,y] — x が数のときに次の列にするだけ。y・centerx / centery・em / lh / %・@ の相対を扱わない
 - 補足 — オプションと data:…;base64 は済み。残りは Windows の exe / dll のリソースと --source=（TIFF のページ・PSD のレイヤー・アイコン）で、Android では読めない
-- \![enter,inductionmode] — 上の InductionMode と同じ
-- \![enter,passivemode] — 上の PassiveMode の制限の多くが無い
 - \![execute,install,url,URL,種別] — 種別は nar だけ。homeurl（そこから更新）・ical（予定表として購読）・ssf を作れる。feed はヘッドラインなので作らない
 - http/rss/ical/websocket オプション — --log=（送ったものと返ってきたものを ghost/master/var/ のファイルに足す）は済み。--insecure だけは安全のため使わない（証明書をいつも確かめる）
-- InductionMode — induction はパッシブの残りの制限（メールを見ない・切り替えや更新や消去をさせないなど）を持たない
-- PassiveMode — タイムアウトしない・メールを見ない・cantalk 0・SSTP 409 だけ。メニュー・スクリプトブレーク・ファイルを渡す・切り替え・最小化・終了・更新・消去を止めない
 - \!\...\] — --sound-only（動画の音だけ）と --spectrum 系が無い
 - \!\...\] — --spectrum 系の開始・止める・間隔の変更が無い
 - \!\...\] — --volume / --balance / --rate / --seektime はある。--window と --spectrum 系が無い

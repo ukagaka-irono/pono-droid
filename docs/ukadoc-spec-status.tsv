@@ -1011,8 +1011,8 @@ list/sakura-script/misc/bang-cancel-websocket-URL.md	DONE	\![cancel,websocket,UR
 list/sakura-script/misc/bang-close-websocket-URL.md	DONE	\![close,websocket,URL]	実装済み
 list/sakura-script/misc/bang-create-shortcut.md	DONE	\![create,shortcut]	ホーム画面のショートカット。startup は Android に無い
 list/sakura-script/misc/bang-enter-collisionmode-bang-enter-collisionmode-rect.md	DONE	\![enter,collisionmode]\![enter,collisionmode,rect]	実装済み
-list/sakura-script/misc/bang-enter-inductionmode.md	PARTIAL	\![enter,inductionmode]	上の InductionMode と同じ
-list/sakura-script/misc/bang-enter-passivemode.md	PARTIAL	\![enter,passivemode]	上の PassiveMode の制限の多くが無い
+list/sakura-script/misc/bang-enter-inductionmode.md	DONE	\![enter,inductionmode]	パッシブモードから、時間切れ・最小化・終了を許したもの（メニューにも隠す・終了を出す）
+list/sakura-script/misc/bang-enter-passivemode.md	DONE	\![enter,passivemode]	ユーザーの操作を止める: メニューは強制解除と閉じるだけ、スクリプトブレーク・ファイルや文字を渡す・切り替え・最小化・終了・更新・消去をさせない、入れた .nar はゴーストに知らせない、OnSurfaceRestore・時間切れ・メールの確認・cantalk。ヘッドラインとオートチェンジは pono-droid に無い
 list/sakura-script/misc/bang-enter-selectmode-rect-bang-enter-selectmode-rect-bang-enter-selectmode-rect.md	DONE	\![enter,selectmode,モード(rect),左,上,右,下]\![enter,selectmode,モード(rect),当たり判定名]\![enter,selectmode,モード(rect)]	実装済み
 list/sakura-script/misc/bang-execute-compressarchive.md	DONE	\![execute,compressarchive,ファイル名,ディレクトリ名,オプション...]	--password（AES の ZIP。zip4j）も
 list/sakura-script/misc/bang-execute-createnar.md	DONE	\![execute,createnar,出力先ファイル]	実装済み
@@ -1070,8 +1070,8 @@ list/sakura-script/misc/m-umsg-wparam-lparam.md	IMPOSSIBLE	\m[umsg,wparam,lparam
 list/sakura-script/misc/notes_executehttp.md	PARTIAL	http/rss/ical/websocket オプション	--log=（送ったものと返ってきたものを ghost/master/var/ のファイルに足す）は済み。--insecure だけは安全のため使わない（証明書をいつも確かめる）
 list/sakura-script/misc/notes_executeical.md	DONE	iCal絞り込みオプション \[2.8.90\]	ICal で期間・展開・件数を決める
 list/sakura-script/misc/notes_executerss.md	DONE	RSS絞り込みオプション \[2.8.92\]	--from / --to / --limit を Feed.filter で絞る
-list/sakura-script/misc/notes_inductionmode.md	PARTIAL	InductionMode	induction はパッシブの残りの制限（メールを見ない・切り替えや更新や消去をさせないなど）を持たない
-list/sakura-script/misc/notes_passivemode.md	PARTIAL	PassiveMode	タイムアウトしない・メールを見ない・cantalk 0・SSTP 409 だけ。メニュー・スクリプトブレーク・ファイルを渡す・切り替え・最小化・終了・更新・消去を止めない
+list/sakura-script/misc/notes_inductionmode.md	DONE	InductionMode	パッシブモードから、時間切れ・最小化・終了を許したもの（メニューにも隠す・終了を出す）
+list/sakura-script/misc/notes_passivemode.md	DONE	PassiveMode	ユーザーの操作を止める: メニューは強制解除と閉じるだけ、スクリプトブレーク・ファイルや文字を渡す・切り替え・最小化・終了・更新・消去をさせない、入れた .nar はゴーストに知らせない、OnSurfaceRestore・時間切れ・メールの確認・cantalk。ヘッドラインとオートチェンジは pono-droid に無い
 list/sakura-script/notes_escape.md	DONE	さくらスクリプトのエスケープ	\\ \% \] と "..." のくくり、"" を SakuraScript.tokenize で読む
 list/sakura-script/notes_lifespan.md	DONE	さくらスクリプトの寿命	スクリプトごとの状態は Playback と Host が持ち、次のスクリプトでは消える
 list/sakura-script/open/__c.md	DONE	\__c	\__c が未対応のタグになる。\![open,communicatebox] と同じにする

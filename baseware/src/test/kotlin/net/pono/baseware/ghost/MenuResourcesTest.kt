@@ -225,4 +225,38 @@ class MenuResourcesTest {
         NetworkUpdater(dir, server).update("https://up.test/", onProgress = { seen += it })
         assertEquals(listOf(UpdateProgress.Download("x.txt", 0, 1), UpdateProgress.Md5("x.txt", NetworkUpdater.md5(a), NetworkUpdater.md5(a))), seen)
     }
+
+    @Test
+    fun passiveAndInductionModesRestrictTheUser() = run(
+        mapOf(
+            "OnPassive" to """\0\![enter,passivemode]\e""",
+            "OnInduction" to """\0\![leave,passivemode]\![enter,inductionmode]\e""",
+        ),
+    ) { c, shiori ->
+        withTimeout(5000) { c.state.first { it.booted } }
+        c.raise("OnPassive", emptyList())
+        withTimeout(5000) { c.state.first { it.passive } }
+        // メニューは強制解除と閉じるだけ
+        c.onMouseLongPress(0, 0, 0, null)
+        c.awaitChoice("pono:cancel")
+        val ids = c.choices().map { it.choice.id }
+        assertEquals(listOf("pono:leavepassive", "pono:cancel"), ids)
+        c.onChoice(Choice("閉じる", "pono:cancel", emptyList()))
+        // 隠す・終了・ファイルを渡すのは効かない
+        c.minimize("user")
+        c.close()
+        c.onFileDrop(listOf("/x.txt"), listOf("text/plain"))
+        delay(300)
+        assertEquals(false, c.state.value.window.minimized)
+        assertEquals(0, shiori.count("OnClose") + shiori.count("OnCloseAll") + shiori.count("OnFileDrop2"))
+        // 誘導モードは隠す・終了を出す
+        c.raise("OnInduction", emptyList())
+        withTimeout(5000) { c.state.first { it.induction && !it.passive } }
+        c.onMouseLongPress(0, 0, 0, null)
+        c.awaitChoice("pono:cancel")
+        assertEquals(listOf("pono:leavepassive", "pono:hide", "pono:close", "pono:cancel"), c.choices().map { it.choice.id })
+        c.minimize("user")
+        withTimeout(5000) { c.state.first { it.window.minimized } }
+    }
+
 }

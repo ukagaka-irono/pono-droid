@@ -115,7 +115,7 @@ class GhostOverlayService : LifecycleService() {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
             // 動いているゴーストをすべて終える（それぞれに OnCloseAll）
-            ACTION_STOP -> if (controllers.isEmpty()) stopSelf() else controllers.forEach { it.close() }
+            ACTION_STOP -> if (controllers.isEmpty()) stopSelf() else controllers.forEach { it.close(force = true) }
             // アプリのゴースト一覧から始めたものは OnUpdateResultExplorer で結果を送る
             ACTION_UPDATE -> mainController?.networkUpdate(explorer = intent.getBooleanExtra(EXTRA_EXPLORER, false)) ?: toast("ゴーストが起動していません")
             ACTION_SHOW -> controllers.forEach { it.restoreWindows("user") }

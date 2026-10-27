@@ -24,7 +24,7 @@ object GhostStore {
                 tmp.outputStream().use { input.copyTo(it) }
             } ?: error("ファイルを開けません")
             val controller = GhostOverlayService.controller.value
-            return controller?.installNar(tmp)?.getOrThrow() ?: repository(context).installer().install(tmp)
+            return controller?.installNar(tmp, fromUser = true)?.getOrThrow() ?: repository(context).installer().install(tmp)
         } finally {
             tmp.delete()
         }

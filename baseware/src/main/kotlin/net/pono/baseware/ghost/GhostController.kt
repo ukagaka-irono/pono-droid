@@ -985,6 +985,8 @@ class GhostController(
      * [explorer] はアプリのゴースト一覧から始めたもので、結果は OnUpdateResult の代わりに OnUpdateResultExplorer
      */
     fun networkUpdate(types: List<String> = listOf("ghost"), options: Set<String> = emptySet(), reason: String = "manual", explorer: Boolean = false) {
+        // パッシブモード・誘導モードの間は、ユーザーは更新できない（スクリプトの \![updatebymyself] はできる）
+        if (reason == "manual" && restricted) return
         val targets = types.mapNotNull { type ->
             when (type) {
                 "ghost" -> UpdateTarget("ghost", ghost.name, ghost.dir, homeUrlOverride ?: ghost.descript["homeurl"])
@@ -2426,6 +2428,9 @@ class GhostController(
         }.getOrNull()
     }
 
+    /** パッシブモードか誘導モード。ユーザーの操作（ファイルを渡す・切り替え・更新・消去など）を止める */
+    private val restricted: Boolean get() = _state.value.let { it.passive || it.induction }
+
     // ---- \![set,alpha / scaling] をだんだん変える ----
 
     /** キャラクターと項目（alpha / scaling）ごとの、変えている途中のもの。新しく頼まれたら前のものは止める */
@@ -2519,8 +2524,13 @@ class GhostController(
      * 済んだら OnInstallCompleteEx（答えが無ければ OnInstallComplete）と OnInstallCompleteAll、だめなら OnInstallFailure か
      * OnInstallRefuse（シェルなどが別のゴーストを名指ししていた）を送る。シェルと追加ファイルはこのゴーストに入れる
      */
-    suspend fun installNar(nar: File): Result<NarInstaller.Result> {
+    suspend fun installNar(nar: File, fromUser: Boolean = false): Result<NarInstaller.Result> {
         val installer = repository?.installer() ?: return Result.failure(IOException("ゴーストの置き場がありません"))
+        // パッシブモード・誘導モードの間にユーザーが入れたものは、入れるがゴーストには知らせない（SSP と同じ）
+        val quiet = fromUser && restricted
+        fun raise(event: String, references: List<String>, userInitiated: Boolean) {
+            if (!quiet) this.raise(event, references, userInitiated = userInitiated)
+        }
         raise("OnInstallBegin", emptyList(), userInitiated = false)
         val result = withContext(Dispatchers.IO) { runCatching { installer.install(nar, ghost) } }
         result.onSuccess { r ->
@@ -2532,7 +2542,7 @@ class GhostController(
                 items.joinToString("\u0001") { it.name },
                 items.joinToString("\u0001") { it.dir.absolutePath + "/" },
             )
-            scope.launch {
+            if (!quiet) scope.launch {
                 _state.first { !it.talking && !it.waitingChoice }
                 val script = request("OnInstallCompleteEx", refs)
                     ?: request("OnInstallComplete", listOf(items[0].type.id, items[0].name, items.getOrNull(1)?.name.orEmpty()))
@@ -2612,6 +2622,8 @@ class GhostController(
      * それ以外の文字（と、扱えない URL）は OnTextDrop（改行はバイト値1）
      */
     fun onTextShared(text: String, scopeId: Int = 0) {
+        // パッシブモード・誘導モードの間は、渡されたものを無視する
+        if (restricted) return
         lastUserActivity = System.currentTimeMillis()
         val t = text.trim().take(MAX_SHARED_TEXT)
         val url = t.takeIf { (it.startsWith("https://") || it.startsWith("http://")) && it.none { c -> c.isWhitespace() } }
@@ -2707,8 +2719,10 @@ class GhostController(
      * 終わる。SSP でただ1体のゴーストを終えるときと同じく OnCloseAll を送り（答えが無ければ OnClose）、そのスクリプトが終わったら
      * SHIORI を閉じる。[reason] は user（メニューや通知から）か system（端末の電源を切るとき）、[scopeId] はメニューを開いたキャラクター
      */
-    fun close(reason: String = "user", scopeId: Int = 0, all: Boolean = true) {
+    fun close(reason: String = "user", scopeId: Int = 0, all: Boolean = true, force: Boolean = false) {
         if (closing) return
+        // パッシブモードの間は、ユーザーは終われない（誘導モードは終われる）
+        if (reason == "user" && _state.value.passive && !force) return
         closing = true
         timerJob?.cancel()
         scope.launch {
@@ -2854,7 +2868,7 @@ class GhostController(
      * （はい → OnVanishSelected、いいえ → OnVanishCancel）。話している途中でバルーンをタップすると OnVanishButtonHold で取りやめる
      */
     fun requestVanish(scopeId: Int = 0) {
-        if (closing || ghostAfterVanish() == null) return
+        if (closing || ghostAfterVanish() == null || restricted) return
         vanishJob?.cancel()
         vanishJob = scope.launch {
             val script = request("OnVanishSelecting", emptyList())
@@ -3306,6 +3320,8 @@ class GhostController(
     /** キャラクターを隠す（\![set,windowstate,minimize] は script、メニューの「隠す」は user） */
     fun minimize(reason: String) {
         if (_state.value.window.minimized) return
+        // パッシブモードの間は、ユーザーは隠せない（誘導モードは隠せる）
+        if (reason == "user" && _state.value.passive) return
         _state.update { it.copy(window = it.window.copy(minimized = true)) }
         raise("OnWindowStateMinimize", listOf(reason), userInitiated = false)
     }
@@ -3594,8 +3610,16 @@ class GhostController(
         fun add(line: String?) {
             line?.let(sb::append)
         }
-        // 制限モード（パッシブモード）の間は、いちばん上に強制解除
-        if (_state.value.passive) add(item("制限モードを解除", "pono:leavepassive", "leavepassivebutton.caption"))
+        // 制限モード（パッシブモード・誘導モード）の間は、強制解除と、許されているものだけ（誘導モードは隠す・終了も）
+        if (restricted) {
+            add(item("制限モードを解除", "pono:leavepassive", "leavepassivebutton.caption"))
+            if (!_state.value.passive) {
+                add(item("隠す", "pono:hide", "hidebutton.caption"))
+                add(item("ゴーストを終了", "pono:close", "quitbutton.caption", "closebutton.caption"))
+            }
+            sb.append("\\q[${caption("閉じる", "closeballoonbutton.caption")},pono:cancel]\\e")
+            return sb.toString()
+        }
         if (parseSites(resource("$scopeName.recommendsites")).isNotEmpty()) {
             add(item("おすすめ", "pono:sites,recommend,$scopeId", "$scopeName.recommendbuttoncaption", "$scopeName.recommendsites.caption", "recommendrootbutton.caption"))
         }
@@ -3826,8 +3850,8 @@ class GhostController(
         val s = _state.value
         when {
             s.waitingChoice -> {}
-            // \![enter,nouserbreakmode] の間は、話している途中で止めさせない
-            s.talking && s.noUserBreak -> {}
+            // \![enter,nouserbreakmode] とパッシブモード・誘導モードの間は、話している途中で止めさせない
+            s.talking && (s.noUserBreak || s.passive || s.induction) -> {}
             s.talking -> {
                 val script = lastScript
                 // OnVanishSelecting の途中なら、消去を取りやめる
@@ -3979,7 +4003,7 @@ class GhostController(
      * 答えが無ければ古いゴースト向けに OnFileDropEx も送る。[scopeId] は渡した先のキャラクター
      */
     fun onFileDrop(paths: List<String>, mimeTypes: List<String>, scopeId: Int = 0) {
-        if (paths.isEmpty()) return
+        if (paths.isEmpty() || restricted) return
         lastUserActivity = System.currentTimeMillis()
         val refs = listOf(paths.joinToString("\u0001"), scopeId.toString(), mimeTypes.joinToString("\u0001"))
         scope.launch {
@@ -4617,7 +4641,7 @@ class GhostController(
                     "pono:hide" -> minimize("user")
                     "pono:resetpos" -> requestResetWindowPos()
                     "pono:resetballoonpos" -> resetBalloonPositions()
-                    "pono:leavepassive" -> _state.update { it.copy(passive = false) }
+                    "pono:leavepassive" -> _state.update { it.copy(passive = false, induction = false) }
                     "pono:scale" -> scope.launch { runScript(scaleMenu(scopeId)) }
                     "pono:setscale" -> refs.getOrNull(1)?.toIntOrNull()?.let { platform.setCharacterScale(it) }
                     "pono:scaleother" -> InputRequest.fromOpenTag(
@@ -4737,7 +4761,7 @@ class GhostController(
             delay(surfaceRestoreMs)
             // 何も見せないスクリプトがちょうど動いていたら、終わるのを待つ
             val s = _state.first { !it.talking && !it.waitingChoice }
-            if (closing) return@launch
+            if (closing || s.passive || s.induction) return@launch
             val surfaces = listOf(0, 1).map { (s.characters[it]?.surface ?: -1).toString() }
             raise("OnSurfaceRestore", surfaces, userInitiated = false)
         }
