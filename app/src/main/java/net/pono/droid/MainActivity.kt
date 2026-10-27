@@ -257,6 +257,23 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                 item(key = "settings-header") {
                     Text("設定", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                 }
+                item(key = "setting:alignment") {
+                    val prefs = remember { OverlaySettings.prefs(context) }
+                    var policy by remember { mutableStateOf(OverlaySettings.alignmentPolicy(prefs)) }
+                    SelectButton(
+                        "キャラクター自由移動",
+                        listOf(
+                            OverlaySettings.ALIGNMENT_GHOST to "ゴースト設定",
+                            OverlaySettings.ALIGNMENT_FREE to "常に自由移動",
+                            OverlaySettings.ALIGNMENT_LIMIT to "常に制限",
+                        ),
+                        policy,
+                        { value ->
+                            policy = value
+                            prefs.edit().putString(OverlaySettings.KEY_ALIGNMENT_POLICY, value).apply()
+                        },
+                    )
+                }
                 item(key = "setting:developer") { SettingSwitch("開発者向けの機能", OverlaySettings.KEY_DEVELOPER, OverlaySettings::developer) }
                 item(key = "setting:speech") { SettingSwitch("話した文字を読み上げる", OverlaySettings.KEY_SPEECH, OverlaySettings::speech) }
                 item(key = "setting:sstp") { SettingSwitch("ほかのアプリから SSTP を受ける（この端末の中だけ）", OverlaySettings.KEY_SSTP, OverlaySettings::sstp) }

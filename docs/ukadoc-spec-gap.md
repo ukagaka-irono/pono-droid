@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1285・一部だけ 54・作る 92・作れない 281・ベースウェアのことではない 338
+全 2050 項目: 済み 1286・一部だけ 54・作る 92・作れない 280・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -51,7 +51,7 @@
 ### 🔧 一部だけ（3）
 - descript.txt（Ghostの） — 説明のページ。\ や % で始まる値を捨てる決まりはしていない（名前などをメニューのスクリプトにそのまま入れている）
 - readme,ファイル名 — メニューと \![open,readme] からは開ける。インストールしたときには開かない
-- seriko.alignmenttodesktop,位置情報 — 書いてあればその吸着にする。どこにも書いていないときは bottom でなく自由に動かせる（スマートフォンの画面なので、下の端に並べない）
+- seriko.alignmenttodesktop,位置情報 — 書いてあればその吸着にする。どこにも書いていないときは、アプリの設定のキャラクター自由移動が常に制限なら仕様どおり bottom、ゴースト設定なら自由（決めたこと）。最初の設定の常に自由移動では吸着しない
 
 ### ⛔ 作れない（9）
 - cursor,ファイル名 / mousecursor,ファイル名 — マウスカーソルが無い（⛔）
@@ -432,9 +432,9 @@
 
 ## SHIORI リソース
 
-済み 88 項目。
+済み 89 項目。
 
-### ⛔ 作れない（71）
+### ⛔ 作れない（70）
 - (入力ボックス種類).defaultleft　(入力ボックス種類).defaulttop — 入力の箱は \0 のバルーンの位置に出す（決めたこと）
 - menu.disable.font.color.b — バルーンのメニューに押せない項目が無い（決めたこと）
 - menu.disable.font.color.g — バルーンのメニューに押せない項目が無い（決めたこと）
@@ -450,7 +450,7 @@
 - menu.sidebar.bitmap.filename — メニューはバルーンに出すので絵を敷かない（決めたこと）
 - activaterootbutton.caption — Windows の手前に出す設定。オーバーレイはいつも手前（決めたこと・メニューに無い）
 - addressbarbutton.caption — SSP のアドレスバー。メニューに無い（決めたこと・メニューに無い）
-- alignrootbutton.caption — キャラクターの自由移動の設定。pono-droid はいつも自由に動かせる（決めたこと・メニューに無い）
+- alignrootbutton.caption — キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
 - alwaysstayontopbutton.caption — オーバーレイはいつも手前（決めたこと・メニューに無い）
 - alwaystrayiconvisiblebutton.caption — タスクトレイが無い（決めたこと・メニューに無い）
 - balloonhistorybutton.caption — 最近使ったものの一覧が無い（決めたこと・メニューに無い）
@@ -463,7 +463,7 @@
 - debugballoonbutton.caption — Materia のバルーンマーカー表示。メニューに無い（決めたこと・メニューに無い）
 - definedsurfaceonlybutton.caption — SSP の互換の切り替え。メニューに無い（決めたこと・メニューに無い）
 - duibutton.caption — DUI が無い（決めたこと・メニューに無い）
-- enableballoonmovebutton.caption — バルーンはいつもキャラクターの上で動かせない（決めたこと・メニューに無い）
+- enableballoonmovebutton.caption — バルーンはいつも縁をつかんで動かせる（止めるのは \![lock,balloonmove] と balloon.dontmove）ので、入り切りのメニューが無い
 - firststaffbutton.caption — バージョン情報の画面が無い（決めたこと・メニューに無い）
 - ghosthistorybutton.caption — 最近使ったものの一覧が無い（決めたこと・メニューに無い）
 - headlinesensehistorybutton.caption — ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
@@ -479,7 +479,6 @@
 - rateofusetotalbutton.caption — Materia の使用率の下位メニュー。rateofusebutton で足りる（決めたこと・メニューに無い）
 - regionenabledbutton.caption — Windows のリージョン（決めたこと・メニューに無い）
 - reloadinfobutton.caption — SSP の動作情報の読み込み直し。メニューに無い（決めたこと・メニューに無い）
-- resetballoonpositionbutton.caption — バルーンはいつもキャラクターの上で動かせない（決めたこと・メニューに無い）
 - resettodefaultbutton.caption — SSP の設定を標準に戻す。メニューに無い（決めたこと・メニューに無い）
 - scriptlogbutton.caption — SSP の開発用パレットのスクリプトログ。メニューに無く、開発用の画面で見る
 - switchactivatewhentalkbutton.caption — Windows の手前に出す設定。オーバーレイはいつも手前（決めたこと・メニューに無い）
@@ -491,10 +490,10 @@
 - switchconsolevisiblebutton.caption — Materia のコンソール（決めたこと・メニューに無い）
 - switchdeactivatebutton.caption — Windows の裏へ沈む設定（決めたこと・メニューに無い）
 - switchdontactivatebutton.caption — Windows の手前に出す設定（決めたこと・メニューに無い）
-- switchdontforcealignbutton.caption — キャラクターの自由移動の設定。いつも自由（決めたこと・メニューに無い）
+- switchdontforcealignbutton.caption — キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
 - switchduivisiblebutton.caption — DUI が無い（決めたこと・メニューに無い）
-- switchforcealignfreebutton.caption — キャラクターの自由移動の設定。いつも自由（決めたこと・メニューに無い）
-- switchforcealignlimitbutton.caption — キャラクターの自由移動の設定。いつも自由（決めたこと・メニューに無い）
+- switchforcealignfreebutton.caption — キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
+- switchforcealignlimitbutton.caption — キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
 - switchignoreserikomovebutton.caption — SERIKO の move を無視する切り替えが無い（決めたこと・メニューに無い）
 - switchlocalsstpbutton.caption — Materia のスイッチ。SSTP はアプリの設定で選ぶ（決めたこと・メニューに無い）
 - switchproxybutton.caption — プロキシの設定が無い（端末の設定に従う）（決めたこと・メニューに無い）

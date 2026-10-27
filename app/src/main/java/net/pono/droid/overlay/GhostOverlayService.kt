@@ -453,6 +453,8 @@ class GhostOverlayService : LifecycleService() {
 
                     override fun developerMode(): Boolean = OverlaySettings.developer(OverlaySettings.prefs(this@GhostOverlayService))
 
+                    override fun alignmentPolicy(): String = OverlaySettings.alignmentPolicy(OverlaySettings.prefs(this@GhostOverlayService))
+
                     override fun openDeveloperScreen(page: String) = DeveloperActivity.start(this@GhostOverlayService, page, dirName)
 
                     override fun openSettings() {
@@ -716,7 +718,7 @@ class GhostOverlayService : LifecycleService() {
             positionsJob?.cancel()
             positionsJob = lifecycleScope.launch {
                 c.state.map { s ->
-                    s.characters.mapValues { (_, ch) -> listOf(ch.move?.first, ch.pinned, ch.nudge?.first, ch.alignment, ch.balloonAlign, ch.balloonOffset, ch.balloonOffsetRelative, ch.balloonOffsets) }
+                    s.characters.mapValues { (_, ch) -> listOf(ch.move?.first, ch.pinned, ch.nudge?.first, ch.alignment, ch.balloonAlign, ch.balloonOffset, ch.balloonOffsetRelative, ch.balloonOffsets, ch.balloonDrag) }
                 }
                     .distinctUntilChanged()
                     .collect { applyPositions(c) }
@@ -1178,6 +1180,7 @@ class GhostOverlayService : LifecycleService() {
                 controllers.forEach { it.onBalloonScaling((balloonScale * 100).roundToInt(), (old * 100).roundToInt()) }
             }
             OverlaySettings.KEY_SSTP -> updateSstp()
+            OverlaySettings.KEY_ALIGNMENT_POLICY -> controllers.forEach { it.onAlignmentPolicyChanged() }
             OverlaySettings.KEY_VOICE -> {
                 updateVoice()
                 controllers.forEach { it.onVoiceRecognitionChanged(voiceAllowed()) }

@@ -695,7 +695,6 @@ class ScriptPlayer(
                 )
                 "execute" -> when {
                     a.size < 2 -> host.unknownTag(token)
-                    a[1].lowercase() in silentExecutes -> {}
                     !host.runExecute(a[1].lowercase(), a.drop(2)) -> host.unknownTag(token)
                 }
                 "cancel" -> if (a.size < 2 || !host.cancel(a[1].trim().lowercase(), a.drop(2))) host.unknownTag(token)
@@ -897,9 +896,6 @@ class ScriptPlayer(
 
     /** raiseplugin などが失敗したときのイベント */
     private fun pluginFailure(command: String) = if ("notify" in command) "OnNotifyPluginFailure" else "OnRaisePluginFailure"
-
-
-    private val silentExecutes = setOf("resetballoonpos")
 
     private val envPattern = Regex("""%(m\?|[a-zA-Z][a-zA-Z0-9]*)""")
     private val propertyPattern = Regex("""%property\[([^\]]*)\]""")

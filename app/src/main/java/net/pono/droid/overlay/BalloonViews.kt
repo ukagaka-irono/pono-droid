@@ -80,6 +80,10 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.text.TextLayoutResult
 import net.pono.baseware.sakura.TextAlign
 import net.pono.baseware.sakura.TextStyle
@@ -268,6 +272,54 @@ data class BalloonLabels(val marker: String? = null, val number: String? = null)
     val isEmpty: Boolean get() = marker == null && number == null
 }
 
+/** バルーンを指で動かした（右と下が正の dp。指を離したら done が true） */
+typealias BalloonDrag = (dx: Int, dy: Int, done: Boolean) -> Unit
+
+/**
+ * バルーンを縁（[inText] が false の所）でつかんで動かす。文字の範囲の上はスクロールと選択肢のまま。
+ * 縁なら中のスクロールより先に指を受け取り、動き出したら（タッチの遊びを超えたら）中には渡さない（止まったまま離せばタップ）。
+ * ウィンドウが指について動くので、画面の上の位置で測る。[onDrag] が null なら動かせない
+ */
+@Composable
+private fun Modifier.balloonEdgeDrag(onDrag: BalloonDrag?, inText: (Offset, IntSize) -> Boolean): Modifier {
+    if (onDrag == null) return this
+    val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val currentDrag by rememberUpdatedState(onDrag)
+    val currentInText by rememberUpdatedState(inText)
+    return onGloballyPositioned { coords[0] = it }.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            if (currentInText(down.position, size)) return@awaitEachGesture
+            fun screen(p: Offset) = coords[0]?.takeIf { it.isAttached }?.localToScreen(p) ?: p
+            val start = screen(down.position)
+            var dragging = false
+            // 送った分（dp）。端数は次に回す
+            var sentX = 0
+            var sentY = 0
+            try {
+                while (true) {
+                    val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed) {
+                        if (dragging) change.consume()
+                        break
+                    }
+                    val moved = screen(change.position) - start
+                    if (!dragging && moved.getDistance() > viewConfiguration.touchSlop) dragging = true
+                    if (!dragging) continue
+                    change.consume()
+                    val x = (moved.x / density).roundToInt()
+                    val y = (moved.y / density).roundToInt()
+                    if (x != sentX || y != sentY) currentDrag(x - sentX, y - sentY, false)
+                    sentX = x
+                    sentY = y
+                }
+            } finally {
+                if (dragging) currentDrag(0, 0, true)
+            }
+        }
+    }
+}
+
 /** pono-droid の簡易バルーン（ゴーストのバルーン画像が無いとき）。印の文字と数は下の端に小さく出す */
 @Composable
 fun SimpleBalloon(
@@ -277,10 +329,14 @@ fun SimpleBalloon(
     autoScroll: Boolean = true,
     online: Boolean = false,
     labels: BalloonLabels = BalloonLabels(),
+    onDrag: BalloonDrag? = null,
 ) {
     val scroll = rememberScrollState()
     AutoScroll(items, scroll, autoScroll)
     val maxHeight = (LocalConfiguration.current.screenHeightDp / 2).coerceIn(220, 400).dp
+    val density = LocalDensity.current
+    val edgeX = with(density) { 12.dp.toPx() }
+    val edgeY = with(density) { 8.dp.toPx() }
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = Color.White,
@@ -289,6 +345,8 @@ fun SimpleBalloon(
             .padding(bottom = 4.dp)
             .width(balloonMaxWidth())
             .border(1.5.dp, Color(0xFF8D6E63), RoundedCornerShape(12.dp))
+            // 文字の周りの余白（左右 12dp・上下 8dp）が縁
+            .balloonEdgeDrag(onDrag) { p, size -> p.x >= edgeX && p.x <= size.width - edgeX && p.y >= edgeY && p.y <= size.height - edgeY }
             .clickable(onClick = onClick),
     ) {
         Box {
@@ -359,13 +417,14 @@ fun SkinBalloon(
     labels: BalloonLabels = BalloonLabels(),
     clickWait: Boolean = false,
     sstp: Boolean = false,
+    onDrag: BalloonDrag? = null,
 ) {
     val images by produceState<List<BalloonSkin.Image>?>(null, skin, scopeId) {
         value = withContext(Dispatchers.IO) { skin.images(scopeId) }
     }
     val candidates = images ?: return
     if (candidates.isEmpty()) {
-        SimpleBalloon(items, onClick, choices, autoScroll, online, labels)
+        SimpleBalloon(items, onClick, choices, autoScroll, online, labels, onDrag)
         return
     }
     val density = LocalDensity.current
@@ -401,7 +460,7 @@ fun SkinBalloon(
         } ?: candidates.lastIndex
         val image = candidates[chosen]
         val placeable = subcompose("balloon") {
-            SkinFrame(image, skin, scopeId, scale, scroll, onlineFrames, labels, style, clickWait, sstp) {
+            SkinFrame(image, skin, scopeId, scale, scroll, onlineFrames, labels, style, clickWait, sstp, onDrag) {
                 if (image.look.vertical) VerticalBalloonBody(items, choices, style, (image.area.height * scale).toInt()) else BalloonBody(items, choices, style)
             }
         }.first().measure(Constraints())
@@ -426,6 +485,7 @@ private fun SkinFrame(
     style: BalloonTextStyle,
     clickWait: Boolean,
     sstp: Boolean,
+    onDrag: BalloonDrag?,
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -438,7 +498,13 @@ private fun SkinFrame(
     /** 印などの画像パーツの位置。overlay_outside_balloon が 1 でなければ、バルーンの画像からはみ出さないようにする */
     fun inside(x: Int, y: Int, pw: Int, ph: Int): Pair<Int, Int> =
         if (look.overlayOutside) x to y else x.coerceIn(0, maxOf(0, w - pw)) to y.coerceIn(0, maxOf(0, h - ph))
-    Box(Modifier.size(px(w), px(h))) {
+    // 文字の範囲（バルーン画像のピクセルを縮めた分）の外が縁
+    val area = image.area
+    Box(
+        Modifier
+            .size(px(w), px(h))
+            .balloonEdgeDrag(onDrag) { p, _ -> p.x >= area.left * scale && p.x <= area.right * scale && p.y >= area.top * scale && p.y <= area.bottom * scale },
+    ) {
         Image(image.bitmap, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.size(px(w), px(h)))
         if (onlineFrames.isNotEmpty()) {
             val frame by produceState(0, onlineFrames) {

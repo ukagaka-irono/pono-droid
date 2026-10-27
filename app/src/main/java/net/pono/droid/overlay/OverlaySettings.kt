@@ -27,6 +27,18 @@ object OverlaySettings {
     fun balloonScale(prefs: SharedPreferences) =
         prefs.getFloat(KEY_BALLOON_SCALE, DEFAULT_BALLOON_SCALE).coerceIn(MIN_BALLOON_SCALE, MAX_BALLOON_SCALE)
 
+    /**
+     * キャラクター自由移動（SSP と同じ3つ。全部のゴーストに共通）。ghost はゴーストの指定（descript.txt・スクリプト）に従い、
+     * free は画面の端に付けずいつも自由に動かし、limit はゴーストの指定に従って何も無ければ下の端に付ける。最初は free
+     */
+    const val KEY_ALIGNMENT_POLICY = "alignmentPolicy"
+    const val ALIGNMENT_GHOST = "ghost"
+    const val ALIGNMENT_FREE = "free"
+    const val ALIGNMENT_LIMIT = "limit"
+
+    fun alignmentPolicy(prefs: SharedPreferences): String =
+        prefs.getString(KEY_ALIGNMENT_POLICY, null)?.takeIf { it in listOf(ALIGNMENT_GHOST, ALIGNMENT_FREE, ALIGNMENT_LIMIT) } ?: ALIGNMENT_FREE
+
     /** ゴーストが話した文字を読み上げるか（最初は読み上げない） */
     const val KEY_SPEECH = "speech"
 

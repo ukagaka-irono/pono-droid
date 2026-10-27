@@ -287,8 +287,11 @@ class CharacterWindow(
         // バルーンの windowposition.x / y の数値（バルーン画像のピクセル。x はどちらに出していても右が正）
         val wp = windowPosition
         val balloonPx = context.resources.displayMetrics.density * balloonScale.floatValue * (balloonSkin?.balloon?.dpiFactor ?: 1f)
-        val ox = (offX * pxPerImagePx + (wp?.x ?: 0) * balloonPx).toInt()
-        val oy = (offY * pxPerImagePx + (wp?.y ?: 0) * balloonPx).toInt()
+        // 指で動かした分（dp）も足す
+        val drag = c?.balloonDrag ?: (0 to 0)
+        val dp = context.resources.displayMetrics.density
+        val ox = (offX * pxPerImagePx + (wp?.x ?: 0) * balloonPx + drag.first * dp).toInt()
+        val oy = (offY * pxPerImagePx + (wp?.y ?: 0) * balloonPx + drag.second * dp).toInt()
         // x はウィンドウを寄せた側（\0 などは右、\1 は左）の端からの距離、y は下の端からの距離
         val (x, y) = when (align) {
             "center" -> params.x + (sw - bw) / 2 to params.y + surfaceHeight

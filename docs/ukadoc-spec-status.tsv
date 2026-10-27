@@ -178,7 +178,7 @@ descript/balloon/recommended-ghost/index.md	NA	descript.txt - 推奨ゴースト
 descript/balloon/recommended-ghost/recommended.ghost.md	BUILD	recommended.ghost,ゴースト名	読んでいない。ほかのゴーストで選ぶとき警告し、そのゴーストを消すとき一緒に消すか聞く
 descript/balloon/recommended-ghost/recommended.ghost.path.md	BUILD	recommended.ghost.path,パス	recommended.ghost と一緒に。ゴーストのフォルダ名で比べる
 descript/ghost/descript-txt/balloon.defaultsurface.md	DONE	balloon.defaultsurface,数値	\b が無いときのバルーンの番号（スコープのもの＞全体）。書いていなければ文字の量で選ぶ
-descript/ghost/descript-txt/balloon.dontmove.md	DONE	balloon.dontmove,true	バルーンは指で動かせない（いつもキャラクターに付いている）ので、いつも dontmove と同じ
+descript/ghost/descript-txt/balloon.dontmove.md	DONE	balloon.dontmove,true	descript.txt に 1 / true があれば、そのキャラクターのバルーンを指で動かせない（\![unlock,balloonmove] でも外れない）
 descript/ghost/descript-txt/balloon.syncscale.md	DONE	balloon.syncscale,true	true ならバルーンの大きさをキャラクターの大きさに合わせる
 descript/ghost/descript-txt/char-star-.balloon.defaultsurface.md	DONE	char\*.balloon.defaultsurface,数値	\b が無いときのバルーンの番号（スコープのもの＞全体）。書いていなければ文字の量で選ぶ
 descript/ghost/descript-txt/char-star-.defaultleft.md	DONE	char\*.defaultleft,X座標	SHIORI リソースが無ければゴーストの descript.txt を読む（loadDefaultPositions）
@@ -233,7 +233,7 @@ descript/ghost/descript-txt/sakura.name.md	DONE	sakura.name,名前	sakuraName
 descript/ghost/descript-txt/sakura.name2.md	DONE	sakura.name2,名前	%selfname2
 descript/ghost/descript-txt/sakura.seriko.alignmenttodesktop.md	DONE	sakura.seriko.alignmenttodesktop,位置情報	ゴースト全体＜これ＜シェル全体＜シェルのスコープの順で起動時の吸着にする
 descript/ghost/descript-txt/sakura.seriko.defaultsurface.md	DONE	sakura.seriko.defaultsurface,数値	defaultSurface（シェルが先、次にゴースト）
-descript/ghost/descript-txt/seriko.alignmenttodesktop.md	PARTIAL	seriko.alignmenttodesktop,位置情報	書いてあればその吸着にする。どこにも書いていないときは bottom でなく自由に動かせる（スマートフォンの画面なので、下の端に並べない）
+descript/ghost/descript-txt/seriko.alignmenttodesktop.md	PARTIAL	seriko.alignmenttodesktop,位置情報	書いてあればその吸着にする。どこにも書いていないときは、アプリの設定のキャラクター自由移動が常に制限なら仕様どおり bottom、ゴースト設定なら自由（決めたこと）。最初の設定の常に自由移動では吸着しない
 descript/ghost/descript-txt/seriko.defaultsurfacedirectoryname.md	DONE	seriko.defaultsurfacedirectoryname,ディレクトリ名	このディレクトリのシェルを既定にする（無ければ master、次に最初のもの）
 descript/ghost/descript-txt/shiori.cache.md	NA	shiori.cache,数値	ゴーストキャッシュが無い。切り替えるといつも unload する（0 と同じ）
 descript/ghost/descript-txt/shiori.encoding.md	DONE	shiori.encoding,文字コード	SHIORI とのやりとりの最初の文字コード（Charset ヘッダが来たらそちら）
@@ -485,7 +485,7 @@ descript/shell-surfacetable/surfacetable-txt/index.md	NA	surfacetable.txt	目次
 descript/shell-surfacetable/surfacetable-txt/option.md	BUILD	option,オプション1,オプション2,...	DisableNoDefineSurfaces なら、定義も名前も無いサーフェスをサーフェステストに出さない
 descript/shell-surfacetable/surfacetable-txt/scope.md	BUILD	scope,数値	サーフェステストで、選んだキャラクターのグループを先に出す
 descript/shell-surfacetable/surfacetable-txt/version.md	BUILD	version,数値	読むだけ（いつも 1）。surfacetable.txt を読むときに一緒に
-descript/shell/descript-txt/char-star-.balloon.dontmove.md	DONE	char\*.balloon.dontmove,数値	バルーンは指で動かせないので、いつも禁止と同じ
+descript/shell/descript-txt/char-star-.balloon.dontmove.md	DONE	char\*.balloon.dontmove,数値	1 / true ならそのキャラクターのバルーンを指で動かせない（シェル＞ゴーストの順。\![unlock,balloonmove] でも外れない）
 descript/shell/descript-txt/char-star-.balloon.syncscale.md	DONE	char\*.balloon.syncscale,true	true ならバルーンの大きさをキャラクターの大きさに合わせる
 descript/shell/descript-txt/char-star-.bindgroup-star-.addid.md	DONE	char\*.bindgroup\*.addid,ID	付けたら addid のものも付け、それを付けるパーツが全部外れたら外す
 descript/shell/descript-txt/char-star-.bindgroup-star-.default.md	DONE	char\*.bindgroup\*.default,数値	bindGroups が scopeName で読む
@@ -512,7 +512,7 @@ descript/shell/descript-txt/id.md	NA	id,ID名	起動ログに出すだけ。pono
 descript/shell/descript-txt/index.md	NA	descript.txt	一覧のページ
 descript/shell/descript-txt/introduction_descript.txt.md	NA	descript.txt（Shellの）	説明のページ。書いてある項目は各行で扱う
 descript/shell/descript-txt/kero.balloon.alignment.md	DONE	kero.balloon.alignment,位置情報	バルーンの置き方の既定（シェル＞ゴースト）。none は画面の真ん中より左なら右、右なら左に出す
-descript/shell/descript-txt/kero.balloon.dontmove_.md	DONE	kero.balloon.dontmove,数値	バルーンは指で動かせないので、いつも禁止と同じ
+descript/shell/descript-txt/kero.balloon.dontmove_.md	DONE	kero.balloon.dontmove,数値	1 / true ならそのキャラクターのバルーンを指で動かせない（シェル＞ゴーストの順。\![unlock,balloonmove] でも外れない）
 descript/shell/descript-txt/kero.balloon.offsetx.md	DONE	kero.balloon.offsetx,座標	バルーンを出す向きごとの既定のずれ（l / r / c / b 付きも。シェル＞ゴースト）。\![set,balloonoffset,@…] はそこからずらす
 descript/shell/descript-txt/kero.balloon.offsety.md	DONE	kero.balloon.offsety,座標	バルーンを出す向きごとの既定のずれ（l / r / c / b 付きも。シェル＞ゴースト）。\![set,balloonoffset,@…] はそこからずらす
 descript/shell/descript-txt/kero.balloon.syncscale_.md	DONE	kero.balloon.syncscale,true	true ならバルーンの大きさをキャラクターの大きさに合わせる
@@ -561,7 +561,7 @@ descript/shell/descript-txt/note-1.md	NA	補足	位置情報・メニュー画�
 descript/shell/descript-txt/readme.charset.md	BUILD	readme.charset,文字コード	シェルの readme を作るとき、この文字コードで読む
 descript/shell/descript-txt/readme.md	BUILD	readme,ファイル名	シェルの readme を開くところが無い。シェルのメニューか一覧から開けるようにする
 descript/shell/descript-txt/sakura.balloon.alignment.md	DONE	sakura.balloon.alignment,位置情報	バルーンの置き方の既定（シェル＞ゴースト）。none は画面の真ん中より左なら右、右なら左に出す
-descript/shell/descript-txt/sakura.balloon.dontmove_.md	DONE	sakura.balloon.dontmove,数値	バルーンは指で動かせないので、いつも禁止と同じ
+descript/shell/descript-txt/sakura.balloon.dontmove_.md	DONE	sakura.balloon.dontmove,数値	1 / true ならそのキャラクターのバルーンを指で動かせない（シェル＞ゴーストの順。\![unlock,balloonmove] でも外れない）
 descript/shell/descript-txt/sakura.balloon.offsetx.md	DONE	sakura.balloon.offsetx,座標	バルーンを出す向きごとの既定のずれ（l / r / c / b 付きも。シェル＞ゴースト）。\![set,balloonoffset,@…] はそこからずらす
 descript/shell/descript-txt/sakura.balloon.offsety.md	DONE	sakura.balloon.offsety,座標	バルーンを出す向きごとの既定のずれ（l / r / c / b 付きも。シェル＞ゴースト）。\![set,balloonoffset,@…] はそこからずらす
 descript/shell/descript-txt/sakura.balloon.syncscale_.md	DONE	sakura.balloon.syncscale,true	true ならバルーンの大きさをキャラクターの大きさに合わせる
@@ -835,10 +835,10 @@ list/sakura-script/balloon-text/b-ID.md	DONE	\b[ID番号]	\b[ID,--fallback=ID2] 
 list/sakura-script/balloon-text/bID.md	DONE	\bID番号	1桁の \b0〜\b9 を読む
 list/sakura-script/balloon-text/bang-enter-nouserbreakmode.md	DONE	\![enter,nouserbreakmode]	実装済み
 list/sakura-script/balloon-text/bang-enter-onlinemode.md	DONE	\![enter,onlinemode]	実装済み
-list/sakura-script/balloon-text/bang-execute-resetballoonpos.md	DONE	\![execute,resetballoonpos]	バルーンはいつもキャラクターに付いているので戻すものが無い
+list/sakura-script/balloon-text/bang-execute-resetballoonpos.md	DONE	\![execute,resetballoonpos]	指で動かしたバルーンのずれを全部消す（長押しメニューのバルーン位置初期化と同じ）
 list/sakura-script/balloon-text/bang-leave-nouserbreakmode.md	DONE	\![leave,nouserbreakmode]	実装済み
 list/sakura-script/balloon-text/bang-leave-onlinemode.md	DONE	\![leave,onlinemode]	実装済み
-list/sakura-script/balloon-text/bang-lock-balloonmove.md	DONE	\![lock,balloonmove]	バルーンは指で動かせないので、止めるものが無い
+list/sakura-script/balloon-text/bang-lock-balloonmove.md	DONE	\![lock,balloonmove]	バルーンの縁をつかんで動かせないようにする（unlock で戻す）
 list/sakura-script/balloon-text/bang-lock-balloonrepaint.md	DONE	\![lock,balloonrepaint]	実装済み
 list/sakura-script/balloon-text/bang-set-autoscroll-disable.md	DONE	\![set,autoscroll,disable]	実装済み
 list/sakura-script/balloon-text/bang-set-autoscroll-enable.md	DONE	\![set,autoscroll,enable]	実装済み
@@ -850,7 +850,7 @@ list/sakura-script/balloon-text/bang-set-balloontimeout.md	DONE	\![set,balloonti
 list/sakura-script/balloon-text/bang-set-balloonwait.md	DONE	\![set,balloonwait,倍率]	実装済み
 list/sakura-script/balloon-text/bang-set-serikotalk-true-false.md	DONE	\![set,serikotalk,true/false]	実装済み
 list/sakura-script/balloon-text/bang-star.md	DONE	\![*]	実装済み
-list/sakura-script/balloon-text/bang-unlock-balloonmove.md	DONE	\![unlock,balloonmove]	同上
+list/sakura-script/balloon-text/bang-unlock-balloonmove.md	DONE	\![unlock,balloonmove]	バルーンの縁をつかんで動かせないようにする（unlock で戻す）
 list/sakura-script/balloon-text/bang-unlock-balloonrepaint.md	DONE	\![unlock,balloonrepaint]	実装済み
 list/sakura-script/balloon-text/c-char-2.md	DONE	\c[char,数値,開始位置]	実装済み
 list/sakura-script/balloon-text/c-char.md	DONE	\c[char,数値]	実装済み
@@ -1846,7 +1846,7 @@ list/shiori-resource/ownerdraw-item-display.md	DONE	オーナードローメニ�
 list/shiori-resource/ownerdraw-item-name/activaterootbutton.caption.md	IMPOSSIBLE	activaterootbutton.caption	Windows の手前に出す設定。オーバーレイはいつも手前（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/addressbarbutton.caption.md	IMPOSSIBLE	addressbarbutton.caption	SSP のアドレスバー。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/aistatebutton.caption.md	DONE	aistatebutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/alignrootbutton.caption.md	IMPOSSIBLE	alignrootbutton.caption	キャラクターの自由移動の設定。pono-droid はいつも自由に動かせる（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/alignrootbutton.caption.md	IMPOSSIBLE	alignrootbutton.caption	キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
 list/shiori-resource/ownerdraw-item-name/alwaysstayontopbutton.caption.md	IMPOSSIBLE	alwaysstayontopbutton.caption	オーバーレイはいつも手前（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/alwaystrayiconvisiblebutton.caption.md	IMPOSSIBLE	alwaystrayiconvisiblebutton.caption	タスクトレイが無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/balloonhistorybutton.caption.md	IMPOSSIBLE	balloonhistorybutton.caption	最近使ったものの一覧が無い（決めたこと・メニューに無い）
@@ -1870,7 +1870,7 @@ list/shiori-resource/ownerdraw-item-name/definedsurfaceonlybutton.caption.md	IMP
 list/shiori-resource/ownerdraw-item-name/dictationbutton.caption.md	DONE	dictationbutton.caption	メニューの音声認識の入り切りの名前（マイクの許可が無ければ設定の画面を開く）
 list/shiori-resource/ownerdraw-item-name/dressuprootbutton.caption.md	DONE	dressuprootbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/duibutton.caption.md	IMPOSSIBLE	duibutton.caption	DUI が無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/enableballoonmovebutton.caption.md	IMPOSSIBLE	enableballoonmovebutton.caption	バルーンはいつもキャラクターの上で動かせない（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/enableballoonmovebutton.caption.md	IMPOSSIBLE	enableballoonmovebutton.caption	バルーンはいつも縁をつかんで動かせる（止めるのは \![lock,balloonmove] と balloon.dontmove）ので、入り切りのメニューが無い
 list/shiori-resource/ownerdraw-item-name/entry.md	NA	-	変更できない項目（言語）。pono-droid のメニューに言語は無い
 list/shiori-resource/ownerdraw-item-name/firststaffbutton.caption.md	IMPOSSIBLE	firststaffbutton.caption	バージョン情報の画面が無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/ghostexplorerbutton.caption.md	DONE	ghostexplorerbutton.caption	メニューの「ゴーストの一覧」（pono-droid の画面を開く）の名前
@@ -1899,7 +1899,7 @@ list/shiori-resource/ownerdraw-item-name/readmebutton.caption.md	DONE	readmebutt
 list/shiori-resource/ownerdraw-item-name/recommendrootbutton.caption.md	DONE	recommendrootbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/regionenabledbutton.caption.md	IMPOSSIBLE	regionenabledbutton.caption	Windows のリージョン（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/reloadinfobutton.caption.md	IMPOSSIBLE	reloadinfobutton.caption	SSP の動作情報の読み込み直し。メニューに無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/resetballoonpositionbutton.caption.md	IMPOSSIBLE	resetballoonpositionbutton.caption	バルーンはいつもキャラクターの上で動かせない（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/resetballoonpositionbutton.caption.md	DONE	resetballoonpositionbutton.caption	長押しメニューのバルーン位置初期化（動かしているときだけ出す）の名前
 list/shiori-resource/ownerdraw-item-name/resettodefaultbutton.caption.md	IMPOSSIBLE	resettodefaultbutton.caption	SSP の設定を標準に戻す。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/scriptlogbutton.caption.md	IMPOSSIBLE	scriptlogbutton.caption	SSP の開発用パレットのスクリプトログ。メニューに無く、開発用の画面で見る
 list/shiori-resource/ownerdraw-item-name/shellrootbutton.caption.md	DONE	shellrootbutton.caption	実装済み
@@ -1916,10 +1916,10 @@ list/shiori-resource/ownerdraw-item-name/switchconsolealwaysvisiblebutton.captio
 list/shiori-resource/ownerdraw-item-name/switchconsolevisiblebutton.caption.md	IMPOSSIBLE	switchconsolevisiblebutton.caption	Materia のコンソール（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchdeactivatebutton.caption.md	IMPOSSIBLE	switchdeactivatebutton.caption	Windows の裏へ沈む設定（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchdontactivatebutton.caption.md	IMPOSSIBLE	switchdontactivatebutton.caption	Windows の手前に出す設定（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchdontforcealignbutton.caption.md	IMPOSSIBLE	switchdontforcealignbutton.caption	キャラクターの自由移動の設定。いつも自由（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchdontforcealignbutton.caption.md	IMPOSSIBLE	switchdontforcealignbutton.caption	キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
 list/shiori-resource/ownerdraw-item-name/switchduivisiblebutton.caption.md	IMPOSSIBLE	switchduivisiblebutton.caption	DUI が無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchforcealignfreebutton.caption.md	IMPOSSIBLE	switchforcealignfreebutton.caption	キャラクターの自由移動の設定。いつも自由（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchforcealignlimitbutton.caption.md	IMPOSSIBLE	switchforcealignlimitbutton.caption	キャラクターの自由移動の設定。いつも自由（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchforcealignfreebutton.caption.md	IMPOSSIBLE	switchforcealignfreebutton.caption	キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
+list/shiori-resource/ownerdraw-item-name/switchforcealignlimitbutton.caption.md	IMPOSSIBLE	switchforcealignlimitbutton.caption	キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
 list/shiori-resource/ownerdraw-item-name/switchignoreserikomovebutton.caption.md	IMPOSSIBLE	switchignoreserikomovebutton.caption	SERIKO の move を無視する切り替えが無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchlocalsstpbutton.caption.md	IMPOSSIBLE	switchlocalsstpbutton.caption	Materia のスイッチ。SSTP はアプリの設定で選ぶ（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchmovetodefaultpositionbutton.caption.md	DONE	switchmovetodefaultpositionbutton.caption	メニューの「位置を戻す」の名前

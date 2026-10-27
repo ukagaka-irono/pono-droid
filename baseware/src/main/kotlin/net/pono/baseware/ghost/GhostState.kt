@@ -131,6 +131,10 @@ data class CharacterState(
      * auto（descript.txt の none）なら画面の真ん中より左にいれば右、右にいれば左にバルーンを出す。null ならいつもの上
      */
     val balloonAlign: String? = null,
+    /** ユーザーがバルーンを指で動かした分（dp、右と下が正）。いつもの位置に足す。null なら動かしていない */
+    val balloonDrag: Pair<Int, Int>? = null,
+    /** バルーンを指で動かせない（\![lock,balloonmove] か descript.txt の balloon.dontmove） */
+    val balloonMoveLocked: Boolean = false,
     /** \![set,balloonmarker,文字]。バルーンに出す印の文字（SSP では SSTP の送り主を出すところ） */
     val balloonMarker: String? = null,
     /** \![set,balloonnum,名前,今,最大]。バルーンに出す数（SSP ではファイルを受け取るときの「名前 今/最大」） */

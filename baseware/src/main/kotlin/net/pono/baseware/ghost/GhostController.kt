@@ -228,6 +228,12 @@ interface GhostPlatform {
     /** pono-droid の設定画面（SSP の本体設定やゴーストエクスプローラの代わり） */
     fun openSettings() {}
 
+    /**
+     * キャラクター自由移動（アプリの設定。SSP の同じ名前のメニューと同じ3つ）。ghost は descript.txt とスクリプトの吸着に従い、
+     * free はいつも自由に動かし、limit はゴーストの指定に従って何も無ければ下の端に付ける
+     */
+    fun alignmentPolicy(): String = "ghost"
+
     /** メニューの「キャラクターの大きさ」で倍率（パーセント）を変える。変えられれば true（OnShellScaling はアプリが送る） */
     fun setCharacterScale(percent: Int): Boolean = false
 
@@ -3471,6 +3477,10 @@ class GhostController(
             if (history?.usage()?.isNotEmpty() == true) add(item("使用率", "pono:rateofuse,$scopeId", "rateofusebutton.caption"))
             add(item("ネットワーク更新", "pono:update", "updatebutton.caption", "updatebuttoncaption"))
             add(item("位置を戻す", "pono:resetpos", "switchmovetodefaultpositionbutton.caption"))
+            // 指で動かしたバルーンがあるときだけ
+            if (_state.value.characters.values.any { it.balloonDrag != null }) {
+                add(item("バルーン位置初期化", "pono:resetballoonpos", "resetballoonpositionbutton.caption"))
+            }
             add(item("時計合わせ", "pono:sntp", "sntpbutton.caption"))
             add(item("サウンドを鳴らさない", "pono:quiet,$scopeId", "switchquietbutton.caption", mark = soundMuted))
             add(item("読み上げ", "pono:speech,$scopeId", "texttospeechbutton.caption", mark = platform.speechEnabled()))
@@ -4435,6 +4445,7 @@ class GhostController(
                     "pono:middle" -> onMiddleClick(scopeId)
                     "pono:hide" -> minimize("user")
                     "pono:resetpos" -> requestResetWindowPos()
+                    "pono:resetballoonpos" -> resetBalloonPositions()
                     "pono:leavepassive" -> _state.update { it.copy(passive = false) }
                     "pono:scale" -> scope.launch { runScript(scaleMenu(scopeId)) }
                     "pono:setscale" -> refs.getOrNull(1)?.toIntOrNull()?.let { platform.setCharacterScale(it) }
@@ -4584,7 +4595,69 @@ class GhostController(
     /** \![set,alignmenttodesktop] で決めたもの（"free" は自由）。default で消すと descript.txt の既定に戻る */
     private val scriptAlignment = HashMap<Int, String>()
 
-    private fun alignmentOf(scope: Int): String? = (scriptAlignment[scope] ?: defaultAlignment(scope))?.takeIf { it != "free" }
+    private fun alignmentOf(scope: Int): String? {
+        val wanted = scriptAlignment[scope] ?: defaultAlignment(scope)
+        return when (platform.alignmentPolicy()) {
+            // 常に自由移動: descript.txt もスクリプトも見ない
+            "free" -> null
+            // 常に制限: 自由（と指定なし）は下の端に付ける
+            "limit" -> wanted?.takeIf { it != "free" } ?: "bottom"
+            else -> wanted?.takeIf { it != "free" }
+        }
+    }
+
+    /** アプリの設定の「キャラクター自由移動」が変わった。いま出ているキャラクターの吸着をやり直す */
+    fun onAlignmentPolicyChanged() {
+        _state.update { s ->
+            s.copy(characters = s.characters.mapValues { (scope, c) -> c.copy(alignment = alignmentOf(scope)) })
+        }
+    }
+
+    // ---- バルーンを指で動かす（SSP のバルーンのドラッグ） ----
+
+    /** \![lock,balloonmove] で止めているか */
+    private var scriptBalloonMoveLock = false
+
+    /** descript.txt の sakura.balloon.dontmove など（シェル、無ければゴーストの balloon.dontmove）が 1 / true */
+    private fun balloonDontMove(scope: Int): Boolean {
+        val key = "${Shell.scopeName(scope)}.balloon.dontmove"
+        val v = (shell.descript[key] ?: ghost.descript[key] ?: shell.descript["balloon.dontmove"] ?: ghost.descript["balloon.dontmove"])?.trim()?.lowercase()
+        return v == "1" || v == "true"
+    }
+
+    private fun balloonMoveLocked(scope: Int) = scriptBalloonMoveLock || balloonDontMove(scope)
+
+    /** 覚えているバルーンのずれ（ゴーストの profile の balloon.drag.スコープ = "x,y"） */
+    private fun savedBalloonDrag(scope: Int): Pair<Int, Int>? =
+        ghost.loadProfile().getProperty("$PROFILE_BALLOON_DRAG$scope")?.split(',')?.mapNotNull { it.trim().toIntOrNull() }
+            ?.takeIf { it.size == 2 }?.let { (x, y) -> x to y }
+
+    /**
+     * バルーンを指で動かしている（[dx] / [dy] は dp、右と下が正）。動かせないバルーンなら何もしない。
+     * [done] なら指を離したので、ずれを覚えておく（次の起動でも同じ）
+     */
+    fun onBalloonDragged(scope: Int, dx: Int, dy: Int, done: Boolean) {
+        if (balloonMoveLocked(scope)) return
+        _state.update {
+            it.update(scope) { c ->
+                val (x, y) = c.balloonDrag ?: (0 to 0)
+                c.copy(balloonDrag = (x + dx).coerceIn(-MAX_BALLOON_DRAG, MAX_BALLOON_DRAG) to (y + dy).coerceIn(-MAX_BALLOON_DRAG, MAX_BALLOON_DRAG))
+            }
+        }
+        if (done) {
+            val drag = _state.value.characters[scope]?.balloonDrag ?: return
+            ghost.saveProfile(ghost.loadProfile().apply { setProperty("$PROFILE_BALLOON_DRAG$scope", "${drag.first},${drag.second}") })
+        }
+    }
+
+    /** バルーン位置初期化（メニューと \![execute,resetballoonpos]）。動かした分を全部消す */
+    fun resetBalloonPositions() {
+        // 覚えている分を先に消す（画面が戻ったときにはもう残っていない）
+        val profile = ghost.loadProfile()
+        profile.stringPropertyNames().filter { it.startsWith(PROFILE_BALLOON_DRAG) }.forEach(profile::remove)
+        ghost.saveProfile(profile)
+        _state.update { s -> s.copy(characters = s.characters.mapValues { (_, c) -> c.copy(balloonDrag = null) }) }
+    }
 
     /**
      * descript.txt の alignmenttodesktop。シェルのスコープ＞シェル全体＞ゴーストのスコープ＞ゴースト全体の順。
@@ -4651,6 +4724,9 @@ class GhostController(
                         balloonOffset = it.characters[scope]?.balloonOffset,
                         balloonOffsetRelative = it.characters[scope]?.balloonOffsetRelative ?: (false to false),
                         balloonOffsets = balloonOffsets(scope),
+                        // 指で動かしたバルーンのずれは、起動し直しても覚えている
+                        balloonDrag = it.characters[scope]?.balloonDrag ?: savedBalloonDrag(scope),
+                        balloonMoveLocked = balloonMoveLocked(scope),
                         balloonAlign = balloonAlignOf(scope),
                         balloonMarker = it.characters[scope]?.balloonMarker,
                         balloonNum = it.characters[scope]?.balloonNum,
@@ -5347,8 +5423,11 @@ class GhostController(
                     manualRepaintLock = locked && manual
                     _state.update { it.withLocks() }
                 }
-                // バルーンは指で動かせない（いつもキャラクターに付いている）ので、止めるまでもない
-                "balloonmove" -> {}
+                // バルーンを指で動かせないようにする（descript.txt の balloon.dontmove は外せない）
+                "balloonmove" -> {
+                    scriptBalloonMoveLock = locked
+                    _state.update { s -> s.copy(characters = s.characters.mapValues { (scope, c) -> c.copy(balloonMoveLocked = balloonMoveLocked(scope)) }) }
+                }
                 else -> return false
             }
             return true
@@ -5417,6 +5496,10 @@ class GhostController(
 
         /** http などは --async でなければ通信が終わるまで、ZIP は --event が無ければ終わるまで待つ（SSP と同じ） */
         override suspend fun runExecute(name: String, args: List<String>): Boolean {
+            if (name == "resetballoonpos") {
+                resetBalloonPositions()
+                return true
+            }
             HttpCommand.parse(name, args)?.let { cmd ->
                 val job = executeHttp(cmd)
                 if (!cmd.async) job.join()
@@ -6182,6 +6265,10 @@ class GhostController(
 
         /** 前に起動したときの pono-droid の版（OnBasewareUpdated） */
         private const val PROFILE_BASEWARE_VERSION = "basewareversion"
+
+        /** 指で動かしたバルーンのずれ（ゴーストの profile のキー。後ろにスコープ番号）と、ずらせる量の上限（dp） */
+        private const val PROFILE_BALLOON_DRAG = "balloon.drag."
+        private const val MAX_BALLOON_DRAG = 4000
 
         /** descript.txt の menu.font.height の上限 */
         private const val MAX_MENU_FONT = 72
