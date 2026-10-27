@@ -103,6 +103,9 @@ class BalloonLayoutTest {
         val big = net.pono.baseware.sakura.TextStyle(height = 20f)
         val styled = BalloonLayout.segments(listOf(BalloonItem.Text("a", big), BalloonItem.Locate(null, null), BalloonItem.Text("b")))
         assertEquals(big, styled[1].style)
+        // 改行で終わるまとまり（次の \_l の基準は次の行）
+        val broken = BalloonLayout.segments(listOf(BalloonItem.Text("a"), BalloonItem.NewLine, BalloonItem.Locate(null, null), BalloonItem.Text("b")))
+        assertEquals(listOf(true, false), broken.map { it.breakAfter })
     }
 
 }

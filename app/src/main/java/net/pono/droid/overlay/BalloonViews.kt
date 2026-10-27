@@ -1,5 +1,6 @@
 package net.pono.droid.overlay
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.Layout
@@ -624,6 +625,46 @@ fun BalloonBody(items: List<BalloonItem>, choices: ChoiceActions, style: Balloon
     }
 }
 
+/**
+ * \_l で置いた文は重なることがあり、上の文の箱が下の文の選択肢をふさぐ。そこで、選択肢を押したかどうかは文ごとではなく
+ * まとまり全体で受け、指の下に選択肢がある文（上に重なっているものから）に渡す
+ */
+private class ChoiceRouter {
+    class Target(
+        val layout: () -> TextLayoutResult?,
+        val ranges: () -> List<IntRange>,
+        val runs: () -> List<BalloonLayout.Run.ChoiceRun>,
+        val setPressed: (Int?) -> Unit,
+    ) {
+        var coordinates: LayoutCoordinates? = null
+    }
+
+    val targets = ArrayList<Target>()
+
+    /** [position]（[from] の中の位置）の下にある選択肢。上に重なっている文から探す */
+    fun find(from: LayoutCoordinates, position: Offset, slop: Float): Pair<Target, Int>? {
+        for (t in targets.asReversed()) {
+            val c = t.coordinates?.takeIf { it.isAttached } ?: continue
+            val local = c.localPositionOf(from, position)
+            if (local.x < 0 || local.y < 0 || local.x > c.size.width || local.y > c.size.height) continue
+            val l = t.layout() ?: continue
+            val k = choiceAt(l, t.ranges(), local, slop)
+            if (k >= 0) return t to k
+        }
+        return null
+    }
+}
+
+private val LocalChoiceRouter = staticCompositionLocalOf<ChoiceRouter?> { null }
+
+/** [position] の下の選択肢の番号（無ければ -1）。文字の少し外（[slop]）まで押せる */
+private fun choiceAt(l: TextLayoutResult, ranges: List<IntRange>, position: Offset, slop: Float): Int {
+    val at = l.getOffsetForPosition(position)
+    return ranges.indexOfFirst {
+        at in it && it.last < l.layoutInput.text.length && l.getPathForRange(it.first, it.last + 1).getBounds().inflate(slop).contains(position)
+    }
+}
+
 /** バルーンの画像の真ん中（文字を書き始める位置から、ピクセル）。\_l[centerx,centery] の基準。分からなければ null */
 val LocalBalloonCenter = staticCompositionLocalOf<Offset?> { null }
 
@@ -656,9 +697,58 @@ private fun LocatedLines(segments: List<BalloonLayout.Segment>, choices: ChoiceA
     val density = LocalDensity.current
     val center = LocalBalloonCenter.current
     val pens = remember { HashMap<String, Pen>() }
-    SubcomposeLayout { constraints ->
+    val router = remember { ChoiceRouter() }
+    val area = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val currentChoices by rememberUpdatedState(choices)
+    val longPress = LocalViewConfiguration.current.longPressTimeoutMillis
+    val slop = with(density) { 6.dp.toPx() }
+    val gestures = Modifier
+        .onGloballyPositioned { area[0] = it }
+        .pointerInput(router) {
+            awaitEachGesture {
+                // 選択肢の上で触れたときだけ受け取る（それ以外はバルーンを叩いたことにする）
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val from = area[0] ?: return@awaitEachGesture
+                val (target, k) = router.find(from, down.position, slop) ?: return@awaitEachGesture
+                down.consume()
+                target.setPressed(k)
+                val choice = target.runs().getOrNull(k)?.choice ?: return@awaitEachGesture target.setPressed(null)
+                var held = false
+                val up = try {
+                    withTimeout(longPress) { waitForUpOrCancellation() }
+                } catch (e: PointerEventTimeoutCancellationException) {
+                    held = true
+                    null
+                }
+                if (held) {
+                    // 長押しはカーソルを乗せたのと同じ。離したら外れる（選ばない）
+                    currentChoices.onHover(choice)
+                    waitForUpOrCancellation()?.consume()
+                    currentChoices.onHover(null)
+                } else if (up != null) {
+                    up.consume()
+                    currentChoices.onChoice(choice)
+                }
+                target.setPressed(null)
+            }
+        }
+    CompositionLocalProvider(LocalChoiceRouter provides router) { LocatedLayout(segments, choices, style, pens, density, center, gestures) }
+}
+
+@Composable
+private fun LocatedLayout(
+    segments: List<BalloonLayout.Segment>,
+    choices: ChoiceActions,
+    style: BalloonTextStyle,
+    pens: HashMap<String, Pen>,
+    density: androidx.compose.ui.unit.Density,
+    center: Offset?,
+    modifier: Modifier,
+) {
+    SubcomposeLayout(modifier) { constraints ->
         val width = if (constraints.hasBoundedWidth) constraints.maxWidth else 0
         val pxPerImagePx = style.spPerPx.dp.toPx()
+        val spacing = 2.dp.roundToPx()
         var penX = 0f
         var penY = 0f
         var bottom = 0
@@ -684,6 +774,11 @@ private fun LocatedLines(segments: List<BalloonLayout.Segment>, choices: ChoiceA
                 placed += Triple(tight, indent.roundToInt(), top)
                 penX = indent + (tightPen.x ?: 0f)
                 penY = y + (tightPen.y ?: 0f)
+                // 改行で終わるまとまりの次は、次の行の左端から
+                if (seg.breakAfter) {
+                    penX = 0f
+                    penY = (top + tight.height + spacing).toFloat()
+                }
                 bottom = maxOf(bottom, top + tight.height)
                 right = maxOf(right, indent.roundToInt() + tight.width)
             } else {
@@ -693,6 +788,10 @@ private fun LocatedLines(segments: List<BalloonLayout.Segment>, choices: ChoiceA
                 placed += Triple(p, 0, top)
                 penX = pen.x ?: indent
                 penY = y + (pen.y ?: 0f)
+                if (seg.breakAfter) {
+                    penX = 0f
+                    penY = (top + p.height + spacing).toFloat()
+                }
                 bottom = maxOf(bottom, top + p.height)
                 right = maxOf(right, p.width)
             }
@@ -903,6 +1002,18 @@ private fun BalloonText(
     // 指の操作は選択肢が変わるまで同じものを使い続けるので、範囲と操作は最新のものを読む
     val currentRanges by rememberUpdatedState(ranges)
     val currentChoices by rememberUpdatedState(choices)
+    val currentRuns by rememberUpdatedState(choiceRuns)
+    // \_l のまとまりの中では、押したかどうかはまとまり全体で受ける（[ChoiceRouter]）
+    val router = LocalChoiceRouter.current
+    val target = remember(router) {
+        router?.let { ChoiceRouter.Target({ layout }, { currentRanges }, { currentRuns }, { pressed = it }) }
+    }
+    if (router != null && target != null) {
+        DisposableEffect(router, target) {
+            router.targets += target
+            onDispose { router.targets -= target }
+        }
+    }
     Text(
         text = text,
         fontSize = style.fontSize,
@@ -942,16 +1053,14 @@ private fun BalloonText(
                     }
                 }
             }
-            .pointerInput(choiceRuns) {
+            .let { m -> if (target != null) m.onGloballyPositioned { target.coordinates = it } else m }
+            .let { m -> if (router != null) m else m.pointerInput(choiceRuns) {
                 if (choiceRuns.isEmpty()) return@pointerInput
                 awaitEachGesture {
                     // 選択肢の上で触れたときだけ受け取る（それ以外はバルーンを叩いたことにする）
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val l = layout ?: return@awaitEachGesture
-                    val at = l.getOffsetForPosition(down.position)
-                    val k = currentRanges.indexOfFirst {
-                        at in it && l.getPathForRange(it.first, it.last + 1).getBounds().inflate(stroke * 6).contains(down.position)
-                    }
+                    val k = choiceAt(l, currentRanges, down.position, stroke * 6)
                     if (k < 0) return@awaitEachGesture
                     down.consume()
                     pressed = k
@@ -974,7 +1083,7 @@ private fun BalloonText(
                     }
                     pressed = null
                 }
-            },
+            } },
     )
 }
 

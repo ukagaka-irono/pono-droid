@@ -91,9 +91,10 @@ object BalloonLayout {
 
     /**
      * \_l[x,y] で分けたまとまり。[x] / [y] はこのまとまりの文字を書き始める位置（null の方は前のまとまりの続き。最初のまとまりは両方 null）、
-     * [style] は \_l を書いた時点の文字の見た目（em や % の基準の文字の高さ）、[lines] はまとまりの中の行（1行目は [x] から、2行目からは左端から）
+     * [style] は \_l を書いた時点の文字の見た目（em や % の基準の文字の高さ）、[lines] はまとまりの中の行（1行目は [x] から、2行目からは左端から）。
+     * [breakAfter] なら、まとまりが改行で終わる（次のまとまりの基準は、次の行の左端）
      */
-    data class Segment(val x: BalloonCoord?, val y: BalloonCoord?, val style: TextStyle, val lines: List<Line>)
+    data class Segment(val x: BalloonCoord?, val y: BalloonCoord?, val style: TextStyle, val lines: List<Line>, val breakAfter: Boolean = false)
 
     /** \_l で分けたまとまり。\_l が無ければ1つ */
     fun segments(items: List<BalloonItem>): List<Segment> {
@@ -103,7 +104,9 @@ object BalloonLayout {
         var startStyle = style
         var from = 0
         fun flush(to: Int) {
-            out += Segment(start?.x, start?.y, startStyle, lines(items.subList(from, to)))
+            val last = items.subList(from, to).lastOrNull { it !is BalloonItem.VAlign && it !is BalloonItem.Align }
+            val breakAfter = last is BalloonItem.NewLine || last is BalloonItem.LineBreak
+            out += Segment(start?.x, start?.y, startStyle, lines(items.subList(from, to)), breakAfter)
         }
         for ((i, item) in items.withIndex()) {
             when (item) {
