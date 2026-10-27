@@ -1,5 +1,6 @@
 package net.pono.baseware.ghost
 
+import net.pono.baseware.sakura.BalloonCoord
 import net.pono.baseware.sakura.BalloonImageOptions
 import net.pono.baseware.sakura.Choice
 import net.pono.baseware.sakura.ChoiceLooks
@@ -26,8 +27,8 @@ sealed interface BalloonItem {
     /** \![*]。次の選択肢の前に付ける印 */
     data object Marker : BalloonItem
 
-    /** \_l[x,y]。同じ行の中で x を指定されたら、そこから次の列にする（狭いバルーンでは座標どおりに置けないので、列に分けて並べる） */
-    data object Column : BalloonItem
+    /** \_l[x,y]。ここから後の文字を、その座標から書く（null の方は動かさない）。縦書きのバルーンでは次の列にする */
+    data class Locate(val x: BalloonCoord?, val y: BalloonCoord?) : BalloonItem
 
     /** \f[align,...]。今の行の寄せ方（次の行からは左寄せに戻る） */
     data class Align(val align: TextAlign) : BalloonItem

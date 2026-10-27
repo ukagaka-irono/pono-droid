@@ -20,7 +20,9 @@ class BalloonLayoutTest {
             override fun clearBalloon(scope: Int) { state = state.copy(balloon = emptyList()) }
             override fun addChoice(scope: Int, choice: Choice) { state = state.append(BalloonItem.ChoiceItem(choice)) }
             override fun addMarker(scope: Int) { state = state.append(BalloonItem.Marker) }
-            override fun moveCursor(scope: Int, x: Int) { state = state.append(BalloonItem.Column) }
+            override fun locate(scope: Int, x: net.pono.baseware.sakura.BalloonCoord?, y: net.pono.baseware.sakura.BalloonCoord?) {
+                state = state.append(BalloonItem.Locate(x, y))
+            }
             override suspend fun waitClick() {}
             override fun raise(event: String, references: List<String>) {}
             override fun openUrl(url: String) {}
@@ -83,4 +85,24 @@ class BalloonLayoutTest {
             lines.map { line -> line.columns.single().joinToString("") { (it as Text).text } },
         )
     }
+
+    @Test
+    fun locateSplitsIntoSegments() = runTest {
+        val items = balloon("""\0なに？\_q\n\![*]\q[何か話して,A]\_l[145]\![*]\q[話しかける,B]\n\f[height,20]大\_l[@-1em,3lh]続き""")
+        val segments = BalloonLayout.segments(items)
+        assertEquals(3, segments.size)
+        assertEquals(null, segments[0].x)
+        assertEquals(net.pono.baseware.sakura.BalloonCoord(145f, net.pono.baseware.sakura.BalloonCoord.Unit.PX), segments[1].x)
+        assertEquals(null, segments[1].y)
+        assertEquals(2, segments[0].lines.size)
+        // 2つ目のまとまりは、選択肢の行と「大」の行
+        assertEquals(2, segments[1].lines.size)
+        assertEquals(net.pono.baseware.sakura.BalloonCoord(-1f, net.pono.baseware.sakura.BalloonCoord.Unit.EM, relative = true), segments[2].x)
+        assertEquals(net.pono.baseware.sakura.BalloonCoord(3f, net.pono.baseware.sakura.BalloonCoord.Unit.LH), segments[2].y)
+        // em の基準は \_l を書いた時点の文字の見た目
+        val big = net.pono.baseware.sakura.TextStyle(height = 20f)
+        val styled = BalloonLayout.segments(listOf(BalloonItem.Text("a", big), BalloonItem.Locate(null, null), BalloonItem.Text("b")))
+        assertEquals(big, styled[1].style)
+    }
+
 }

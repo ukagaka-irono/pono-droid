@@ -829,7 +829,7 @@ list/sakura-script/balloon-text/_b-inline.md	DONE	\_b[ファイルパス,inline]
 list/sakura-script/balloon-text/_b-x-y-2.md	DONE	\_b\,オプション...\]	--option=opaque / use_self_alpha / fixed / foreground / background、--clipping=、--scaling=（px・%・0 で縦横比・負で反転・long / short と max / min）、data:…;base64 の画像
 list/sakura-script/balloon-text/_b-x-y-opaque.md	DONE	\_b[ファイルパス,x,y,opaque]	実装済み
 list/sakura-script/balloon-text/_b-x-y.md	DONE	\_b[ファイルパス,x,y]	実装済み
-list/sakura-script/balloon-text/_l-x-y.md	PARTIAL	\_l[x,y]	x が数のときに次の列にするだけ。y・centerx / centery・em / lh / %・@ の相対を扱わない
+list/sakura-script/balloon-text/_l-x-y.md	PARTIAL	\_l[x,y]	横書きのバルーンは座標どおり（px・em・lh・%・@ の相対・centerx / centery、\_l の後は左寄せ）。縦書きのバルーンは次の列にするだけ
 list/sakura-script/balloon-text/_n.md	DONE	\_n	実装済み
 list/sakura-script/balloon-text/b-ID.md	DONE	\b[ID番号]	\b[ID,--fallback=ID2] の代わりの番号を読まない
 list/sakura-script/balloon-text/bID.md	DONE	\bID番号	1桁の \b0〜\b9 を読む

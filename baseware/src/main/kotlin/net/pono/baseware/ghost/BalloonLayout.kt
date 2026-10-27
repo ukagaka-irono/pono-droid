@@ -1,5 +1,6 @@
 package net.pono.baseware.ghost
 
+import net.pono.baseware.sakura.BalloonCoord
 import net.pono.baseware.sakura.BalloonImageOptions
 import net.pono.baseware.sakura.Choice
 import net.pono.baseware.sakura.ChoiceLooks
@@ -68,8 +69,9 @@ object BalloonLayout {
                 is BalloonItem.LineBreak -> endLine(item.percent)
                 is BalloonItem.VAlign -> valign = item.align
                 BalloonItem.Marker -> marker = true
-                // 行の頭での \_l は位置合わせだけなので、列は増やさない。\_l の後は左寄せに戻る（SSP と同じ）
-                BalloonItem.Column -> {
+                // 縦書きのバルーンでは \_l で次の列にする。行の頭での \_l は位置合わせだけなので、列は増やさない。
+                // \_l の後は左寄せに戻る（SSP と同じ）
+                is BalloonItem.Locate -> {
                     if (current().isNotEmpty()) columns += mutableListOf<Run>()
                     align = TextAlign.LEFT
                 }
@@ -85,6 +87,38 @@ object BalloonLayout {
         // 最後の \n の後ろの空行は出さない
         if (columns.size > 1 || current().isNotEmpty()) endLine()
         return lines
+    }
+
+    /**
+     * \_l[x,y] で分けたまとまり。[x] / [y] はこのまとまりの文字を書き始める位置（null の方は前のまとまりの続き。最初のまとまりは両方 null）、
+     * [style] は \_l を書いた時点の文字の見た目（em や % の基準の文字の高さ）、[lines] はまとまりの中の行（1行目は [x] から、2行目からは左端から）
+     */
+    data class Segment(val x: BalloonCoord?, val y: BalloonCoord?, val style: TextStyle, val lines: List<Line>)
+
+    /** \_l で分けたまとまり。\_l が無ければ1つ */
+    fun segments(items: List<BalloonItem>): List<Segment> {
+        val out = mutableListOf<Segment>()
+        var start: BalloonItem.Locate? = null
+        var style = TextStyle.Default
+        var startStyle = style
+        var from = 0
+        fun flush(to: Int) {
+            out += Segment(start?.x, start?.y, startStyle, lines(items.subList(from, to)))
+        }
+        for ((i, item) in items.withIndex()) {
+            when (item) {
+                is BalloonItem.Text -> style = item.style
+                is BalloonItem.Locate -> {
+                    flush(i)
+                    start = item
+                    startStyle = style
+                    from = i + 1
+                }
+                else -> {}
+            }
+        }
+        flush(items.size)
+        return out
     }
 
     /** 文字の中ではなく、位置を指定して置く画像（\_b[ファイル,x,y]） */

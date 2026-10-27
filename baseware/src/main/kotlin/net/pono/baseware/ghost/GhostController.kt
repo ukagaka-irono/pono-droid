@@ -1,5 +1,6 @@
 package net.pono.baseware.ghost
 
+import net.pono.baseware.sakura.BalloonCoord
 import net.pono.baseware.sakura.BalloonImageOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -6150,7 +6151,7 @@ class GhostController(
 
         override fun addMarker(scope: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.Marker) } }
 
-        override fun moveCursor(scope: Int, x: Int) = _state.update { it.update(scope) { c -> c.append(BalloonItem.Column) } }
+        override fun locate(scope: Int, x: BalloonCoord?, y: BalloonCoord?) = _state.update { it.update(scope) { c -> c.append(BalloonItem.Locate(x, y)) } }
 
         override fun setBalloonId(scope: Int, id: Int) = _state.update { it.update(scope) { c -> c.copy(balloonId = id) } }
 

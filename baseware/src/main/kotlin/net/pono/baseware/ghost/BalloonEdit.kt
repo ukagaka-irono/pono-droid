@@ -69,7 +69,7 @@ object BalloonEdit {
         var from = 0
         var units = 0
         for ((i, item) in items.withIndex()) {
-            val column = item is BalloonItem.Column
+            val column = item is BalloonItem.Locate
             if (column || item is BalloonItem.NewLine || item is BalloonItem.LineBreak) {
                 // \_l で区切ったところは中身が無くても行に数える
                 out += Segment(from, i, separator = true, counts = units > 0 || column)

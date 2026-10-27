@@ -56,7 +56,7 @@ class BalloonEditTest {
         // ukadoc の例: トークを3行目から、\n1行削除。\nこの部分が\_l[,]削除される。\c[line,1,2]
         val items = listOf(
             text("トークを3行目から、"), BalloonItem.NewLine, text("1行削除。"), BalloonItem.NewLine,
-            text("この部分が"), BalloonItem.Column, text("削除される。"),
+            text("この部分が"), BalloonItem.Locate(null, null), text("削除される。"),
         )
         assertEquals(
             listOf(text("トークを3行目から、"), BalloonItem.NewLine, text("1行削除。"), BalloonItem.NewLine, text("削除される。")),

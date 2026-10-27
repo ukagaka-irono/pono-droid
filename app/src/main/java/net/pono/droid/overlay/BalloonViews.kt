@@ -1,5 +1,9 @@
 package net.pono.droid.overlay
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.text.style.TextIndent
 import net.pono.baseware.sakura.BalloonImageOptions
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -566,7 +570,9 @@ private fun SkinFrame(
                 .let { if (vertical) it.horizontalScroll(scroll, reverseScrolling = true) else it.verticalScroll(scroll) },
             contentAlignment = if (vertical) Alignment.TopEnd else Alignment.TopStart,
         ) {
-            content()
+            // \_l[centerx,centery] の基準（文字を書き始める位置から見た、バルーンの画像の真ん中）
+            val center = Offset((image.bitmap.width / 2f - image.area.left) * scale, (image.bitmap.height / 2f - image.area.top) * scale)
+            CompositionLocalProvider(LocalBalloonCenter provides center) { content() }
         }
         // スクロールしても動かない画像（\_b の --option=fixed）
         Box(Modifier.offset(px(image.area.left), px(image.area.top)).size(px(image.area.width), px(image.area.height))) { fixed() }
@@ -612,9 +618,129 @@ fun BalloonBody(items: List<BalloonItem>, choices: ChoiceActions, style: Balloon
     val placed = BalloonLayout.placedImages(items).filterNot { it.options.fixed }
     Box {
         PlacedPictures(placed.filterNot { it.options.foreground }, style)
-        BalloonLines(items, choices, style)
+        val segments = BalloonLayout.segments(items)
+        if (segments.size == 1) BalloonLines(items, choices, style) else LocatedLines(segments, choices, style)
         PlacedPictures(placed.filter { it.options.foreground }, style)
     }
+}
+
+/** バルーンの画像の真ん中（文字を書き始める位置から、ピクセル）。\_l[centerx,centery] の基準。分からなければ null */
+val LocalBalloonCenter = staticCompositionLocalOf<Offset?> { null }
+
+/**
+ * まとまりの最後の文字の後ろの位置（まとまりの左上から、ピクセル）。次の \_l[@…] の基準。
+ * 文の組み方が変わらなければ組み直しの知らせは来ないので、まとまりごとに使い続ける
+ */
+private class Pen {
+    /** 最後の文字の右 */
+    var x: Float? = null
+
+    /** 最後の行の、その文の中での上端と、まとまりの中での文の上端 */
+    var lineTop: Float? = null
+    var textTop: Int = 0
+
+    /** 最後の文の行の数（1行に収まったか） */
+    var lineCount: Int = 0
+
+    val y: Float? get() = lineTop?.let { it + textTop }
+}
+
+/**
+ * \_l[x,y] で分けたまとまりを、それぞれの座標から書く。まとまりの1行目は x から、2行目からは左端から。
+ * x / y を省いた方は前のまとまりの最後の文字の後ろのまま、@ はそこからの相対。重なってもよい（SSP と同じ）。
+ * 1行に収まるまとまりは、その幅だけの箱にして x に置く（同じ行の前のまとまりの選択肢を、上に重ねた箱でふさがない）。
+ * 折り返すまとまりは、文字の範囲いっぱいの箱の1行目を字下げする
+ */
+@Composable
+private fun LocatedLines(segments: List<BalloonLayout.Segment>, choices: ChoiceActions, style: BalloonTextStyle) {
+    val density = LocalDensity.current
+    val center = LocalBalloonCenter.current
+    val pens = remember { HashMap<String, Pen>() }
+    SubcomposeLayout { constraints ->
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth else 0
+        val pxPerImagePx = style.spPerPx.dp.toPx()
+        var penX = 0f
+        var penY = 0f
+        var bottom = 0
+        var right = 0
+        val placed = ArrayList<Triple<Placeable, Int, Int>>()
+        segments.forEachIndexed { i, seg ->
+            val em = with(density) { style.size(seg.style).sp.toPx() }
+            val lineHeight = em * LINE_HEIGHT
+            val x = seg.x?.resolve(em, lineHeight, pxPerImagePx, penX, center?.x ?: (width / 2f)) ?: penX
+            val y = seg.y?.resolve(em, lineHeight, pxPerImagePx, penY, center?.y ?: penY) ?: penY
+            // 左端より左・右端より右へは書けないので、字下げは文字の範囲に収める
+            val indent = x.coerceIn(0f, if (width > 0) width.toFloat() else x.coerceAtLeast(0f))
+            val top = y.roundToInt()
+            val tightPen = pens.getOrPut("t$i") { Pen() }
+            val tight = if (seg.lines.size == 1 && width > 0 && indent < width) {
+                subcompose("t$i") { SegmentLines(seg.lines, choices, style, 0.sp, tightPen, fill = false) }
+                    .first().measure(Constraints(maxWidth = (width - indent).roundToInt().coerceAtLeast(1)))
+                    .takeIf { tightPen.lineCount <= 1 }
+            } else {
+                null
+            }
+            if (tight != null) {
+                placed += Triple(tight, indent.roundToInt(), top)
+                penX = indent + (tightPen.x ?: 0f)
+                penY = y + (tightPen.y ?: 0f)
+                bottom = maxOf(bottom, top + tight.height)
+                right = maxOf(right, indent.roundToInt() + tight.width)
+            } else {
+                val pen = pens.getOrPut("f$i") { Pen() }
+                val p = subcompose("f$i") { SegmentLines(seg.lines, choices, style, with(density) { indent.toSp() }, pen) }
+                    .first().measure(Constraints(maxWidth = constraints.maxWidth))
+                placed += Triple(p, 0, top)
+                penX = pen.x ?: indent
+                penY = y + (pen.y ?: 0f)
+                bottom = maxOf(bottom, top + p.height)
+                right = maxOf(right, p.width)
+            }
+        }
+        layout(if (width > 0) width else right, bottom.coerceAtLeast(0)) {
+            for ((p, left, top) in placed) p.place(left, top)
+        }
+    }
+}
+
+/** 1つのまとまりの行。1行目は [indent] だけ字下げし、最後の文字の後ろの位置を [pen] に書く。[fill] でなければ文の幅だけの箱にする */
+@Composable
+private fun SegmentLines(
+    lines: List<BalloonLayout.Line>,
+    choices: ChoiceActions,
+    style: BalloonTextStyle,
+    indent: TextUnit,
+    pen: Pen,
+    fill: Boolean = true,
+) {
+    val spacing = with(LocalDensity.current) { 2.dp.roundToPx() }
+    if (lines.isEmpty()) {
+        pen.x = null
+        pen.lineTop = null
+    }
+    Layout(content = {
+        lines.forEachIndexed { k, line ->
+            BalloonLine(line, choices, style, if (k == 0) indent else 0.sp, if (k == lines.lastIndex) { l -> recordPen(l, pen) } else null, fill = fill)
+        }
+    }) { measurables, constraints ->
+        val ps = measurables.map { it.measure(constraints.copy(minHeight = 0)) }
+        var y = 0
+        val tops = ps.mapIndexed { k, p ->
+            val top = y
+            y += p.height + if (k < ps.lastIndex) spacing else 0
+            top
+        }
+        pen.textTop = tops.lastOrNull() ?: 0
+        layout(ps.maxOfOrNull { it.width } ?: 0, y) { ps.forEachIndexed { k, p -> p.place(0, tops[k]) } }
+    }
+}
+
+private fun recordPen(l: TextLayoutResult, pen: Pen) {
+    if (l.lineCount == 0) return
+    val last = l.lineCount - 1
+    pen.x = l.getLineRight(last)
+    pen.lineTop = l.getLineTop(last)
+    pen.lineCount = l.lineCount
 }
 
 /** \_b[ファイル,x,y,--option=fixed] の画像。スクロールしても動かないよう、文字の範囲に重ねて置く */
@@ -635,31 +761,43 @@ private fun PlacedPictures(images: List<BalloonLayout.PlacedImage>, style: Ballo
 private fun BalloonLines(items: List<BalloonItem>, choices: ChoiceActions, style: BalloonTextStyle) {
     val lineHeightPx = with(LocalDensity.current) { (style.fontSize * LINE_HEIGHT).toPx() }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        for (line in BalloonLayout.lines(items)) {
-            val align = when (line.align) {
-                TextAlign.CENTER -> ComposeTextAlign.Center
-                TextAlign.RIGHT -> ComposeTextAlign.End
-                TextAlign.LEFT -> ComposeTextAlign.Start
-            }
-            // \n[half] / \n[150] は、ふつうの1行との差だけ行を上下にずらす（負なら前の行に重なる）
-            val shift = ((line.gap - 100) / 100f * lineHeightPx).roundToInt()
-            val gap = if (shift == 0) {
-                Modifier
-            } else {
-                Modifier.layout { measurable, constraints ->
-                    val p = measurable.measure(constraints)
-                    layout(p.width, (p.height + shift).coerceAtLeast(0)) { p.place(0, shift) }
-                }
-            }
-            Box(gap) {
-                if (line.columns.size == 1) {
-                    BalloonText(line.columns[0], choices, style, align, line.valign, Modifier.fillMaxWidth())
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (column in line.columns) {
-                            BalloonText(column, choices, style, align, line.valign, Modifier.weight(1f))
-                        }
-                    }
+        for (line in BalloonLayout.lines(items)) BalloonLine(line, choices, style, lineHeightPx = lineHeightPx)
+    }
+}
+
+/** 1行。[indent] は1行目の字下げ（\_l の x）、[onLayout] は文の組み方（最後の文字の位置を知るため） */
+@Composable
+private fun BalloonLine(
+    line: BalloonLayout.Line,
+    choices: ChoiceActions,
+    style: BalloonTextStyle,
+    indent: TextUnit = 0.sp,
+    onLayout: ((TextLayoutResult) -> Unit)? = null,
+    lineHeightPx: Float = with(LocalDensity.current) { (style.fontSize * LINE_HEIGHT).toPx() },
+    fill: Boolean = true,
+) {
+    val align = when (line.align) {
+        TextAlign.CENTER -> ComposeTextAlign.Center
+        TextAlign.RIGHT -> ComposeTextAlign.End
+        TextAlign.LEFT -> ComposeTextAlign.Start
+    }
+    // \n[half] / \n[150] は、ふつうの1行との差だけ行を上下にずらす（負なら前の行に重なる）
+    val shift = ((line.gap - 100) / 100f * lineHeightPx).roundToInt()
+    val gap = if (shift == 0) {
+        Modifier
+    } else {
+        Modifier.layout { measurable, constraints ->
+            val p = measurable.measure(constraints)
+            layout(p.width, (p.height + shift).coerceAtLeast(0)) { p.place(0, shift) }
+        }
+    }
+    Box(gap) {
+        if (line.columns.size == 1) {
+            BalloonText(line.columns[0], choices, style, align, line.valign, if (fill) Modifier.fillMaxWidth() else Modifier, indent, onLayout)
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((k, column) in line.columns.withIndex()) {
+                    BalloonText(column, choices, style, align, line.valign, Modifier.weight(1f), if (k == 0) indent else 0.sp, onLayout.takeIf { k == line.columns.lastIndex })
                 }
             }
         }
@@ -686,6 +824,8 @@ private fun BalloonText(
     align: ComposeTextAlign,
     valign: VerticalAlign?,
     modifier: Modifier = Modifier,
+    indent: TextUnit = 0.sp,
+    onLayout: ((TextLayoutResult) -> Unit)? = null,
 ) {
     val textRuns = runs.filterIsInstance<BalloonLayout.Run.Text>()
     val largest = textRuns.maxOfOrNull { style.size(it.style) } ?: style.fontSize.value
@@ -773,8 +913,11 @@ private fun BalloonText(
         softWrap = !noWrap,
         maxLines = if (noWrap) 1 else Int.MAX_VALUE,
         overflow = TextOverflow.Clip,
-        style = style.base(),
-        onTextLayout = { layout = it },
+        style = if (indent.value > 0f) style.base().copy(textIndent = TextIndent(firstLine = indent)) else style.base(),
+        onTextLayout = {
+            layout = it
+            onLayout?.invoke(it)
+        },
         modifier = modifier
             .padding(vertical = if (hasChoice) 2.dp else 0.dp)
             .drawBehind {

@@ -161,8 +161,8 @@ interface ScriptHost {
      */
     fun addImage(scope: Int, file: String, x: Int?, y: Int?, opaque: Boolean, options: BalloonImageOptions = BalloonImageOptions()) {}
 
-    /** `\_l[x,y]` で横の位置を指定された（同じ行で次の列に移る） */
-    fun moveCursor(scope: Int, x: Int) {}
+    /** `\_l[x,y]`。ここから後の文字を書く位置（null の方は動かさない） */
+    fun locate(scope: Int, x: BalloonCoord?, y: BalloonCoord?) {}
 
     /** `\b[n]`。バルーンの番号を選ぶ（-1 ならバルーンを隠す） */
     fun setBalloonId(scope: Int, id: Int) {}
@@ -554,7 +554,12 @@ class ScriptPlayer(
                     }
                 }
                 // 横の位置が数で書かれているときだけ（@ 付きの相対指定や縦だけの指定は無視する）
-                "_l" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { host.moveCursor(scope, it) }
+                // \_l[x,y]。両方とも省けば何もしない
+                "_l" -> {
+                    val x = BalloonCoord.parse(a.getOrNull(0))
+                    val y = BalloonCoord.parse(a.getOrNull(1))
+                    if (x != null || y != null) host.locate(scope, x, y)
+                }
                 // \b[ID,--fallback=ID2,--fallback=ID3]
                 "b" -> a.firstOrNull()?.trim()?.toIntOrNull()?.let { id ->
                     val fallbacks = a.drop(1).map { it.trim() }.filter { it.lowercase().startsWith("--fallback=") }.mapNotNull { it.substringAfter('=').trim().toIntOrNull() }
