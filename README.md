@@ -146,6 +146,7 @@ APK は `app/build/outputs/apk/debug/app-debug.apk` にできます。
    ```
 
 4. 鍵が使えるか試します。Actions → Release → Run workflow で `develop` を選んで動かすと、署名した APK を作って確かめます（リリースには載せません）。できた APK は実行結果の Artifacts にあります。
+   Run workflow のボタンは、手で動かせる版の `release.yml` が既定のブランチ（`main`）に入ってから出ます。
 
 シークレットは fork や、fork からの PR には渡らないので、そこでは Release は動かず、Build（デバッグ版）だけがいつもどおり動きます。
 
