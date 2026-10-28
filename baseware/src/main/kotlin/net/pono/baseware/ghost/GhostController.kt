@@ -64,6 +64,7 @@ import net.pono.baseware.shiori.ShioriResponse
 import net.pono.baseware.shiori.ShioriSession
 import net.pono.baseware.shiori.ShioriTimeoutException
 import net.pono.baseware.text.TextCharsets
+import net.pono.baseware.update.fetchBytes
 import net.pono.baseware.update.FetchResult
 import net.pono.baseware.update.HttpFetcher
 import net.pono.baseware.update.NetworkUpdater
@@ -562,6 +563,8 @@ class GhostController(
         scope.launch {
             resetSurfaces()
             applyWindowDefaults()
+            // 購読している予定表は、起動のたびに古ければ取り直す（起動を待たせない）
+            launch(Dispatchers.IO) { runCatching { refreshIcal() } }
             val loaded = try {
                 loadShiori()
             } finally {
@@ -1208,7 +1211,7 @@ class GhostController(
             )
             GhostSchedule.todayReference(GhostSchedule.DEFAULT_TYPE, d.title, d.description, "", e, day)
         }
-        return schedule.today(day) + user
+        return schedule.today(day) + subscribedSchedule(day) + user
     }
 
     /** 毎分: 日付が変わったら今日の予定を知らせ直し、知らせる時刻になった予定は OnSchedule5MinutesToGo */
@@ -2798,15 +2801,105 @@ class GhostController(
             }
             "url" -> {
                 val url = args.getOrNull(1)?.trim()?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: return null
-                // feed（RSS で配られる .nar の一覧）は扱えない
-                if (args.getOrNull(2)?.trim()?.lowercase() == "feed") {
-                    raise("OnInstallFailure", listOf("unsupported"), userInitiated = false)
-                    return null
+                // 種別を省いたら URL の形で決める（.ics は予定表、.ssf はトーク、/ で終われば更新先、それ以外は .nar）
+                val path = url.substringBefore('?').lowercase()
+                val type = args.getOrNull(2)?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: when {
+                    path.endsWith(".ics") -> "ical"
+                    path.endsWith(".ssf") -> "ssf"
+                    path.endsWith("/") -> "homeurl"
+                    else -> "nar"
                 }
-                scope.launch { downloadAndInstall(url, scopeId = 0, dropped = false) }
+                when (type) {
+                    "homeurl" -> scope.launch { installFromHomeUrl(url) }
+                    "ical" -> scope.launch { subscribeIcal(url) }
+                    "ssf" -> scope.launch { playSsf(url) }
+                    // feed（ヘッドラインセンサ）は作らない
+                    "feed" -> {
+                        raise("OnInstallFailure", listOf("unsupported"), userInitiated = false)
+                        return null
+                    }
+                    else -> scope.launch { downloadAndInstall(url, scopeId = 0, dropped = false) }
+                }
             }
             else -> null
         }
+    }
+
+    /**
+     * x-ukagaka-link:type=install / homeurl（アプリで確かめてから）。install は URL の .nar、homeurl は URL を更新先として取ってきて入れる
+     */
+    fun installFromLink(type: String, url: String) {
+        if (!url.startsWith("https://") && !url.startsWith("http://")) return
+        scope.launch { if (type == "homeurl") installFromHomeUrl(url) else downloadAndInstall(url, scopeId = 0, dropped = false) }
+    }
+
+    /** URL を更新先とみなして、ネットワーク更新と同じ方法でファイルを全部取ってきて入れる */
+    private suspend fun installFromHomeUrl(url: String) {
+        val work = File(ghost.dir, GhostPackager.PONO_DIR + "/homeurl-install")
+        when (val r = net.pono.baseware.update.HomeUrlInstaller.fetch(url, work, updateFetcher)) {
+            is net.pono.baseware.update.HomeUrlInstaller.Outcome.Fetched -> installNar(r.nar)
+            is net.pono.baseware.update.HomeUrlInstaller.Outcome.Failed -> raise("OnInstallFailure", listOf(r.reason), userInitiated = false)
+        }
+        work.deleteRecursively()
+    }
+
+    // ---- 購読している予定表（\![execute,install,url,URL,ical]） ----
+
+    /** 購読している予定表の置き場（URL ごとの .ics と、URL の一覧 urls.txt） */
+    private val icalDir get() = File(ghost.dir, GhostPackager.PONO_DIR + "/ical")
+
+    /** iCal（.ics）の URL を購読する。取ってきて読めたら覚え、今日の予定に入れる */
+    private suspend fun subscribeIcal(url: String) {
+        if (!fetchIcal(url)) {
+            raise("OnInstallFailure", listOf("invalid type"), userInitiated = false)
+            return
+        }
+        val urls = icalUrls()
+        if (url !in urls) File(icalDir, "urls.txt").writeText((urls + url).joinToString("\n") + "\n")
+        notifyTodayIfChanged()
+    }
+
+    private fun icalUrls(): List<String> = runCatching { File(icalDir, "urls.txt").readLines() }.getOrDefault(emptyList()).map { it.trim() }.filter { it.isNotEmpty() }
+
+    private fun icalFile(url: String) = File(icalDir, java.security.MessageDigest.getInstance("SHA-1").digest(url.toByteArray()).joinToString("") { "%02x".format(it) }.take(16) + ".ics")
+
+    /** [url] の予定表を取ってきて置く。読めなければ false */
+    private suspend fun fetchIcal(url: String): Boolean = withContext(Dispatchers.IO) {
+        val (r, bytes) = updateFetcher.fetchBytes(url, MAX_ICAL_BYTES)
+        if (r != FetchResult.Ok) return@withContext false
+        val text = TextCharsets.decode(bytes)
+        if (ICal.parse(text) == null) return@withContext false
+        icalDir.mkdirs()
+        icalFile(url).writeText(text)
+        true
+    }
+
+    /** 起動したとき、1日より古い購読の予定表を取り直す */
+    private suspend fun refreshIcal() {
+        for (url in icalUrls()) {
+            val f = icalFile(url)
+            if (f.isFile && System.currentTimeMillis() - f.lastModified() < ICAL_REFRESH_MS) continue
+            fetchIcal(url)
+        }
+    }
+
+    /** 購読している予定表の、[day] の予定（OnScheduleTodayNotify の1件ずつと同じ形） */
+    private fun subscribedSchedule(day: java.time.LocalDate): List<String> = icalUrls().flatMap { url ->
+        val cal = runCatching { icalFile(url).takeIf { it.isFile }?.readText()?.let(ICal::parse) }.getOrNull() ?: return@flatMap emptyList()
+        cal.events.filter { ICal.occurrences(it, day, day).isNotEmpty() }
+            .map { e -> GhostSchedule.todayReference(GhostSchedule.DEFAULT_TYPE, e.summary, e.description, "", e, day) }
+    }
+
+    /** SSF（さくらスクリプトのファイル）を取ってきて話す。外から来たスクリプトなので、SSTP と同じく危ないタグは使わせない */
+    private suspend fun playSsf(url: String) {
+        val (r, bytes) = withContext(Dispatchers.IO) { updateFetcher.fetchBytes(url, MAX_SSF_BYTES) }
+        if (r != FetchResult.Ok) {
+            raise("OnInstallFailure", listOf(NetworkUpdater.describe(r)), userInitiated = false)
+            return
+        }
+        val script = TextCharsets.decode(bytes).trim().takeIf { it.isNotEmpty() } ?: return
+        cancelScript()
+        runScript(script, untrustedScript = true)
     }
 
     /**
@@ -6893,6 +6986,11 @@ class GhostController(
 
         /** メニューの「バルーンを動かせる」を切ってあるか（ゴーストの profile） */
         private const val PROFILE_BALLOON_MOVE_OFF = "balloon.move.off"
+
+        /** 購読する予定表と SSF の大きさの上限、予定表を取り直すまでの時間 */
+        private const val MAX_ICAL_BYTES = 4L shl 20
+        private const val MAX_SSF_BYTES = 1L shl 20
+        private const val ICAL_REFRESH_MS = 24L * 60 * 60 * 1000
 
         /** httpc で取ってくるものの大きさの上限と、待つ時間 */
         private const val HTTPC_MAX_BYTES = 10L shl 20

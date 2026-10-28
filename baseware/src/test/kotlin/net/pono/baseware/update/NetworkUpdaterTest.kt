@@ -152,6 +152,27 @@ class NetworkUpdaterTest {
     }
 
     @Test
+    fun homeUrlIsFetchedIntoANar() = runTest {
+        val install = "type,ghost\r\ndirectory,linked\r\n".toByteArray()
+        val dic = "dic".toByteArray()
+        val server = FakeServer(
+            mutableMapOf(
+                base + "updates2.dau" to manifest("install.txt" to install, "ghost/master/a.dic" to dic),
+                base + "install.txt" to install,
+                base + "ghost/master/a.dic" to dic,
+            ),
+        )
+        val work = tmp.newFolder("work")
+        val r = HomeUrlInstaller.fetch(base, work, server)
+        val nar = (r as HomeUrlInstaller.Outcome.Fetched).nar
+        val names = java.util.zip.ZipFile(nar).use { z -> z.entries().toList().map { it.name }.sorted() }
+        assertEquals(listOf("ghost/master/a.dic", "install.txt"), names)
+        // install.txt が無ければ入れられない
+        val empty = FakeServer(mutableMapOf(base + "updates2.dau" to manifest("a.txt" to dic), base + "a.txt" to dic))
+        assertEquals(HomeUrlInstaller.Outcome.Failed("invalid type"), HomeUrlInstaller.fetch(base, tmp.newFolder("work2"), empty))
+    }
+
+    @Test
     fun appliesDeleteListAfterUpdate() = runTest {
         val dir = ghostDir("ghost/master/old.dic" to "x", "ghost/master/keep.dic" to "y", "pono/profile.properties" to "booted=1")
         val deleteList = "ghost/master/old.dic\r\n../outside.txt\r\npono/profile.properties\r\npono\r\n./pono\r\n".toByteArray()

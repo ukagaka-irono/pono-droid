@@ -1036,7 +1036,7 @@ list/sakura-script/misc/bang-execute-http-put-URL.md	DONE	\![execute,http-put,UR
 list/sakura-script/misc/bang-execute-ical-get-URL.md	DONE	\![execute,ical-get,URL,オプション,オプション,オプション...]	実装済み
 list/sakura-script/misc/bang-execute-ical-post-URL.md	DONE	\![execute,ical-post,URL,オプション,オプション,オプション...]	実装済み
 list/sakura-script/misc/bang-execute-install-path.md	DONE	\![execute,install,path,ファイル名]	実装済み
-list/sakura-script/misc/bang-execute-install-url-URL.md	PARTIAL	\![execute,install,url,URL,種別]	種別は nar だけ。homeurl（そこから更新）・ical（予定表として購読）・ssf を作れる。feed はヘッドラインなので作らない
+list/sakura-script/misc/bang-execute-install-url-URL.md	DONE	\![execute,install,url,URL,種別]	種別は nar・homeurl（そこから取ってきて入れる）・ical（予定表を購読して今日の予定に入れる）・ssf（取ってきて外のスクリプトとして話す）。省けば URL の形で決める。feed はヘッドラインなので作らない
 list/sakura-script/misc/bang-execute-nslookup-1-2.md	DONE	\![execute,nslookup,パラメータ1,パラメータ2,...]	実装済み
 list/sakura-script/misc/bang-execute-ping-1-2.md	DONE	\![execute,ping,パラメータ1,パラメータ2,...]	InetAddress.isReachable の代わり。--ttl / --size / --df / --data は Android では指定できない
 list/sakura-script/misc/bang-execute-rss-get-URL.md	DONE	\![execute,rss-get,URL,オプション,オプション,オプション...]	実装済み
@@ -2048,4 +2048,4 @@ spec/update-file/updatestxt.md	DONE	updates.txt (Version 3)	charset, 行と file
 spec/web/application-x-nar.md	DONE	application/x-nar MIMEタイプ	共有するときは application/x-nar。ブラウザなどで落とした .nar（application/x-nar・zip）を開くとインストールする
 spec/web/chapter0.md	NA	Web関連	執筆中の空のページ
 spec/web/index.md	NA	Web関連	目次
-spec/web/x-ukagaka-link.md	PARTIAL	x-ukagaka-link スキーム	type=event だけ。type=install（URL の .nar を落として入れる）と type=homeurl（更新と同じ方法で取ってきて入れる）が無い
+spec/web/x-ukagaka-link.md	DONE	x-ukagaka-link スキーム	type=event・install（URL の .nar）・homeurl（更新と同じ方法で取ってきて）を扱う。install と homeurl は入れる前に必ず確かめる

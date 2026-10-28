@@ -1,5 +1,10 @@
 package net.pono.droid
 
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
+import androidx.activity.compose.setContent
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -32,8 +37,14 @@ class ShareActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // x-ukagaka-link: のリンクを開いた（SSP の Web 関連付け）
         if (intent.action == Intent.ACTION_VIEW && intent.data?.scheme == "x-ukagaka-link") {
+            val link = intent.dataString.orEmpty()
+            // type=install / homeurl は Web のページから来るので、入れる前に必ず確かめる
+            linkInstall(link)?.let { (type, url) ->
+                confirmLinkInstall(type, url)
+                return
+            }
             val controller = GhostOverlayService.controller.value
-            if (controller == null || !controller.onUkagakaLink(intent.dataString.orEmpty())) toast("そのゴーストは起動していません")
+            if (controller == null || !controller.onUkagakaLink(link)) toast("そのゴーストは起動していません")
             finish()
             return
         }
@@ -141,6 +152,78 @@ class ShareActivity : ComponentActivity() {
             intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
         }
         else -> emptyList()
+    }
+
+    /** x-ukagaka-link:type=install&url=… / type=homeurl&url=… の種類と URL（http / https のときだけ）。ほかは null */
+    private fun linkInstall(link: String): Pair<String, String>? {
+        val params = link.substringAfter(':', "").substringAfter('?').split('&').associate { p ->
+            p.substringBefore('=').lowercase() to runCatching { java.net.URLDecoder.decode(p.substringAfter('=', ""), "UTF-8") }.getOrDefault("")
+        }
+        val type = params["type"]?.lowercase()?.takeIf { it == "install" || it == "homeurl" } ?: return null
+        val url = params["url"]?.trim()?.takeIf { it.startsWith("https://") || it.startsWith("http://") } ?: return null
+        return type to url
+    }
+
+    /** リンクから入れてよいか聞く。「インストール」なら、ゴーストが動いていればそのゴーストに、いなければアプリが入れる */
+    private fun confirmLinkInstall(type: String, url: String) {
+        setContent {
+            MaterialTheme {
+                AlertDialog(
+                    onDismissRequest = { finish() },
+                    title = { Text("インストール") },
+                    text = {
+                        Text(
+                            if (type == "homeurl") "「$url」から、ネットワーク更新と同じ方法でファイルを取ってきてインストールしますか？"
+                            else "「$url」の .nar をインストールしますか？",
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            // 先に閉じる（取ってくる間にもう一度押されて、二重に入れないように）
+                            setContent {}
+                            lifecycleScope.launch {
+                                try {
+                                    installFromLink(type, url)
+                                } finally {
+                                    finish()
+                                }
+                            }
+                        }) { Text("インストール") }
+                    },
+                    dismissButton = { TextButton(onClick = { finish() }) { Text("やめる") } },
+                )
+            }
+        }
+    }
+
+    private suspend fun installFromLink(type: String, url: String) {
+        GhostOverlayService.controller.value?.let {
+            it.installFromLink(type, url)
+            return
+        }
+        // ゴーストが動いていなければ、アプリが取ってきて入れる
+        val fetcher = net.pono.baseware.update.UrlConnectionFetcher("pono-droid")
+        val work = File(cacheDir, "link-install")
+        val nar = withContext(Dispatchers.IO) {
+            if (type == "homeurl") {
+                (net.pono.baseware.update.HomeUrlInstaller.fetch(url, work, fetcher) as? net.pono.baseware.update.HomeUrlInstaller.Outcome.Fetched)?.nar
+            } else {
+                work.deleteRecursively()
+                work.mkdirs()
+                File(work, "link.nar").takeIf { f ->
+                    f.outputStream().use { fetcher.fetch(url, it, FileDrop.MAX_TOTAL_BYTES) } == net.pono.baseware.update.FetchResult.Ok
+                }
+            }
+        }
+        if (nar == null) {
+            work.deleteRecursively()
+            toast("取ってこられませんでした")
+            return
+        }
+        val result = withContext(Dispatchers.IO) { runCatching { GhostStore.repository(this@ShareActivity).installer().install(nar) } }
+        work.deleteRecursively()
+        toast(result.fold({ GhostStore.describe(it) }, { "インストールできませんでした: ${it.message}" }))
+        result.onSuccess { GhostStore.afterInstall(this@ShareActivity, it) }
     }
 
     private fun toast(message: String) {

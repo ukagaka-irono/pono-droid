@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1452・一部だけ 22・作る 0・作れない 239・ベースウェアのことではない 337
+全 2050 項目: 済み 1454・一部だけ 20・作る 0・作れない 239・ベースウェアのことではない 337
 
 ## バルーンの descript.txt など
 
@@ -161,12 +161,11 @@
 
 ## さくらスクリプト
 
-済み 342 項目。
+済み 343 項目。
 
-### 🔧 一部だけ（6）
+### 🔧 一部だけ（5）
 - \_l[x,y] — 横書きのバルーンは座標どおり（px・em・lh・%・@ の相対・centerx / centery、\_l の後は左寄せ）。縦書きのバルーンは次の列にするだけ
 - 補足 — オプションと data:…;base64 は済み。残りは Windows の exe / dll のリソースと --source=（TIFF のページ・PSD のレイヤー・アイコン）で、Android では読めない
-- \![execute,install,url,URL,種別] — 種別は nar だけ。homeurl（そこから更新）・ical（予定表として購読）・ssf を作れる。feed はヘッドラインなので作らない
 - http/rss/ical/websocket オプション — --log=（送ったものと返ってきたものを ghost/master/var/ のファイルに足す）は済み。--insecure だけは安全のため使わない（証明書をいつも確かめる）
 - \!\...\] — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
 - sound play/load/option のオプション — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
@@ -429,12 +428,11 @@
 
 ## 仕様（SSTP・SHIORI/3.0・SAORI・更新ファイルなど）
 
-済み 73 項目。
+済み 74 項目。
 
-### 🔧 一部だけ（3）
+### 🔧 一部だけ（2）
 - Decompress — gzip（複数のメンバーも）・zlib・deflate は済み。brotli と zstd の展開は部品（ライブラリ）が要るので、まだ 400 unsupported algorithm
 - CompressArchive — overwrite・append・--password は済み。lzma とヘッダの暗号化（headerencrypt）は zip4j に無いので 500 unknown method
-- x-ukagaka-link スキーム — type=event だけ。type=install（URL の .nar を落として入れる）と type=homeurl（更新と同じ方法で取ってきて入れる）が無い
 
 ### ⛔ 作れない（9）
 - DLL共通仕様 — Windows の DLL の決まり。pono-droid は SHIORI を組み込みで動かす
