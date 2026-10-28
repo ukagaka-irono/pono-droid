@@ -862,6 +862,7 @@ class GhostController(
         lastTodaySchedule = today
         s.notify("OnScheduleTodayNotify", *today.toTypedArray())
         s.notify("OnDesktopWallpaperChange", *wallpaperRefs("init", "unknown").toTypedArray())
+        s.notify("enable_log", if (shioriLogEnabled()) "1" else "0")
         s.notify("OnSpeechSynthesisStatus", if (platform.speechEnabled()) "1" else "0")
         s.notify("OnVoiceRecognitionStatus", if (platform.voiceRecognitionEnabled()) "1" else "0")
         // 今日が祝日なら、OnNotifyUserInfo のすぐ後に（SSP と同じ。祝日表の代わりに日本の祝日を求める）
@@ -1336,6 +1337,15 @@ class GhostController(
     suspend fun shioriLogFile(): File? {
         val path = resource("log_path")?.trim() ?: return null
         return ghostPath(path)?.takeIf { it.isFile }
+    }
+
+    /** 開発用パレットの「SHIORI 内部のログを取る」。ゴーストごとに覚える（初めは切） */
+    fun shioriLogEnabled(): Boolean = ghost.loadProfile().getProperty(PROFILE_ENABLE_LOG) == "1"
+
+    /** 「SHIORI 内部のログを取る」を変えた。覚えて、SHIORI に NOTIFY enable_log で伝える */
+    fun setShioriLogEnabled(enabled: Boolean) {
+        ghost.saveProfile(ghost.loadProfile().apply { setProperty(PROFILE_ENABLE_LOG, if (enabled) "1" else "0") })
+        notify("enable_log", listOf(if (enabled) "1" else "0"))
     }
 
     /** SHIORI のログを、テキストを見るアプリで開く。ログが無ければ null、開けなければ false */
@@ -6601,6 +6611,9 @@ class GhostController(
         /** 指で動かしたバルーンのずれ（ゴーストの profile のキー。後ろにスコープ番号）と、ずらせる量の上限（dp） */
         private const val PROFILE_BALLOON_DRAG = "balloon.drag."
         private const val MAX_BALLOON_DRAG = 4000
+
+        /** 開発用パレットの「SHIORI 内部のログを取る」を覚えておく名前 */
+        private const val PROFILE_ENABLE_LOG = "developer.enable_log"
 
         /** descript.txt の menu.font.height の上限 */
         private const val MAX_MENU_FONT = 72

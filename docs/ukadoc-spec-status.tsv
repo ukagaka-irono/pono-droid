@@ -1619,7 +1619,7 @@ list/shiori-event/notify/calendarskinpathlist.md	IMPOSSIBLE	calendarskinpathlist
 list/shiori-event/notify/capability.md	DONE	capability	起動時に、送る request.* と読む response.* のヘッダ名（小文字）を NOTIFY
 list/shiori-event/notify/configuredbiffname.md	DONE	configuredbiffname	起動時に設定したメールのアカウント名を NOTIFY
 list/shiori-event/notify/enable_debug.md	DONE	enable_debug	\![set,shioridebugmode] で送る
-list/shiori-event/notify/enable_log.md	BUILD	enable_log	開発用の画面に「SHIORI のログ」の入り切りを足し、変えたら NOTIFY
+list/shiori-event/notify/enable_log.md	DONE	enable_log	開発用の画面の「SHIORI 内部のログを取る」（ゴーストごとに覚える）。起動時と変えたときに NOTIFY
 list/shiori-event/notify/ghostpathlist.md	DONE	ghostpathlist	起動時にゴーストの置き場の絶対パスを NOTIFY
 list/shiori-event/notify/headlinepathlist.md	IMPOSSIBLE	headlinepathlist	ヘッドラインセンサーは作らない（決めたこと）
 list/shiori-event/notify/hwnd.md	IMPOSSIBLE	hwnd	Windows のウィンドウハンドルが無い

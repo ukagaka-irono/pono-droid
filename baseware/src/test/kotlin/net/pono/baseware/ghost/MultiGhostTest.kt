@@ -311,6 +311,20 @@ class MultiGhostTest {
     }
 
     @Test
+    fun shioriLogSwitchIsNotifiedAndRemembered() = run {
+        val a = boot("a", emptyMap())
+        assertEquals(listOf("0"), a.shiori.awaitEvent("enable_log"))
+        a.c.setShioriLogEnabled(true)
+        withTimeout(5000) { while (a.shiori.count("enable_log") < 2) delay(10) }
+        assertEquals(listOf("1"), a.shiori.awaitEvent("enable_log"))
+        // ゴーストごとに覚えていて、次に起動したときも入りで伝える
+        a.c.close()
+        withTimeout(5000) { while (hub.isRunning("a")) delay(10) }
+        val again = boot("a", emptyMap())
+        assertEquals(listOf("1"), again.shiori.awaitEvent("enable_log"))
+    }
+
+    @Test
     fun desktopWallpaperChangeIsSent() = run {
         val platform = object : GhostPlatform by RecordingPlatform() {
             override fun desktopWallpaperColor(): Int = 0x336699

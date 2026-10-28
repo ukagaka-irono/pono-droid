@@ -1,5 +1,6 @@
 package net.pono.droid
 
+import androidx.compose.material3.Switch
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -355,6 +356,7 @@ private fun DeveloperPage(controller: GhostController, modifier: Modifier, onOpe
     val scope = rememberCoroutineScope()
     var openingLog by remember { mutableStateOf(false) }
     var logMissing by remember { mutableStateOf(false) }
+    var logEnabled by remember(controller) { mutableStateOf(controller.shioriLogEnabled()) }
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -375,6 +377,16 @@ private fun DeveloperPage(controller: GhostController, modifier: Modifier, onOpe
             OutlinedButton(onClick = { controller.reloadFromDeveloper("ghost") }) { Text("ゴースト") }
         }
         Text("SHIORI のログ", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("SHIORI 内部のログを取る", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Switch(
+                checked = logEnabled,
+                onCheckedChange = { on ->
+                    logEnabled = on
+                    controller.setShioriLogEnabled(on)
+                },
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = {
