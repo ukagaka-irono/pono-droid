@@ -64,6 +64,7 @@ class ShareActivity : ComponentActivity() {
         if (uris.size == 1 && displayName(uris[0])?.lowercase()?.endsWith(".nar") == true) {
             val result = withContext(Dispatchers.IO) { runCatching { GhostStore.install(this@ShareActivity, uris[0]) } }
             toast(result.fold({ GhostStore.describe(it) }, { "インストールできませんでした: ${it.message}" }))
+            result.onSuccess { GhostStore.afterInstall(this@ShareActivity, it) }
             return
         }
         val controller = GhostOverlayService.controller.value ?: return toast("ゴーストが起動していません")

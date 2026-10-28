@@ -80,6 +80,18 @@ class SurfaceTestGroupsTest {
     }
 
     @Test
+    fun shellCraftmanAndReadme() {
+        val dir = tmp.newFolder()
+        File(dir, "descript.txt").writeText("charset,UTF-8\r\nname,なつ\r\ncraftman,pono\r\ncraftmanw,ぽの\r\ncraftmanurl,https://example.com/\r\nreadme,doc.txt\r\nreadme.charset,Shift_JIS\r\n")
+        File(dir, "doc.txt").writeBytes("せつめい".toByteArray(charset("windows-31j")))
+        val s = Shell(dir)
+        assertEquals("ぽの", s.craftman)
+        assertEquals("https://example.com/", s.craftmanUrl)
+        assertEquals("せつめい", s.readmeText())
+        assertEquals("せつめい", Shell.readmeOf(dir))
+    }
+
+    @Test
     fun withoutTheTableEverySurfaceIsListedWithStandardNames() {
         val s = shell(withTable = false)
         assertNull(s.surfaceNames)

@@ -91,7 +91,7 @@ class InstallShareTest {
         val pkg = File(tmp.root, "pkg.nar")
         ZipOutputStream(pkg.outputStream()).use { z ->
             z.putNextEntry(ZipEntry("install.txt"))
-            z.write("type,package\r\n".toByteArray())
+            z.write("type,package\r\nbootghost,second\r\n".toByteArray())
             z.closeEntry()
             z.putNextEntry(ZipEntry("g.nar"))
             z.write(inner1.readBytes())
@@ -99,6 +99,8 @@ class InstallShareTest {
         }
         val r = c.installNar(pkg).getOrThrow()
         assertEquals(listOf("ghost" to "二人目", "balloon" to "b0"), r.installed.map { it.type.id to it.name })
+        // bootghost は入れたゴーストのディレクトリ名
+        assertEquals("second", r.bootGhost)
         val ex = shiori.awaitEvent("OnInstallCompleteEx")
         assertEquals("ghost\u0001balloon", ex[0])
         assertEquals("二人目\u0001b0", ex[1])

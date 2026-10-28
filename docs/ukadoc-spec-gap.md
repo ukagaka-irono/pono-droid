@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1431・一部だけ 30・作る 12・作れない 239・ベースウェアのことではない 338
+全 2050 項目: 済み 1438・一部だけ 30・作る 5・作れない 239・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -53,14 +53,7 @@
 
 ## シェルの descript.txt
 
-済み 81 項目。
-
-### 🔨 作る（5）
-- craftman,作者名 — シェルの作者を出すところが無い。シェルの一覧に出す
-- craftmanurl,URL — 同上
-- craftmanw,作者名 — 同上
-- readme.charset,文字コード — シェルの readme を作るとき、この文字コードで読む
-- readme,ファイル名 — シェルの readme を開くところが無い。シェルのメニューか一覧から開けるようにする
+済み 86 項目。
 
 ### ⛔ 作れない（15）
 - menu.background.alignment,位置 — メニューはバルーンに出すので、メニューの絵が無い（⛔）
@@ -123,11 +116,7 @@
 
 ## install.txt・delete.txt・updates
 
-済み 19 項目。
-
-### 🔨 作る（2）
-- bootghost,ディレクトリ名 — ゴーストが動いていないときに package を入れたら、bootghost のゴーストを起動する（アプリの画面・共有から）
-- 相対パス,ignore — 旧仕様だが SSP は読む。createupdatedata で ignore のファイルを外す（GhostPackager の UPDATE）
+済み 21 項目。
 
 ### ― ベースウェアのことではない（6）
 - delete.txt — 一覧のページ

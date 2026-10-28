@@ -3909,6 +3909,10 @@ class GhostController(
             val name = Shell.nameOf(dir)
             sb.append("\\q[${quote((if (dir == shell.dir) "● " else "○ ") + name)},pono:shell,${dir.name}]\\n")
         }
+        // 今のシェルの作者・作者のページ・Read Me（descript.txt の craftman / craftmanurl / readme）
+        shell.craftman?.let { sb.append("\\n作者: ").append(literalScript(it)).append("\\n") }
+        shell.craftmanUrl?.let { sb.append("\\q[作者のページ,${quote(it)}]\\n") }
+        if (shell.readmeFile() != null) sb.append("\\q[シェルの Read Me,pono:shellreadme]\\n")
         sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
         return sb.toString()
     }
@@ -4900,6 +4904,7 @@ class GhostController(
                     }
                     "pono:balloonforce" -> refs.firstOrNull()?.let { changeBalloon(it) }
                     "pono:readme" -> ghost.readmeFile()?.let { platform.showText(ghost.name, readmeText()) }
+                    "pono:shellreadme" -> shell.readmeText()?.let { platform.showText(shell.name, it) }
                 }
             }
             id.startsWith("http://") || id.startsWith("https://") -> {

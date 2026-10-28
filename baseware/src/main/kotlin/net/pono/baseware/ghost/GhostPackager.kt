@@ -115,8 +115,18 @@ class GhostPackager(private val root: File) {
     }
 
     private fun developerOptions(): DeveloperOptions {
-        val file = File(root, "developer_options.txt").takeIf { it.isFile } ?: return DeveloperOptions(emptyList())
-        val rules = runCatching { file.readLines() }.getOrDefault(emptyList()).mapNotNull { line ->
+        // 旧仕様の updates_def.txt（相対パス,ignore で更新の一覧から外す。フォルダは書けない）。後に読む developer_options.txt の方が勝つ
+        val old = File(root, "updates_def.txt").takeIf { it.isFile }?.let { f ->
+            runCatching { f.readLines() }.getOrDefault(emptyList()).mapNotNull { line ->
+                val parts = line.split(',').map { it.trim() }
+                val path = parts.firstOrNull()?.replace('\\', '/')?.takeIf { it.isNotEmpty() && !it.startsWith("//") && !it.endsWith("/") }
+                    ?: return@mapNotNull null
+                if (parts.drop(1).none { it.equals("ignore", ignoreCase = true) }) return@mapNotNull null
+                Regex(Regex.escape(path), RegexOption.IGNORE_CASE) to setOf(Purpose.UPDATE.option)
+            }
+        }.orEmpty()
+        val file = File(root, "developer_options.txt").takeIf { it.isFile } ?: return DeveloperOptions(old)
+        val rules = old + runCatching { file.readLines() }.getOrDefault(emptyList()).mapNotNull { line ->
             val parts = line.split(',').map { it.trim() }
             val path = parts.firstOrNull()?.replace('\\', '/')?.takeIf { it.isNotEmpty() && !it.startsWith("//") } ?: return@mapNotNull null
             // フォルダ（/ で終わる）はその下のすべて

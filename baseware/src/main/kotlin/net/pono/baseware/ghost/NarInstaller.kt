@@ -25,8 +25,16 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
     /** 入れたもの1つ。[name] は install.txt の name（無ければ directory） */
     data class Installed(val type: Type, val name: String, val dir: File)
 
-    /** [type] と [dir] は最初に入れたもの、[installed] は同梱のバルーンや package の中身も含めた全部 */
-    data class Result(val type: Type, val dir: File, val installed: List<Installed> = listOf(Installed(type, dir.name, dir)))
+    /**
+     * [type] と [dir] は最初に入れたもの、[installed] は同梱のバルーンや package の中身も含めた全部。
+     * [bootGhost] は package の install.txt の bootghost（入れた後、ゴーストが動いていなければ起動するゴーストのディレクトリ名）
+     */
+    data class Result(
+        val type: Type,
+        val dir: File,
+        val installed: List<Installed> = listOf(Installed(type, dir.name, dir)),
+        val bootGhost: String? = null,
+    )
 
     /** @param target シェルと追加ファイルを受け取るゴースト（たいてい起動中のゴースト）。無ければそれらは入れられない */
     fun install(nar: File, target: Ghost? = null): Result = install(nar, target, depth = 0)
@@ -41,7 +49,7 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
                 ?: throw InstallException("install.txt がありません")
             val install = Descript.parse(TextCharsets.decode(zip.getInputStream(installEntry).readBytes()))
             val typeName = install["type"]?.trim()?.lowercase()
-            if (typeName == "package") return installPackage(zip, entries, target, depth)
+            if (typeName == "package") return installPackage(zip, entries, target, depth, install["bootghost"]?.let(::safeName))
             val type = when (typeName) {
                 "ghost" -> Type.GHOST
                 "balloon" -> Type.BALLOON
@@ -96,7 +104,7 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
     }
 
     /** type,package。中の .nar を順に入れる（package の中の package は入れない） */
-    private fun installPackage(zip: ZipFile, entries: List<java.util.zip.ZipEntry>, target: Ghost?, depth: Int): Result {
+    private fun installPackage(zip: ZipFile, entries: List<java.util.zip.ZipEntry>, target: Ghost?, depth: Int, bootGhost: String?): Result {
         if (depth > 0) throw InstallException("package の中の package は入れられません")
         val nars = entries.filter { it.name.lowercase().endsWith(".nar") }.take(MAX_PACKAGE_NARS)
         if (nars.isEmpty()) throw InstallException("package に .nar がありません")
@@ -110,7 +118,9 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
                 tmp.delete()
             }
         }
-        return Result(installed.first().type, installed.first().dir, installed)
+        // bootghost は入れたゴーストの中のものだけ
+        val boot = bootGhost?.takeIf { b -> installed.any { it.type == Type.GHOST && it.dir.name == b } }
+        return Result(installed.first().type, installed.first().dir, installed, boot)
     }
 
     /**

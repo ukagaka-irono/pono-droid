@@ -154,8 +154,8 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
             }
             result.onSuccess { r ->
                 reload()
-                // 入れたゴーストかバルーンに readme があれば開く（SSP と同じくインストールしたときに見せる）
-                withContext(Dispatchers.IO) { GhostStore.readme(r) }?.let { (title, text) -> TextViewerActivity.start(context, title, text) }
+                // readme があれば開き、package の bootghost があれば起動する
+                GhostStore.afterInstall(context, r)
             }
             snackbar.showSnackbar(result.fold({ GhostStore.describe(it) }, { "インストールできませんでした: ${it.message}" }))
         }

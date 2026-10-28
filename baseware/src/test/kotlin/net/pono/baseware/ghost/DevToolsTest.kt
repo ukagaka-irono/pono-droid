@@ -76,6 +76,24 @@ class DevToolsTest {
         assertEquals(listOf("developer_options.txt", "ghost/master/descript.txt"), net.pono.baseware.update.UpdateManifest.parse(txt.readText()).map { it.path })
     }
 
+    @Test
+    fun oldUpdatesDefIgnoresFilesInTheUpdateList() {
+        val root = tmp.newFolder("g")
+        root.put("ghost/master/descript.txt", "abc")
+        root.put("ghost/master/save.txt", "x")
+        root.put("ghost/master/keep.txt", "y")
+        // フォルダは書けない（無視する）。ignore の無い行も効かない
+        root.put("updates_def.txt", "ghost\\master\\save.txt,ignore\r\nghost/master/keep.txt,other\r\nghost/,ignore\r\n")
+        val dau = File(root, "updates2.dau")
+        GhostPackager(root).createUpdateData(listOf(dau))
+        val names = dau.readText().lines().filter { it.isNotEmpty() }.map { it.substringBefore('\u0001') }
+        assertEquals(listOf("ghost/master/descript.txt", "ghost/master/keep.txt", "updates_def.txt"), names)
+        // .nar には入る（ignore は更新の一覧だけ）
+        val out = File(tmp.root, "g.nar")
+        GhostPackager(root).createNar(out)
+        assertTrue("ghost/master/save.txt" in narEntries(out))
+    }
+
     private fun md5(s: String) = java.security.MessageDigest.getInstance("MD5").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 
     /** 書き出しなどを頼まれたら覚えておくプラットフォーム */

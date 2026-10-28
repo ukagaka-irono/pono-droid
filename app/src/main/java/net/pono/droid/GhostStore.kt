@@ -1,5 +1,9 @@
 package net.pono.droid
 
+import android.provider.Settings
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import net.pono.baseware.shell.Shell
 import android.content.Context
 import android.net.Uri
 import net.pono.baseware.ghost.Ghost
@@ -31,13 +35,24 @@ object GhostStore {
     }
 
     /** インストールしたことを伝える文。同梱のバルーンなどがあれば、それも並べる */
-    /** 入れたゴーストかバルーンのうち、最初に readme があるものの名前と中身。どれにも無ければ null */
+    /** 入れたゴースト・バルーン・シェルのうち、最初に readme があるものの名前と中身。どれにも無ければ null */
     fun readme(result: NarInstaller.Result): Pair<String, String>? = result.installed.firstNotNullOfOrNull { item ->
         when (item.type) {
             NarInstaller.Type.GHOST -> Ghost(item.dir).let { g -> g.readmeText()?.let { g.name to it } }
             NarInstaller.Type.BALLOON -> Balloon(item.dir).let { b -> b.readmeText()?.let { b.name to it } }
+            NarInstaller.Type.SHELL -> Shell.readmeOf(item.dir)?.let { Shell.nameOf(item.dir) to it }
             else -> null
         }
+    }
+
+    /**
+     * インストールした後（アプリの画面と共有から）。readme があれば開き（SSP と同じくインストールしたときに見せる）、
+     * package の bootghost があって、ゴーストが動いていなければそれを起動する
+     */
+    suspend fun afterInstall(context: Context, result: NarInstaller.Result) {
+        withContext(Dispatchers.IO) { readme(result) }?.let { (title, text) -> TextViewerActivity.start(context, title, text) }
+        val boot = result.bootGhost ?: return
+        if (GhostOverlayService.runningGhosts.value.isEmpty() && Settings.canDrawOverlays(context)) GhostOverlayService.start(context, boot)
     }
 
     fun describe(result: NarInstaller.Result): String = result.installed.joinToString("、") { item ->

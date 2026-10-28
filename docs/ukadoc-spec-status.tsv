@@ -278,7 +278,7 @@ descript/install/developer_options.txt/index.md	NA	developer_options.txt	一覧�
 descript/install/developer_options.txt/introduction_developeroptions.txt.md	DONE	developer_options.txt	\![execute,createnar] / createupdatedata で読む
 descript/install/index.md	NA	Install設定	一覧のページ
 descript/install/install-txt/accept.md	DONE	accept,本体側名	合わなければ OnInstallRefuse
-descript/install/install-txt/bootghost.md	BUILD	bootghost,ディレクトリ名	ゴーストが動いていないときに package を入れたら、bootghost のゴーストを起動する（アプリの画面・共有から）
+descript/install/install-txt/bootghost.md	DONE	bootghost,ディレクトリ名	package を入れた後、ゴーストが動いていなければ bootghost のゴーストを起動する（アプリの画面・共有から）
 descript/install/install-txt/charset.md	DONE	charset,文字コード	charset 行を読む（TextCharsets）
 descript/install/install-txt/directory.md	DONE	directory,ディレクトリ名	safeName で 1 階層だけ
 descript/install/install-txt/index.md	NA	install.txt	一覧のページ
@@ -293,7 +293,7 @@ descript/install/install-txt/star-.refreshundeletemask.md	DONE	\*.refreshundelet
 descript/install/install-txt/star-.source.directory.md	DONE	\*.source.directory,ディレクトリ名	階層のあるパスも使える。外を指すものは写さない
 descript/install/install-txt/type.md	DONE	type,種別	ghost / shell / supplement / balloon / package。plugin・headline・language・calendar は ⛔ で入れない
 descript/install/narignore-updateignore-narinclude-updateinclude.md	DONE	.narignore / .updateignore / .narinclude / .updateinclude	GhostPackager（include: は 3 階層まで、フォルダの外は読まない）
-descript/install/updates_def-txt/entry.md	BUILD	相対パス,ignore	旧仕様だが SSP は読む。createupdatedata で ignore のファイルを外す（GhostPackager の UPDATE）
+descript/install/updates_def-txt/entry.md	DONE	相対パス,ignore	更新データを作るとき、相対パス,ignore のファイルを外す（フォルダは書けない。developer_options.txt の方が勝つ）
 descript/install/updates_def-txt/index.md	NA	updates_def.txt	一覧のページ
 descript/install/updates_def-txt/note-1.md	NA	補足	旧仕様の説明
 descript/plugin/descript-txt/charset.md	IMPOSSIBLE	charset,文字コード	プラグインは作らない（⛔）
@@ -504,9 +504,9 @@ descript/shell/descript-txt/char-star-.menuitemex-star.md	DONE	char\*.menuitemex
 descript/shell/descript-txt/char-star-.name.md	DONE	char\*.name,名前	シェルの名前で %selfname・%keroname・scope(n).name・呼びかけを上書きする（name.allowoverride が 0 なら使わない）
 descript/shell/descript-txt/char-star-.seriko.alignmenttodesktop.md	DONE	char\*.seriko.alignmenttodesktop,位置情報	シェルのスコープ＞シェル全体＞ゴーストのスコープ＞ゴースト全体の順で起動時の吸着にする
 descript/shell/descript-txt/charset.md	DONE	charset,文字コード	charset 行を読む（TextCharsets）
-descript/shell/descript-txt/craftman.md	BUILD	craftman,作者名	シェルの作者を出すところが無い。シェルの一覧に出す
-descript/shell/descript-txt/craftmanurl.md	BUILD	craftmanurl,URL	同上
-descript/shell/descript-txt/craftmanw.md	BUILD	craftmanw,作者名	同上
+descript/shell/descript-txt/craftman.md	DONE	craftman,作者名	ゴーストのメニューの「シェル」に作者を出す（craftmanw があればそちら）
+descript/shell/descript-txt/craftmanurl.md	DONE	craftmanurl,URL	ゴーストのメニューの「シェル」に「作者のページ」を出す（http / https のときだけ）
+descript/shell/descript-txt/craftmanw.md	DONE	craftmanw,作者名	ゴーストのメニューの「シェル」の作者として出す
 descript/shell/descript-txt/homeurl.md	DONE	homeurl,URL	シェルのネットワーク更新に使う
 descript/shell/descript-txt/id.md	NA	id,ID名	起動ログに出すだけ。pono-droid には起動ログが無い
 descript/shell/descript-txt/index.md	NA	descript.txt	一覧のページ
@@ -558,8 +558,8 @@ descript/shell/descript-txt/menu.sidebar.alignment.md	IMPOSSIBLE	menu.sidebar.al
 descript/shell/descript-txt/menu.sidebar.bitmap.filename.md	IMPOSSIBLE	menu.sidebar.bitmap.filename,ファイル名	メニューの絵が無い（⛔）
 descript/shell/descript-txt/name.md	DONE	name,シェル名	Shell.name
 descript/shell/descript-txt/note-1.md	NA	補足	位置情報・メニュー画像の位置・アイコン枠の説明のページ
-descript/shell/descript-txt/readme.charset.md	BUILD	readme.charset,文字コード	シェルの readme を作るとき、この文字コードで読む
-descript/shell/descript-txt/readme.md	BUILD	readme,ファイル名	シェルの readme を開くところが無い。シェルのメニューか一覧から開けるようにする
+descript/shell/descript-txt/readme.charset.md	DONE	readme.charset,文字コード	シェルの readme をこの文字コードで読む（無ければ charset 行か中身から決める）
+descript/shell/descript-txt/readme.md	DONE	readme,ファイル名	インストールしたときに開き、ゴーストのメニューの「シェル」の「シェルの Read Me」からも開ける
 descript/shell/descript-txt/sakura.balloon.alignment.md	DONE	sakura.balloon.alignment,位置情報	バルーンの置き方の既定（シェル＞ゴースト）。none は画面の真ん中より左なら右、右なら左に出す
 descript/shell/descript-txt/sakura.balloon.dontmove_.md	DONE	sakura.balloon.dontmove,数値	1 / true ならそのキャラクターのバルーンを指で動かせない（シェル＞ゴーストの順。\![unlock,balloonmove] でも外れない）
 descript/shell/descript-txt/sakura.balloon.offsetx.md	DONE	sakura.balloon.offsetx,座標	バルーンを出す向きごとの既定のずれ（l / r / c / b 付きも。シェル＞ゴースト）。\![set,balloonoffset,@…] はそこからずらす

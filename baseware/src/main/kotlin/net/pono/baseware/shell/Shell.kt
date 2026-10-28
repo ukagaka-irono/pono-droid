@@ -51,6 +51,18 @@ class Shell(val dir: File) {
 
     val name: String get() = descript["name"] ?: dir.name
 
+    /** descript.txt の craftmanw（無ければ craftman）。シェルのメニューに出す */
+    val craftman: String? get() = (descript["craftmanw"] ?: descript["craftman"])?.trim()?.takeIf { it.isNotEmpty() }
+
+    /** descript.txt の craftmanurl。http か https のときだけ */
+    val craftmanUrl: String? get() = descript["craftmanurl"]?.trim()?.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
+
+    /** descript.txt の readme（無ければ readme.txt）。シェルのフォルダの中だけ */
+    fun readmeFile(): File? = readmeFile(dir, descript)
+
+    /** readme の中身（readme.charset があればその文字コードで読む）。無ければ null */
+    fun readmeText(): String? = readmeText(dir, descript)
+
     /**
      * 発言履歴の顔（正方形）を [surfaceId] の絵（幅 [width]・高さ [height]）から切り出す矩形。SSP と同じく、icon.rect があればそれを、
      * 無ければ当たり判定の face / 顔、次に head / 頭 を少し広げて使う。長い辺に合わせて中心から正方形にし、絵からはみ出さないようずらす。
@@ -201,6 +213,15 @@ class Shell(val dir: File) {
          * 名前だけ要るとき（一覧やメニュー）はこちら
          */
         fun nameOf(dir: File): String = runCatching { Descript.read(File(dir, "descript.txt"))["name"] }.getOrNull() ?: dir.name
+
+        /** [dir] のシェルの readme の中身（surfaces*.txt は読まない。インストールした後に開くとき） */
+        fun readmeOf(dir: File): String? = runCatching { readmeText(dir, Descript.read(File(dir, "descript.txt"))) }.getOrNull()
+
+        private fun readmeFile(dir: File, descript: Descript): File? =
+            TextCharsets.fileIn(dir, descript["readme"]?.takeIf { it.isNotBlank() } ?: "readme.txt")
+
+        private fun readmeText(dir: File, descript: Descript): String? =
+            readmeFile(dir, descript)?.let { f -> runCatching { TextCharsets.decode(f.readBytes(), descript["readme.charset"]) }.getOrNull() }
 
         private val SURFACE_FILE = Regex("""^surface0*(\d+)\.png$""")
 
