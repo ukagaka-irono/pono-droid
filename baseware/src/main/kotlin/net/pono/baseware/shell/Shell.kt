@@ -164,6 +164,9 @@ class Shell(val dir: File) {
         dir.listFiles()?.associateBy { it.name.lowercase() }.orEmpty()
     }
 
+    /** surfacetable.txt（サーフェステストの名前とグループ）。無ければ null */
+    val surfaceNames: SurfaceNameTable? by lazy { files["surfacetable.txt"]?.let(SurfaceNameTable::read) }
+
     /** ファイル名の大文字小文字は区別しない（Windows 由来のため）。シェルのフォルダの外を指していれば null */
     fun file(name: String): File? {
         val path = name.replace('\\', '/')

@@ -1,111 +1,93 @@
 package net.pono.baseware.shell
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 
-/** surfaces.txt の名前の参照・--alpha・-2・旧形式の start・ファイルごとの descript・重ねる順と当たり判定の順 */
+/** surfacetable.txt と、それで分けたサーフェステストの一覧 */
 class SurfaceNamesTest {
-    @Test
-    fun namesStandForNumbers() {
-        val table = SurfaceTable.parse(
-            """
-            surface0 {
-            animation1.name,まばたき
-            animation1.interval,never
-            animation1.pattern0,overlay,100,50,0,0
-            animation2.interval,runonce
-            animation2.option,exclusive,(まばたき)
-            animation2.pattern0,start,まばたき
-            animation2.pattern1,alternativestart,[まばたき.3]
-            animation2.pattern2,overlay,笑顔,50,0,0
-            animation2.pattern3,overlay,定義,50,0,0
-            animation2.pattern4,overlay,-2,0,0,0
-            }
-            surface5 { name,定義 }
-            surface7 { }
-            sakura.surface.alias {
-            笑顔,[7]
-            }
-            """.trimIndent(),
-        )
-        val anim = table[0]!!.animations[2]!!
-        assertEquals(setOf(1), anim.exclusiveOf)
-        assertEquals(listOf(1), anim.frames[0].targets)
-        assertEquals(listOf(1, 3), anim.frames[1].targets)
-        assertEquals(7, anim.frames[2].surface)
-        assertEquals(5, anim.frames[3].surface)
-        assertEquals(-2, anim.frames[4].surface)
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    private val table = """
+        charset,UTF-8
+        version,1
+        option,DisableNoDefineSurfaces
+
+        //==========パーツ==========
+        group,__disabled
+        {
+        	19,__parts
+        }
+        group,クー
+        {
+        	scope,1
+        	10,
+        	11,刮目した
+        }
+        group,[空]平日
+        {
+        	scope,0
+        	0,素
+        	1,__parts
+        	5,笑
+        }
+    """.trimIndent()
+
+    private fun shell(withTable: Boolean): Shell {
+        val dir = tmp.newFolder()
+        for (id in listOf(0, 1, 3, 5, 10, 11, 19, 50)) File(dir, "surface$id.png").writeBytes(byteArrayOf())
+        File(dir, "descript.txt").writeText("charset,UTF-8\r\nname,てすと\r\n")
+        // surface3 だけ surfaces.txt に定義がある
+        File(dir, "surfaces.txt").writeText("charset,UTF-8\r\nsurface3\r\n{\r\ncollision0,0,0,10,10,Head\r\n}\r\n")
+        if (withTable) File(dir, "surfacetable.txt").writeText(table)
+        return Shell(dir)
     }
 
     @Test
-    fun alphaAndOldControlPatterns() {
-        val table = SurfaceTable.parse(
-            """
-            surface0 {
-            animation1.pattern0,overlay,100,50,0,0,--alpha,128
-            animation1.pattern1,overlay,100,50,0,0
-            animation1.pattern2,overlayscreen,100,50,0,0,--alpha,999
-            3interval,always
-            3pattern0,0,0,alternativestart,[1,2]
-            3pattern1,100,5,overlay,0,0,--alpha,64
-            }
-            """.trimIndent(),
-        )
-        val a = table[0]!!.animations[1]!!.frames
-        assertEquals(listOf(128, 255, 255), a.map { it.alpha })
-        assertEquals("overlayscreen", a[2].method)
-        val old = table[0]!!.animations[3]!!.frames
-        assertEquals("alternativestart", old[0].method)
-        assertEquals(listOf(1, 2), old[0].targets)
-        assertEquals(64, old[1].alpha)
+    fun parsesGroupsScopesAndOptions() {
+        val t = SurfaceNameTable.parse(table)
+        assertEquals(1, t.version)
+        assertTrue(t.disableNoDefineSurfaces)
+        assertEquals(listOf("__disabled", "クー", "[空]平日"), t.groups.map { it.name })
+        assertTrue(t.groups[0].disabled)
+        assertEquals(listOf(null, 1, 0), t.groups.map { it.scope })
+        assertEquals(listOf(SurfaceNameTable.Entry(10, null), SurfaceNameTable.Entry(11, "刮目した")), t.groups[1].entries)
     }
 
     @Test
-    fun descriptSortsOnlyItsOwnFile() {
-        val table = SurfaceTable.parse(
-            listOf(
-                "descript { animation-sort,ascend\ncollision-sort,descend }\nsurface0 { collision0,0,0,10,10,A }",
-                "surface1 { collision0,0,0,10,10,B }\nsurface.append0 { collision1,0,0,10,10,C }",
-            ).joinToString("\n" + SurfaceTable.FILE_BREAK + "\n"),
-        )
-        assertEquals(SortOrder.ASCEND, table[0]!!.animationSort)
-        assertEquals(SortOrder.DESCEND, table[0]!!.collisionSort)
-        assertEquals(SortOrder.DESCEND, table[1]!!.animationSort)
-        assertEquals(SortOrder.NONE, table[1]!!.collisionSort)
+    fun groupsTheSurfaceTestAndPutsTheChosenCharacterFirst() {
+        val groups = shell(withTable = true).surfaceTestGroups(0)
+        assertEquals(listOf("[空]平日", "クー", "そのほか"), groups.map { it.name })
+        // __parts と名前を省いたものは名前なし。グループに無いものは標準の名前
+        assertEquals(listOf(SurfaceTestItem(0, "素"), SurfaceTestItem(1, null), SurfaceTestItem(5, "笑")), groups[0].items)
+        assertEquals(listOf(SurfaceTestItem(10, null), SurfaceTestItem(11, "刮目した")), groups[1].items)
+        // __disabled の 19 と、定義も名前も無い 50（DisableNoDefineSurfaces）は出さない。3 は surfaces.txt に定義がある
+        assertEquals(listOf(SurfaceTestItem(3, "不安")), groups[2].items)
+        assertEquals(listOf("クー", "[空]平日", "そのほか"), shell(withTable = true).surfaceTestGroups(1).map { it.name })
     }
 
     @Test
-    fun backgroundCollisionsComeAfterTheBase() {
-        val def = SurfaceTable.parse(
-            """
-            surface0 {
-            collision0,0,0,10,10,Base
-            animation1.option,background
-            animation1.collision0,0,0,20,20,Back
-            animation2.collision0,0,0,20,20,Front
-            }
-            """.trimIndent(),
-        )[0]!!
-        assertEquals("Base", def.hitTest(5, 5, listOf(1)))
-        assertEquals("Back", def.hitTest(15, 15, listOf(1)))
-        assertEquals("Front", def.hitTest(5, 5, listOf(1, 2)))
+    fun groupsWithoutANameStillGetAHeading() {
+        val dir = tmp.newFolder()
+        for (id in listOf(0, 10)) File(dir, "surface$id.png").writeBytes(byteArrayOf())
+        File(dir, "surfacetable.txt").writeText("0,素\ngroup,\n{\n10,相方\n}\n")
+        assertEquals(listOf("（グループなし）", "（グループなし）"), Shell(dir).surfaceTestGroups(0).map { it.name })
     }
 
     @Test
-    fun bindFramesRememberTheirAnimation() {
-        val def = SurfaceTable.parse(
-            """
-            surface0 {
-            animation30.interval,bind
-            animation30.pattern0,overlay,100,0,0,0
-            animation20.interval,bind
-            animation20.pattern0,overlay,101,0,0,0
-            }
-            """.trimIndent(),
-        )[0]!!
-        val frames = def.bindFrames(setOf(20, 30))
-        assertTrue(frames.isNotEmpty())
-        assertEquals(mapOf(100 to 30, 101 to 20), frames.associate { it.surface to it.layerOf })
+    fun withoutTheTableEverySurfaceIsListedWithStandardNames() {
+        val s = shell(withTable = false)
+        assertNull(s.surfaceNames)
+        val groups = s.surfaceTestGroups(0)
+        assertEquals(1, groups.size)
+        assertNull(groups[0].name)
+        assertEquals(listOf(0, 1, 3, 5, 10, 11, 19, 50), groups[0].items.map { it.id })
+        assertEquals("刮目", groups[0].items.first { it.id == 11 }.name)
+        assertNull(groups[0].items.first { it.id == 50 }.name)
     }
 }

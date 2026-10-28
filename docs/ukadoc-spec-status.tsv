@@ -477,14 +477,14 @@ descript/shell-surfaces/tooltip-brace/entry.md	DONE	当たり判定名,表示内
 descript/shell-surfaces/tooltip-brace/index.md	NA	tooltipブレス	目次のページ
 descript/shell-surfaces/tooltip-brace/introduction_tooltipbrace.md	DONE	tooltipブレス記述例	sakura / kero / charN.tooltips を読む
 descript/shell-surfacetable/index.md	NA	Shell設定 - surfacetable.txt	目次のページ
-descript/shell-surfacetable/introduction_surfacetable.txt.md	BUILD	surfacetable.txt	surfacetable.txt を読んでいない。サーフェステストの一覧の名前・グループ分けに使う（DeveloperActivity の SurfaceTestPage）
-descript/shell-surfacetable/surfacetable-txt/ID.md	BUILD	サーフェスID,名前	サーフェステストの一覧に名前を出す。__parts は名前なし扱い
-descript/shell-surfacetable/surfacetable-txt/charset.md	BUILD	charset,文字コード	surfacetable.txt を読むときに charset 行を見る（TextCharsets.decode でよい）
-descript/shell-surfacetable/surfacetable-txt/group.md	BUILD	group,グループ名	サーフェステストでグループごとに分け、__disabled は出さない
+descript/shell-surfacetable/introduction_surfacetable.txt.md	DONE	surfacetable.txt	surfacetable.txt を読み、開発用の画面のサーフェステストをグループと名前で並べる
+descript/shell-surfacetable/surfacetable-txt/ID.md	DONE	サーフェスID,名前	サーフェステストの一覧に名前を出す。__parts と名前を省いたものは名前なし、書いていない 0〜11・19・25 などは標準の名前
+descript/shell-surfacetable/surfacetable-txt/charset.md	DONE	charset,文字コード	charset 行の文字コードで読む（無ければ中身から UTF-8 か Shift_JIS）
+descript/shell-surfacetable/surfacetable-txt/group.md	DONE	group,グループ名	サーフェステストでグループごとに見出しを付けて分け、__disabled のサーフェスは出さない
 descript/shell-surfacetable/surfacetable-txt/index.md	NA	surfacetable.txt	目次のページ
-descript/shell-surfacetable/surfacetable-txt/option.md	BUILD	option,オプション1,オプション2,...	DisableNoDefineSurfaces なら、定義も名前も無いサーフェスをサーフェステストに出さない
-descript/shell-surfacetable/surfacetable-txt/scope.md	BUILD	scope,数値	サーフェステストで、選んだキャラクターのグループを先に出す
-descript/shell-surfacetable/surfacetable-txt/version.md	BUILD	version,数値	読むだけ（いつも 1）。surfacetable.txt を読むときに一緒に
+descript/shell-surfacetable/surfacetable-txt/option.md	DONE	option,オプション1,オプション2,...	DisableNoDefineSurfaces なら、surfaces.txt に定義も名前も無いサーフェスをサーフェステストに出さない
+descript/shell-surfacetable/surfacetable-txt/scope.md	DONE	scope,数値	サーフェステストで、選んだキャラクターのグループを先に出す
+descript/shell-surfacetable/surfacetable-txt/version.md	DONE	version,数値	読むだけ（書式はいつも 1 として扱う）
 descript/shell/descript-txt/char-star-.balloon.dontmove.md	DONE	char\*.balloon.dontmove,数値	1 / true ならそのキャラクターのバルーンを指で動かせない（シェル＞ゴーストの順。\![unlock,balloonmove] でも外れない）
 descript/shell/descript-txt/char-star-.balloon.syncscale.md	DONE	char\*.balloon.syncscale,true	true ならバルーンの大きさをキャラクターの大きさに合わせる
 descript/shell/descript-txt/char-star-.bindgroup-star-.addid.md	DONE	char\*.bindgroup\*.addid,ID	付けたら addid のものも付け、それを付けるパーツが全部外れたら外す

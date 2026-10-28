@@ -1,5 +1,6 @@
 package net.pono.droid
 
+import net.pono.baseware.shell.surfaceTestGroups
 import androidx.compose.material3.Switch
 import android.content.Context
 import android.content.Intent
@@ -312,12 +313,15 @@ private fun ShioriRequestPage(controller: GhostController, modifier: Modifier) {
     }
 }
 
-/** シェルにあるサーフェスを、選んだキャラクターに1つずつ出してみる */
+/**
+ * シェルにあるサーフェスを、選んだキャラクターに1つずつ出してみる。surfacetable.txt があれば、そのグループと名前で並べ、
+ * 選んだキャラクターのグループを先に出す
+ */
 @Composable
 private fun SurfaceTestPage(controller: GhostController, modifier: Modifier) {
     val scopes = remember(controller) { controller.characterScopes }
-    val surfaces = remember(controller) { controller.shell.surfaceIds() }
     var target by rememberSaveable { mutableStateOf(0) }
+    val groups = remember(controller, target) { controller.shell.surfaceTestGroups(target) }
     Column(modifier.padding(16.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // キャラクターが多いゴーストもあるので、横にスクロールさせる
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -330,17 +334,25 @@ private fun SurfaceTestPage(controller: GhostController, modifier: Modifier) {
                 }
             }
         }
-        if (surfaces.isEmpty()) {
+        if (groups.all { it.items.isEmpty() }) {
             Text("サーフェスがありません", style = MaterialTheme.typography.bodyMedium)
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(surfaces, key = { it }) { id ->
-                Card(Modifier.fillMaxWidth()) {
-                    Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("サーフェス $id", style = MaterialTheme.typography.bodyLarge)
+            groups.forEachIndexed { index, group ->
+                group.name?.let { name ->
+                    item(key = "group:$index") {
+                        Text(name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                    }
+                }
+                items(group.items, key = { it.id }) { item ->
+                    Card(Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("サーフェス ${item.id}", style = MaterialTheme.typography.bodyLarge)
+                                item.name?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                            }
+                            TextButton(onClick = { controller.testSurface(target, item.id) }) { Text("出す") }
                         }
-                        TextButton(onClick = { controller.testSurface(target, id) }) { Text("出す") }
                     }
                 }
             }

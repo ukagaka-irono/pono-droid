@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1385・一部だけ 30・作る 19・作れない 278・ベースウェアのことではない 338
+全 2050 項目: 済み 1392・一部だけ 30・作る 12・作れない 278・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -146,16 +146,7 @@
 
 ## surfacetable.txt
 
-済み 0 項目。
-
-### 🔨 作る（7）
-- surfacetable.txt — surfacetable.txt を読んでいない。サーフェステストの一覧の名前・グループ分けに使う（DeveloperActivity の SurfaceTestPage）
-- サーフェスID,名前 — サーフェステストの一覧に名前を出す。__parts は名前なし扱い
-- charset,文字コード — surfacetable.txt を読むときに charset 行を見る（TextCharsets.decode でよい）
-- group,グループ名 — サーフェステストでグループごとに分け、__disabled は出さない
-- option,オプション1,オプション2,... — DisableNoDefineSurfaces なら、定義も名前も無いサーフェスをサーフェステストに出さない
-- scope,数値 — サーフェステストで、選んだキャラクターのグループを先に出す
-- version,数値 — 読むだけ（いつも 1）。surfacetable.txt を読むときに一緒に
+済み 7 項目。
 
 ### ― ベースウェアのことではない（2）
 - Shell設定 - surfacetable.txt — 目次のページ
