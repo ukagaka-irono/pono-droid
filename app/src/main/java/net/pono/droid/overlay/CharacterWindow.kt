@@ -659,19 +659,25 @@ class CharacterWindow(
         /** 2本指で触れている。上下になぞるとホイール、動かさずに離すと中クリック */
         private var twoFingers = false
 
-        /** 続けて中クリックした回数（2本指で叩く・マウスの中ボタン）。戻る・進むボタンも同じく数える */
+        /**
+         * 続けて中クリックした回数（2本指で叩く・マウスの中ボタン）。戻る・進むボタンも同じく数える。
+         * 前の中クリックで指をすべて離して（ボタンを放して）から、次に触れるまでが短ければ続けたことにする
+         */
         private var middleCount = 0
-        private var lastMiddleTime = 0L
+        private var lastMiddleUpTime = 0L
         private var lastMiddleButton = ""
+
+        /** いまの操作で中クリックを知らせた。指をすべて離した時刻を [lastMiddleUpTime] に覚える */
+        private var middleClicked = false
 
         /** マウスの中・戻る・進むボタンで押している（押したボタンの名前）。左ボタンの操作はしない */
         private var extraButton: String? = null
 
         /** 中クリックを1回数えて知らせる */
         private fun middleClick(event: MotionEvent, x: Float, y: Float, button: String, callbacks: SurfaceTouchCallbacks) {
-            val continued = button == lastMiddleButton && event.eventTime - lastMiddleTime <= multiTapTimeout
+            val continued = button == lastMiddleButton && event.downTime - lastMiddleUpTime <= multiTapTimeout
             middleCount = if (continued) middleCount + 1 else 1
-            lastMiddleTime = event.eventTime
+            middleClicked = true
             lastMiddleButton = button
             callbacks.onMiddleClick(x, y, middleCount, button, pointerDevice(event))
         }
@@ -775,7 +781,13 @@ class CharacterWindow(
                     extraButton?.let { button ->
                         extraButton = null
                         middleClick(event, event.x, event.y, button, callbacks)
+                        middleClicked = false
+                        lastMiddleUpTime = event.eventTime
                         return true
+                    }
+                    if (middleClicked) {
+                        middleClicked = false
+                        lastMiddleUpTime = event.eventTime
                     }
                     if (longPressed) {
                         // 長押しはもう知らせてある
@@ -808,6 +820,7 @@ class CharacterWindow(
                     callbacks.onRelease(event.x, event.y)
                 }
                 MotionEvent.ACTION_CANCEL -> {
+                    middleClicked = false
                     if (extraButton != null) {
                         extraButton = null
                         return true
