@@ -276,4 +276,49 @@ class MultiGhostTest {
         assertEquals(listOf("c"), platform.calls.map { it.first })
         assertTrue(hub.isRunning("c"))
     }
+
+    @Test
+    fun installForAnotherRunningGhostIsRerouted() = run {
+        val a = boot("a", emptyMap())
+        val b = boot("b", emptyMap())
+        val nar = File(tmp.root, "shell.nar")
+        java.util.zip.ZipOutputStream(nar.outputStream()).use { z ->
+            z.putNextEntry(java.util.zip.ZipEntry("install.txt"))
+            z.write("type,shell\r\nname,夏服\r\ndirectory,summer\r\naccept,びい\r\n".toByteArray())
+            z.closeEntry()
+        }
+        // A に渡したが B 宛て。A に OnInstallReroute、その後のイベントは B に
+        val r = a.c.installNar(nar).getOrThrow()
+        assertEquals(File(repository.root, "b/shell/summer").canonicalPath, r.dir.canonicalPath)
+        assertEquals(listOf("びい", "shell", "夏服"), a.shiori.awaitEvent("OnInstallReroute"))
+        b.shiori.awaitEvent("OnInstallCompleteAll")
+        assertEquals(0, a.shiori.count("OnInstallRefuse"))
+    }
+
+    @Test
+    fun rateOfUseGraphIsNotified() = run {
+        // 履歴はゴースト置き場の隣の pono/history.properties
+        val history = UsageHistory(File(repository.root.parentFile, "pono/history.properties"))
+        history.ghostBooted("a")
+        history.ghostMinute("a")
+        history.ghostBooted("c")
+        val a = boot("a", mapOf("OnGraph" to """\![open,rateofusegraph]\e"""))
+        a.c.raise("OnGraph", emptyList())
+        val shiori = a.shiori
+        val refs = shiori.awaitEvent("rateofusegraph")
+        assertEquals(listOf("ゴーストA", "あい", "", "2", "1", "100", "boot", "2", "1", "100", "2", "1", "100"), refs[0].split('\u0001'))
+        assertEquals(listOf("ゴーストC", "しい", "", "1", "0", "0", "install"), refs[1].split('\u0001').take(7))
+    }
+
+    @Test
+    fun desktopWallpaperChangeIsSent() = run {
+        val platform = object : GhostPlatform by RecordingPlatform() {
+            override fun desktopWallpaperColor(): Int = 0x336699
+        }
+        val a = boot("a", emptyMap(), platform = platform)
+        assertEquals(listOf("init", "unknown", "", "", "fill", "51,102,153"), a.shiori.awaitEvent("OnDesktopWallpaperChange"))
+        a.c.onDesktopWallpaperChanged(self = true)
+        withTimeout(5000) { while (a.shiori.count("OnDesktopWallpaperChange") < 2) delay(10) }
+        assertEquals(listOf("update", "self", "", "", "fill", "51,102,153"), a.shiori.awaitEvent("OnDesktopWallpaperChange"))
+    }
 }

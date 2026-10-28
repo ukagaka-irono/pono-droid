@@ -1548,7 +1548,7 @@ list/shiori-event/install/OnInstallCompleteAll.md	DONE	OnInstallCompleteAll	実�
 list/shiori-event/install/OnInstallCompleteEx.md	DONE	OnInstallCompleteEx	実装済み
 list/shiori-event/install/OnInstallFailure.md	DONE	OnInstallFailure	決まった値で送る
 list/shiori-event/install/OnInstallRefuse.md	DONE	OnInstallRefuse	実装済み
-list/shiori-event/install/OnInstallReroute.md	BUILD	OnInstallReroute	accept で名指しされたゴーストが一緒に起動していたら、そちらへ入れて以降のイベントもそちらに送る（いまは OnInstallRefuse）
+list/shiori-event/install/OnInstallReroute.md	DONE	OnInstallReroute	accept が一緒に起動しているほかのゴーストなら、受けたゴーストに OnInstallReroute を送り、そちらへ入れる（以降のイベントもそちら）
 list/shiori-event/install/caption_install-identifier.md	DONE	インストールの識別子	ghost / shell / balloon / supplement を送る。plugin・headline・calendar は入れられない
 list/shiori-event/install/caption_install-reasonoffailure.md	NA	インストールの失敗理由	値の表。ずれは OnInstallFailure の行に書いた
 list/shiori-event/install/index.md	NA	インストールイベント	目次のページ
@@ -1636,7 +1636,7 @@ list/shiori-event/notify/installedshellname.md	DONE	installedshellname	起動時
 list/shiori-event/notify/otherghostname.md	DONE	otherghostname	一緒に動いているゴーストの名前と \0・\1 のサーフェスを、起動時と増減したときに NOTIFY
 list/shiori-event/notify/ownerghostname.md	DONE	ownerghostname	実装済み
 list/shiori-event/notify/pluginpathlist.md	IMPOSSIBLE	pluginpathlist	プラグインは作らない（決めたこと）
-list/shiori-event/notify/rateofusegraph.md	BUILD	rateofusegraph	名前だけ見つかったが NOTIFY は送っていない。使用率を出すとき（\![open,rateofusegraph]・メニュー）に history.usage から送る
+list/shiori-event/notify/rateofusegraph.md	DONE	rateofusegraph	使用率を出すとき（\![open,rateofusegraph] など）に1体ずつ13項目をバイト値1でつないで送る
 list/shiori-event/notify/uniqueid.md	DONE	uniqueid	実装済み
 list/shiori-event/os-state/OnBatteryChargingStart.md	DONE	OnBatteryChargingStart	実装済み
 list/shiori-event/os-state/OnBatteryChargingStop.md	DONE	OnBatteryChargingStop	実装済み
@@ -1646,7 +1646,7 @@ list/shiori-event/os-state/OnBatteryNotify.md	DONE	OnBatteryNotify	実装済み
 list/shiori-event/os-state/OnCPULoadHigh.md	DONE	OnCPULoadHigh	実装済み
 list/shiori-event/os-state/OnCPULoadLow.md	DONE	OnCPULoadLow	実装済み
 list/shiori-event/os-state/OnDarkTheme.md	DONE	OnDarkTheme	実装済み
-list/shiori-event/os-state/OnDesktopWallpaperChange.md	BUILD	OnDesktopWallpaperChange	WallpaperManager の色が変わった知らせで送る（Reference2 のパスは空、きっかけは unknown）。ssp-gap では ⛔
+list/shiori-event/os-state/OnDesktopWallpaperChange.md	DONE	OnDesktopWallpaperChange	起動時に init、壁紙の色が変わった知らせで update。pono-droid が変えた直後は self、ほかは unknown。パスは空、置き方は fill、色は壁紙の主な色
 list/shiori-event/os-state/OnDeviceArrival.md	DONE	OnDeviceArrival	実装済み
 list/shiori-event/os-state/OnDeviceRemove.md	DONE	OnDeviceRemove	実装済み
 list/shiori-event/os-state/OnDisplayChange.md	DONE	OnDisplayChange	実装済み

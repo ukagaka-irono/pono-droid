@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1366・一部だけ 32・作る 36・作れない 278・ベースウェアのことではない 338
+全 2050 項目: 済み 1369・一部だけ 32・作る 33・作れない 278・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -322,17 +322,14 @@
 
 ## SHIORI イベント
 
-済み 252 項目。
+済み 255 項目。
 
-### 🔨 作る（10）
+### 🔨 作る（7）
 - inputbox.autocomplete — 入力の箱を開くときに聞き、返った候補（バイト値1区切り）を InputBalloon の入力欄の下に出す
-- OnInstallReroute — accept で名指しされたゴーストが一緒に起動していたら、そちらへ入れて以降のイベントもそちらに送る（いまは OnInstallRefuse）
 - OnMouseDoubleClickEx — 2本指で2回続けて叩いたとき（とマウスの中・戻る・進むボタン）に middle などで送る
 - OnMouseHover — マウスやペンのホバー（ACTION_HOVER_MOVE）が止まったときに送る。指では起きない
 - OnMouseMultipleClickEx — 2本指で3回以上続けて叩いたとき。答えが無ければ ClickEx / DoubleClickEx へ
 - enable_log — 開発用の画面に「SHIORI のログ」の入り切りを足し、変えたら NOTIFY
-- rateofusegraph — 名前だけ見つかったが NOTIFY は送っていない。使用率を出すとき（\![open,rateofusegraph]・メニュー）に history.usage から送る
-- OnDesktopWallpaperChange — WallpaperManager の色が変わった知らせで送る（Reference2 のパスは空、きっかけは unknown）。ssp-gap では ⛔
 - OnMusicPlayEx — 🔒 通知へのアクセスを許したときだけ MediaSessionManager で曲名・アーティスト・album・duration などを送る。ssp-gap では ⛔
 - OnVideoPlayEx — 🔒 OnMusicPlayEx と同じ仕組みで、動画のセッションのときに送る。ssp-gap では ⛔
 

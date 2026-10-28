@@ -548,7 +548,18 @@ class GhostOverlayService : LifecycleService() {
                         }.getOrDefault(emptyList())
                     }
 
+                    override fun desktopWallpaperColor(): Int? =
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+                            runCatching {
+                                android.app.WallpaperManager.getInstance(this@GhostOverlayService)
+                                    .getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM)?.primaryColor?.toArgb()?.and(0xFFFFFF)
+                            }.getOrNull()
+                        } else {
+                            null
+                        }
+
                     override fun setWallpaper(request: WallpaperRequest): Boolean {
+                        lastWallpaperSetMs = System.currentTimeMillis()
                         if (!OverlaySettings.wallpaper(OverlaySettings.prefs(this@GhostOverlayService))) {
                             Log.i(TAG, "壁紙の変更はアプリの設定で許していません")
                             return false
@@ -1224,6 +1235,21 @@ class GhostOverlayService : LifecycleService() {
         )
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(networkCallback)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+            runCatching { android.app.WallpaperManager.getInstance(this).addOnColorsChangedListener(wallpaperListener, mainHandler) }
+        }
+    }
+
+    /** \![set,wallpaper] で pono-droid が壁紙を変えた時刻（その直後の変化は self） */
+    @Volatile private var lastWallpaperSetMs = 0L
+
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** 端末の壁紙が変わった（OnDesktopWallpaperChange）。色が変わったという知らせで分かる。ロック画面だけの変化は見ない */
+    private val wallpaperListener = android.app.WallpaperManager.OnColorsChangedListener { _, which ->
+        if (which and android.app.WallpaperManager.FLAG_SYSTEM == 0) return@OnColorsChangedListener
+        val self = System.currentTimeMillis() - lastWallpaperSetMs < WALLPAPER_SELF_MS
+        controllers.forEach { it.onDesktopWallpaperChanged(self) }
     }
 
     /** 画面の向き（OnDisplayChange）・ダークモード（OnDarkTheme）・言語（OnLanguageChange）が変わった */
@@ -1325,6 +1351,9 @@ class GhostOverlayService : LifecycleService() {
         unregisterReceiver(screenReceiver)
         unregisterReceiver(batteryReceiver)
         runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback) }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+            runCatching { android.app.WallpaperManager.getInstance(this).removeOnColorsChangedListener(wallpaperListener) }
+        }
         teardown()
         speech.shutdown()
         super.onDestroy()
@@ -1421,6 +1450,9 @@ class GhostOverlayService : LifecycleService() {
     }
 
     companion object {
+        /** 壁紙を変えてから、変化の知らせを self とみなす時間 */
+        private const val WALLPAPER_SELF_MS = 10_000L
+
         private const val TAG = "pono"
         private const val CHANNEL = "ghost_running"
         private const val OLD_CHANNEL = "ghost"

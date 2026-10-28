@@ -325,6 +325,9 @@ interface GhostPlatform {
      */
     fun soundMeta(file: File): Map<String, String> = emptyMap()
 
+    /** 端末の壁紙の主な色（0xRRGGBB）。分からなければ null（OnDesktopWallpaperChange の Reference5） */
+    fun desktopWallpaperColor(): Int? = null
+
     /** 内蔵 SAORI の internal_crypto の Protect。データをこの端末のこのアプリの鍵で包む。包めなければ null */
     fun protectData(data: ByteArray): ByteArray? = null
 
@@ -858,6 +861,7 @@ class GhostController(
         val today = todaySchedule()
         lastTodaySchedule = today
         s.notify("OnScheduleTodayNotify", *today.toTypedArray())
+        s.notify("OnDesktopWallpaperChange", *wallpaperRefs("init", "unknown").toTypedArray())
         s.notify("OnSpeechSynthesisStatus", if (platform.speechEnabled()) "1" else "0")
         s.notify("OnVoiceRecognitionStatus", if (platform.voiceRecognitionEnabled()) "1" else "0")
         // 今日が祝日なら、OnNotifyUserInfo のすぐ後に（SSP と同じ。祝日表の代わりに日本の祝日を求める）
@@ -2445,6 +2449,21 @@ class GhostController(
     /** パッシブモードか誘導モード。ユーザーの操作（ファイルを渡す・切り替え・更新・消去など）を止める */
     private val restricted: Boolean get() = _state.value.let { it.passive || it.induction }
 
+    // ---- 端末の壁紙（OnDesktopWallpaperChange） ----
+
+    /** 端末の壁紙が変わった。[self] なら pono-droid が \![set,wallpaper] で変えたもの */
+    fun onDesktopWallpaperChanged(self: Boolean) =
+        raise("OnDesktopWallpaperChange", wallpaperRefs("update", if (self) "self" else "unknown"), userInitiated = false)
+
+    /**
+     * OnDesktopWallpaperChange の Reference。Android では壁紙のファイルの場所も置き方も分からないので、パスは空、置き方は fill、
+     * 色は壁紙の主な色。画面は1つなので、画面ごとの情報（Reference6 から）は付けない
+     */
+    private fun wallpaperRefs(kind: String, trigger: String): List<String> {
+        val c = platform.desktopWallpaperColor()
+        return listOf(kind, trigger, "", "", "fill", c?.let { "${it shr 16 and 255},${it shr 8 and 255},${it and 255}" }.orEmpty())
+    }
+
     // ---- \![set,alpha / scaling] をだんだん変える ----
 
     /** キャラクターと項目（alpha / scaling）ごとの、変えている途中のもの。新しく頼まれたら前のものは止める */
@@ -2567,6 +2586,14 @@ class GhostController(
                 raise("OnInstallCompleteAll", refs, userInitiated = false)
             }
         }.onFailure { e ->
+            // accept が一緒に起動しているほかのゴーストなら、そちらに入れる（以降のイベントはそちらに）
+            val target = (e as? NarInstaller.RefusedException)?.let { r ->
+                hub?.others(this)?.firstOrNull { o -> r.accept.isNotEmpty() && (o.ghost.sakuraName == r.accept || o.ghost.name == r.accept) }
+            }
+            if (e is NarInstaller.RefusedException && target != null) {
+                raise("OnInstallReroute", listOf(e.accept, e.type, e.name), userInitiated = false)
+                return target.installNar(nar, fromUser)
+            }
             if (e is NarInstaller.RefusedException) {
                 raise("OnInstallRefuse", listOf(e.accept, e.type, e.name), userInitiated = false)
             } else {
@@ -3730,6 +3757,7 @@ class GhostController(
     private fun rateOfUseScript(scopeId: Int): String? {
         val usage = history?.usage()?.takeIf { it.isNotEmpty() } ?: return null
         val total = usage.sumOf { it.minutes }
+        notifyRateOfUse(usage)
         val sb = StringBuilder("\\p[$scopeId]\\_q【使用率】\\n")
         for (u in usage.take(MAX_RATE_ROWS)) {
             val name = repository?.find(u.dirName)?.name ?: u.dirName
@@ -3738,6 +3766,33 @@ class GhostController(
         }
         sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
         return sb.toString()
+    }
+
+    /**
+     * 使用率を出すときの NOTIFY rateofusegraph。1体ずつ、名前・本体側・相方・起動回数・分・割合・状態（boot / install / vanish）、
+     * 週（7日）と月（30日）の起動回数・分・割合をバイト値1でつなぐ
+     */
+    private fun notifyRateOfUse(usage: List<UsageHistory.Usage>) {
+        val today = history?.today() ?: java.time.LocalDate.now()
+        val total = usage.sumOf { it.minutes }
+        val week = usage.sumOf { it.minutes(7, today) }
+        val month = usage.sumOf { it.minutes(30, today) }
+        fun percent(m: Int, all: Int) = if (all > 0) formatNumber(m * 100.0 / all) else "0"
+        val refs = usage.map { u ->
+            val g = repository?.find(u.dirName)
+            val state = when {
+                u.dirName == ghost.dir.name || hub?.isRunning(u.dirName) == true -> "boot"
+                g != null -> "install"
+                else -> "vanish"
+            }
+            listOf(
+                g?.name ?: u.dirName, g?.sakuraName.orEmpty(), g?.keroName.orEmpty(),
+                u.boots.toString(), u.minutes.toString(), percent(u.minutes, total), state,
+                u.boots(7, today).toString(), u.minutes(7, today).toString(), percent(u.minutes(7, today), week),
+                u.boots(30, today).toString(), u.minutes(30, today).toString(), percent(u.minutes(30, today), month),
+            ).joinToString("\u0001")
+        }
+        notify("rateofusegraph", refs)
     }
 
     /** おすすめ（recommend）かポータル（portal）の一覧 */
