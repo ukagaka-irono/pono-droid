@@ -322,10 +322,16 @@ android {
             isMinifyEnabled = false
             if (releaseSigningReady) signingConfig = signingConfigs.getByName("release")
         }
-        // 動きの速さを確かめるための版。中身はリリースと同じ（デバッグできない）で、デバッグ用の鍵で署名するので、
-        // 端末に入っているデバッグ版の上にデータを残したまま入れられる
+        // デバッグ用の鍵で署名する版は net.pono.droid.debug にして、リリースの鍵の版（net.pono.droid）と並べて入れられるようにする。
+        // アプリの名前は src/debug・src/benchmark の strings.xml で見分けられるようにしている
+        debug {
+            applicationIdSuffix = ".debug"
+        }
+        // 動きの速さを確かめるための版。中身はリリースと同じ（デバッグできない）で、デバッグ版と同じ鍵・同じ
+        // net.pono.droid.debug なので、端末に入っているデバッグ版の上にデータを残したまま入れられる
         create("benchmark") {
             initWith(getByName("release"))
+            applicationIdSuffix = ".debug"
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "release"
         }
