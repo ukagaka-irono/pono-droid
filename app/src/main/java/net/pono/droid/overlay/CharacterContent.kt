@@ -1,5 +1,13 @@
 package net.pono.droid.overlay
 
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import net.pono.baseware.text.TextCharsets
+import net.pono.baseware.shell.Cursors
+import net.pono.baseware.shell.CursorAction
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Job
@@ -204,6 +212,25 @@ fun CharacterSurface(
         activeAnimations.mapNotNull { id -> def?.animations?.get(id) }.flatMap { a -> a.collisions.values } + def?.orderedCollisions().orEmpty()
     }
     val labelPaint = remember { android.graphics.Paint().apply { color = android.graphics.Color.RED; isAntiAlias = true } }
+    // マウスやペンのカーソル（surfaces.txt の cursor ブレスと descript.txt の mousecursor.*）。何をしているか（乗った・押したなど）と、その下の当たり判定
+    val context = LocalContext.current
+    var cursorAt by remember { mutableStateOf<Pair<CursorAction, String?>>(CursorAction.UP to null) }
+    val currentHit by rememberUpdatedState(::hit)
+    val currentPoint by rememberUpdatedState(::imagePoint)
+    val loadingNow = state.loading != null
+    val cursorIcon = remember(cursorAt, controller.shell, loadingNow) {
+        val ghost = controller.ghost
+        val ghostFile = { name: String -> TextCharsets.fileIn(ghost.masterDir, name) }
+        val choice = if (loadingNow) {
+            // SHIORI を読み込んでいる間は待ちのカーソル（mousecursor.wait）
+            Cursors.fromDescripts("wait", listOf(ghost.descript to ghostFile))
+        } else {
+            Cursors.forCharacter(
+                controller.shell.surfaces.cursors[scopeId].orEmpty(), cursorAt.second, cursorAt.first, ghost.descript, controller.shell::file, ghostFile,
+            )
+        }
+        CursorIcons.icon(context, choice)
+    }
     Box(contentAlignment = Alignment.TopCenter) {
         Image(
             bitmap = bmp.asImageBitmap(),
@@ -233,8 +260,9 @@ fun CharacterSurface(
                         )
                     }
                 }
+                .pointerHoverIcon(cursorIcon)
                 .pointerInput(Unit) {
-                    // マウスやペンがしばらく止まったら OnMouseHover（指では起きない）
+                    // マウスやペンがしばらく止まったら OnMouseHover（指では起きない）。カーソルも、乗った・押した・回した・止まったで替える
                     coroutineScope {
                         var rest: Job? = null
                         awaitPointerEventScope {
@@ -248,12 +276,26 @@ fun CharacterSurface(
                                     PointerType.Eraser -> "eraser"
                                     else -> continue
                                 }
+                                val p = currentPoint(c.position.x, c.position.y)
+                                val collision = currentHit(p)
+                                when (e.type) {
+                                    PointerEventType.Press ->
+                                        cursorAt = (if (e.buttons.isSecondaryPressed) CursorAction.RIGHT_DOWN else CursorAction.DOWN) to collision
+                                    PointerEventType.Release -> cursorAt = CursorAction.UP to collision
+                                    PointerEventType.Exit -> cursorAt = CursorAction.UP to null
+                                    PointerEventType.Scroll -> {
+                                        cursorAt = CursorAction.WHEEL to collision
+                                        // マウスのホイール（奥へ回したら正。1目盛り 120）
+                                        val amount = (-c.scrollDelta.y * WHEEL_NOTCH).roundToInt()
+                                        if (amount != 0) controller.onMouseWheel(scopeId, p.first, p.second, collision, amount)
+                                    }
+                                }
                                 if (e.type != PointerEventType.Move || c.pressed) continue
-                                val at = c.position
+                                cursorAt = CursorAction.UP to collision
                                 rest = launch {
                                     delay(HOVER_REST_MS)
-                                    val p = imagePoint(at.x, at.y)
-                                    controller.onMouseHover(scopeId, p.first, p.second, hit(p), device)
+                                    cursorAt = CursorAction.HOVER to collision
+                                    controller.onMouseHover(scopeId, p.first, p.second, collision, device)
                                 }
                             }
                         }
@@ -373,6 +415,8 @@ fun CharacterBalloon(scopeId: Int, controller: GhostController, skin: BalloonSki
     val character = (state.balloonSnapshot ?: state.characters)[scopeId] ?: return
     // 入力の箱は SSP と同じく \0 のバルーンの位置に、話している文の下に出す
     val input = state.input?.takeIf { scopeId == 0 }
+    // マウスやペンのカーソル（バルーンと、無ければゴーストの descript.txt の mousecursor.*）
+    CompositionLocalProvider(LocalBalloonCursors provides rememberBalloonCursors(controller, skin, state.loading != null)) {
     Column(horizontalAlignment = if (scopeId == 1) Alignment.Start else Alignment.End) {
         TalkBalloon(
             scopeId, character, state.loading, state.online && scopeId == 0, state.visitedAnchors, controller, skin,
@@ -380,6 +424,7 @@ fun CharacterBalloon(scopeId: Int, controller: GhostController, skin: BalloonSki
         )
         if (input != null) InputBalloon(input, skin, controller::onInputSubmit, controller::onInputCancel)
     }
+    } // CompositionLocalProvider
 }
 
 /** [online] なら \0 のバルーンにオンラインの印を出す（話していなくても、空のバルーンを出して印を見せる。SSP と同じ） */
@@ -520,3 +565,6 @@ private fun DrawScope.drawCollisions(collisions: List<Collision>, pxPerX: Float,
 
 /** マウスやペンがこれだけ止まったら OnMouseHover を送る */
 private const val HOVER_REST_MS = 500L
+
+/** マウスのホイールの1目盛り（OnMouseWheel の量） */
+private const val WHEEL_NOTCH = 120f

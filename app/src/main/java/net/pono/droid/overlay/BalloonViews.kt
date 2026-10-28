@@ -1,5 +1,8 @@
 package net.pono.droid.overlay
 
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.layout.Placeable
@@ -338,6 +341,10 @@ private fun Modifier.balloonDrag(
     }
 }
 
+/** バルーンのふだんのマウスカーソル（バルーンの descript.txt の mousecursor.arrow など。[LocalBalloonCursors]） */
+@Composable
+private fun Modifier.balloonCursor(): Modifier = LocalBalloonCursors.current?.let { pointerHoverIcon(it.arrow) } ?: this
+
 /** pono-droid の簡易バルーン（ゴーストのバルーン画像が無いとき）。印の文字と数は下の端に小さく出す */
 @Composable
 fun SimpleBalloon(
@@ -367,6 +374,7 @@ fun SimpleBalloon(
             .border(1.5.dp, Color(0xFF8D6E63), RoundedCornerShape(12.dp))
             // 読み返せるほど長いときは、文字の周りの余白（左右 12dp・上下 8dp）が縁
             .balloonDrag(onDrag, hits, { scroll.maxValue > 0 }) { p, size -> p.x >= edgeX && p.x <= size.width - edgeX && p.y >= edgeY && p.y <= size.height - edgeY }
+            .balloonCursor()
             .clickable(onClick = onClick),
     ) {
         Box {
@@ -529,7 +537,8 @@ private fun SkinFrame(
             .size(px(w), px(h))
             .balloonDrag(onDrag, hits, { scroll.maxValue > 0 }) { p, _ ->
                 p.x >= area.left * scale && p.x <= area.right * scale && p.y >= area.top * scale && p.y <= area.bottom * scale
-            },
+            }
+            .balloonCursor(),
     ) {
         Image(image.bitmap, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.size(px(w), px(h)))
         if (onlineFrames.isNotEmpty()) {
@@ -1022,6 +1031,9 @@ private fun BalloonText(
     val currentRuns by rememberUpdatedState(choiceRuns)
     // \_l のまとまりの中では、押したかどうかはまとまり全体で受ける（[ChoiceRouter]）
     val router = LocalChoiceRouter.current
+    // マウスやペンが選択肢の上にあれば、選択肢のカーソル（バルーンの cursor など）にする
+    val cursors = LocalBalloonCursors.current
+    var overChoice by remember { mutableStateOf(false) }
     // バルーンを動かすとき、選択肢の上かを見る（[LocalChoiceHits]）
     val hits = LocalChoiceHits.current
     val target = remember(router, hits) {
@@ -1077,6 +1089,23 @@ private fun BalloonText(
                 }
             }
             .let { m -> if (target != null) m.onGloballyPositioned { target.coordinates = it } else m }
+            .let { m ->
+                if (cursors == null || choiceRuns.isEmpty()) {
+                    m
+                } else {
+                    m.pointerHoverIcon(if (overChoice) cursors.choice else cursors.arrow).pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val e = awaitPointerEvent(PointerEventPass.Initial)
+                                val c = e.changes.firstOrNull() ?: continue
+                                if (c.type != PointerType.Mouse && c.type != PointerType.Stylus) continue
+                                overChoice = e.type != PointerEventType.Exit &&
+                                    (layout?.let { l -> choiceAt(l, currentRanges, c.position, stroke * 6) >= 0 } ?: false)
+                            }
+                        }
+                    }
+                }
+            }
             .let { m -> if (router != null) m else m.pointerInput(choiceRuns) {
                 if (choiceRuns.isEmpty()) return@pointerInput
                 awaitEachGesture {

@@ -382,11 +382,13 @@ class SurfaceDefinition(val id: Int) {
 /**
  * @param aliases キャラクター（0 が sakura、1 が kero、2 以降が charN）ごとの surface.alias。別名 → サーフェス番号の候補
  * @param tooltips キャラクターごとの sakura.tooltips などのブレス。当たり判定の名前 → 出す文字
+ * @param cursors キャラクターごとの sakura.cursor などのブレス（当たり判定ごとのマウスカーソル）
  */
 class SurfaceTable(
     val definitions: Map<Int, SurfaceDefinition>,
     val aliases: Map<Int, Map<String, List<Int>>> = emptyMap(),
     val tooltips: Map<Int, Map<String, String>> = emptyMap(),
+    val cursors: Map<Int, List<CursorRule>> = emptyMap(),
 ) {
     operator fun get(id: Int): SurfaceDefinition? = definitions[id]
 
@@ -415,11 +417,12 @@ class SurfaceTable(
         private val collision = Regex("""^collision(\d+)$""")
         private val collisionEx = Regex("""^collisionex(\d+)$""")
 
-        /** ブレスの種類（surface / surface.alias / tooltips / descript） */
+        /** ブレスの種類（surface / surface.alias / tooltips / cursor / descript） */
         private sealed interface Block {
             data class Surfaces(val ids: List<Int>) : Block
             data class Alias(val scope: Int) : Block
             data class Tooltips(val scope: Int) : Block
+            data class Cursor(val scope: Int) : Block
             data object Descript : Block
             data object Other : Block
         }
@@ -431,6 +434,7 @@ class SurfaceTable(
             val defs = sortedMapOf<Int, SurfaceDefinition>()
             val aliases = HashMap<Int, MutableMap<String, List<Int>>>()
             val tooltips = HashMap<Int, MutableMap<String, String>>()
+            val cursors = HashMap<Int, MutableList<CursorRule>>()
             var collisionSort = SortOrder.NONE
             var animationSort = SortOrder.DESCEND
             var header = StringBuilder()
@@ -463,6 +467,10 @@ class SurfaceTable(
                         if (key.isNotEmpty() && (key in into || into.size < SurfaceDefinition.MAX_PARTS)) {
                             into[key] = line.substringAfter(',', "").trim().take(MAX_TOOLTIP)
                         }
+                    }
+                    is Block.Cursor -> Cursors.parseRule(line)?.let { rule ->
+                        val into = cursors.getOrPut(b.scope) { ArrayList() }
+                        if (into.size < SurfaceDefinition.MAX_PARTS) into += rule
                     }
                     Block.Descript -> {
                         val value = line.substringAfter(',', "").trim().lowercase()
@@ -518,7 +526,7 @@ class SurfaceTable(
             }
             endFile()
             resolveNames(defs, aliases)
-            return SurfaceTable(defs, aliases, tooltips)
+            return SurfaceTable(defs, aliases, tooltips, cursors)
         }
 
         /** surfaces*.txt を何個かつないで読むときの、ファイルの境目の行（descript ブレスをファイルごとにする） */
@@ -548,7 +556,7 @@ class SurfaceTable(
         private fun targetKeys(args: List<String>): List<String> =
             args.joinToString(",").split(',', '.', '[', ']', '(', ')').map { it.trim() }.filter { it.isNotEmpty() }
 
-        private val scopedHeader = Regex("""^(sakura|kero|char(\d+))\.(surface\.alias|tooltips)$""", RegexOption.IGNORE_CASE)
+        private val scopedHeader = Regex("""^(sakura|kero|char(\d+))\.(surface\.alias|tooltips|cursor)$""", RegexOption.IGNORE_CASE)
 
         /**
          * ヘッダの種類。"sakura.surface.alias" / "kero.tooltips" ならそのキャラクター、"descript" なら descript ブレス。
@@ -563,7 +571,11 @@ class SurfaceTable(
                     "kero" -> 1
                     else -> m.groupValues[2].toIntOrNull() ?: return Block.Other
                 }
-                return if (m.groupValues[3].lowercase() == "tooltips") Block.Tooltips(scope) else Block.Alias(scope)
+                return when (m.groupValues[3].lowercase()) {
+                    "tooltips" -> Block.Tooltips(scope)
+                    "cursor" -> Block.Cursor(scope)
+                    else -> Block.Alias(scope)
+                }
             }
             val ids = surfaceIds(tokens, defs, existing)
             return if (ids.isEmpty()) Block.Other else Block.Surfaces(ids)

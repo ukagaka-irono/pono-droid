@@ -1,5 +1,6 @@
 package net.pono.droid.overlay
 
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
@@ -179,6 +180,7 @@ private fun SkinInputBox(
                 .offset(px(area.left), px(area.top))
                 .size(px(area.width), px(area.height))
                 .then(balloon.communicateBackground?.let { Modifier.background(it.toColor()) } ?: Modifier)
+                .inputCursor()
                 .focusRequester(focus),
             decorationBox = { field ->
                 Box(Modifier.fillMaxSize().padding(horizontal = 2.dp), contentAlignment = if (multiLine) Alignment.TopStart else Alignment.CenterStart) {
@@ -273,7 +275,7 @@ private fun SimpleInputBox(
                     visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
                     keyboardOptions = keyboardOptions(request, password),
                     keyboardActions = KeyboardActions(onDone = { submit() }),
-                    modifier = fieldModifier.fillMaxWidth().focusRequester(focus),
+                    modifier = fieldModifier.fillMaxWidth().inputCursor().focusRequester(focus),
                 )
             }
             Suggestions(request, text.text, { text = it.limitedTo(request.limit) }, fieldModifier.fillMaxWidth())
@@ -311,6 +313,10 @@ private fun Suggestions(request: InputRequest, typed: String, onPick: (TextField
 
 /** 入力欄の下に出す候補の数 */
 private const val MAX_SUGGESTIONS = 5
+
+/** 文字の欄のマウスカーソル（バルーンの descript.txt の mousecursor.text など。[LocalBalloonCursors]） */
+@Composable
+private fun Modifier.inputCursor(): Modifier = LocalBalloonCursors.current?.let { pointerHoverIcon(it.text, overrideDescendants = true) } ?: this
 
 /** パスワードの箱に添える注意。入れたものはゴーストのスクリプトに渡る */
 @Composable

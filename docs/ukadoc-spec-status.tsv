@@ -87,7 +87,7 @@ descript/balloon/descript-txt/cursor.font.shadowcolor.b.md	DONE	cursor.font.shad
 descript/balloon/descript-txt/cursor.font.shadowcolor.g.md	DONE	cursor.font.shadowcolor.g,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
 descript/balloon/descript-txt/cursor.font.shadowcolor.r.md	DONE	cursor.font.shadowcolor.r,数値	選択肢・リンクの影の色を読み、文字に影を付ける（影の付け方が無ければ font.shadowstyle）
 descript/balloon/descript-txt/cursor.font.shadowstyle.md	DONE	cursor.font.shadowstyle,形態指定	選択肢・リンクの影を右下（offset）か縁取り（outline）にする（無ければ font.shadowstyle）
-descript/balloon/descript-txt/cursor.md	IMPOSSIBLE	cursor,ファイル名 / mousecursor,ファイル名	マウスカーソルが無い（タッチで操作する）
+descript/balloon/descript-txt/cursor.md	DONE	cursor,ファイル名 / mousecursor,ファイル名	マウスやペンを使うとき、バルーンの選択肢とリンクの上のカーソル（無ければゴーストの cursor、次に矢印）。.cur / .ani / .ico を読む
 descript/balloon/descript-txt/cursor.notselect.brush.color.b.md	DONE	cursor.notselect.brush.color.b,数値	linkLook("cursor.notselect") の brush
 descript/balloon/descript-txt/cursor.notselect.brush.color.g.md	DONE	cursor.notselect.brush.color.g,数値	linkLook("cursor.notselect") の brush
 descript/balloon/descript-txt/cursor.notselect.brush.color.r.md	DONE	cursor.notselect.brush.color.r,数値	linkLook("cursor.notselect") の brush
@@ -126,9 +126,9 @@ descript/balloon/descript-txt/homeurl.md	DONE	homeurl,URL	バルーンのネッ�
 descript/balloon/descript-txt/id.md	DONE	id,ID名	descript.txt として読む。表示や動作で使う所は無い
 descript/balloon/descript-txt/index.md	NA	descript.txt	一覧のページ
 descript/balloon/descript-txt/introduction_descript.txt.md	NA	descript.txt（Balloonの）	概要と記述例。中身は各項目で見る
-descript/balloon/descript-txt/mousecursor.arrow.md	IMPOSSIBLE	mousecursor.arrow,ファイル名	マウスカーソルが無い
-descript/balloon/descript-txt/mousecursor.text.md	IMPOSSIBLE	mousecursor.text,ファイル名	マウスカーソルが無い
-descript/balloon/descript-txt/mousecursor.wait.md	IMPOSSIBLE	mousecursor.wait,ファイル名	マウスカーソルが無い
+descript/balloon/descript-txt/mousecursor.arrow.md	DONE	mousecursor.arrow,ファイル名	マウスやペンを使うとき、バルーンの上のふだんのカーソル（無ければゴーストの mousecursor.arrow）
+descript/balloon/descript-txt/mousecursor.text.md	DONE	mousecursor.text,ファイル名	入力の箱の文字の欄のカーソル（無ければゴーストの mousecursor.text、次に I 型）
+descript/balloon/descript-txt/mousecursor.wait.md	DONE	mousecursor.wait,ファイル名	SHIORI を読み込んでいる間のバルーンの上のカーソル（無ければゴーストの mousecursor.wait）
 descript/balloon/descript-txt/name.md	DONE	name,バルーン名	Balloon.name
 descript/balloon/descript-txt/number.font.color.b.md	DONE	number.font.color.b,数値	Balloon.numberColor
 descript/balloon/descript-txt/number.font.color.g.md	DONE	number.font.color.g,数値	Balloon.numberColor
@@ -192,7 +192,7 @@ descript/ghost/descript-txt/charset.md	DONE	charset,文字コード	charset 行�
 descript/ghost/descript-txt/craftman.md	DONE	craftman,作者名	プロパティの craftmanw に使う
 descript/ghost/descript-txt/craftmanurl.md	DONE	craftmanurl,URL	プロパティの craftmanurl
 descript/ghost/descript-txt/craftmanw.md	DONE	craftmanw,作者名	プロパティの craftmanw
-descript/ghost/descript-txt/cursor.md	IMPOSSIBLE	cursor,ファイル名 / mousecursor,ファイル名	マウスカーソルが無い（⛔）
+descript/ghost/descript-txt/cursor.md	DONE	cursor,ファイル名 / mousecursor,ファイル名	マウスやペンを使うとき、キャラクターの当たり判定の上のカーソル（system:finger の代わり）。.cur / .ani / .ico を読む
 descript/ghost/descript-txt/don-t-2.md	DONE	don't need bind,数値	1 なら着せ替えを使わない（既定のパーツも付けず、メニューにも出さず、\![bind] も効かない）
 descript/ghost/descript-txt/don-t-3.md	DONE	don't need seriko talk,数値	1 なら interval が talk の口パクを動かさない
 descript/ghost/descript-txt/don-t.md	DONE	don't need onmousemove,数値	1 なら OnMouseMove（なでる）を送らない
@@ -214,11 +214,11 @@ descript/ghost/descript-txt/kero.seriko.defaultsurface.md	DONE	kero.seriko.defau
 descript/ghost/descript-txt/makoto.md	IMPOSSIBLE	makoto,ファイル名	MAKOTO は Windows の DLL（⛔）
 descript/ghost/descript-txt/menu.font.height.md	DONE	menu.font.height,フォントサイズ	メニューの頭に \f[height] を付ける（シェルの指定が先）
 descript/ghost/descript-txt/menu.font.name.md	DONE	menu.font.name,フォント名	メニューの頭に \f[name] を付ける（シェルの指定が先）
-descript/ghost/descript-txt/mousecursor.arrow.md	IMPOSSIBLE	mousecursor.arrow,ファイル名	マウスカーソルが無い（⛔）
-descript/ghost/descript-txt/mousecursor.grip.md	IMPOSSIBLE	mousecursor.grip,ファイル名	マウスカーソルが無い（⛔）
-descript/ghost/descript-txt/mousecursor.hand.md	IMPOSSIBLE	mousecursor.hand,ファイル名	マウスカーソルが無い（⛔）
-descript/ghost/descript-txt/mousecursor.text.md	IMPOSSIBLE	mousecursor.text,ファイル名	マウスカーソルが無い（⛔）
-descript/ghost/descript-txt/mousecursor.wait.md	IMPOSSIBLE	mousecursor.wait,ファイル名	マウスカーソルが無い（⛔）
+descript/ghost/descript-txt/mousecursor.arrow.md	DONE	mousecursor.arrow,ファイル名	当たり判定の外など、system:arrow の代わりのカーソル
+descript/ghost/descript-txt/mousecursor.grip.md	DONE	mousecursor.grip,ファイル名	Bust を押している間など、system:grip の代わりのカーソル
+descript/ghost/descript-txt/mousecursor.hand.md	DONE	mousecursor.hand,ファイル名	Bust の上など、system:hand の代わりのカーソル
+descript/ghost/descript-txt/mousecursor.text.md	DONE	mousecursor.text,ファイル名	入力の箱の文字の欄のカーソル（バルーンに無いとき）
+descript/ghost/descript-txt/mousecursor.wait.md	DONE	mousecursor.wait,ファイル名	SHIORI を読み込んでいる間のキャラクターの上のカーソル
 descript/ghost/descript-txt/name.allowoverride.md	DONE	name.allowoverride,数値	0 ならシェルの sakura.name などを使わない
 descript/ghost/descript-txt/name.md	DONE	name,ゴースト名	Ghost.name
 descript/ghost/descript-txt/note-1.md	NA	補足	位置情報の説明のページ（seriko.alignmenttodesktop の値）
@@ -313,23 +313,23 @@ descript/plugin/descript-txt/secondchangeinterval.md	IMPOSSIBLE	secondchangeinte
 descript/plugin/descript-txt/type.md	IMPOSSIBLE	type,種別	プラグインは作らない（⛔）
 descript/plugin/index.md	IMPOSSIBLE	Plugin設定	プラグインは作らない（⛔）
 descript/shell-surfaces/cursor-brace/index.md	NA	cursorブレス	目次のページ（cursor ブレスはマウスカーソルが無いので使わない）
-descript/shell-surfaces/cursor-brace/introduction_cursorbrace.md	IMPOSSIBLE	cursorブレス記述例	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/mousedown-star.md	IMPOSSIBLE	mousedown\*,当たり判定ID,ファイル名	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/mousehover-star.md	IMPOSSIBLE	mousehover\*,当たり判定ID,ファイル名	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/mouserightdown-star.md	IMPOSSIBLE	mouserightdown\*,当たり判定ID,ファイル名	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/mouseup-star.md	IMPOSSIBLE	mouseup\*,当たり判定ID,ファイル名	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/mousewheel-star.md	IMPOSSIBLE	mousewheel\*,当たり判定ID,ファイル名	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/system-cursor/index.md	IMPOSSIBLE	システムカーソル	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/system-cursor/system-arrow.md	IMPOSSIBLE	system:arrow	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/system-cursor/system-cross.md	IMPOSSIBLE	system:cross	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/system-cursor/system-finger.md	IMPOSSIBLE	system:finger	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/system-cursor/system-grip.md	IMPOSSIBLE	system:grip	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/system-cursor/system-hand.md	IMPOSSIBLE	system:hand	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/system-cursor/system-help.md	IMPOSSIBLE	system:help	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/system-cursor/system-move.md	IMPOSSIBLE	system:move	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/system-cursor/system-no.md	IMPOSSIBLE	system:no	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/system-cursor/system-text.md	IMPOSSIBLE	system:text	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-descript/shell-surfaces/cursor-brace/system-cursor/system-wait.md	IMPOSSIBLE	system:wait	cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
+descript/shell-surfaces/cursor-brace/introduction_cursorbrace.md	DONE	cursorブレス記述例	sakura.cursor / kero.cursor / charN.cursor を読み、マウスやペンのカーソルを当たり判定ごとに替える
+descript/shell-surfaces/cursor-brace/mousedown-star.md	DONE	mousedown\*,当たり判定ID,ファイル名	当たり判定の上でボタンを押している間のカーソル（既定は finger、Bust は grip）
+descript/shell-surfaces/cursor-brace/mousehover-star.md	DONE	mousehover\*,当たり判定ID,ファイル名	当たり判定の上でしばらく止まったときのカーソル（既定は arrow）
+descript/shell-surfaces/cursor-brace/mouserightdown-star.md	DONE	mouserightdown\*,当たり判定ID,ファイル名	右ボタンを押している間のカーソル（既定は finger）
+descript/shell-surfaces/cursor-brace/mouseup-star.md	DONE	mouseup\*,当たり判定ID,ファイル名	当たり判定の上に乗ったときのカーソル（既定は finger、Bust は hand）
+descript/shell-surfaces/cursor-brace/mousewheel-star.md	DONE	mousewheel\*,当たり判定ID,ファイル名	ホイールを回したときのカーソル（既定は arrow）。マウスのホイールで OnMouseWheel も送る
+descript/shell-surfaces/cursor-brace/system-cursor/index.md	DONE	システムカーソル	system:名前 を Android の近い形のカーソルにする（descript.txt の mousecursor.* があればそちら）
+descript/shell-surfaces/cursor-brace/system-cursor/system-arrow.md	DONE	system:arrow	Android の矢印のカーソル
+descript/shell-surfaces/cursor-brace/system-cursor/system-cross.md	DONE	system:cross	Android の十字のカーソル
+descript/shell-surfaces/cursor-brace/system-cursor/system-finger.md	DONE	system:finger	Android の指さしのカーソル
+descript/shell-surfaces/cursor-brace/system-cursor/system-grip.md	DONE	system:grip	Android の握った手のカーソル
+descript/shell-surfaces/cursor-brace/system-cursor/system-hand.md	DONE	system:hand	Android の開いた手のカーソル
+descript/shell-surfaces/cursor-brace/system-cursor/system-help.md	DONE	system:help	Android のヘルプのカーソル
+descript/shell-surfaces/cursor-brace/system-cursor/system-move.md	DONE	system:move	Android の四方向の矢印のカーソル
+descript/shell-surfaces/cursor-brace/system-cursor/system-no.md	DONE	system:no	Android の禁止のカーソル
+descript/shell-surfaces/cursor-brace/system-cursor/system-text.md	DONE	system:text	Android のI型のカーソル
+descript/shell-surfaces/cursor-brace/system-cursor/system-wait.md	DONE	system:wait	Android の待ちのカーソル
 descript/shell-surfaces/descript-brace/animation-sort.md	DONE	animation-sort,ソート順序	当たり判定と絵の重ね順の両方に効く（SurfaceRenderer がアニメーション番号の順に重ねる）
 descript/shell-surfaces/descript-brace/collision-sort.md	DONE	collision-sort,ソート順序	none / ascend / descend を orderedCollisions で使う
 descript/shell-surfaces/descript-brace/index.md	NA	descriptブレス	目次のページ

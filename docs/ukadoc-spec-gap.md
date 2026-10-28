@@ -4,11 +4,11 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1404・一部だけ 30・作る 12・作れない 266・ベースウェアのことではない 338
+全 2050 項目: 済み 1431・一部だけ 30・作る 12・作れない 239・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
-済み 162 項目。
+済み 166 項目。
 
 ### 🔧 一部だけ（5）
 - balloons\*s.txt/balloonk\*s.txt — 画像ごとの balloons*s.txt で、文字の範囲・矢印や印の位置・windowposition を上書きする。文字の色・大きさ・書体は descript.txt のまま
@@ -16,12 +16,6 @@
 - sstpmessage.yb,座標 — 縦書きのときの印の文字の終わりとして読むが、印の文字は縦書きにしていない
 - use_input_alpha,数値 — 1 なら入力の箱の画像もバルーンと同じ透明度の扱いにする。バルーン全体を半透明にする設定は pono-droid に無い
 - vertical,0/1 — 1 なら上から下へ字を送り、右から左へ列を送る（縦書き用の句読点・かっこ、長音と英数字は回す、小さい仮名は右上）。\f[align] は列の中の寄せ。選択肢の長押しのカーソル、\f[valign] の厚み方向の寄せ、印の文字と数の縦書きは無い
-
-### ⛔ 作れない（4）
-- cursor,ファイル名 / mousecursor,ファイル名 — マウスカーソルが無い（タッチで操作する）
-- mousecursor.arrow,ファイル名 — マウスカーソルが無い
-- mousecursor.text,ファイル名 — マウスカーソルが無い
-- mousecursor.wait,ファイル名 — マウスカーソルが無い
 
 ### ― ベースウェアのことではない（4）
 - balloons\*s.txt/balloonk\*s.txt/balloonc\*s.txt(個別指定) — 一覧のページ
@@ -31,7 +25,7 @@
 
 ## ゴーストの descript.txt
 
-済み 58 項目。
+済み 64 項目。
 
 ### 🔨 作る（4）
 - shiori.logo.align,位置情報 — AI グラフを絵で描くとき（今はラベルと値を文字で並べる）の背景画像の基準
@@ -43,14 +37,8 @@
 - descript.txt（Ghostの） — 説明のページ。\ や % で始まる値を捨てる決まりはしていない（名前などをメニューのスクリプトにそのまま入れている）
 - seriko.alignmenttodesktop,位置情報 — 書いてあればその吸着にする。どこにも書いていないときは、アプリの設定のキャラクター自由移動が常に制限なら仕様どおり bottom、ゴースト設定なら自由（決めたこと）。最初の設定の常に自由移動では吸着しない
 
-### ⛔ 作れない（7）
-- cursor,ファイル名 / mousecursor,ファイル名 — マウスカーソルが無い（⛔）
+### ⛔ 作れない（1）
 - makoto,ファイル名 — MAKOTO は Windows の DLL（⛔）
-- mousecursor.arrow,ファイル名 — マウスカーソルが無い（⛔）
-- mousecursor.grip,ファイル名 — マウスカーソルが無い（⛔）
-- mousecursor.hand,ファイル名 — マウスカーソルが無い（⛔）
-- mousecursor.text,ファイル名 — マウスカーソルが無い（⛔）
-- mousecursor.wait,ファイル名 — マウスカーソルが無い（⛔）
 
 ### ― ベースウェアのことではない（9）
 - id,ID名 — 起動ログに出すだけ。pono-droid には起動ログが無い
@@ -100,30 +88,13 @@
 
 ## surfaces.txt
 
-済み 130 項目。
+済み 147 項目。
 
 ### 🔧 一部だけ（2）
 - element\*,描画メソッド,ファイル名,X座標,Y座標(,オプション...) — --clipping / --alpha / --scaling と、動く surface*.png・element はある。--source（PSD のレイヤー・TIFF のページ・アイコン）は読まない。動く画像は SERIKO のコマより上に出る
 - auto — overlay として重ねる。--source の PSD などのレイヤーから描画方法を読む部分が無い
 
-### ⛔ 作れない（23）
-- cursorブレス記述例 — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- mousedown\*,当たり判定ID,ファイル名 — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- mousehover\*,当たり判定ID,ファイル名 — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- mouserightdown\*,当たり判定ID,ファイル名 — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- mouseup\*,当たり判定ID,ファイル名 — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- mousewheel\*,当たり判定ID,ファイル名 — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- システムカーソル — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- system:arrow — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- system:cross — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- system:finger — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- system:grip — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- system:hand — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- system:help — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- system:move — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- system:no — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- system:text — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
-- system:wait — cursor ブレスは使わない（マウスカーソルが無い。ssp-gap.md の決め事）
+### ⛔ 作れない（6）
 - balloon.offsetx,座標 — サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
 - balloon.offsety,座標 — サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
 - kero.balloon.offsetx,座標 — サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
