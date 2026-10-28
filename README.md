@@ -109,28 +109,45 @@ APK は `app/build/outputs/apk/debug/app-debug.apk` にできます。
 
 ### 最初に一度だけ: 署名鍵を作ってシークレットに登録する
 
-署名鍵はリポジトリに入れないでください。なくすと同じアプリとして更新できなくなるので、手元で安全に保管します。
+署名鍵はリポジトリに入れないでください（`.gitignore` で `*.jks` などは除いてありますが、リポジトリの外に置きます）。なくすと同じアプリとして更新できなくなるので、合言葉と一緒に、パスワードマネージャーや別のドライブにも控えておきます。
+コマンドは Git Bash で打ちます。
 
-1. 鍵を作ります（合言葉を聞かれます）。
+1. リポジトリの外に置き場所を作り、鍵を作ります。合言葉と、名前・組織などを聞かれるので自分で打ちます（名前などは空でもかまいません）。有効期限は 10000 日（約 27 年）です。
+
+   ```bash
+   mkdir -p ~/keys/pono-droid && cd ~/keys/pono-droid
+   ```
 
    ```bash
    keytool -genkeypair -keystore pono-droid-release.jks -storetype PKCS12 -alias pono-droid -keyalg RSA -keysize 4096 -validity 10000
    ```
 
-2. GitHub に登録するため、base64 にします。
+   `keytool` が見つからないときは、Android Studio に入っているものを使います（`"/c/Program Files/Android/Android Studio/jbr/bin/keytool.exe"`）。
+
+2. GitHub に登録するため、base64 にします（1 行で、改行なし）。
 
    ```bash
    base64 -w0 pono-droid-release.jks > pono-droid-release.jks.base64
    ```
 
-3. リポジトリの Settings → Secrets and variables → Actions に、次の4つを登録します。
+3. リポジトリの Settings → Secrets and variables → Actions の Repository secrets に、次の4つを登録します。
 
    | 名前 | 中身 |
    |------|------|
-   | `PONO_KEYSTORE_BASE64` | 2. で作ったファイルの中身 |
+   | `PONO_KEYSTORE_BASE64` | 2. で作ったファイルの中身（全部を貼る） |
    | `PONO_KEYSTORE_PASSWORD` | キーストアの合言葉 |
    | `PONO_KEY_ALIAS` | 鍵の別名（上の例では `pono-droid`） |
    | `PONO_KEY_PASSWORD` | 鍵の合言葉（PKCS12 ではキーストアと同じ） |
+
+   登録したら、base64 のファイルは消します（.jks は残します）。
+
+   ```bash
+   rm ~/keys/pono-droid/pono-droid-release.jks.base64
+   ```
+
+4. 鍵が使えるか試します。Actions → Release → Run workflow で `develop` を選んで動かすと、署名した APK を作って確かめます（リリースには載せません）。できた APK は実行結果の Artifacts にあります。
+
+シークレットは fork や、fork からの PR には渡らないので、そこでは Release は動かず、Build（デバッグ版）だけがいつもどおり動きます。
 
 ### リリースする
 

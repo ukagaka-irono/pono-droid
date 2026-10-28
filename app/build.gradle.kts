@@ -283,6 +283,16 @@ val releaseKeystore = System.getenv("PONO_KEYSTORE_FILE")?.takeIf { it.isNotBlan
 val releaseSigningReady = releaseKeystore?.isFile == true &&
     listOf("PONO_KEYSTORE_PASSWORD", "PONO_KEY_ALIAS", "PONO_KEY_PASSWORD").all { !System.getenv(it).isNullOrEmpty() }
 
+// 一部だけ設定してあるのは打ち間違いのはずなので知らせる（値は出さず、名前だけ）
+if (!releaseSigningReady) {
+    val signingEnv = listOf("PONO_KEYSTORE_FILE", "PONO_KEYSTORE_PASSWORD", "PONO_KEY_ALIAS", "PONO_KEY_PASSWORD")
+    val missing = signingEnv.filter { System.getenv(it).isNullOrEmpty() }
+    if (missing.size < signingEnv.size) {
+        val why = if (releaseKeystore != null && !releaseKeystore.isFile) "PONO_KEYSTORE_FILE points to no file" else "missing: ${missing.joinToString()}"
+        logger.warn("Release signing is partly configured ($why); the release build will be unsigned.")
+    }
+}
+
 android {
     namespace = "net.pono.droid"
     compileSdk = 37

@@ -6,10 +6,13 @@ name: Release
 #   PONO_KEYSTORE_PASSWORD キーストアの合言葉
 #   PONO_KEY_ALIAS         鍵の別名
 #   PONO_KEY_PASSWORD      鍵の合言葉
+# Actions のページから手で動かすと（Run workflow）、署名した APK を作って確かめるだけで、リリースには載せない。
+# シークレットを登録したあと、鍵が正しく使えるかを試すのに使う。APK は実行結果の Artifacts から取れる。
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -56,9 +59,12 @@ jobs:
           PONO_KEY_PASSWORD: ${{ secrets.PONO_KEY_PASSWORD }}
         run: |
           # タグ v0.2.0 → versionName 0.2.0。versionCode はこのワークフローの通し番号（必ず増える）
-          ./gradlew :baseware:test :app:assembleRelease --stacktrace \
-            -PponoVersionName="${GITHUB_REF_NAME#v}" \
-            -PponoVersionCode="${{ github.run_number }}"
+          # 手で動かしたとき（タグではない）は build.gradle.kts の既定の番号のまま
+          version=()
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version=(-PponoVersionName="${GITHUB_REF_NAME#v}" -PponoVersionCode="${{ github.run_number }}")
+          fi
+          ./gradlew :baseware:test :app:assembleRelease --stacktrace "${version[@]}"
 
       - name: Verify signature
         run: |
@@ -70,9 +76,20 @@ jobs:
           build_tools="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
           "$build_tools/apksigner" verify --print-certs "$apk"
           mkdir -p dist
-          cp "$apk" "dist/pono-droid-${GITHUB_REF_NAME}.apk"
+          # 手で動かしたときの名前はブランチ名から（feature/x の / は - に）
+          cp "$apk" "dist/pono-droid-${GITHUB_REF_NAME//\//-}.apk"
+
+      # 手で動かしたときは、リリースに載せずに Artifacts に置く
+      - name: Upload signed APK
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pono-droid-signed-apk
+          path: dist/*.apk
+          if-no-files-found: error
 
       - name: Publish to GitHub Releases
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
