@@ -285,20 +285,29 @@ data class BalloonLabels(val marker: String? = null, val number: String? = null)
 typealias BalloonDrag = (dx: Int, dy: Int, done: Boolean) -> Unit
 
 /**
- * バルーンを縁（[inText] が false の所）でつかんで動かす。文字の範囲の上はスクロールと選択肢のまま。
- * 縁なら中のスクロールより先に指を受け取り、動き出したら（タッチの遊びを超えたら）中には渡さない（止まったまま離せばタップ）。
+ * バルーンをつかんで動かす。選択肢（[hits] に並んだ文の選択肢）の上で触れたときは動かさない。
+ * 文が長くて中をスクロールできる（[scrollable]）間だけは、文字の範囲（[inText]）はスクロールのままにし、縁（その外）で動かす。
+ * 中の操作より先に指を受け取り、動き出したら（タッチの遊びを超えたら）中には渡さない（止まったまま離せばタップ）。
  * ウィンドウが指について動くので、画面の上の位置で測る。[onDrag] が null なら動かせない
  */
 @Composable
-private fun Modifier.balloonEdgeDrag(onDrag: BalloonDrag?, inText: (Offset, IntSize) -> Boolean): Modifier {
+private fun Modifier.balloonDrag(
+    onDrag: BalloonDrag?,
+    hits: ChoiceRouter,
+    scrollable: () -> Boolean,
+    inText: (Offset, IntSize) -> Boolean,
+): Modifier {
     if (onDrag == null) return this
     val coords = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val currentDrag by rememberUpdatedState(onDrag)
     val currentInText by rememberUpdatedState(inText)
+    val currentScrollable by rememberUpdatedState(scrollable)
+    val slop = with(LocalDensity.current) { 6.dp.toPx() }
     return onGloballyPositioned { coords[0] = it }.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            if (currentInText(down.position, size)) return@awaitEachGesture
+            if (currentScrollable() && currentInText(down.position, size)) return@awaitEachGesture
+            coords[0]?.takeIf { it.isAttached }?.let { from -> if (hits.find(from, down.position, slop) != null) return@awaitEachGesture }
             fun screen(p: Offset) = coords[0]?.takeIf { it.isAttached }?.localToScreen(p) ?: p
             val start = screen(down.position)
             var dragging = false
@@ -346,6 +355,8 @@ fun SimpleBalloon(
     val density = LocalDensity.current
     val edgeX = with(density) { 12.dp.toPx() }
     val edgeY = with(density) { 8.dp.toPx() }
+    // 選択肢の上で触れたら動かさないので、中の文の選択肢を集める
+    val hits = remember { ChoiceRouter() }
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = Color.White,
@@ -354,15 +365,15 @@ fun SimpleBalloon(
             .padding(bottom = 4.dp)
             .width(balloonMaxWidth())
             .border(1.5.dp, Color(0xFF8D6E63), RoundedCornerShape(12.dp))
-            // 文字の周りの余白（左右 12dp・上下 8dp）が縁
-            .balloonEdgeDrag(onDrag) { p, size -> p.x >= edgeX && p.x <= size.width - edgeX && p.y >= edgeY && p.y <= size.height - edgeY }
+            // 読み返せるほど長いときは、文字の周りの余白（左右 12dp・上下 8dp）が縁
+            .balloonDrag(onDrag, hits, { scroll.maxValue > 0 }) { p, size -> p.x >= edgeX && p.x <= size.width - edgeX && p.y >= edgeY && p.y <= size.height - edgeY }
             .clickable(onClick = onClick),
     ) {
         Box {
             val s = LocalBalloonScale.current
             val simpleStyle = BalloonTextStyle.Simple.let { it.copy(fontSize = it.fontSize * s, spPerPx = it.spPerPx * s) }
             Box(Modifier.heightIn(max = maxHeight).verticalScroll(scroll).padding(horizontal = 12.dp, vertical = 8.dp)) {
-                BalloonBody(items, choices, simpleStyle)
+                CompositionLocalProvider(LocalChoiceHits provides hits) { BalloonBody(items, choices, simpleStyle) }
             }
             Box(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) { FixedBalloonImages(items, simpleStyle) }
             if (online) SimpleOnlineMarker(Modifier.align(Alignment.TopEnd).padding(end = 8.dp, top = 2.dp))
@@ -510,12 +521,15 @@ private fun SkinFrame(
     /** 印などの画像パーツの位置。overlay_outside_balloon が 1 でなければ、バルーンの画像からはみ出さないようにする */
     fun inside(x: Int, y: Int, pw: Int, ph: Int): Pair<Int, Int> =
         if (look.overlayOutside) x to y else x.coerceIn(0, maxOf(0, w - pw)) to y.coerceIn(0, maxOf(0, h - ph))
-    // 文字の範囲（バルーン画像のピクセルを縮めた分）の外が縁
+    // 読み返せるほど長いときは、文字の範囲（バルーン画像のピクセルを縮めた分）の外が縁
     val area = image.area
+    val hits = remember { ChoiceRouter() }
     Box(
         Modifier
             .size(px(w), px(h))
-            .balloonEdgeDrag(onDrag) { p, _ -> p.x >= area.left * scale && p.x <= area.right * scale && p.y >= area.top * scale && p.y <= area.bottom * scale },
+            .balloonDrag(onDrag, hits, { scroll.maxValue > 0 }) { p, _ ->
+                p.x >= area.left * scale && p.x <= area.right * scale && p.y >= area.top * scale && p.y <= area.bottom * scale
+            },
     ) {
         Image(image.bitmap, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.size(px(w), px(h)))
         if (onlineFrames.isNotEmpty()) {
@@ -573,7 +587,7 @@ private fun SkinFrame(
         ) {
             // \_l[centerx,centery] の基準（文字を書き始める位置から見た、バルーンの画像の真ん中）
             val center = Offset((image.bitmap.width / 2f - image.area.left) * scale, (image.bitmap.height / 2f - image.area.top) * scale)
-            CompositionLocalProvider(LocalBalloonCenter provides center) { content() }
+            CompositionLocalProvider(LocalBalloonCenter provides center, LocalChoiceHits provides hits) { content() }
         }
         // スクロールしても動かない画像（\_b の --option=fixed）
         Box(Modifier.offset(px(image.area.left), px(image.area.top)).size(px(image.area.width), px(image.area.height))) { fixed() }
@@ -656,6 +670,9 @@ private class ChoiceRouter {
 }
 
 private val LocalChoiceRouter = staticCompositionLocalOf<ChoiceRouter?> { null }
+
+/** バルーン1つの中の文の選択肢。バルーンを動かすとき、選択肢の上で触れたかを見る（[balloonDrag]） */
+private val LocalChoiceHits = staticCompositionLocalOf<ChoiceRouter?> { null }
 
 /** [position] の下の選択肢の番号（無ければ -1）。文字の少し外（[slop]）まで押せる */
 private fun choiceAt(l: TextLayoutResult, ranges: List<IntRange>, position: Offset, slop: Float): Int {
@@ -1005,13 +1022,19 @@ private fun BalloonText(
     val currentRuns by rememberUpdatedState(choiceRuns)
     // \_l のまとまりの中では、押したかどうかはまとまり全体で受ける（[ChoiceRouter]）
     val router = LocalChoiceRouter.current
-    val target = remember(router) {
-        router?.let { ChoiceRouter.Target({ layout }, { currentRanges }, { currentRuns }, { pressed = it }) }
+    // バルーンを動かすとき、選択肢の上かを見る（[LocalChoiceHits]）
+    val hits = LocalChoiceHits.current
+    val target = remember(router, hits) {
+        if (router != null || hits != null) ChoiceRouter.Target({ layout }, { currentRanges }, { currentRuns }, { pressed = it }) else null
     }
-    if (router != null && target != null) {
-        DisposableEffect(router, target) {
-            router.targets += target
-            onDispose { router.targets -= target }
+    if (target != null) {
+        DisposableEffect(router, hits, target) {
+            router?.targets?.add(target)
+            hits?.targets?.add(target)
+            onDispose {
+                router?.targets?.remove(target)
+                hits?.targets?.remove(target)
+            }
         }
     }
     Text(
