@@ -1,5 +1,7 @@
 package net.pono.droid.overlay
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -116,6 +118,10 @@ fun InputBalloon(request: InputRequest, skin: BalloonSkin?, onSubmit: (Int, Stri
         val skinImage = image
         if (skinImage != null) {
             SkinInputBox(skinImage, skin!!, text, { text = it.limitedTo(request.limit) }, request, password, multiLine, focus, submit)
+            Suggestions(
+                request, text.text, { text = it.limitedTo(request.limit) },
+                Modifier.width(balloonMaxWidth()).background(Color.White.copy(alpha = 0.85f), RoundedCornerShape(12.dp)),
+            )
             if (password) PasswordNote(Modifier.width(balloonMaxWidth()))
             InputButtons(cancel, submit, Modifier.background(Color.White.copy(alpha = 0.85f), RoundedCornerShape(12.dp)))
         } else {
@@ -270,11 +276,41 @@ private fun SimpleInputBox(
                     modifier = fieldModifier.fillMaxWidth().focusRequester(focus),
                 )
             }
+            Suggestions(request, text.text, { text = it.limitedTo(request.limit) }, fieldModifier.fillMaxWidth())
             if (password) PasswordNote(fieldModifier.padding(top = 4.dp))
             InputButtons(cancel, submit, Modifier.align(Alignment.End))
         }
     }
 }
+
+/**
+ * inputbox.autocomplete の候補のうち、打った文字で始まるもの（大文字小文字は区別しない）。欄が空のときと、打った文字と同じものは出さない。
+ * 押すとその文字にする
+ */
+@Composable
+private fun Suggestions(request: InputRequest, typed: String, onPick: (TextFieldValue) -> Unit, modifier: Modifier) {
+    if (typed.isEmpty() || request.suggestions.isEmpty()) return
+    val matches = request.suggestions.filter { it.startsWith(typed, ignoreCase = true) && it != typed }.take(MAX_SUGGESTIONS)
+    if (matches.isEmpty()) return
+    Column(modifier) {
+        for (s in matches) {
+            Text(
+                s,
+                color = SimpleText,
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onPick(TextFieldValue(s, TextRange(s.length))) }
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+/** 入力欄の下に出す候補の数 */
+private const val MAX_SUGGESTIONS = 5
 
 /** パスワードの箱に添える注意。入れたものはゴーストのスクリプトに渡る */
 @Composable

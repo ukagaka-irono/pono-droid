@@ -4176,11 +4176,31 @@ class GhostController(
         inputTimeout?.cancel()
         _state.update { it.copy(input = request) }
         if (request.kind == InputRequest.Kind.TEACH) raise("OnTeachStart", emptyList(), userInitiated = false)
+        requestAutocomplete(request)
         if (request.timeoutMs > 0) {
             inputTimeout = scope.launch {
                 delay(request.timeoutMs)
                 if (_state.value.input?.serial == request.serial) onInputCancel(request.serial, timeout = true)
             }
+        }
+    }
+
+    /**
+     * inputbox.autocomplete。inputbox・teachbox・communicatebox を開いたときに聞き、バイト値1で区切った候補が返れば箱に持たせる。
+     * 答えを待つ間に箱が替わっていたら捨てる
+     */
+    private fun requestAutocomplete(request: InputRequest) {
+        val refs = when (request.kind) {
+            InputRequest.Kind.INPUT -> listOf("inputbox", request.id)
+            InputRequest.Kind.TEACH -> listOf("teachbox")
+            InputRequest.Kind.COMMUNICATE -> listOf("communicatebox")
+            else -> return
+        }
+        scope.launch {
+            val value = request("inputbox.autocomplete", refs, translate = false) ?: return@launch
+            val list = value.split('\u0001').map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(MAX_AUTOCOMPLETE)
+            if (list.isEmpty()) return@launch
+            _state.update { s -> if (s.input?.serial == request.serial) s.copy(input = s.input.copy(suggestions = list)) else s }
         }
     }
 
@@ -6611,6 +6631,9 @@ class GhostController(
         /** 指で動かしたバルーンのずれ（ゴーストの profile のキー。後ろにスコープ番号）と、ずらせる量の上限（dp） */
         private const val PROFILE_BALLOON_DRAG = "balloon.drag."
         private const val MAX_BALLOON_DRAG = 4000
+
+        /** inputbox.autocomplete の候補の数の上限 */
+        private const val MAX_AUTOCOMPLETE = 500
 
         /** 開発用パレットの「SHIORI 内部のログを取る」を覚えておく名前 */
         private const val PROFILE_ENABLE_LOG = "developer.enable_log"

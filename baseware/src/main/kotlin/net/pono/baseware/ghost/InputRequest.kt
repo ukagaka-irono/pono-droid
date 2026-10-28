@@ -28,6 +28,8 @@ data class InputRequest(
     val balloonId: Int? = null,
     /** --reference=。答えのイベントの後ろに足す追加情報（書いた順） */
     val references: List<String> = emptyList(),
+    /** inputbox.autocomplete でゴーストが返した候補。打った文字で始まるものを入力欄の下に出す */
+    val suggestions: List<String> = emptyList(),
 ) {
     enum class Kind {
         /** 1行入力。答えは ID のイベント（On で始まるとき）か OnUserInput */

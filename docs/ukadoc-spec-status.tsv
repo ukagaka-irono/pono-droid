@@ -1541,7 +1541,7 @@ list/shiori-event/inputbox/OnTextAreaInputCancel.md	DONE	OnTextAreaInputCancel	�
 list/shiori-event/inputbox/OnUserInput.md	DONE	OnUserInput	実装済み
 list/shiori-event/inputbox/OnUserInputCancel.md	DONE	OnUserInputCancel	実装済み
 list/shiori-event/inputbox/index.md	NA	入力ボックスイベント	目次のページ
-list/shiori-event/inputbox/inputbox.autocomplete.md	BUILD	inputbox.autocomplete	入力の箱を開くときに聞き、返った候補（バイト値1区切り）を InputBalloon の入力欄の下に出す
+list/shiori-event/inputbox/inputbox.autocomplete.md	DONE	inputbox.autocomplete	inputbox・teachbox・communicatebox を開いたときに聞き、打った文字で始まる候補を入力欄の下に5つまで出す（押すとその文字になる）
 list/shiori-event/install/OnInstallBegin.md	DONE	OnInstallBegin	実装済み
 list/shiori-event/install/OnInstallComplete.md	DONE	OnInstallComplete	実装済み
 list/shiori-event/install/OnInstallCompleteAll.md	DONE	OnInstallCompleteAll	実装済み

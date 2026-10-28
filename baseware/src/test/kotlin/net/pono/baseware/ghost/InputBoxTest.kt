@@ -153,4 +153,28 @@ class InputBoxTest {
         }
     }
 
+    @Test
+    fun autocompleteSuggestionsComeWithTheBox() = runBlocking {
+        val shiori = ScriptedShiori(
+            mapOf(
+                "OnFirstBoot" to """\0\![open,inputbox,OnName,0]\e""",
+                "inputbox.autocomplete" to "りんご\u0001りす\u0001 \u0001りんご",
+                "OnTeachIt" to """\0\![open,teachbox]\e""",
+            ),
+        )
+        val scope = testScope()
+        val controller = testController(tmp.newTestGhost(), shiori, scope)
+        try {
+            controller.start()
+            // 空と重なりは除く
+            val box = withTimeout(5000) { controller.state.first { it.input?.suggestions?.isNotEmpty() == true } }.input!!
+            assertEquals(listOf("りんご", "りす"), box.suggestions)
+            assertEquals(listOf("inputbox", "OnName"), shiori.awaitEvent("inputbox.autocomplete"))
+            controller.raise("OnTeachIt", emptyList())
+            withTimeout(5000) { while (shiori.count("inputbox.autocomplete") < 2) delay(10) }
+            assertEquals(listOf("teachbox"), shiori.awaitEvent("inputbox.autocomplete"))
+        } finally {
+            scope.cancel()
+        }
+    }
 }
