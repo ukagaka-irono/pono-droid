@@ -1995,9 +1995,9 @@ spec/saori-ex/internal_crypto/internal_crypto_pkey.md	DONE	公開鍵暗号（Gen
 spec/saori-ex/internal_data/index.md	DONE	internal_data	java.util.zip と自前の形式の変換（hex・base64・base32・url・bech32）
 spec/saori-ex/internal_data/internal_data.Compress.md	DONE	Compress	java.util.zip と自前の形式の変換（hex・base64・base32・url・bech32）
 spec/saori-ex/internal_data/internal_data.Convert.md	DONE	Convert	java.util.zip と自前の形式の変換（hex・base64・base32・url・bech32）
-spec/saori-ex/internal_data/internal_data.Decompress.md	PARTIAL	Decompress	gzip（複数のメンバーも）・zlib・deflate は済み。brotli と zstd の展開は部品（ライブラリ）が要るので、まだ 400 unsupported algorithm
+spec/saori-ex/internal_data/internal_data.Decompress.md	DONE	Decompress	gzip（複数のメンバーも）・zlib・deflate と、brotli（org.brotli:dec）・zstd（zstd-jni。つないだフレームも）の展開。壊れている・切れている・後ろに余計なデータがあれば invalid encoding、8MB を超えれば too large
 spec/saori-ex/internal_file/index.md	DONE	internal_file	\![execute,extractarchive / compressarchive] と同じ zip4j。読み書きはゴーストのフォルダの中だけ（外は 400 path not allowed）
-spec/saori-ex/internal_file/internal_file.CompressArchive.md	PARTIAL	CompressArchive	overwrite・append・--password は済み。lzma とヘッダの暗号化（headerencrypt）は zip4j に無いので 500 unknown method
+spec/saori-ex/internal_file/internal_file.CompressArchive.md	IMPOSSIBLE	CompressArchive	overwrite・append・--password・lzma（ZIP の方式 14 を自分で書く。--password と一緒なら WinZip AES-256。ExtractArchive でも読める）は済み。headerencrypt（中央ディレクトリの暗号化）は PKWARE だけの仕様で公開された実装が無く、500 unknown method（決めたこと）
 spec/saori-ex/internal_file/internal_file.ExtractArchive.md	DONE	ExtractArchive	\![execute,extractarchive / compressarchive] と同じ zip4j。読み書きはゴーストのフォルダの中だけ（外は 400 path not allowed）
 spec/saori-ex/internal_file/internal_file.MediaInfo.md	DONE	MediaInfo	画像は BitmapFactory で大きさだけ、音声・動画は MediaMetadataRetriever（comment は取れないので空）。改行は 0x01、知らないキーは空
 spec/saori-ex/internal_file/internal_file_impl.md	DONE	MediaInfoを実装するベースウェア向けの注記	画像は BitmapFactory で大きさだけ、音声・動画は MediaMetadataRetriever（comment は取れないので空）。改行は 0x01、知らないキーは空

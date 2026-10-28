@@ -97,6 +97,11 @@ object NetTools {
         if (!zip.isFile) throw ArchiveException("file not found")
         val root = dest.canonicalFile
         if (!root.isDirectory && !root.mkdirs()) throw ArchiveException("create directory failed")
+        // LZMA で圧縮したものは zip4j では読めないので自分で読む
+        if (ZipArchive.needsOwnReader(zip)) {
+            val (count, size) = archiveErrors { ZipArchive.extract(zip, root, password) }
+            return ArchiveResult(count, zip.length(), size)
+        }
         var files = 0
         var total = 0L
         archiveErrors {
@@ -133,9 +138,9 @@ object NetTools {
 
     /**
      * [source]（ファイルかフォルダ）を [zip] にまとめる（[password] があれば AES で暗号にする）。[zip] 自身は中に入れない。
-     * [append] なら、あれば今の [zip] に足す（圧縮後の大きさは増えた分）
+     * [append] なら、あれば今の [zip] に足す（圧縮後の大きさは増えた分）。[lzma] なら LZMA で圧縮する
      */
-    fun compress(source: File, zip: File, password: String? = null, append: Boolean = false): ArchiveResult {
+    fun compress(source: File, zip: File, password: String? = null, append: Boolean = false, lzma: Boolean = false): ArchiveResult {
         val base = source.canonicalFile
         if (!base.exists()) throw ArchiveException(if (source.path.endsWith("/")) "directory not found" else "file not found")
         val out = zip.canonicalFile
@@ -146,6 +151,11 @@ object NetTools {
         out.parentFile?.let { if (!it.isDirectory && !it.mkdirs()) throw ArchiveException("create directory failed") }
         if (!append) out.delete()
         val before = if (out.isFile) out.length() else 0L
+        // LZMA と、LZMA の入った書庫に足すときは、zip4j では書けないので自分で書く
+        if (lzma || (out.isFile && ZipArchive.needsOwnReader(out))) {
+            archiveErrors { ZipArchive.write(files, base, out, password, append = out.isFile, lzma = lzma) }
+            return ArchiveResult(files.size, out.length() - before, total)
+        }
         archiveErrors {
             ZipFile(out, password?.toCharArray()).use { z ->
                 for (f in files) {

@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1457・一部だけ 17・作る 0・作れない 239・ベースウェアのことではない 337
+全 2050 項目: 済み 1458・一部だけ 15・作る 0・作れない 240・ベースウェアのことではない 337
 
 ## バルーンの descript.txt など
 
@@ -427,13 +427,9 @@
 
 ## 仕様（SSTP・SHIORI/3.0・SAORI・更新ファイルなど）
 
-済み 74 項目。
+済み 75 項目。
 
-### 🔧 一部だけ（2）
-- Decompress — gzip（複数のメンバーも）・zlib・deflate は済み。brotli と zstd の展開は部品（ライブラリ）が要るので、まだ 400 unsupported algorithm
-- CompressArchive — overwrite・append・--password は済み。lzma とヘッダの暗号化（headerencrypt）は zip4j に無いので 500 unknown method
-
-### ⛔ 作れない（9）
+### ⛔ 作れない（10）
 - DLL共通仕様 — Windows の DLL の決まり。pono-droid は SHIORI を組み込みで動かす
 - FMO/Mutex — Windows だけの仕組み
 - FMO用Mutex — Windows の名前つき Mutex
@@ -442,6 +438,7 @@
 - Mutex — Windows の名前つき Mutex（ssp / sakura）。ほかのアプリから見る手段が無い
 - HEADLINE/2.0 — ヘッドラインは Windows の DLL。決めたとおり作らない
 - PLUGIN/2.0 — プラグインは Windows の DLL。決めたとおり作らない
+- CompressArchive — overwrite・append・--password・lzma（ZIP の方式 14 を自分で書く。--password と一緒なら WinZip AES-256。ExtractArchive でも読める）は済み。headerencrypt（中央ディレクトリの暗号化）は PKWARE だけの仕様で公開された実装が無く、500 unknown method（決めたこと）
 - Direct SSTP — Windows の WM_COPYDATA。Android には同じものが無い
 
 ### ― ベースウェアのことではない（4）

@@ -1,5 +1,9 @@
 package net.pono.baseware.saori
 
+import org.brotli.dec.BrotliInputStream
+import java.io.InputStream
+import java.io.ByteArrayInputStream
+import com.github.luben.zstd.ZstdInputStream
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.text.Normalizer
@@ -142,7 +146,8 @@ object DataModule {
             },
             SaoriFunction("Decompress", 2, 2, listOf("data-in", "out", "charset")) { c ->
                 val method = c.arg(0).trim().lowercase()
-                if (method !in setOf("gzip", "zlib", "deflate")) throw SaoriException.bad("unsupported algorithm")
+                // brotli と zstd は展開だけ
+                if (method !in setOf("gzip", "zlib", "deflate", "brotli", "zstd")) throw SaoriException.bad("unsupported algorithm")
                 val data = c.bytes(1, "data", "base64")
                 SaoriResult(c.output(decompress(method, data), "text"))
             },
@@ -174,6 +179,18 @@ object DataModule {
     fun decompress(method: String, data: ByteArray): ByteArray {
         val out = ByteArrayOutputStream()
         when (method) {
+            "brotli" -> {
+                val result = decodeStream(data) { BrotliInputStream(it) }
+                // brotli の終わりは中から分からないので、最後の1バイトが無くても読めたら後ろに余計なデータがある
+                if (data.size > 1 && runCatching { decodeStream(data.copyOf(data.size - 1)) { BrotliInputStream(it) } }.isSuccess) {
+                    throw SaoriException.bad("invalid encoding")
+                }
+                return result
+            }
+            "zstd" -> {
+                if (data.isEmpty()) throw SaoriException.bad("invalid encoding")
+                return decodeStream(data) { ZstdInputStream(it) }
+            }
             "zlib", "deflate" -> {
                 val used = inflate(data, 0, method == "deflate", out)
                 if (used != data.size) throw SaoriException.bad("invalid encoding")
@@ -193,6 +210,30 @@ object DataModule {
                     pos += 8
                 }
             }
+        }
+        return out.toByteArray()
+    }
+
+    /** 部品（brotli / zstd）で展開する。壊れていれば invalid encoding、8MB を超えれば too large */
+    private fun decodeStream(data: ByteArray, open: (InputStream) -> InputStream): ByteArray {
+        val out = ByteArrayOutputStream()
+        try {
+            open(ByteArrayInputStream(data)).use { input ->
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                    if (out.size() > SaoriCodec.MAX_BYTES) throw SaoriException.bad("too large")
+                }
+            }
+        } catch (e: SaoriException) {
+            throw e
+        } catch (e: LinkageError) {
+            // zstd のネイティブの部品が読み込めない端末
+            throw SaoriException.bad("unsupported algorithm")
+        } catch (e: Exception) {
+            throw SaoriException.bad("invalid encoding")
         }
         return out.toByteArray()
     }

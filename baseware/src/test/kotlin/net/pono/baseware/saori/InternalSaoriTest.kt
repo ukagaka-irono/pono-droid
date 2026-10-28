@@ -187,6 +187,25 @@ class InternalSaoriTest {
         assertEquals("400 invalid encoding", error("internal_data", "Decompress", "zlib", "AAAA"))
         assertEquals("400 out of range", error("internal_data", "Compress", "zlib", "a", "--level=10"))
         assertEquals("400 unsupported algorithm", error("internal_data", "Compress", "brotli", "a"))
+
+        // brotli と zstd は展開だけ（brotli は brotli コマンドで作ったもの）
+        val text = (1..20).joinToString("") { "ぽの brotli テスト $it " }
+        val br = "oZAQwG+RYJ5icvCaIAssp8GX43QgJZcLDjlgfm0to8DSwSFpgDtd0zKN7Y0x4AAkp5XHwfEsIIViDuFY7xOHcmNkMltaWdvY2o0EJAqNiYWNg1veEAQ="
+        assertEquals(text, result("internal_data", "Decompress", "brotli", br))
+        val brBytes = java.util.Base64.getDecoder().decode(br)
+        val b64 = java.util.Base64.getEncoder()
+        assertEquals("400 invalid encoding", error("internal_data", "Decompress", "brotli", b64.encodeToString(brBytes.copyOf(brBytes.size - 3))))
+        assertEquals("400 invalid encoding", error("internal_data", "Decompress", "brotli", b64.encodeToString(brBytes + byteArrayOf(0))))
+        assertEquals("400 invalid encoding", error("internal_data", "Decompress", "brotli", ""))
+        val zs = com.github.luben.zstd.Zstd.compress(text.toByteArray())
+        assertEquals(text, result("internal_data", "Decompress", "zstd", b64.encodeToString(zs)))
+        // つないだフレームも読む。途中で切れている・後ろに余計なデータがあればだめ
+        assertEquals(text + text, result("internal_data", "Decompress", "zstd", b64.encodeToString(zs + zs)))
+        assertEquals("400 invalid encoding", error("internal_data", "Decompress", "zstd", b64.encodeToString(zs.copyOf(zs.size - 2))))
+        assertEquals("400 invalid encoding", error("internal_data", "Decompress", "zstd", b64.encodeToString(zs + byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8))))
+        assertEquals("400 unsupported algorithm", error("internal_data", "Compress", "zstd", "a"))
+        val big = com.github.luben.zstd.Zstd.compress(ByteArray(9 shl 20))
+        assertEquals("400 too large", error("internal_data", "Decompress", "zstd", b64.encodeToString(big)))
     }
 
     // ---- internal_time ----
@@ -490,7 +509,11 @@ class InternalSaoriTest {
         assertEquals("11", c.values[1])
         assertEquals("400 file exists", error("internal_file", "CompressArchive", "save/backup.zip", "save/data"))
         assertEquals(200, call("internal_file", "CompressArchive", "save/backup.zip", "save/data", "--option=overwrite").code)
-        assertEquals("500 unknown method", error("internal_file", "CompressArchive", "save/x.zip", "save/data", "--option=lzma"))
+        // lzma（パスワードも一緒に）は自分で書き、読める。ヘッダの暗号化は作れない
+        assertEquals("2", call("internal_file", "CompressArchive", "save/lzma.zip", "save/data", "--option=lzma", "--password=pw").result)
+        assertEquals(200, call("internal_file", "ExtractArchive", "save/lzma.zip", "save/lz", "--password=pw").code)
+        assertEquals("hello", File(master, "save/lz/a.txt").readText())
+        assertEquals("500 unknown method", error("internal_file", "CompressArchive", "save/x.zip", "save/data", "--option=headerencrypt", "--password=pw"))
         assertEquals("400 file not found", error("internal_file", "CompressArchive", "save/x.zip", "save/none"))
         assertEquals("400 path not allowed", error("internal_file", "CompressArchive", "../../../x.zip", "save/data"))
         val x = call("internal_file", "ExtractArchive", "save/backup.zip", "save/restore")

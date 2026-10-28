@@ -48,9 +48,9 @@ object FileModule {
                 if (!second.exists()) throw SaoriException.bad("file not found")
                 if (!second.isDirectory) throw SaoriException.fail("file not found")
                 if (first.exists() && "overwrite" !in opts && "append" !in opts) throw SaoriException.bad("file exists")
-                // ZIP の部品（zip4j）は LZMA での圧縮とヘッダの暗号化を持たない
-                if ("lzma" in opts || "headerencrypt" in opts) throw SaoriException.fail("unknown method")
-                NetTools.compress(second, first, password, append = "append" in opts && "overwrite" !in opts)
+                // ヘッダ（中央ディレクトリ）の暗号化は PKWARE だけの仕様で、作れない
+                if ("headerencrypt" in opts) throw SaoriException.fail("unknown method")
+                NetTools.compress(second, first, password, append = "append" in opts && "overwrite" !in opts, lzma = "lzma" in opts)
             } else {
                 if (!first.isFile) throw SaoriException.bad("file not found")
                 NetTools.extract(first, second, password)
