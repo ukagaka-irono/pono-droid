@@ -325,6 +325,20 @@ class MultiGhostTest {
     }
 
     @Test
+    fun mediaPlayFallsBackToOnMusicPlay() = run {
+        val a = boot("a", mapOf("OnMusicPlay" to """\0いい曲\e"""))
+        a.c.onMediaPlay(false, "うた", "かしゅ", listOf("album" to "あるばむ", "duration" to "180"))
+        assertEquals(listOf("うた", "かしゅ", "album\u0001あるばむ", "duration\u0001180"), a.shiori.awaitEvent("OnMusicPlayEx"))
+        assertEquals(listOf("うた", "かしゅ"), a.shiori.awaitEvent("OnMusicPlay"))
+        // 動画は OnVideoPlayEx だけ
+        a.c.onMediaPlay(true, "どうが", "", listOf("source" to "ブラウザ"))
+        assertEquals(listOf("どうが", "", "source\u0001ブラウザ"), a.shiori.awaitEvent("OnVideoPlayEx"))
+        delay(200)
+        assertEquals(1, a.shiori.count("OnMusicPlay"))
+        assertEquals(1, a.shiori.count("OnMusicPlayEx"))
+    }
+
+    @Test
     fun desktopWallpaperChangeIsSent() = run {
         val platform = object : GhostPlatform by RecordingPlatform() {
             override fun desktopWallpaperColor(): Int = 0x336699

@@ -108,5 +108,26 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Desktop mascot (ukagaka ghost) shown over other apps" />
         </service>
+
+        <!-- 通知へのアクセスを許してもらうためだけのもの。許されると、再生中の曲や動画をゴーストに伝えられる（通知そのものは読まない） -->
+        <service
+            android:name=".overlay.MediaListenerService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
+
+    <!-- 再生中の曲や動画のアプリの名前と、ブラウザ（ブラウザで鳴っているものは動画とする）を見分けるため -->
+    <queries>
+        <intent>
+            <action android:name="android.media.browse.MediaBrowserService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
 </manifest>

@@ -1184,6 +1184,19 @@ class GhostOverlayService : LifecycleService() {
         )
     }
 
+    /** 端末で鳴っている曲や動画を見張る。設定で選んでいて、通知へのアクセスがあるときだけ */
+    private var mediaWatcher: MediaWatcher? = null
+
+    private fun updateMedia() {
+        if (OverlaySettings.media(OverlaySettings.prefs(this)) && MediaWatcher.hasAccess(this)) {
+            val w = mediaWatcher ?: MediaWatcher(this) { p -> controllers.forEach { it.onMediaPlay(p.video, p.title, p.artist, p.extras) } }
+            mediaWatcher = w
+            w.start()
+        } else {
+            mediaWatcher?.stop()
+        }
+    }
+
     /** アプリの画面で変えたキャラクターの大きさ。変わったらゴーストに伝える（OnShellScaling） */
     private var characterScale = 1f
     /** バルーンの大きさ（OnBalloonScaling） */
@@ -1201,6 +1214,7 @@ class GhostOverlayService : LifecycleService() {
                 controllers.forEach { it.onBalloonScaling((balloonScale * 100).roundToInt(), (old * 100).roundToInt()) }
             }
             OverlaySettings.KEY_SSTP -> updateSstp()
+            OverlaySettings.KEY_MEDIA -> updateMedia()
             OverlaySettings.KEY_ALIGNMENT_POLICY -> controllers.forEach { it.onAlignmentPolicyChanged() }
             OverlaySettings.KEY_VOICE -> {
                 updateVoice()
@@ -1222,6 +1236,7 @@ class GhostOverlayService : LifecycleService() {
             balloonScale = OverlaySettings.balloonScale(it)
             it.registerOnSharedPreferenceChangeListener(scaleListener)
         }
+        updateMedia()
         registerReceiver(
             screenReceiver,
             IntentFilter().apply {
@@ -1348,6 +1363,7 @@ class GhostOverlayService : LifecycleService() {
     override fun onDestroy() {
         if (instance === this) instance = null
         OverlaySettings.prefs(this).unregisterOnSharedPreferenceChangeListener(scaleListener)
+        mediaWatcher?.stop()
         unregisterReceiver(screenReceiver)
         unregisterReceiver(batteryReceiver)
         runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback) }
@@ -1496,6 +1512,11 @@ class GhostOverlayService : LifecycleService() {
 
         /** 動いているサービス（\![open,dialog,save] の保存先を見張るため） */
         private var instance: GhostOverlayService? = null
+
+        /** 通知へのアクセスを許された・取り消された（[MediaListenerService] から） */
+        fun onMediaAccessChanged() {
+            instance?.updateMedia()
+        }
 
         /**
          * 発言履歴の顔。[controller] のゴーストの [surfaceId] の絵から顔を切り出し、[sizePx] 四方にしたもの

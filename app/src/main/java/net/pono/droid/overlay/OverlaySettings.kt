@@ -73,4 +73,12 @@ object OverlaySettings {
     const val KEY_USB = "usb"
 
     fun usb(prefs: SharedPreferences) = prefs.getBoolean(KEY_USB, false)
+
+    /**
+     * 端末で鳴っている曲や動画をゴーストに伝えるか（OnMusicPlayEx / OnVideoPlayEx / OnMusicPlay。
+     * 通知へのアクセスも要る。最初は伝えない）
+     */
+    const val KEY_MEDIA = "media"
+
+    fun media(prefs: SharedPreferences) = prefs.getBoolean(KEY_MEDIA, false)
 }

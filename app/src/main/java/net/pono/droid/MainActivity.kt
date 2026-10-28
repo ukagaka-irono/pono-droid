@@ -1,5 +1,7 @@
 package net.pono.droid
 
+import net.pono.droid.overlay.MediaWatcher
+import android.content.Context
 import android.Manifest
 import android.content.Intent
 import android.content.SharedPreferences
@@ -295,6 +297,13 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                     )
                 }
                 item(key = "setting:usb") { SettingSwitch("USB 機器をつないだり外したりしたらゴーストに伝える", OverlaySettings.KEY_USB, OverlaySettings::usb) }
+                item(key = "setting:media") {
+                    SettingSwitch(
+                        "再生中の曲や動画をゴーストに伝える（通知へのアクセス）", OverlaySettings.KEY_MEDIA, OverlaySettings::media,
+                        access = SpecialAccess(MediaWatcher::hasAccess) { it.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
+                        onDenied = { scope.launch { snackbar.showSnackbar("通知へのアクセスがありません") } },
+                    )
+                }
                 item(key = "setting:mail") { MailAccountRow(onMessage = { scope.launch { snackbar.showSnackbar(it) } }) }
                 item(key = "version") {
                     Text(
@@ -346,6 +355,7 @@ private fun ScaleSlider(label: String, key: String, read: (SharedPreferences) ->
 
 /**
  * 入り切りの設定。切り替えたときに保存する。permission があれば、入れる前に許可を求め、許されなければ切ったままにする。
+ * access（通知へのアクセスなど）があれば、入れる前に端末の設定の画面を開き、戻ってきて許されていれば入れる。
  * 後から端末の設定で許可を取り消されたら、設定が入っていても切れているように出す（画面に戻るたびに確かめる）
  */
 @Composable
@@ -354,17 +364,27 @@ private fun SettingSwitch(
     key: String,
     read: (SharedPreferences) -> Boolean,
     permission: String? = null,
+    access: SpecialAccess? = null,
     onDenied: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val prefs = remember { OverlaySettings.prefs(context) }
     var checked by remember { mutableStateOf(read(prefs)) }
-    fun hasPermission() = permission == null || ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+    fun hasPermission() = (permission == null || ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) &&
+        (access == null || access.granted(context))
     var granted by remember { mutableStateOf(hasPermission()) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { granted = hasPermission() }
+    // 端末の設定の画面へ許しをもらいに行った。戻ってきたら確かめる
+    var asking by remember { mutableStateOf(false) }
     fun save(value: Boolean) {
         checked = value
         prefs.edit().putBoolean(key, value).apply()
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        granted = hasPermission()
+        if (asking) {
+            asking = false
+            if (granted) save(true) else onDenied()
+        }
     }
     val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         granted = ok
@@ -374,10 +394,23 @@ private fun SettingSwitch(
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         Switch(
             checked = checked && granted,
-            onCheckedChange = { on -> if (on && permission != null) request.launch(permission) else save(on) },
+            onCheckedChange = { on ->
+                when {
+                    on && permission != null && ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED ->
+                        request.launch(permission)
+                    on && access != null && !access.granted(context) -> {
+                        asking = true
+                        access.open(context)
+                    }
+                    else -> save(on)
+                }
+            },
         )
     }
 }
+
+/** 端末の設定の画面で許してもらうアクセス（通知へのアクセスなど）。[granted] で確かめ、無ければ [open] でその画面を開く */
+private class SpecialAccess(val granted: (Context) -> Boolean, val open: (Context) -> Unit)
 
 /** メールの確認（\![biff]）のアカウントと、確かめる間隔。アカウントは1つだけ */
 @Composable

@@ -1709,8 +1709,8 @@ list/shiori-event/other/OnInternalSaoriComplete.md	DONE	OnInternalSaoriComplete	
 list/shiori-event/other/OnInternalSaoriFailure.md	DONE	OnInternalSaoriFailure	内蔵 SAORI の --async の結果（識別子が On で始まらないとき）
 list/shiori-event/other/OnKeyPress.md	IMPOSSIBLE	OnKeyPress	オーバーレイがキーを受けると、ほかのアプリへの入力を横取りする（決めたこと）
 list/shiori-event/other/OnLanguageChange.md	DONE	OnLanguageChange	実装済み
-list/shiori-event/other/OnMusicPlay.md	PARTIAL	OnMusicPlay	SSTP の GIVE Song だけ。端末で鳴っている曲（MediaSession）からは送らない
-list/shiori-event/other/OnMusicPlayEx.md	BUILD	OnMusicPlayEx	🔒 通知へのアクセスを許したときだけ MediaSessionManager で曲名・アーティスト・album・duration などを送る。ssp-gap では ⛔
+list/shiori-event/other/OnMusicPlay.md	DONE	OnMusicPlay	SSTP の GIVE Song と、設定で選んで通知へのアクセスを許したときの端末の MediaSession（OnMusicPlayEx に答えが無いとき）
+list/shiori-event/other/OnMusicPlayEx.md	DONE	OnMusicPlayEx	🔒 設定で選び、通知へのアクセスを許したときだけ。曲名・アーティストと album・albumartist・subtitle・source・duration・genre・composer（artwork は無し）
 list/shiori-event/other/OnNekodorifExist.md	IMPOSSIBLE	OnNekodorifExist	Windows の猫どりふ
 list/shiori-event/other/OnOtherGhostTalk.md	DONE	OnOtherGhostTalk	実装済み
 list/shiori-event/other/OnRecommendsiteChoice.md	DONE	OnRecommendsiteChoice	実装済み
@@ -1722,7 +1722,7 @@ list/shiori-event/other/OnSoundSpectrum.md	DONE	OnSoundSpectrum	鳴らしてい�
 list/shiori-event/other/OnSoundStop.md	DONE	OnSoundStop	実装済み
 list/shiori-event/other/OnTextDrop.md	DONE	OnTextDrop	実装済み
 list/shiori-event/other/OnTranslate.md	DONE	OnTranslate	実装済み
-list/shiori-event/other/OnVideoPlayEx.md	BUILD	OnVideoPlayEx	🔒 OnMusicPlayEx と同じ仕組みで、動画のセッションのときに送る。ssp-gap では ⛔
+list/shiori-event/other/OnVideoPlayEx.md	DONE	OnVideoPlayEx	🔒 OnMusicPlayEx と同じ仕組み。動画のアプリかブラウザのセッションのときに送る
 list/shiori-event/other/caption_archive_error_codes.md	DONE	アーカイブ操作エラーコード	決まった値で送る
 list/shiori-event/other/caption_musicplayex_codes.md	NA	OnMusicPlayExの拡張情報リスト	OnMusicPlayEx の値の表
 list/shiori-event/other/index.md	NA	その他イベント	目次のページ

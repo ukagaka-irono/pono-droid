@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1374・一部だけ 32・作る 28・作れない 278・ベースウェアのことではない 338
+全 2050 項目: 済み 1377・一部だけ 31・作る 26・作れない 278・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -322,14 +322,7 @@
 
 ## SHIORI イベント
 
-済み 260 項目。
-
-### 🔨 作る（2）
-- OnMusicPlayEx — 🔒 通知へのアクセスを許したときだけ MediaSessionManager で曲名・アーティスト・album・duration などを送る。ssp-gap では ⛔
-- OnVideoPlayEx — 🔒 OnMusicPlayEx と同じ仕組みで、動画のセッションのときに送る。ssp-gap では ⛔
-
-### 🔧 一部だけ（1）
-- OnMusicPlay — SSTP の GIVE Song だけ。端末で鳴っている曲（MediaSession）からは送らない
+済み 263 項目。
 
 ### ⛔ 作れない（53）
 - OnBasewareUpdating — アプリの更新は Play ストアが行い、置き換える前にアプリへ知らせが来ない

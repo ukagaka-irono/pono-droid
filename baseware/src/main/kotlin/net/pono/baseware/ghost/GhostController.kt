@@ -2459,6 +2459,26 @@ class GhostController(
     /** パッシブモードか誘導モード。ユーザーの操作（ファイルを渡す・切り替え・更新・消去など）を止める */
     private val restricted: Boolean get() = _state.value.let { it.passive || it.induction }
 
+    // ---- 端末で鳴っている曲や動画（OnMusicPlayEx / OnVideoPlayEx / OnMusicPlay） ----
+
+    /**
+     * 端末で曲や動画の再生が始まった。動画なら OnVideoPlayEx、曲なら OnMusicPlayEx を送り、それに答えが無ければ OnMusicPlay。
+     * [extras] は album・duration などの拡張情報（名前と内容。バイト値1でつないで Reference2 から）。話している間は返事を出さない
+     */
+    fun onMediaPlay(video: Boolean, title: String, artist: String, extras: List<Pair<String, String>>) {
+        val refs = listOf(title, artist) + extras.map { "${it.first}\u0001${it.second}" }
+        scope.launch {
+            val script = if (video) {
+                request("OnVideoPlayEx", refs)
+            } else {
+                request("OnMusicPlayEx", refs) ?: request("OnMusicPlay", listOf(title, artist))
+            } ?: return@launch
+            if (_state.value.talking || _state.value.waitingChoice) return@launch
+            cancelScript()
+            runScript(script)
+        }
+    }
+
     // ---- 端末の壁紙（OnDesktopWallpaperChange） ----
 
     /** 端末の壁紙が変わった。[self] なら pono-droid が \![set,wallpaper] で変えたもの */
