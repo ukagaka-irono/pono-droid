@@ -95,6 +95,11 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- AI グラフ（メニューの「AI グラフ」と \![open,aigraph]） -->
+        <activity
+            android:name=".AiGraphActivity"
+            android:exported="false" />
+
         <!-- readme などを読む画面（\![open,readme]） -->
         <activity
             android:name=".TextViewerActivity"

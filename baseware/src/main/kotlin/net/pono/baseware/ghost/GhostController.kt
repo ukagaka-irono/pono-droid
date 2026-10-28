@@ -277,6 +277,12 @@ interface GhostPlatform {
      */
     fun showTrayBalloon(title: String, text: String, icon: String) {}
 
+    /**
+     * AI グラフ（getaistate / getaistateex）をレーダーチャートの画面で出す。[logo] は背景の画像（shiori.logo.*）。
+     * 出せたら true（出せなければ、バルーンに文字で並べる）
+     */
+    fun openAiGraph(title: String, graphs: List<AiGraph>, logo: AiGraphLogo?): Boolean = false
+
     /** \![set,tasktrayicon,ファイル,文字]。常駐の通知に [text] を出す */
     fun setTrayText(text: String) {}
 
@@ -3808,6 +3814,30 @@ class GhostController(
         return sb.toString()
     }
 
+    /**
+     * メニューの「AI グラフ」と \![open,aigraph]。レーダーチャートの画面で出し、出せなければバルーンに文字で並べる。
+     * 背景は descript.txt の shiori.logo.file（無ければ ai.png。グラフが何枚もあれば ai0.png、ai1.png…）
+     */
+    private suspend fun showAiGraph(scopeId: Int) {
+        val raws = aiStates().takeIf { it.isNotEmpty() } ?: return
+        val graphs = raws.map(AiGraph::parse)
+        if (platform.openAiGraph(ghost.name, graphs, aiGraphLogo(graphs.size))) return
+        aiStateScript(scopeId)?.let { runScript(it) }
+    }
+
+    /** AI グラフの背景（shiori.logo.file / align / x / y）。どのグラフにも画像が無ければ null */
+    private fun aiGraphLogo(count: Int): AiGraphLogo? {
+        val name = ghost.descript["shiori.logo.file"]?.trim()?.takeIf { it.isNotEmpty() } ?: "ai.png"
+        val base = name.substringBeforeLast('.', name)
+        val ext = name.substringAfterLast('.', "").let { if (it.isEmpty()) "" else ".$it" }
+        val files = (0 until count).map { i ->
+            TextCharsets.fileIn(ghost.masterDir, "$base$i$ext") ?: if (count == 1) TextCharsets.fileIn(ghost.masterDir, name) else null
+        }
+        if (files.all { it == null }) return null
+        val align = ghost.descript["shiori.logo.align"]?.trim()?.lowercase()?.takeIf { it in AiGraphLogo.ALIGNS } ?: "lefttop"
+        return AiGraphLogo(files, align, ghost.descript.int("shiori.logo.x") ?: 0, ghost.descript.int("shiori.logo.y") ?: 0)
+    }
+
     /** \![open,rateofusegraph] とメニューの「使用率」。起動していた時間の長いゴーストから順に、割合と時間を並べる */
     private fun rateOfUseScript(scopeId: Int): String? {
         val usage = history?.usage()?.takeIf { it.isNotEmpty() } ?: return null
@@ -4860,7 +4890,7 @@ class GhostController(
                     "pono:terms-open" -> showTerms()
                     "pono:sstp-block" -> blockLastSstpSender()
                     "pono:biff" -> checkMail(null)
-                    "pono:aistate" -> scope.launch { aiStateScript(scopeId)?.let { runScript(it) } }
+                    "pono:aistate" -> scope.launch { showAiGraph(scopeId) }
                     "pono:rateofuse" -> rateOfUseScript(scopeId)?.let { runScript(it) }
                     "pono:terms" -> raise(if (refs.firstOrNull() == "accept") "OnGhostTermsAccept" else "OnGhostTermsDecline", emptyList())
                     "pono:menu" -> scope.launch { runScript(basewareMenu(scopeId)) }
@@ -6375,7 +6405,7 @@ class GhostController(
             when (kind) {
                 "readme" -> platform.showText(ghost.name, readmeText())
                 "terms" -> return showTerms()
-                "aigraph" -> scope.launch { aiStateScript(0)?.let { runScript(it) } }
+                "aigraph" -> scope.launch { showAiGraph(0) }
                 "rateofusegraph", "rateofusegraphballoon", "rateofusegraphtotal" -> rateOfUseScript(0)?.let { runScript(it) } ?: return false
                 // SSP のヘルプの代わりに、pono-droid の説明を開く
                 "help" -> platform.openUrl(HELP_URL)

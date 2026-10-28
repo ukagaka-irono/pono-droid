@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1438・一部だけ 30・作る 5・作れない 239・ベースウェアのことではない 338
+全 2050 項目: 済み 1442・一部だけ 30・作る 1・作れない 239・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -25,13 +25,7 @@
 
 ## ゴーストの descript.txt
 
-済み 64 項目。
-
-### 🔨 作る（4）
-- shiori.logo.align,位置情報 — AI グラフを絵で描くとき（今はラベルと値を文字で並べる）の背景画像の基準
-- shiori.logo.file,ファイル名 — 同上。背景画像（複数・_dark）
-- shiori.logo.x,X座標 — 同上。背景画像の X
-- shiori.logo.y,Y座標 — 同上。背景画像の Y
+済み 68 項目。
 
 ### 🔧 一部だけ（2）
 - descript.txt（Ghostの） — 説明のページ。\ や % で始まる値を捨てる決まりはしていない（名前などをメニューのスクリプトにそのまま入れている）

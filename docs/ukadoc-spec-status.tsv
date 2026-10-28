@@ -239,10 +239,10 @@ descript/ghost/descript-txt/shiori.cache.md	NA	shiori.cache,数値	ゴースト�
 descript/ghost/descript-txt/shiori.encoding.md	DONE	shiori.encoding,文字コード	SHIORI とのやりとりの最初の文字コード（Charset ヘッダが来たらそちら）
 descript/ghost/descript-txt/shiori.escape_unknown.md	DONE	shiori.escape_unknown,0/1	できない文字を ?escape!unicode[0xABCD] にして渡し、答えで戻す
 descript/ghost/descript-txt/shiori.forceencoding.md	DONE	shiori.forceencoding,文字コード	Charset ヘッダを見ずにこの文字コードに決める
-descript/ghost/descript-txt/shiori.logo.align.md	BUILD	shiori.logo.align,位置情報	AI グラフを絵で描くとき（今はラベルと値を文字で並べる）の背景画像の基準
-descript/ghost/descript-txt/shiori.logo.file.md	BUILD	shiori.logo.file,ファイル名	同上。背景画像（複数・_dark）
-descript/ghost/descript-txt/shiori.logo.x.md	BUILD	shiori.logo.x,X座標	同上。背景画像の X
-descript/ghost/descript-txt/shiori.logo.y.md	BUILD	shiori.logo.y,Y座標	同上。背景画像の Y
+descript/ghost/descript-txt/shiori.logo.align.md	DONE	shiori.logo.align,位置情報	AI グラフの画面（レーダーチャート）で、shiori.logo.x / y の基準の角にする（lefttop・leftbottom・righttop・rightbottom）
+descript/ghost/descript-txt/shiori.logo.file.md	DONE	shiori.logo.file,ファイル名	AI グラフの画面の背景に敷く（無ければ ai.png。何枚もあれば ai0.png・ai1.png…）。アプリはいつも明るい画面なので _dark は使わない
+descript/ghost/descript-txt/shiori.logo.x.md	DONE	shiori.logo.x,X座標	AI グラフの画面の背景の画像の X（画像の1ピクセルを 1dp）
+descript/ghost/descript-txt/shiori.logo.y.md	DONE	shiori.logo.y,Y座標	AI グラフの画面の背景の画像の Y（画像の1ピクセルを 1dp）
 descript/ghost/descript-txt/shiori.md	DONE	shiori,ファイル名	使う SHIORI を選ぶのに読む
 descript/ghost/descript-txt/shiori.version.md	NA	shiori.version,バージョン	pono-droid で動く SHIORI（YAYA・里々・華和梨・かがり）はどれも 3.0。2.x は送らない
 descript/ghost/descript-txt/sstp.allowcommunicate.md	DONE	sstp.allowcommunicate,数値	0 なら COMMUNICATE と GIVE の Document を 420 で断る

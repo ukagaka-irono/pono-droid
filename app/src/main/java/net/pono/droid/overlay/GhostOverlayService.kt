@@ -600,6 +600,11 @@ class GhostOverlayService : LifecycleService() {
                         refreshForeground()
                     }
 
+                    override fun openAiGraph(title: String, graphs: List<net.pono.baseware.ghost.AiGraph>, logo: net.pono.baseware.ghost.AiGraphLogo?): Boolean {
+                        net.pono.droid.AiGraphActivity.start(this@GhostOverlayService, graphs, logo)
+                        return true
+                    }
+
                     override fun setTrayIcon(file: File?) {
                         trayIcon = file
                         refreshForeground()
