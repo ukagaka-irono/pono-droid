@@ -1949,9 +1949,9 @@ list/shiori-resource/tooltip/index.md	NA	ツールチップ系	目次のペー�
 list/shiori-resource/tooltip/tooltip.md	DONE	tooltip	実装済み
 list/shiori-resource/update/index.md	NA	更新情報	目次のページ
 list/shiori-resource/update/other_homeurl_override.md	DONE	other_homeurl_override	実装済み
-manual/balloon.md	PARTIAL	バルーン	balloons*s.txt・arrows* など・marker・clickwait・sstp・online の画像と、\p[2] 以降の balloonp*def*.png / .pna / s.txt と arrowp*def など（無ければ \1 用）は使う。thumbnail.png はまだ
+manual/balloon.md	DONE	バルーン	balloons*s.txt・arrows* など・marker・clickwait・sstp・online の画像と、\p[2] 以降の balloonp*def*.png / .pna / s.txt と arrowp*def など（無ければ \1 用）を使う。thumbnail.png はアプリのバルーンの一覧と、ゴーストのバルーンを選ぶメニューに出す
 manual/directory.md	NA	全体の構成	フォルダの構成の説明
-manual/ghost.md	PARTIAL	ゴースト	thumbnail.png（一覧のサムネイル）・*.ico・ai0.png / ai0_dark.png（AI グラフの絵）を使っていない
+manual/ghost.md	DONE	ゴースト	thumbnail.png（ghost/master。アプリのゴーストの一覧に出す）・*.ico（descript.txt の icon。常駐の通知）・ai0.png など（AI グラフの背景）を使う。ai0_dark.png は、アプリがいつも明るい画面なので使わない（shiori.logo.file と同じ）
 manual/install.md	DONE	インストール	.nar（zip）のインストール。lzh・cab・自己解凍 exe は対象外
 manual/owner-draw-menu.md	DONE	オーナードローメニュー	メニューはバルーンに出す。絵の指定は決めたとおり作らない
 manual/shell.md	PARTIAL	シェル	surface*.png や element の APNG / GIF / WebP は動く（Android 9 から）。SERIKO のコマより上に出る

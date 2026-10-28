@@ -44,6 +44,9 @@ class Balloon private constructor(val dir: File, private val base: Descript, pri
     /** descript.txt の craftmanurl（作者のページ）。http か https のときだけ */
     val craftmanUrl: String? get() = base["craftmanurl"]?.trim()?.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
 
+    /** 一覧のサムネイル（thumbnail.png）。無ければ null */
+    fun thumbnailFile(): File? = files["thumbnail.png"]?.takeIf { it.isFile }
+
     /** descript.txt の readme（無ければ readme.txt）。バルーンのフォルダの中だけ */
     fun readmeFile(): File? = TextCharsets.fileIn(dir, base["readme"]?.takeIf { it.isNotBlank() } ?: "readme.txt")
 

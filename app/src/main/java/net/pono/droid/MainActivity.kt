@@ -1,5 +1,14 @@
 package net.pono.droid
 
+import java.io.File
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.produceState
+import androidx.compose.foundation.Image
+import android.graphics.BitmapFactory
 import net.pono.droid.overlay.MediaWatcher
 import android.content.Context
 import android.Manifest
@@ -588,6 +597,9 @@ private data class GhostItem(
     /** バルーン置き場のディレクトリ名 → バルーンの名前。null は pono-droid の簡易バルーン */
     val balloons: List<Pair<String?, String>>,
     val selectedBalloon: String?,
+    /** 選ぶメニューに出すサムネイル（thumbnail.png）。シェルとバルーンのディレクトリ名から */
+    val shellThumbnails: Map<String?, File> = emptyMap(),
+    val balloonThumbnails: Map<String?, File> = emptyMap(),
     /** ゴーストの recommended.balloon（ディレクトリ名。入っていなければ null）と、警告に出す名前。推奨が無ければ両方 null */
     val recommendedBalloon: String? = null,
     val recommendedBalloonLabel: String? = null,
@@ -597,6 +609,8 @@ private fun GhostItem(ghost: Ghost, balloons: BalloonRepository) = GhostItem(
     ghost = ghost,
     shells = ghost.shellDirs.map { dir -> dir.name to Shell.nameOf(dir) },
     selectedShell = ghost.shellDir()?.name,
+    shellThumbnails = ghost.shellDirs.mapNotNull { dir -> Shell.thumbnailOf(dir)?.let { Pair<String?, File>(dir.name, it) } }.toMap(),
+    balloonThumbnails = balloons.list().mapNotNull { b -> b.thumbnailFile()?.let { b.dir.name to it } }.toMap(),
     balloons = listOf<Pair<String?, String>>(null to "簡易バルーン") + balloons.list().map { it.dir.name to it.name },
     selectedBalloon = ghost.balloon(balloons)?.dir?.name,
     recommendedBalloon = ghost.recommendedBalloon(balloons)?.dir?.name,
@@ -631,9 +645,15 @@ private fun BalloonRow(balloon: Balloon, inUse: Boolean, onReadme: () -> Unit, o
     var confirm by remember { mutableStateOf(false) }
     val hasReadme = remember(balloon) { balloon.readmeFile() != null }
     val url = balloon.craftmanUrl
+    val thumbnail = rememberThumbnail(remember(balloon) { balloon.thumbnailFile() }, THUMBNAIL_SIZE)
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                thumbnail?.let {
+                    // 名前がすぐ横にあるので、読み上げは名前に任せる
+                    Image(it, contentDescription = null, modifier = Modifier.size(THUMBNAIL_SIZE).clip(MaterialTheme.shapes.small))
+                    Spacer(Modifier.width(12.dp))
+                }
                 Column(Modifier.weight(1f)) {
                     Text(balloon.name + if (inUse) "（使用中）" else "", style = MaterialTheme.typography.bodyLarge)
                     balloon.descript["craftmanw"]?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -665,17 +685,32 @@ private fun BalloonRow(balloon: Balloon, inUse: Boolean, onReadme: () -> Unit, o
     }
 }
 
-/** 「シェル: 名前」のようなボタンと、選ぶためのメニュー。選べるものが1つしか無ければ押せない */
+/** 「シェル: 名前」のようなボタンと、選ぶためのメニュー。選べるものが1つしか無ければ押せない。[thumbnails] があれば項目の頭に出す */
 @Composable
-private fun <T> SelectButton(label: String, options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
+private fun <T> SelectButton(
+    label: String,
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    thumbnails: Map<T, File> = emptyMap(),
+) {
     var open by remember { mutableStateOf(false) }
     val current = options.firstOrNull { it.first == selected }?.second ?: "なし"
     Box(modifier) {
         TextButton(onClick = { open = true }, enabled = options.size > 1) { Text("$label: $current") }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             for ((value, name) in options) {
+                val thumbnail = thumbnails[value]
                 DropdownMenuItem(
                     text = { Text(if (value == selected) "✓ $name" else name) },
+                    leadingIcon = thumbnail?.let { file ->
+                        {
+                            rememberThumbnail(file, MENU_THUMBNAIL_SIZE)?.let {
+                                Image(it, contentDescription = null, modifier = Modifier.size(MENU_THUMBNAIL_SIZE).clip(MaterialTheme.shapes.extraSmall))
+                            }
+                        }
+                    },
                     onClick = {
                         open = false
                         if (value != selected) onSelect(value)
@@ -705,9 +740,15 @@ private fun GhostRow(
     var confirmUninstall by remember { mutableStateOf(false) }
     // 推奨と違うバルーンを選んだ。切り替える前に確かめる（選んだバルーンと、その警告）
     var pendingBalloon by remember { mutableStateOf<Pair<String?, String>?>(null) }
+    val thumbnail = rememberThumbnail(remember(ghost) { ghost.thumbnailFile() }, THUMBNAIL_SIZE)
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                thumbnail?.let {
+                    // 名前がすぐ横にあるので、読み上げは名前に任せる
+                    Image(it, contentDescription = null, modifier = Modifier.size(THUMBNAIL_SIZE).clip(MaterialTheme.shapes.small))
+                    Spacer(Modifier.width(12.dp))
+                }
                 Column(Modifier.weight(1f)) {
                     Text(
                         ghost.name + when {
@@ -735,14 +776,14 @@ private fun GhostRow(
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SelectButton("シェル", item.shells, item.selectedShell, { it?.let(onSelectShell) }, Modifier.weight(1f))
+                SelectButton("シェル", item.shells, item.selectedShell, { it?.let(onSelectShell) }, Modifier.weight(1f), thumbnails = item.shellThumbnails)
                 // 起動中に消すと、動いているゴーストのファイルが無くなるので先に終了してもらう
                 TextButton(onClick = { confirmUninstall = true }, enabled = !running && !loading) { Text("削除") }
             }
             SelectButton("バルーン", item.balloons, item.selectedBalloon, { value ->
                 val warning = balloonWarning(value)
                 if (warning == null) onSelectBalloon(value) else pendingBalloon = value to warning
-            })
+            }, thumbnails = item.balloonThumbnails)
         }
     }
     pendingBalloon?.let { (value, warning) ->
@@ -773,4 +814,28 @@ private fun GhostRow(
             dismissButton = { TextButton(onClick = { confirmUninstall = false }) { Text("やめる") } },
         )
     }
+}
+
+/** 一覧と、選ぶメニューのサムネイルの大きさ */
+private val THUMBNAIL_SIZE = 48.dp
+private val MENU_THUMBNAIL_SIZE = 24.dp
+
+/** [file] のサムネイルを [size] に足りるだけ縮めて読む（大きな画像でもメモリを使いすぎない）。無いか読めなければ null */
+@Composable
+private fun rememberThumbnail(file: File?, size: Dp): ImageBitmap? {
+    val sidePx = with(LocalDensity.current) { size.roundToPx() }
+    val image by produceState<ImageBitmap?>(null, file, sidePx) {
+        value = file?.let { f ->
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeFile(f.path, bounds)
+                    var sample = 1
+                    while (bounds.outWidth / (sample * 2) >= sidePx && bounds.outHeight / (sample * 2) >= sidePx) sample *= 2
+                    BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
+                }.getOrNull()
+            }
+        }
+    }
+    return image
 }

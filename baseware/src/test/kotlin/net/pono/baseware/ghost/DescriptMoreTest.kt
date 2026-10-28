@@ -13,6 +13,7 @@ import net.pono.baseware.shiori.ShioriMethod
 import net.pono.baseware.shiori.ShioriRequest
 import net.pono.baseware.shiori.ShioriResponse
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -144,6 +145,27 @@ class DescriptMoreTest {
         val ghost = tmp.newTestGhost("shells", extraDescript = "seriko.defaultsurfacedirectoryname,second\r\n")
         File(ghost.dir, "shell/second").mkdirs()
         assertEquals("second", ghost.defaultShellDir()!!.name)
+    }
+
+    @Test
+    fun thumbnailsOfGhostShellAndBalloon() {
+        val ghost = tmp.newTestGhost("thumbs")
+        assertNull(ghost.thumbnailFile())
+        // ゴーストのフォルダの直下より ghost/master を先に。大文字小文字は問わない
+        File(ghost.dir, "thumbnail.png").writeBytes(byteArrayOf(1))
+        assertEquals(File(ghost.dir, "thumbnail.png"), ghost.thumbnailFile())
+        File(ghost.masterDir, "Thumbnail.PNG").writeBytes(byteArrayOf(1))
+        assertEquals(File(ghost.masterDir, "Thumbnail.PNG"), ghost.thumbnailFile())
+
+        val shellDir = File(ghost.dir, "shell/master")
+        assertNull(net.pono.baseware.shell.Shell.thumbnailOf(shellDir))
+        File(shellDir, "THUMBNAIL.png").writeBytes(byteArrayOf(1))
+        assertEquals(File(shellDir, "THUMBNAIL.png"), net.pono.baseware.shell.Shell.thumbnailOf(shellDir))
+
+        val balloonDir = tmp.newFolder("balloon")
+        File(balloonDir, "descript.txt").writeText("charset,UTF-8\r\nname,b\r\n")
+        File(balloonDir, "thumbnail.png").writeBytes(byteArrayOf(1))
+        assertEquals(File(balloonDir, "thumbnail.png"), net.pono.baseware.balloon.Balloon(balloonDir).thumbnailFile())
     }
 
     @Test

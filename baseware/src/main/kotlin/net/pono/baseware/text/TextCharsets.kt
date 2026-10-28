@@ -45,6 +45,10 @@ object TextCharsets {
         return String(if (bom) bytes.copyOfRange(3, bytes.size) else bytes, charset)
     }
 
+    /** [dir] の直下の [name] のファイル（thumbnail.png など。大文字小文字は問わない）。無ければ null */
+    fun fileInIgnoringCase(dir: File, name: String): File? =
+        dir.listFiles()?.firstOrNull { it.isFile && it.name.equals(name, ignoreCase = true) }
+
     /** [dir] の中の [name] のファイル（readme など）。置き場の外を指していたり、無かったりすれば null */
     fun fileIn(dir: File, name: String): File? {
         val root = runCatching { dir.canonicalFile }.getOrNull() ?: return null

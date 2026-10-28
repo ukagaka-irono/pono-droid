@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1455・一部だけ 19・作る 0・作れない 239・ベースウェアのことではない 337
+全 2050 項目: 済み 1457・一部だけ 17・作る 0・作れない 239・ベースウェアのことではない 337
 
 ## バルーンの descript.txt など
 
@@ -452,11 +452,9 @@
 
 ## そのほか（説明のページ）
 
-済み 3 項目。
+済み 5 項目。
 
-### 🔧 一部だけ（3）
-- バルーン — balloons*s.txt・arrows* など・marker・clickwait・sstp・online の画像と、\p[2] 以降の balloonp*def*.png / .pna / s.txt と arrowp*def など（無ければ \1 用）は使う。thumbnail.png はまだ
-- ゴースト — thumbnail.png（一覧のサムネイル）・*.ico・ai0.png / ai0_dark.png（AI グラフの絵）を使っていない
+### 🔧 一部だけ（1）
 - シェル — surface*.png や element の APNG / GIF / WebP は動く（Android 9 から）。SERIKO のコマより上に出る
 
 ### ⛔ 作れない（1）

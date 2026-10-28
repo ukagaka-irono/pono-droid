@@ -5627,7 +5627,7 @@ class GhostController(
         "index" -> index.toString()
         // SHIORI の名前（descript.txt の shiori）
         "shiori" -> g.shioriName
-        "thumbnail" -> thumbnailOf(g.dir)
+        "thumbnail" -> g.thumbnailFile()?.absolutePath.orEmpty()
         // descript.txt の icon（ghost/master からのパス）
         "icon" -> g.descript["icon"]?.trim()?.takeIf { it.isNotEmpty() }?.let { File(g.masterDir, it.replace('\\', '/')) }
             ?.takeIf { it.isFile && it.canonicalPath.startsWith(g.dir.canonicalPath + File.separator) }?.absolutePath.orEmpty()
@@ -5639,8 +5639,7 @@ class GhostController(
     }
 
     /** そのフォルダの thumbnail.png（大文字小文字は問わない）。無ければ空 */
-    private fun thumbnailOf(dir: File): String =
-        dir.listFiles()?.firstOrNull { it.isFile && it.name.equals("thumbnail.png", ignoreCase = true) }?.absolutePath.orEmpty()
+    private fun thumbnailOf(dir: File): String = TextCharsets.fileInIgnoringCase(dir, "thumbnail.png")?.absolutePath.orEmpty()
 
     /** シェル・バルーンの descript.txt にある、作者・URL・サムネイル・更新の結果 */
     private fun packageProperty(dir: File, descript: net.pono.baseware.text.Descript, key: String): String? = when (key) {

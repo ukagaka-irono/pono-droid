@@ -212,6 +212,9 @@ class Shell(val dir: File) {
          * [dir] のシェルの名前（descript.txt の name、無ければディレクトリ名）。[Shell] を作ると surfaces*.txt をすべて読むので、
          * 名前だけ要るとき（一覧やメニュー）はこちら
          */
+        /** [dir] のシェルの一覧のサムネイル（thumbnail.png）。無ければ null */
+        fun thumbnailOf(dir: File): File? = TextCharsets.fileInIgnoringCase(dir, "thumbnail.png")
+
         fun nameOf(dir: File): String = runCatching { Descript.read(File(dir, "descript.txt"))["name"] }.getOrNull() ?: dir.name
 
         /** [dir] のシェルの readme の中身（surfaces*.txt は読まない。インストールした後に開くとき） */
