@@ -182,9 +182,18 @@ char *SaoriRequest(int n, char *h, long *len) {
     return out;
 }
 
+// 読み込んだことを本体に知らせる（GET Version を送り、答えは捨てる）。互換モジュールの houchi は、読み込んだだけで働き出す
+void SaoriNotifyLoad(int n) {
+    static const char kVersion[] = "GET Version SAORI/1.0\r\nCharset: UTF-8\r\nSender: pono-droid\r\n\r\n";
+    long outLen = 0;
+    char *out = pono_saori_direct(g_saori_slots[n].name, kVersion, static_cast<long>(sizeof(kVersion) - 1), &outLen);
+    free(out);
+}
+
 // YAYA（POSIX）の <名前>_saori_load / unload / request（ID 付き）
 template <int N> long SaoriLoadWithId(char *h, long) {
     free(h);
+    SaoriNotifyLoad(N);
     return N + 1;
 }
 template <int N> int SaoriUnloadWithId(long) { return 1; }
@@ -193,6 +202,7 @@ template <int N> char *SaoriRequestWithId(long, char *h, long *len) { return Sao
 // 華和梨などの load / unload / request
 template <int N> int SaoriLoad(char *h, long) {
     free(h);
+    SaoriNotifyLoad(N);
     return 1;
 }
 template <int N> int SaoriUnload() { return 1; }

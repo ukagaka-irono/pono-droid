@@ -1,5 +1,9 @@
 package net.pono.droid
 
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxWidth
+import net.pono.baseware.ghost.HanayuGraph
+import java.lang.ref.WeakReference
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -50,7 +54,8 @@ import kotlin.math.sin
 
 /**
  * AI グラフ（getaistate / getaistateex。メニューの「AI グラフ」と \![open,aigraph]）。SSP と同じく 288×288 の面にレーダーチャートを描き、
- * descript.txt の shiori.logo.file の画像を shiori.logo.align / x / y の位置に敷く（画像の1ピクセルを 1dp に）
+ * descript.txt の shiori.logo.file の画像を shiori.logo.align / x / y の位置に敷く（画像の1ピクセルを 1dp に）。
+ * 互換モジュールの hanayu（花柚）のグラフ（radar はレーダーチャート、usetime / bar は棒、line は折れ線）もこの画面で出す
  */
 class AiGraphActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
@@ -62,12 +67,17 @@ class AiGraphActivity : ComponentActivity() {
         val align = intent.getStringExtra(EXTRA_ALIGN) ?: "lefttop"
         val logoX = intent.getIntExtra(EXTRA_X, 0)
         val logoY = intent.getIntExtra(EXTRA_Y, 0)
+        val hanayu = readHanayu(intent)
+        if (hanayu != null) {
+            shownHanayu?.get()?.takeIf { it !== this }?.finish()
+            shownHanayu = WeakReference(this)
+        }
         setContent {
             MaterialTheme {
                 Scaffold(
                     topBar = {
                         TopAppBar(
-                            title = { Text("AI グラフ", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            title = { Text(hanayu?.title?.takeIf { it.isNotEmpty() } ?: "AI グラフ", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             actions = { TextButton(onClick = { finish() }) { Text("閉じる") } },
                         )
                     },
@@ -76,7 +86,9 @@ class AiGraphActivity : ComponentActivity() {
                         Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        if (graphs.isEmpty()) {
+                        if (hanayu != null) {
+                            HanayuChart(hanayu)
+                        } else if (graphs.isEmpty()) {
                             Text("AI グラフがありません", style = MaterialTheme.typography.bodyMedium)
                         }
                         graphs.forEachIndexed { i, graph ->
@@ -92,7 +104,50 @@ class AiGraphActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        if (shownHanayu?.get() === this) shownHanayu = null
+        super.onDestroy()
+    }
+
     companion object {
+        /** 出している hanayu のグラフの画面（hide で閉じる） */
+        private var shownHanayu: WeakReference<AiGraphActivity>? = null
+
+        private const val EXTRA_HANAYU_KIND = "hanayu.kind"
+        private const val EXTRA_HANAYU_TITLE = "hanayu.title"
+        private const val EXTRA_HANAYU_LABELS = "hanayu.labels"
+        private const val EXTRA_HANAYU_VALUES = "hanayu.values"
+        private const val EXTRA_HANAYU_BACKGROUND = "hanayu.background"
+
+        /** hanayu の show。前に出していたものは閉じる */
+        fun startHanayu(context: Context, graph: HanayuGraph) {
+            context.startActivity(
+                Intent(context, AiGraphActivity::class.java)
+                    .putExtra(EXTRA_HANAYU_KIND, graph.kind)
+                    .putExtra(EXTRA_HANAYU_TITLE, graph.title)
+                    .putExtra(EXTRA_HANAYU_LABELS, graph.points.take(AiGraph.MAX_AXES).map { it.first }.toTypedArray())
+                    .putExtra(EXTRA_HANAYU_VALUES, graph.points.take(AiGraph.MAX_AXES).map { it.second }.toDoubleArray())
+                    .putExtra(EXTRA_HANAYU_BACKGROUND, graph.background?.path.orEmpty())
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+
+        /** hanayu の hide。出していなければ false */
+        fun hideHanayu(): Boolean {
+            val activity = shownHanayu?.get() ?: return false
+            activity.runOnUiThread { activity.finish() }
+            return true
+        }
+
+        private fun readHanayu(intent: Intent): HanayuGraph? {
+            val kind = intent.getStringExtra(EXTRA_HANAYU_KIND) ?: return null
+            val labels = intent.getStringArrayExtra(EXTRA_HANAYU_LABELS).orEmpty()
+            val values = intent.getDoubleArrayExtra(EXTRA_HANAYU_VALUES) ?: DoubleArray(0)
+            val points = values.indices.map { labels.getOrElse(it) { "" } to values[it] }
+            val background = intent.getStringExtra(EXTRA_HANAYU_BACKGROUND)?.takeIf { it.isNotEmpty() }?.let(::File)
+            return HanayuGraph(kind, intent.getStringExtra(EXTRA_HANAYU_TITLE).orEmpty(), points, background)
+        }
+
         private const val EXTRA_COUNT = "count"
         private const val EXTRA_LOGOS = "logos"
         private const val EXTRA_ALIGN = "align"
@@ -209,6 +264,65 @@ private fun RadarChart(graph: AiGraph, logo: File?, align: String, logoX: Int, l
                 else -> tip.y - text.size.height / 2
             }
             drawText(text, topLeft = Offset(x.coerceIn(0f, size.width - text.size.width), y.coerceIn(0f, size.height - text.size.height)))
+        }
+    }
+}
+
+/** hanayu の描く面の大きさ（radar 以外。背景の画像はこの大きさで面いっぱい） */
+private const val HANAYU_WIDTH = 450
+private const val HANAYU_HEIGHT = 340
+
+/** hanayu のグラフ。radar は AI グラフと同じレーダーチャート、usetime / bar は棒、line は折れ線 */
+@Composable
+private fun HanayuChart(graph: HanayuGraph) {
+    if (graph.kind == "radar") {
+        val values = graph.points.map { it.second }
+        val top = values.maxOrNull()?.takeIf { it > 0 } ?: 1.0
+        RadarChart(AiGraph(values, graph.points.map { it.first }, values.map { 0.0 }, values.map { top }), graph.background, "lefttop", 0, 0)
+        return
+    }
+    val background by produceState<ImageBitmap?>(null, graph.background) {
+        value = graph.background?.let { f -> withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(f.path)?.asImageBitmap() }.getOrNull() } }
+    }
+    val colors = MaterialTheme.colorScheme
+    val labelStyle = MaterialTheme.typography.bodySmall.copy(color = colors.onSurfaceVariant)
+    val measurer = rememberTextMeasurer()
+    // 横に広い面は、画面の幅に合わせて縮める（縦横の比は保つ）
+    Canvas(Modifier.fillMaxWidth().aspectRatio(HANAYU_WIDTH.toFloat() / HANAYU_HEIGHT)) {
+        background?.let { img -> drawImage(img, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())) }
+        val n = graph.points.size
+        if (n == 0) return@Canvas
+        val line = 1.dp.toPx()
+        val labelHeight = measurer.measure("0", labelStyle).size.height.toFloat()
+        val gap = 4.dp.toPx()
+        val left = gap
+        val right = size.width - gap
+        val top = gap
+        val bottom = size.height - labelHeight - gap * 2
+        val maxValue = graph.points.maxOf { it.second }.takeIf { it > 0 } ?: 1.0
+        drawLine(colors.outlineVariant, Offset(left, bottom), Offset(right, bottom), line)
+        val slot = (right - left) / n
+        fun y(v: Double) = bottom - ((v.coerceAtLeast(0.0) / maxValue) * (bottom - top)).toFloat()
+        if (graph.kind == "line") {
+            val path = Path()
+            graph.points.forEachIndexed { i, (_, v) ->
+                val x = left + slot * (i + 0.5f)
+                if (i == 0) path.moveTo(x, y(v)) else path.lineTo(x, y(v))
+            }
+            drawPath(path, colors.primary, style = Stroke(line * 2))
+            // 点は線の上に（8dp の丸）
+            graph.points.forEachIndexed { i, (_, v) ->
+                drawCircle(colors.primary, radius = 4.dp.toPx(), center = Offset(left + slot * (i + 0.5f), y(v)))
+            }
+        } else {
+            graph.points.forEachIndexed { i, (_, v) ->
+                val x = left + slot * i + slot * 0.2f
+                drawRect(colors.primary, topLeft = Offset(x, y(v)), size = androidx.compose.ui.geometry.Size(slot * 0.6f, bottom - y(v)))
+            }
+        }
+        graph.points.forEachIndexed { i, (label, _) ->
+            val text = measurer.measure(label, labelStyle, overflow = TextOverflow.Ellipsis, maxLines = 1, constraints = Constraints(maxWidth = slot.roundToInt().coerceAtLeast(1)))
+            drawText(text, topLeft = Offset(left + slot * i + (slot - text.size.width) / 2, bottom + gap))
         }
     }
 }

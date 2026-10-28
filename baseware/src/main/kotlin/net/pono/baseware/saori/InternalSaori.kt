@@ -61,6 +61,41 @@ interface SaoriEnv {
      * それまでにゴーストが終わった（SHIORI を読み込み直した）なら送らない
      */
     fun async(work: () -> Pair<String, List<String>>)
+
+    // ---- 互換モジュール（[CompatSaori]）が使うもの ----
+
+    /** クリップボードに写す（textcopy / clipcopy）。写せたら true */
+    fun copyText(text: String): Boolean = false
+
+    /** 端末の IPv4 アドレス（saori_ip の GetLocalIP） */
+    fun localAddress(): String? = null
+
+    /** 端末の名前（saori_ip の GetLocalHostname） */
+    fun hostName(): String? = null
+
+    /** OS・CPU・メモリ（saori_cpuid） */
+    fun device(): net.pono.baseware.ghost.DeviceInfo? = null
+
+    /** いちばん新しい CPU の負荷（%。cpuusage） */
+    fun cpuLoad(): Int? = null
+
+    /** ネットワークにつながっているか（httpc の引数なし） */
+    fun online(): Boolean = false
+
+    /** [url] を取ってくる（httpc）。取れなければ null。この呼び出しの間は待つ */
+    fun httpGet(url: String): ByteArray? = null
+
+    /** mciaudio の play（鳴っていれば一時停止の切り替え）・loop・stop */
+    fun audio(command: String, file: File) {}
+
+    /** houchi を読み込んだ。端末を放っておいている間、1分ごとに OnHouchi を送る */
+    fun houchi() {}
+
+    /** hanayu の show（スタイル名と、ラベルと値の組）。出せたら true */
+    fun showHanayu(style: String, data: List<Pair<String, Double>>): Boolean = false
+
+    /** hanayu の hide。出していなければ false */
+    fun hideHanayu(): Boolean = false
 }
 
 /**
@@ -192,6 +227,9 @@ class SaoriCall(
  * ゴーストの SHIORI（YAYA の FUNCTIONEX・里々の（internal_…））から、呼び出し元のゴーストごとに使う
  */
 class InternalSaori(private val env: SaoriEnv) {
+    /** 互換モジュール（textcopy などの DLL の代わり）。呼び出し元のゴーストごとに状態を持つ */
+    private val compat = CompatSaori(env)
+
     /** 要求のバイト列に答える。[module] は Module ヘッダが無いときに使う名前（YAYA が DLL として読んだもの） */
     fun handle(request: ByteArray, module: String? = null): ByteArray {
         val req = SaoriRequest.parse(request) ?: return SaoriResponse.error(400, "invalid parameter").encode(TextCharsets.CP932)
@@ -201,6 +239,7 @@ class InternalSaori(private val env: SaoriEnv) {
     fun answer(req: SaoriRequest, fallbackModule: String? = null): SaoriResponse {
         val moduleName = (req["Module"] ?: fallbackModule)?.trim()?.takeIf { it.isNotEmpty() }
             ?: return SaoriResponse.error(400, "invalid parameter")
+        moduleName.lowercase().takeIf { it in CompatSaori.NAMES }?.let { return compat.answer(it, req) }
         val module = MODULES.firstOrNull { it.name.equals(moduleName, ignoreCase = true) }
             ?: return SaoriResponse.error(400, "unknown module")
         if (req.method == SaoriRequest.GET_VERSION) return SaoriResponse(200, VERSION_RESULT)
@@ -280,12 +319,12 @@ class InternalSaori(private val env: SaoriEnv) {
             )
         }
 
-        /** ゴーストが読もうとした SAORI の名前（パスや .dll 付きでもよい）が内蔵モジュールなら、そのモジュールの名前 */
+        /** ゴーストが読もうとした SAORI の名前（パスや .dll 付きでもよい）が内蔵モジュールか互換モジュールなら、そのモジュールの名前 */
         fun moduleNameOf(path: String): String? {
             val base = path.replace('\\', '/').substringAfterLast('/').let {
                 if (it.endsWith(".dll", ignoreCase = true)) it.dropLast(4) else it
             }
-            return base.lowercase().takeIf { it.startsWith("internal_") }
+            return base.lowercase().takeIf { it.startsWith("internal_") || it in CompatSaori.NAMES }
         }
     }
 }

@@ -30,6 +30,12 @@ data class AiGraph(val values: List<Double>, val labels: List<String>, val added
 }
 
 /**
+ * hanayu（花柚）のグラフ。[kind] は usetime（7日分の起動時間の棒）・line・bar・radar、[points] はラベルと値、
+ * [background] は hanayu.txt の background.filename（無ければ null）
+ */
+data class HanayuGraph(val kind: String, val title: String, val points: List<Pair<String, Double>>, val background: File?)
+
+/**
  * AI グラフの背景の画像（descript.txt の shiori.logo.*）。[files] はグラフごとの画像（無ければ null）、
  * [align] は lefttop / leftbottom / righttop / rightbottom、[x] / [y] はそこからの位置（288×288 の描く面のピクセル）
  */

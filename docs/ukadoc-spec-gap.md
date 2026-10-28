@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1442・一部だけ 30・作る 1・作れない 239・ベースウェアのことではない 338
+全 2050 項目: 済み 1444・一部だけ 30・作る 0・作れない 239・ベースウェアのことではない 337
 
 ## バルーンの descript.txt など
 
@@ -396,10 +396,10 @@
 
 ## 拡張イベント（ゴーストやアプリが決めたもの）
 
-済み 0 項目。
+済み 1 項目。
 
-### ― ベースウェアのことではない（213）
-- 213 項目（一覧は ukadoc-spec-status.tsv）
+### ― ベースウェアのことではない（212）
+- 212 項目（一覧は ukadoc-spec-status.tsv）
 
 ## プラグインのイベント
 
@@ -430,10 +430,7 @@
 
 ## 仕様（SSTP・SHIORI/3.0・SAORI・更新ファイルなど）
 
-済み 66 項目。
-
-### 🔨 作る（1）
-- 互換モジュール — 内蔵モジュール（internal_*）は済み。互換モジュール（houchi・clipcopy・textcopy・saori_ip・saori_cpuid・mciaudio・cpuusage・httpc・string・hanayu）は、原作の SAORI の動きを1つずつ作る必要があり、まだ
+済み 67 項目。
 
 ### 🔧 一部だけ（9）
 - Decompress — gzip（複数のメンバーも）・zlib・deflate は済み。brotli と zstd の展開は部品（ライブラリ）が要るので、まだ 400 unsupported algorithm

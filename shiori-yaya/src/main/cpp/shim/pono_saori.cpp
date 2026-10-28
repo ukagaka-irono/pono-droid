@@ -87,7 +87,13 @@ extern "C" int pono_saori_module_name(const char *path, char *out, size_t outSiz
     std::string name(base);
     for (char &c : name) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
     if (name.size() > 4 && name.compare(name.size() - 4, 4, ".dll") == 0) name.erase(name.size() - 4);
-    if (name.size() <= 9 || name.compare(0, 9, "internal_") != 0) return 0;
+    // 互換モジュール（本体が DLL の代わりに答える、よく使われていた SAORI。spec/saori-ex/compat.md）
+    static const char *const compat[] = {
+        "houchi", "clipcopy", "textcopy", "saori_ip", "saori_cpuid", "mciaudio", "cpuusage", "httpc", "string", "hanayu",
+    };
+    bool known = name.size() > 9 && name.compare(0, 9, "internal_") == 0;
+    for (const char *c : compat) known = known || name == c;
+    if (!known) return 0;
     // モジュール名に使える文字だけ（ほかの文字の名前は、ゴーストに同梱の DLL として扱い、読まない）
     for (char c : name) {
         if (!isalnum(static_cast<unsigned char>(c)) && c != '_') return 0;

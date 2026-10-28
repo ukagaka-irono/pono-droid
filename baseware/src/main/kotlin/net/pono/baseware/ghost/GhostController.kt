@@ -210,6 +210,18 @@ interface GhostPlatform {
     /** 今のネットワークの状態。null なら起動時の OnNetworkStatusChange を送らない */
     fun networkStatus(): NetworkStatus? = null
 
+    /** 端末の名前（saori_ip の GetLocalHostname）。分からなければ null */
+    fun hostName(): String? = null
+
+    /** クリップボードに写す（互換モジュールの textcopy / clipcopy）。写せたら true */
+    fun copyText(text: String): Boolean = false
+
+    /** hanayu のグラフを出す（[kind] は usetime / line / bar / radar）。出せたら true */
+    fun showHanayu(graph: HanayuGraph): Boolean = false
+
+    /** hanayu のグラフを閉じる。出していなければ false */
+    fun hideHanayu(): Boolean = false
+
     /** 端末の見た目・言語など。null なら OnDarkTheme・OnLanguageChange などを送らない */
     fun systemInfo(): SystemInfo? = null
 
@@ -2541,6 +2553,24 @@ class GhostController(
         override fun unprotect(data: ByteArray) = platform.unprotectData(data)
         override fun mediaInfo(file: File) = platform.mediaInfo(file)
 
+        override fun copyText(text: String) = platform.copyText(text)
+        override fun localAddress() = platform.networkStatus()?.addresses?.firstOrNull { IPV4.matches(it) }
+        override fun hostName() = platform.hostName()
+        override fun device() = platform.deviceInfo()
+        override fun cpuLoad() = lastCpuLoad
+        override fun online() = platform.networkStatus()?.online ?: false
+
+        override fun httpGet(url: String): ByteArray? {
+            val out = java.io.ByteArrayOutputStream()
+            val outcome = httpClient.execute(HttpRequest("GET", url, timeoutMs = HTTPC_TIMEOUT_MS), out, HTTPC_MAX_BYTES)
+            return out.toByteArray().takeIf { outcome is HttpOutcome.Response && outcome.code in 200..299 }
+        }
+
+        override fun audio(command: String, file: File) = compatAudio(command, file)
+        override fun houchi() = startHouchi()
+        override fun showHanayu(style: String, data: List<Pair<String, Double>>) = showHanayuGraph(style, data)
+        override fun hideHanayu() = platform.hideHanayu()
+
         override fun async(work: () -> Pair<String, List<String>>) {
             val generation = shioriGeneration
             scope.launch {
@@ -2556,6 +2586,110 @@ class GhostController(
      * モジュールの名前（YAYA が DLL として読んだもの）。SHIORI の request の途中に、どのスレッドからでも呼ばれる
      */
     fun saori(request: ByteArray, module: String? = null): ByteArray = internalSaori.handle(request, module)
+
+    // ---- 互換モジュールの mciaudio・houchi・hanayu ----
+
+    /** mciaudio で鳴らしている音（playing / paused。止まっていれば null） */
+    @Volatile private var compatAudioState: String? = null
+
+    /** mciaudio の play / loop（鳴っていれば一時停止と再開を切り替える）と stop */
+    private fun compatAudio(command: String, file: File) {
+        when (command) {
+            "stop" -> {
+                platform.stopSound(file)
+                compatAudioState = null
+            }
+            else -> when (compatAudioState) {
+                "playing" -> {
+                    platform.soundControl("pause", file, SoundOptions())
+                    compatAudioState = "paused"
+                }
+                "paused" -> {
+                    platform.soundControl("resume", file, SoundOptions())
+                    compatAudioState = "playing"
+                }
+                else -> {
+                    platform.playSound(file, command == "loop", SoundOptions())
+                    compatAudioState = "playing"
+                }
+            }
+        }
+    }
+
+    private var houchiJob: Job? = null
+
+    /**
+     * houchi.dll の代わり。端末の画面が消えている間を「放っておかれている」とみて、1分ごとに OnHouchi（Reference0 = 分）を
+     * NOTIFY で送る（画面が消えている間は話させない）。画面が点いたら数え直す
+     */
+    private fun startHouchi() {
+        if (houchiJob?.isActive == true || closing) return
+        houchiJob = scope.launch {
+            var minutes = 0
+            while (isActive) {
+                delay(60_000)
+                if (_state.value.screenOn) {
+                    minutes = 0
+                    continue
+                }
+                minutes++
+                notify("OnHouchi", listOf(minutes.toString()))
+            }
+        }
+    }
+
+    /**
+     * hanayu の show。スタイル（hanayu.txt の [名前] か 名前 { }）の graph（usetime / line / bar / radar）と背景で、ラベルと値の組を出す。
+     * usetime は、このゴーストの7日分の起動していた時間（分）
+     */
+    private fun showHanayuGraph(style: String, data: List<Pair<String, Double>>): Boolean {
+        val config = hanayuConfig(style)
+        val kind = config["graph"]?.trim()?.lowercase()?.takeIf { it in setOf("usetime", "line", "bar", "radar") } ?: "usetime"
+        val points = if (kind == "usetime") usetimeWeek() else data
+        val background = config["background.filename"]?.trim()?.takeIf { it.isNotEmpty() }?.let { name ->
+            hanayuDir()?.let { TextCharsets.fileIn(it, name) } ?: TextCharsets.fileIn(ghost.masterDir, name)
+        }
+        return platform.showHanayu(HanayuGraph(kind, style, points, background))
+    }
+
+    /** このゴーストの、6日前から今日までの起動していた時間（分）。ラベルは月/日 */
+    private fun usetimeWeek(): List<Pair<String, Double>> {
+        val today = history?.today() ?: java.time.LocalDate.now()
+        val usage = history?.usage()?.firstOrNull { it.dirName == ghost.dir.name }
+        return (6 downTo 0).map { back ->
+            val day = today.minusDays(back.toLong())
+            "${day.monthValue}/${day.dayOfMonth}" to (usage?.days?.get(day.toString())?.second ?: 0).toDouble()
+        }
+    }
+
+    /** hanayu.txt のあるフォルダ（ghost/master か、その下の SAORI のフォルダ） */
+    private fun hanayuDir(): File? {
+        File(ghost.masterDir, "hanayu.txt").takeIf { it.isFile }?.let { return ghost.masterDir }
+        return ghost.masterDir.walkTopDown().maxDepth(3).firstOrNull { it.isFile && it.name.equals("hanayu.txt", ignoreCase = true) }?.parentFile
+    }
+
+    /** hanayu.txt の [style] の項目（key,value）。無ければ空 */
+    private fun hanayuConfig(style: String): Map<String, String> {
+        val file = hanayuDir()?.let { File(it, "hanayu.txt") } ?: return emptyMap()
+        val lines = runCatching { TextCharsets.readLines(file) }.getOrDefault(emptyList()).map { it.trim() }
+        val out = LinkedHashMap<String, String>()
+        var inStyle = false
+        var braced = false
+        for ((i, line) in lines.withIndex()) {
+            when {
+                line.isEmpty() || line.startsWith("//") -> continue
+                line.startsWith("[") && line.endsWith("]") -> inStyle = line.removeSurrounding("[", "]").trim() == style
+                line == "{" -> braced = inStyle
+                line == "}" -> if (braced) {
+                    braced = false
+                    inStyle = false
+                }
+                ',' !in line -> inStyle = line == style && lines.getOrNull(i + 1) == "{"
+                inStyle -> out[line.substringBefore(',').trim().lowercase()] = line.substringAfter(',').trim()
+            }
+        }
+        return out
+    }
 
     // ---- 時刻合わせ（\7 / \![executesntp]） ----
 
@@ -6754,6 +6888,12 @@ class GhostController(
 
         /** メニューの「バルーンを動かせる」を切ってあるか（ゴーストの profile） */
         private const val PROFILE_BALLOON_MOVE_OFF = "balloon.move.off"
+
+        /** httpc で取ってくるものの大きさの上限と、待つ時間 */
+        private const val HTTPC_MAX_BYTES = 10L shl 20
+        private const val HTTPC_TIMEOUT_MS = 30_000
+
+        private val IPV4 = Regex("""\d{1,3}(\.\d{1,3}){3}""")
 
         /** 開発用パレットの「SHIORI 内部のログを取る」を覚えておく名前 */
         private const val PROFILE_ENABLE_LOG = "developer.enable_log"

@@ -1417,7 +1417,7 @@ list/shiori-event-ex/plugin-weather-station/OnWeatherStation.Weather.md	NA	OnWea
 list/shiori-event-ex/plugin-weather-station/index.md	NA	プラグイン「Weather Station」	外のアプリ・ゴーストの説明のページ
 list/shiori-event-ex/plugin-weather-station/note-1.md	NA	補足	外のアプリ・ゴーストの説明のページ
 list/shiori-event-ex/related-sakura-script.md	NA	関連するさくらスクリプト	関連タグへの案内。raiseother などは済み
-list/shiori-event-ex/saori-httpc-dll/OnHttpcNotify.md	NA	OnHttpcNotify	httpc.dll が送るもの。互換モジュールの httpc を作るときは本体が送る
+list/shiori-event-ex/saori-httpc-dll/OnHttpcNotify.md	DONE	OnHttpcNotify	互換モジュールの httpc の bg が、終わったら本体から送る（Reference1 は空）
 list/shiori-event-ex/saori-httpc-dll/index.md	NA	SAORI「httpc.dll」	httpc.dll の説明。互換モジュールは compat.md で扱う
 list/shiori-event-ex/ukadoc/OnUkadocScriptExample.md	NA	OnUkadocScriptExample	ukadoc のページが SSTP で送るもの
 list/shiori-event-ex/ukadoc/index.md	NA	UKADOC	外のアプリ・ゴーストの説明のページ
@@ -1970,7 +1970,7 @@ spec/headline.md	IMPOSSIBLE	HEADLINE/2.0	ヘッドラインは Windows の DLL�
 spec/plugin.md	IMPOSSIBLE	PLUGIN/2.0	プラグインは Windows の DLL。決めたとおり作らない
 spec/saori-ex/async.md	DONE	非同期の呼び出し	--async= で 204 を返し、結果は OnInternalSaoriComplete / Failure（識別子が On で始まればその名前と＋Failure）で届ける。同時に動くのは CPU の数（2～4）まで。SHIORI を読み込み直したら届けない
 spec/saori-ex/chapter0.md	DONE	SAORI over DirectSSTP	YAYA の FUNCTIONEX / LOADLIB（拡張子なしの internal_* を DLL として読ませるビルドのときのパッチと、dlopen の差し替え）と里々の（internal_…）から、本体の内蔵モジュールを呼べる
-spec/saori-ex/compat.md	BUILD	互換モジュール	内蔵モジュール（internal_*）は済み。互換モジュール（houchi・clipcopy・textcopy・saori_ip・saori_cpuid・mciaudio・cpuusage・httpc・string・hanayu）は、原作の SAORI の動きを1つずつ作る必要があり、まだ
+spec/saori-ex/compat.md	DONE	互換モジュール	10 個とも本体が DLL の代わりに答える（YAYA・里々などが DLL として読んだとき、Direct SSTP の Module でも）。GetInternetIP は外のサービスに問い合わせるので 500。houchi は画面が消えている間を放置とみて 1 分ごとに OnHouchi を NOTIFY。hanayu は AI グラフの画面で radar・棒・折れ線を出す
 spec/saori-ex/directsstp.md	DONE	SAORI over DirectSSTP	WM_COPYDATA の代わりに、:shiori のプロセスから AIDL のコールバック（IShioriHost）で呼び出し元のゴーストの本体へ渡す。ソケットと SSTP over HTTP の SAORI/1.0 は 400 direct sstp only。GET Version は Result: pono-droid Internal
 spec/saori-ex/index.md	DONE	SAORI over DirectSSTP	YAYA の FUNCTIONEX / LOADLIB（拡張子なしの internal_* を DLL として読ませるビルドのときのパッチと、dlopen の差し替え）と里々の（internal_…）から、本体の内蔵モジュールを呼べる
 spec/saori-ex/internal.md	DONE	内蔵モジュールの共通規約	位置引数と --オプション（後のものが有効・知らないものは 400）、--名前-in=（text・hex・base64(url)・base32・url・bech32・file）と --out=、ErrorDescription

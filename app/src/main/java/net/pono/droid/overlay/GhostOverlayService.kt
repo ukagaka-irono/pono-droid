@@ -605,6 +605,22 @@ class GhostOverlayService : LifecycleService() {
                         return true
                     }
 
+                    override fun copyText(text: String): Boolean = runCatching {
+                        getSystemService(android.content.ClipboardManager::class.java)
+                            ?.setPrimaryClip(android.content.ClipData.newPlainText(controller?.ghost?.name ?: "pono-droid", text))
+                    }.isSuccess
+
+                    override fun hostName(): String? =
+                        runCatching { android.provider.Settings.Global.getString(contentResolver, android.provider.Settings.Global.DEVICE_NAME) }.getOrNull()
+                            ?.takeIf { it.isNotBlank() } ?: android.os.Build.MODEL
+
+                    override fun showHanayu(graph: net.pono.baseware.ghost.HanayuGraph): Boolean {
+                        net.pono.droid.AiGraphActivity.startHanayu(this@GhostOverlayService, graph)
+                        return true
+                    }
+
+                    override fun hideHanayu(): Boolean = net.pono.droid.AiGraphActivity.hideHanayu()
+
                     override fun setTrayIcon(file: File?) {
                         trayIcon = file
                         refreshForeground()
