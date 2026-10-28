@@ -74,7 +74,7 @@ descript/balloon/descript-txt/communicatebox.width.md	DONE	communicatebox.width,
 descript/balloon/descript-txt/communicatebox.x.md	DONE	communicatebox.x,座標	Balloon.communicateBox
 descript/balloon/descript-txt/communicatebox.y.md	DONE	communicatebox.y,座標	Balloon.communicateBox
 descript/balloon/descript-txt/craftman.md	DONE	craftman,作者名	craftmanw が無いときに使う
-descript/balloon/descript-txt/craftmanurl.md	BUILD	craftmanurl,URL	バルーンでは使っていない。アプリのバルーンの一覧に作者の URL を出す
+descript/balloon/descript-txt/craftmanurl.md	DONE	craftmanurl,URL	アプリのバルーンの一覧に「作者のページ」を出す（http / https のときだけ）
 descript/balloon/descript-txt/craftmanw.md	DONE	craftmanw,作者名	アプリの一覧と balloonlist.*.craftmanw
 descript/balloon/descript-txt/cursor.blendmethod.md	DONE	cursor.blendmethod,コマンド	notmaskpen などを近い重ね方（反転・明るく・暗く）にして、塗りに使う
 descript/balloon/descript-txt/cursor.brush.color.b.md	DONE	cursor.brush.color.b,数値	linkLook("cursor") の brush（押している間）
@@ -146,8 +146,8 @@ descript/balloon/descript-txt/origin.x.md	DONE	origin.x,座標	負の値は右�
 descript/balloon/descript-txt/origin.y.md	DONE	origin.y,座標	負の値は下端から、--数値 は本当の負の数
 descript/balloon/descript-txt/overlay_outside_balloon.md	PARTIAL	overlay_outside_balloon,数値	0 ならオンライン・SSTP の印をバルーンの画像の中に収め、1 なら収めない。ウィンドウを印の分だけ広げてはいない
 descript/balloon/descript-txt/paint_transparent_region_black.md	DONE	paint_transparent_region_black,数値	.pna の画像は既定で、左上の色の所を黒にしてから透明度を掛ける（0 / 1 で決められる）
-descript/balloon/descript-txt/readme.charset.md	BUILD	readme.charset,文字コード	バルーンの readme と一緒に作る。TextCharsets で読む
-descript/balloon/descript-txt/readme.md	BUILD	readme,ファイル名	バルーンの readme を開く所が無い（ゴーストだけ）。インストール後とバルーンの一覧から TextViewerActivity で出す
+descript/balloon/descript-txt/readme.charset.md	DONE	readme.charset,文字コード	バルーンの readme をこの文字コードで読む（無ければ charset 行か中身から決める）
+descript/balloon/descript-txt/readme.md	DONE	readme,ファイル名	インストールしたときに開き、バルーンの一覧の「説明を読む」からも開ける（バルーンのフォルダの中だけ）
 descript/balloon/descript-txt/sstpmarker.x.md	DONE	sstpmarker.x,座標	SSTP の印の位置（負は右端から。無ければ文字の範囲の左上）
 descript/balloon/descript-txt/sstpmarker.y.md	DONE	sstpmarker.y,座標	SSTP の印の位置（負は下端から。無ければ文字の範囲の左上）
 descript/balloon/descript-txt/sstpmessage.font.color.b.md	DONE	sstpmessage.font.color.b,数値	Balloon.markerColor（\![set,balloonmarker] の文字）
@@ -173,10 +173,10 @@ descript/balloon/descript-txt/windowposition.y.md	DONE	windowposition.y,座標	�
 descript/balloon/descript-txt/wordwrappoint.x.md	DONE	wordwrappoint.x,座標	Balloon.textArea の右端
 descript/balloon/descript-txt/wordwrappoint.y.md	DONE	wordwrappoint.y,座標	縦書きのときの折り返し（無ければ validrect.bottom）
 descript/balloon/index.md	DONE	Balloon設定	*1 の座標はどれも負なら右端・下端から、--数値 は本当の負の数
-descript/balloon/recommended-ghost/caption_recommended.md	BUILD	推奨の意味	推奨の意味の説明。ゴーストを消すとき推奨バルーンも消すか聞く動きは recommended.ghost と一緒に作る
+descript/balloon/recommended-ghost/caption_recommended.md	DONE	推奨の意味	説明のページ。ゴーストを消すとき推奨のバルーンも消すか聞く動きは recommended.ghost で作った
 descript/balloon/recommended-ghost/index.md	NA	descript.txt - 推奨ゴースト	一覧のページ
-descript/balloon/recommended-ghost/recommended.ghost.md	BUILD	recommended.ghost,ゴースト名	読んでいない。ほかのゴーストで選ぶとき警告し、そのゴーストを消すとき一緒に消すか聞く
-descript/balloon/recommended-ghost/recommended.ghost.path.md	BUILD	recommended.ghost.path,パス	recommended.ghost と一緒に。ゴーストのフォルダ名で比べる
+descript/balloon/recommended-ghost/recommended.ghost.md	DONE	recommended.ghost,ゴースト名	ほかのゴーストで選ぶとき（アプリの一覧・ゴーストのメニュー）に警告し、そのゴーストを消すとき一緒に消すか聞く。一覧に「〜向け」と出す
+descript/balloon/recommended-ghost/recommended.ghost.path.md	DONE	recommended.ghost.path,パス	recommended.ghost と同じ。最後のフォルダ名とゴーストのフォルダ名で比べる
 descript/ghost/descript-txt/balloon.defaultsurface.md	DONE	balloon.defaultsurface,数値	\b が無いときのバルーンの番号（スコープのもの＞全体）。書いていなければ文字の量で選ぶ
 descript/ghost/descript-txt/balloon.dontmove.md	DONE	balloon.dontmove,true	descript.txt に 1 / true があれば、そのキャラクターのバルーンを指で動かせない（\![unlock,balloonmove] でも外れない）
 descript/ghost/descript-txt/balloon.syncscale.md	DONE	balloon.syncscale,true	true ならバルーンの大きさをキャラクターの大きさに合わせる
@@ -222,8 +222,8 @@ descript/ghost/descript-txt/mousecursor.wait.md	IMPOSSIBLE	mousecursor.wait,フ�
 descript/ghost/descript-txt/name.allowoverride.md	DONE	name.allowoverride,数値	0 ならシェルの sakura.name などを使わない
 descript/ghost/descript-txt/name.md	DONE	name,ゴースト名	Ghost.name
 descript/ghost/descript-txt/note-1.md	NA	補足	位置情報の説明のページ（seriko.alignmenttodesktop の値）
-descript/ghost/descript-txt/readme.charset.md	BUILD	readme.charset,文字コード	readme は UTF-8 か CP932 の自動判定だけ。readme.charset があればそれで読む
-descript/ghost/descript-txt/readme.md	PARTIAL	readme,ファイル名	メニューと \![open,readme] からは開ける。インストールしたときには開かない
+descript/ghost/descript-txt/readme.charset.md	DONE	readme.charset,文字コード	ゴーストの readme をこの文字コードで読む（無ければ charset 行か中身から決める）
+descript/ghost/descript-txt/readme.md	DONE	readme,ファイル名	メニューと \![open,readme] から開け、インストールしたときにも開く
 descript/ghost/descript-txt/sakura.balloon.defaultsurface.md	DONE	sakura.balloon.defaultsurface,数値	\b が無いときのバルーンの番号（スコープのもの＞全体）。書いていなければ文字の量で選ぶ
 descript/ghost/descript-txt/sakura.defaultleft.md	DONE	sakura.defaultleft,X座標	loadDefaultPositions
 descript/ghost/descript-txt/sakura.defaulttop.md	DONE	sakura.defaulttop,Y座標	同上

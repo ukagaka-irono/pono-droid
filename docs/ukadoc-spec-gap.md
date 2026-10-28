@@ -4,19 +4,11 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1377・一部だけ 31・作る 26・作れない 278・ベースウェアのことではない 338
+全 2050 項目: 済み 1385・一部だけ 30・作る 19・作れない 278・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
-済み 156 項目。
-
-### 🔨 作る（6）
-- craftmanurl,URL — バルーンでは使っていない。アプリのバルーンの一覧に作者の URL を出す
-- readme.charset,文字コード — バルーンの readme と一緒に作る。TextCharsets で読む
-- readme,ファイル名 — バルーンの readme を開く所が無い（ゴーストだけ）。インストール後とバルーンの一覧から TextViewerActivity で出す
-- 推奨の意味 — 推奨の意味の説明。ゴーストを消すとき推奨バルーンも消すか聞く動きは recommended.ghost と一緒に作る
-- recommended.ghost,ゴースト名 — 読んでいない。ほかのゴーストで選ぶとき警告し、そのゴーストを消すとき一緒に消すか聞く
-- recommended.ghost.path,パス — recommended.ghost と一緒に。ゴーストのフォルダ名で比べる
+済み 162 項目。
 
 ### 🔧 一部だけ（5）
 - balloons\*s.txt/balloonk\*s.txt — 画像ごとの balloons*s.txt で、文字の範囲・矢印や印の位置・windowposition を上書きする。文字の色・大きさ・書体は descript.txt のまま
@@ -39,18 +31,16 @@
 
 ## ゴーストの descript.txt
 
-済み 54 項目。
+済み 56 項目。
 
-### 🔨 作る（5）
-- readme.charset,文字コード — readme は UTF-8 か CP932 の自動判定だけ。readme.charset があればそれで読む
+### 🔨 作る（4）
 - shiori.logo.align,位置情報 — AI グラフを絵で描くとき（今はラベルと値を文字で並べる）の背景画像の基準
 - shiori.logo.file,ファイル名 — 同上。背景画像（複数・_dark）
 - shiori.logo.x,X座標 — 同上。背景画像の X
 - shiori.logo.y,Y座標 — 同上。背景画像の Y
 
-### 🔧 一部だけ（3）
+### 🔧 一部だけ（2）
 - descript.txt（Ghostの） — 説明のページ。\ や % で始まる値を捨てる決まりはしていない（名前などをメニューのスクリプトにそのまま入れている）
-- readme,ファイル名 — メニューと \![open,readme] からは開ける。インストールしたときには開かない
 - seriko.alignmenttodesktop,位置情報 — 書いてあればその吸着にする。どこにも書いていないときは、アプリの設定のキャラクター自由移動が常に制限なら仕様どおり bottom、ゴースト設定なら自由（決めたこと）。最初の設定の常に自由移動では吸着しない
 
 ### ⛔ 作れない（9）

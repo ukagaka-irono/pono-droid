@@ -31,6 +31,15 @@ object GhostStore {
     }
 
     /** インストールしたことを伝える文。同梱のバルーンなどがあれば、それも並べる */
+    /** 入れたゴーストかバルーンのうち、最初に readme があるものの名前と中身。どれにも無ければ null */
+    fun readme(result: NarInstaller.Result): Pair<String, String>? = result.installed.firstNotNullOfOrNull { item ->
+        when (item.type) {
+            NarInstaller.Type.GHOST -> Ghost(item.dir).let { g -> g.readmeText()?.let { g.name to it } }
+            NarInstaller.Type.BALLOON -> Balloon(item.dir).let { b -> b.readmeText()?.let { b.name to it } }
+            else -> null
+        }
+    }
+
     fun describe(result: NarInstaller.Result): String = result.installed.joinToString("、") { item ->
         when (item.type) {
             NarInstaller.Type.GHOST -> "ゴースト: ${Ghost(item.dir).name}"

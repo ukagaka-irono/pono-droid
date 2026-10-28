@@ -339,6 +339,27 @@ class MultiGhostTest {
     }
 
     @Test
+    fun balloonForAnotherGhostAsksFirst() = run {
+        val dir = File(repository.balloons.root, "onlyb")
+        dir.mkdirs()
+        File(dir, "descript.txt").writeText("charset,UTF-8\r\nname,Bせんよう\r\nrecommended.ghost,ゴーストB\r\n")
+        File(dir, "balloons0.png").writeBytes(byteArrayOf())
+        val a = boot("a", mapOf("OnTest" to """\0\q[Bせんよう,pono:balloon,onlyb]\e"""))
+        a.c.raise("OnTest", emptyList())
+        withTimeout(5000) {
+            a.c.state.first { s -> s.characters.values.any { ch -> ch.balloon?.any { it is BalloonItem.ChoiceItem && it.choice.id == "pono:balloon" } == true } }
+        }
+        // ゴーストA のメニューで B 向けのバルーンを選ぶと、先に確かめる（まだ切り替えない）
+        a.c.onChoice(net.pono.baseware.sakura.Choice("Bせんよう", "pono:balloon", listOf("onlyb")))
+        withTimeout(5000) {
+            a.c.state.first { s -> s.characters.values.any { ch -> ch.balloon?.any { it is BalloonItem.ChoiceItem && it.choice.id == "pono:balloonforce" } == true } }
+        }
+        assertEquals(null, repository.find("a")!!.loadProfile().getProperty("balloon"))
+        a.c.onChoice(net.pono.baseware.sakura.Choice("それでも切り替える", "pono:balloonforce", listOf("onlyb")))
+        withTimeout(5000) { while (repository.find("a")!!.balloon(repository.balloons)?.dir?.name != "onlyb") delay(10) }
+    }
+
+    @Test
     fun desktopWallpaperChangeIsSent() = run {
         val platform = object : GhostPlatform by RecordingPlatform() {
             override fun desktopWallpaperColor(): Int = 0x336699

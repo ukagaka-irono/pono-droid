@@ -35,6 +35,23 @@ object TextCharsets {
         return if (isValidUtf8(body)) String(body, Charsets.UTF_8) else String(body, CP932)
     }
 
+    /**
+     * readme などを読む。[charsetName]（descript.txt の readme.charset）が分かればその文字コードで、
+     * 無ければ [decode] と同じく charset 行か中身から決める
+     */
+    fun decode(bytes: ByteArray, charsetName: String?): String {
+        val charset = resolve(charsetName) ?: return decode(bytes)
+        val bom = charset == Charsets.UTF_8 && bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()
+        return String(if (bom) bytes.copyOfRange(3, bytes.size) else bytes, charset)
+    }
+
+    /** [dir] の中の [name] のファイル（readme など）。置き場の外を指していたり、無かったりすれば null */
+    fun fileIn(dir: File, name: String): File? {
+        val root = runCatching { dir.canonicalFile }.getOrNull() ?: return null
+        val file = runCatching { File(root, name.replace('\\', '/')).canonicalFile }.getOrNull() ?: return null
+        return file.takeIf { it.path.startsWith(root.path + File.separator) && it.isFile }
+    }
+
     private val charsetLine = Regex("""^\s*charset\s*,\s*([A-Za-z0-9_\-]+)""", setOf(RegexOption.MULTILINE, RegexOption.IGNORE_CASE))
 
     private fun declaredCharset(bytes: ByteArray): Charset? {

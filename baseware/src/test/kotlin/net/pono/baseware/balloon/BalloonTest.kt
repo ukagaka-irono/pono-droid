@@ -45,6 +45,30 @@ class BalloonTest {
     }
 
     @Test
+    fun recommendedGhostReadmeAndCraftmanUrl() {
+        val dir = tmp.newFolder("only")
+        File(dir, "descript.txt").writeText("charset,UTF-8\r\nname,専用\r\nrecommended.ghost.path,ghost\\Emily4\r\ncraftmanurl,https://example.com/\r\nreadme,doc.txt\r\nreadme.charset,Shift_JIS\r\n")
+        File(dir, "balloons0.png").writeBytes(byteArrayOf())
+        File(dir, "doc.txt").writeBytes("せつめい".toByteArray(charset("windows-31j")))
+        val b = Balloon(dir)
+        // recommended.ghost.path はフォルダ名で比べる（大文字小文字は見ない）
+        assertEquals(true, b.isRecommendedFor("えみり", "emily4"))
+        assertEquals(false, b.isRecommendedFor("ほか", "other"))
+        assertEquals("Emily4", b.recommendedGhostLabel)
+        assertEquals("https://example.com/", b.craftmanUrl)
+        assertEquals("せつめい", b.readmeText())
+        // 推奨を書いていなければ null。javascript: などのURLは使わない
+        File(dir, "descript.txt").writeText("charset,UTF-8\r\nname,ふつう\r\ncraftmanurl,javascript:alert(1)\r\nreadme,../outside.txt\r\n")
+        File(tmp.root, "outside.txt").writeText("外")
+        val plain = Balloon(dir)
+        assertNull(plain.isRecommendedFor("ほか", "other"))
+        assertNull(plain.craftmanUrl)
+        assertNull(plain.readmeFile())
+        val repo = BalloonRepository(tmp.root)
+        assertEquals(listOf<String>(), repo.recommendedFor("ほか", "other").map { it.name })
+    }
+
+    @Test
     fun ignoresImageNamesWithOverflowingNumbers() {
         val balloon = Balloon(balloonDir("balloons0.png", "balloons99999999999.png", "balloonk1.png"))
         assertTrue(balloon.isValid)

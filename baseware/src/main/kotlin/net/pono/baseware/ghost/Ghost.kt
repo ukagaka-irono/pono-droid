@@ -30,6 +30,15 @@ class Ghost(val dir: File) {
         return shellDirs.firstOrNull { it.name == preferred } ?: shellDirs.firstOrNull { it.name == "master" } ?: shellDirs.firstOrNull()
     }
 
+    /** descript.txt の readme（無ければ readme.txt）。ghost/master か、ゴーストのフォルダの直下 */
+    fun readmeFile(): File? {
+        val name = descript["readme"]?.takeIf { it.isNotBlank() } ?: "readme.txt"
+        return TextCharsets.fileIn(masterDir, name) ?: TextCharsets.fileIn(dir, name)
+    }
+
+    /** readme の中身（readme.charset があればその文字コードで読む）。無ければ null */
+    fun readmeText(): String? = readmeFile()?.let { f -> runCatching { TextCharsets.decode(f.readBytes(), descript["readme.charset"]) }.getOrNull() }
+
     /** 選んであるシェル（無ければ既定のシェル） */
     fun shellDir(): File? =
         loadProfile().getProperty(PROFILE_SHELL)?.let { name -> shellDirs.firstOrNull { it.name == name } } ?: defaultShellDir()

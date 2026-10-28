@@ -2,6 +2,7 @@ package net.pono.baseware.balloon
 
 import net.pono.baseware.sakura.LinkLook
 import net.pono.baseware.text.Descript
+import net.pono.baseware.text.TextCharsets
 import java.io.File
 
 /** 色（0〜255）。descript.txt の xxx.r / xxx.g / xxx.b から作る */
@@ -39,6 +40,32 @@ class Balloon private constructor(val dir: File, private val base: Descript, pri
     val descript: Descript get() = base
 
     val name: String get() = base["name"] ?: dir.name
+
+    /** descript.txt の craftmanurl（作者のページ）。http か https のときだけ */
+    val craftmanUrl: String? get() = base["craftmanurl"]?.trim()?.takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
+
+    /** descript.txt の readme（無ければ readme.txt）。バルーンのフォルダの中だけ */
+    fun readmeFile(): File? = TextCharsets.fileIn(dir, base["readme"]?.takeIf { it.isNotBlank() } ?: "readme.txt")
+
+    /** readme の中身（readme.charset があればその文字コードで読む）。無ければ null */
+    fun readmeText(): String? = readmeFile()?.let { f -> runCatching { TextCharsets.decode(f.readBytes(), base["readme.charset"]) }.getOrNull() }
+
+    /** recommended.ghost の名前（無ければ recommended.ghost.path の最後のフォルダ名）。警告に出す */
+    val recommendedGhostLabel: String? get() = recommendedGhost ?: recommendedGhostDir
+
+    private val recommendedGhostDir: String?
+        get() = recommendedGhostPath?.replace('\\', '/')?.trim('/', ' ')?.substringAfterLast('/')?.takeIf { it.isNotEmpty() }
+
+    /**
+     * [ghostName]（descript.txt の name）・[ghostDirName]（ゴーストのフォルダ名）のゴーストがこのバルーンの推奨のゴーストか。
+     * 推奨のゴーストを決めていなければ null
+     */
+    fun isRecommendedFor(ghostName: String, ghostDirName: String): Boolean? {
+        val byName = recommendedGhost
+        val byDir = recommendedGhostDir
+        if (byName == null && byDir == null) return null
+        return byName == ghostName || byDir.equals(ghostDirName, ignoreCase = true)
+    }
     val isValid: Boolean get() = File(dir, "descript.txt").isFile && images(0).isNotEmpty()
 
     private val files: Map<String, File> by lazy { parent?.files ?: dir.listFiles()?.associateBy { it.name.lowercase() }.orEmpty() }
@@ -448,6 +475,9 @@ class BalloonRepository(val root: File) {
 
     /** バルーンの名前（descript.txt の name）で探す。ゴーストの descript.txt の balloon 指定に使う */
     fun findByName(name: String): Balloon? = list().firstOrNull { it.name == name || it.dir.name == name }
+
+    /** [ghostName]・[ghostDirName] のゴースト向け（recommended.ghost）のバルーン。ゴーストを消すとき、一緒に消すか聞く */
+    fun recommendedFor(ghostName: String, ghostDirName: String): List<Balloon> = list().filter { it.isRecommendedFor(ghostName, ghostDirName) == true }
 
     /** バルーンを消す（元に戻せない）。置き場の外は消さない。選んでいたゴーストは次から簡易バルーンか指定のものに戻る */
     fun uninstall(balloon: Balloon): Boolean {

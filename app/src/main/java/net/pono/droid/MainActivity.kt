@@ -115,6 +115,8 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     var listed by remember { mutableStateOf(false) }
     var installing by remember { mutableStateOf(false) }
     val version = remember { AppVersion.of(context) }
+    // 消したゴースト向け（recommended.ghost）のバルーン。一緒に消すか聞く
+    var leftBalloons by remember { mutableStateOf<Pair<String, List<Balloon>>?>(null) }
 
     suspend fun reload() {
         val repo = GhostStore.repository(context)
@@ -150,9 +152,35 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
             } finally {
                 installing = false
             }
-            result.onSuccess { reload() }
+            result.onSuccess { r ->
+                reload()
+                // 入れたゴーストかバルーンに readme があれば開く（SSP と同じくインストールしたときに見せる）
+                withContext(Dispatchers.IO) { GhostStore.readme(r) }?.let { (title, text) -> TextViewerActivity.start(context, title, text) }
+            }
             snackbar.showSnackbar(result.fold({ GhostStore.describe(it) }, { "インストールできませんでした: ${it.message}" }))
         }
+    }
+
+    leftBalloons?.let { (ghostName, left) ->
+        AlertDialog(
+            onDismissRequest = { leftBalloons = null },
+            title = { Text("バルーンを削除") },
+            text = {
+                Text("「$ghostName」向けのバルーン${left.joinToString("") { "「${it.name}」" }}も削除しますか？ 元に戻せません。")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    leftBalloons = null
+                    scope.launch {
+                        val repo = GhostStore.repository(context)
+                        val ok = withContext(Dispatchers.IO) { left.all { repo.balloons.uninstall(it) } }
+                        reload()
+                        snackbar.showSnackbar(if (ok) "削除しました: ${left.joinToString("、") { it.name }}" else "削除できなかったバルーンがあります")
+                    }
+                }) { Text("削除") }
+            },
+            dismissButton = { TextButton(onClick = { leftBalloons = null }) { Text("残す") } },
+        )
     }
 
     Scaffold(
@@ -220,6 +248,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                                 if (isRunning) GhostOverlayService.start(context, dirName)
                             }
                         },
+                        balloonWarning = { dirName -> balloonWarning(item, balloons, dirName) },
                         onSelectBalloon = { balloon ->
                             scope.launch {
                                 withContext(Dispatchers.IO) { item.ghost.selectBalloon(balloon) }
@@ -229,8 +258,17 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                         },
                         onUninstall = {
                             scope.launch {
-                                val ok = withContext(Dispatchers.IO) { GhostStore.repository(context).uninstall(item.ghost) }
+                                val repo = GhostStore.repository(context)
+                                val ok = withContext(Dispatchers.IO) { repo.uninstall(item.ghost) }
+                                // 動いているゴーストが使っているバルーンは聞かない（消させない）
+                                val inUse = ghosts.filter { it.ghost.dir.name in running }.mapNotNull { it.selectedBalloon }.toSet()
+                                val left = if (ok) {
+                                    withContext(Dispatchers.IO) { repo.balloons.recommendedFor(item.ghost.name, item.ghost.dir.name) }.filter { it.dir.name !in inUse }
+                                } else {
+                                    emptyList()
+                                }
                                 reload()
+                                if (left.isNotEmpty()) leftBalloons = item.ghost.name to left
                                 snackbar.showSnackbar(if (ok) "削除しました: ${item.ghost.name}" else "削除できませんでした: ${item.ghost.name}")
                             }
                         },
@@ -247,6 +285,16 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                     BalloonRow(
                         balloon = balloon,
                         inUse = balloon.dir.name in inUse,
+                        onReadme = {
+                            scope.launch {
+                                withContext(Dispatchers.IO) { balloon.readmeText() }?.let { TextViewerActivity.start(context, balloon.name, it) }
+                            }
+                        },
+                        onCraftmanUrl = { url ->
+                            if (runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.isFailure) {
+                                scope.launch { snackbar.showSnackbar("ページを開けるアプリがありません") }
+                            }
+                        },
                         onUninstall = {
                             scope.launch {
                                 val ok = withContext(Dispatchers.IO) { GhostStore.repository(context).balloons.uninstall(balloon) }
@@ -540,6 +588,9 @@ private data class GhostItem(
     /** バルーン置き場のディレクトリ名 → バルーンの名前。null は pono-droid の簡易バルーン */
     val balloons: List<Pair<String?, String>>,
     val selectedBalloon: String?,
+    /** ゴーストの recommended.balloon（ディレクトリ名。入っていなければ null）と、警告に出す名前。推奨が無ければ両方 null */
+    val recommendedBalloon: String? = null,
+    val recommendedBalloonLabel: String? = null,
 )
 
 private fun GhostItem(ghost: Ghost, balloons: BalloonRepository) = GhostItem(
@@ -548,19 +599,54 @@ private fun GhostItem(ghost: Ghost, balloons: BalloonRepository) = GhostItem(
     selectedShell = ghost.shellDir()?.name,
     balloons = listOf<Pair<String?, String>>(null to "簡易バルーン") + balloons.list().map { it.dir.name to it.name },
     selectedBalloon = ghost.balloon(balloons)?.dir?.name,
+    recommendedBalloon = ghost.recommendedBalloon(balloons)?.dir?.name,
+    recommendedBalloonLabel = if (ghost.hasRecommendedBalloon) {
+        ghost.recommendedBalloon(balloons)?.name ?: ghost.descript["recommended.balloon"] ?: ghost.descript["recommended.balloon.path"]
+    } else {
+        null
+    },
 )
 
-/** インストール済みのバルーン1つ。削除は確かめてから */
+/**
+ * [item] のゴーストにバルーン [dirName]（null は簡易バルーン）を選ぶ前の警告。バルーンがほかのゴースト向け（recommended.ghost）か、
+ * ゴーストが別のバルーンを推奨している（recommended.balloon）なら、その文。どちらでもなければ null
+ */
+private fun balloonWarning(item: GhostItem, balloons: List<Balloon>, dirName: String?): String? {
+    val chosen = dirName?.let { d -> balloons.firstOrNull { it.dir.name == d } }
+    if (chosen != null && chosen.isRecommendedFor(item.ghost.name, item.ghost.dir.name) == false) {
+        return "バルーン「${chosen.name}」は「${chosen.recommendedGhostLabel.orEmpty()}」のゴースト向けに作られています。ほかのゴーストでは正しく表示されないことがあります。"
+    }
+    if (item.recommendedBalloonLabel != null && item.recommendedBalloon != dirName) {
+        return "このゴーストは「${item.recommendedBalloonLabel}」のバルーンで使うよう作られています。ほかのバルーンでは正しく表示されないことがあります。"
+    }
+    return null
+}
+
+/**
+ * インストール済みのバルーン1つ。削除は確かめてから。readme があれば「説明を読む」、craftmanurl があれば「作者のページ」を出す。
+ * 特定のゴースト向け（recommended.ghost）なら、そのゴーストの名前も出す
+ */
 @Composable
-private fun BalloonRow(balloon: Balloon, inUse: Boolean, onUninstall: () -> Unit) {
+private fun BalloonRow(balloon: Balloon, inUse: Boolean, onReadme: () -> Unit, onCraftmanUrl: (String) -> Unit, onUninstall: () -> Unit) {
     var confirm by remember { mutableStateOf(false) }
+    val hasReadme = remember(balloon) { balloon.readmeFile() != null }
+    val url = balloon.craftmanUrl
     Card(Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(balloon.name + if (inUse) "（使用中）" else "", style = MaterialTheme.typography.bodyLarge)
-                balloon.descript["craftmanw"]?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(balloon.name + if (inUse) "（使用中）" else "", style = MaterialTheme.typography.bodyLarge)
+                    balloon.descript["craftmanw"]?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    balloon.recommendedGhostLabel?.let { Text("「$it」向け", style = MaterialTheme.typography.bodySmall) }
+                }
+                TextButton(onClick = { confirm = true }, enabled = !inUse) { Text("削除") }
             }
-            TextButton(onClick = { confirm = true }, enabled = !inUse) { Text("削除") }
+            if (hasReadme || url != null) {
+                Row {
+                    if (hasReadme) TextButton(onClick = onReadme) { Text("説明を読む") }
+                    url?.let { TextButton(onClick = { onCraftmanUrl(it) }) { Text("作者のページ") } }
+                }
+            }
         }
     }
     if (confirm) {
@@ -611,11 +697,14 @@ private fun GhostRow(
     besideEnabled: Boolean,
     onStartBeside: () -> Unit,
     onSelectShell: (String) -> Unit,
+    balloonWarning: (String?) -> String?,
     onSelectBalloon: (String?) -> Unit,
     onUninstall: () -> Unit,
 ) {
     val ghost = item.ghost
     var confirmUninstall by remember { mutableStateOf(false) }
+    // 推奨と違うバルーンを選んだ。切り替える前に確かめる（選んだバルーンと、その警告）
+    var pendingBalloon by remember { mutableStateOf<Pair<String?, String>?>(null) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -650,8 +739,25 @@ private fun GhostRow(
                 // 起動中に消すと、動いているゴーストのファイルが無くなるので先に終了してもらう
                 TextButton(onClick = { confirmUninstall = true }, enabled = !running && !loading) { Text("削除") }
             }
-            SelectButton("バルーン", item.balloons, item.selectedBalloon, onSelectBalloon)
+            SelectButton("バルーン", item.balloons, item.selectedBalloon, { value ->
+                val warning = balloonWarning(value)
+                if (warning == null) onSelectBalloon(value) else pendingBalloon = value to warning
+            })
         }
+    }
+    pendingBalloon?.let { (value, warning) ->
+        AlertDialog(
+            onDismissRequest = { pendingBalloon = null },
+            title = { Text("バルーンを切り替える") },
+            text = { Text(warning) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingBalloon = null
+                    onSelectBalloon(value)
+                }) { Text("それでも切り替える") }
+            },
+            dismissButton = { TextButton(onClick = { pendingBalloon = null }) { Text("やめる") } },
+        )
     }
     if (confirmUninstall) {
         AlertDialog(

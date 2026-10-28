@@ -3725,7 +3725,7 @@ class GhostController(
             if (ghost.shellDirs.size > 1) add(item("シェル", "pono:shells,$scopeId", "shellrootbutton.caption"))
             add(item("キャラクターの大きさ", "pono:scale,$scopeId", "shellscalerootbutton.caption"))
             if (repository != null) add(item("バルーン", "pono:balloons,$scopeId", "balloonrootbutton.caption"))
-            if (readmeFile() != null) add(item("Read Me", "pono:readme", "readmebutton.caption", "readmebuttoncaption"))
+            if (ghost.readmeFile() != null) add(item("Read Me", "pono:readme", "readmebutton.caption", "readmebuttoncaption"))
             if (termsFile() != null) add(item("利用規約", "pono:terms-open", "termsbutton.caption"))
             if (aiStates().isNotEmpty()) add(item("AI グラフ", "pono:aistate,$scopeId", "aistatebutton.caption"))
             if (history?.usage()?.isNotEmpty() == true) add(item("使用率", "pono:rateofuse,$scopeId", "rateofusebutton.caption"))
@@ -3945,12 +3945,6 @@ class GhostController(
             }
             site.url.startsWith("http://") || site.url.startsWith("https://") -> platform.openUrl(site.url)
         }
-    }
-
-    /** descript.txt の readme（無ければ readme.txt） */
-    private fun readmeFile(): File? {
-        val name = ghost.descript["readme"]?.takeIf { it.isNotBlank() } ?: "readme.txt"
-        return File(ghost.masterDir, name).takeIf { it.isFile } ?: File(ghost.dir, name).takeIf { it.isFile }
     }
 
     /**
@@ -4836,7 +4830,15 @@ class GhostController(
                     "pono:balloon" -> refs.firstOrNull()?.let { dir ->
                         val balloons = repository?.balloons
                         val recommended = balloons?.let(ghost::recommendedBalloon)
-                        if (ghost.hasRecommendedBalloon && recommended?.dir?.name != dir) {
+                        // バルーンの recommended.ghost がほかのゴーストなら、そのことを先に確かめる
+                        val chosen = balloons?.find(dir)
+                        if (chosen != null && chosen.isRecommendedFor(ghost.name, ghost.dir.name) == false) {
+                            runScript(
+                                "\\p[$scopeId]\\_qバルーン「${chosen.name}」は「${chosen.recommendedGhostLabel.orEmpty()}」のゴースト向けに作られています。" +
+                                    "ほかのゴーストでは正しく表示されないことがあります。\\n\\n" +
+                                    "\\q[それでも切り替える,pono:balloonforce,${quote(dir)}]\\n\\q[やめる,pono:balloons,$scopeId]\\e",
+                            )
+                        } else if (ghost.hasRecommendedBalloon && recommended?.dir?.name != dir) {
                             runScript(
                                 "\\p[$scopeId]\\_qこのゴーストは「${recommended?.name ?: ghost.descript["recommended.balloon"].orEmpty()}」のバルーンで使うよう作られています。" +
                                     "ほかのバルーンでは正しく表示されないことがあります。\\n\\n" +
@@ -4847,7 +4849,7 @@ class GhostController(
                         }
                     }
                     "pono:balloonforce" -> refs.firstOrNull()?.let { changeBalloon(it) }
-                    "pono:readme" -> readmeFile()?.let { platform.showText(ghost.name, readmeText()) }
+                    "pono:readme" -> ghost.readmeFile()?.let { platform.showText(ghost.name, readmeText()) }
                 }
             }
             id.startsWith("http://") || id.startsWith("https://") -> {
@@ -5699,12 +5701,11 @@ class GhostController(
         return true
     }
 
-    /** descript.txt の readme（無ければ readme.txt）の中身 */
+    /** descript.txt の readme（無ければ readme.txt）の中身。readme.charset があればその文字コードで読む */
     private fun readmeText(): String {
         val name = ghost.descript["readme"]?.takeIf { it.isNotBlank() } ?: "readme.txt"
-        val file = File(ghost.masterDir, name).takeIf { it.isFile } ?: File(ghost.dir, name).takeIf { it.isFile }
-            ?: return "$name がありません"
-        return runCatching { TextCharsets.decode(file.readBytes()) }.getOrDefault("$name を読めませんでした")
+        if (ghost.readmeFile() == null) return "$name がありません"
+        return ghost.readmeText() ?: "$name を読めませんでした"
     }
 
     /** スクリプトが終わってから送るイベント（\![raise] か、\![get,property] の答え） */
