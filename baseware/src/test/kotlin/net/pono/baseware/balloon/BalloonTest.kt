@@ -125,6 +125,30 @@ class BalloonTest {
     }
 
     @Test
+    fun thirdCharacterUsesBalloonpImagesAndParts() {
+        val dir = balloonDir(
+            "balloons0.png", "balloonk1.png", "balloonp2def0.png", "balloonp2def1.png",
+            "arrow0.png", "arrowp2def0.png", "markerp2def.png", "online0.png", "onlinep2def0.png",
+        )
+        File(dir, "balloonp2def1s.txt").writeText("font.height,20\r\nfont.color.r,255\r\nfont.color.g,0\r\nfont.color.b,0\r\n")
+        val balloon = Balloon(dir)
+        // \p[2] は balloonp2def の奇数番、\p[3] は無いので \1 用
+        assertEquals(listOf("balloonp2def1.png"), balloon.images(2).map { it.file.name })
+        assertEquals(listOf("balloonk1.png"), balloon.images(3).map { it.file.name })
+        assertEquals("balloonp2def1.png", balloon.imageForId(2, 0)?.file?.name)
+        // 矢印・印・オンラインの印も arrowp2def0.png などを先に
+        assertEquals(File(dir, "arrowp2def0.png"), balloon.arrowImage(0, 2))
+        assertEquals(File(dir, "arrow0.png"), balloon.arrowImage(0, 3))
+        assertEquals(File(dir, "markerp2def.png"), balloon.markerImage(2))
+        assertEquals(listOf(File(dir, "onlinep2def0.png")), balloon.onlineImages(2))
+        // 画像ごとの balloonp2def1s.txt で文字の大きさと色が変わる
+        val look = balloon.variant(File(dir, "balloonp2def1.png"))
+        assertEquals(20, look.fontHeight)
+        assertEquals(255, look.fontColor?.r)
+        assertEquals(balloon.fontHeight, balloon.variant(File(dir, "balloonp2def0.png")).fontHeight)
+    }
+
+    @Test
     fun picksImageForBalloonIdBySide() {
         val balloon = Balloon(balloonDir("balloons0.png", "balloons1.png", "balloons2.png", "balloons3.png", "balloonk2.png", "balloonk3.png"))
         // \b[2] は組 2/3 のうち、\0 は偶数（2）、\1 は奇数（3）

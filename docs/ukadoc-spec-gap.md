@@ -4,14 +4,13 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1454・一部だけ 20・作る 0・作れない 239・ベースウェアのことではない 337
+全 2050 項目: 済み 1455・一部だけ 19・作る 0・作れない 239・ベースウェアのことではない 337
 
 ## バルーンの descript.txt など
 
-済み 166 項目。
+済み 167 項目。
 
-### 🔧 一部だけ（5）
-- balloons\*s.txt/balloonk\*s.txt — 画像ごとの balloons*s.txt で、文字の範囲・矢印や印の位置・windowposition を上書きする。文字の色・大きさ・書体は descript.txt のまま
+### 🔧 一部だけ（4）
 - overlay_outside_balloon,数値 — 0 ならオンライン・SSTP の印をバルーンの画像の中に収め、1 なら収めない。ウィンドウを印の分だけ広げてはいない
 - sstpmessage.yb,座標 — 縦書きのときの印の文字の終わりとして読むが、印の文字は縦書きにしていない
 - use_input_alpha,数値 — 1 なら入力の箱の画像もバルーンと同じ透明度の扱いにする。バルーン全体を半透明にする設定は pono-droid に無い
@@ -456,7 +455,7 @@
 済み 3 項目。
 
 ### 🔧 一部だけ（3）
-- バルーン — balloons*s.txt・arrows* など・marker・clickwait・sstp の画像は使う。balloonp*（3人目以降のバルーン画像）と thumbnail.png はまだ
+- バルーン — balloons*s.txt・arrows* など・marker・clickwait・sstp・online の画像と、\p[2] 以降の balloonp*def*.png / .pna / s.txt と arrowp*def など（無ければ \1 用）は使う。thumbnail.png はまだ
 - ゴースト — thumbnail.png（一覧のサムネイル）・*.ico・ai0.png / ai0_dark.png（AI グラフの絵）を使っていない
 - シェル — surface*.png や element の APNG / GIF / WebP は動く（Android 9 から）。SERIKO のコマより上に出る
 

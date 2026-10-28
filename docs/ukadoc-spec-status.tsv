@@ -3,7 +3,7 @@ CLAUDE.md	NA	CLAUDE.md	仕様書のリポジトリの決まりで、ベースウ
 INDEX.md	NA	UKADOC トップページ	目次のページ
 README.md	NA	ukadoc-spec	リポジトリの説明
 descript/balloon/balloonsoption/arrow.filename.md	DONE	arrow.filename,ファイル名	arrow.filename と、キャラクターごとの arrows / arrowk / arrowpN を先に探す
-descript/balloon/balloonsoption/balloons-s-txt-balloonk-s-txt.md	PARTIAL	balloons\*s.txt/balloonk\*s.txt	画像ごとの balloons*s.txt で、文字の範囲・矢印や印の位置・windowposition を上書きする。文字の色・大きさ・書体は descript.txt のまま
+descript/balloon/balloonsoption/balloons-s-txt-balloonk-s-txt.md	DONE	balloons\*s.txt/balloonk\*s.txt	画像ごとの balloons*s.txt / balloonk*s.txt / balloonp*def*s.txt で、文字の範囲・矢印や印の位置・windowposition に加えて、文字の色・大きさ・書体・影・太字なども上書きする（画像ごとに文字の組みを測る）
 descript/balloon/balloonsoption/clickwaitmarker.filename.md	DONE	clickwaitmarker.filename,ファイル名	クリック待ちの間、最後に話したキャラクターのバルーンに clickwait*.png を出す（続きの矢印が出ている間は矢印）
 descript/balloon/balloonsoption/index.md	NA	balloons\*s.txt/balloonk\*s.txt/balloonc\*s.txt(個別指定)	一覧のページ
 descript/balloon/balloonsoption/marker.filename.md	DONE	marker.filename,ファイル名	\![*] の印を marker*.png の画像で選択肢の前に置く（無いバルーンは「▸」）
@@ -1949,7 +1949,7 @@ list/shiori-resource/tooltip/index.md	NA	ツールチップ系	目次のペー�
 list/shiori-resource/tooltip/tooltip.md	DONE	tooltip	実装済み
 list/shiori-resource/update/index.md	NA	更新情報	目次のページ
 list/shiori-resource/update/other_homeurl_override.md	DONE	other_homeurl_override	実装済み
-manual/balloon.md	PARTIAL	バルーン	balloons*s.txt・arrows* など・marker・clickwait・sstp の画像は使う。balloonp*（3人目以降のバルーン画像）と thumbnail.png はまだ
+manual/balloon.md	PARTIAL	バルーン	balloons*s.txt・arrows* など・marker・clickwait・sstp・online の画像と、\p[2] 以降の balloonp*def*.png / .pna / s.txt と arrowp*def など（無ければ \1 用）は使う。thumbnail.png はまだ
 manual/directory.md	NA	全体の構成	フォルダの構成の説明
 manual/ghost.md	PARTIAL	ゴースト	thumbnail.png（一覧のサムネイル）・*.ico・ai0.png / ai0_dark.png（AI グラフの絵）を使っていない
 manual/install.md	DONE	インストール	.nar（zip）のインストール。lzh・cab・自己解凍 exe は対象外

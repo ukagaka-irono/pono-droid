@@ -102,12 +102,16 @@ class Balloon private constructor(val dir: File, private val base: Descript, pri
     }
 
     /**
-     * そのキャラクター用の画像を小さい順に返す。\0 は偶数番（右側のキャラクター用）、\1 は奇数番を使い、
-     * 無ければもう片方の番号や \0 用の画像で代わりにする。
+     * そのキャラクター用の画像を小さい順に返す。\0 は偶数番（右側のキャラクター用）、\1 と \p[2] 以降は奇数番を使い、
+     * 無ければもう片方の番号や \0 用の画像で代わりにする。\p[2] 以降は balloonp2def0.png などを先に、無ければ \1 用
      */
     fun images(scope: Int): List<BalloonImage> {
-        val prefixes = if (scope == 0) listOf("balloons") else listOf("balloonk", "balloons")
-        val parity = if (scope == 0) 0 else 1
+        val prefixes = when (scope) {
+            0 -> listOf("balloons")
+            1 -> listOf("balloonk", "balloons")
+            else -> listOf("balloonp${scope}def", "balloonk", "balloons")
+        }
+        val parity = parityOf(scope)
         for (prefix in prefixes) {
             // 番号が桁あふれするファイル名（細工されたバルーン）は無いものとして扱う
             val all = files.values.mapNotNull { f ->
@@ -126,8 +130,11 @@ class Balloon private constructor(val dir: File, private val base: Descript, pri
     fun imageForId(scope: Int, id: Int): BalloonImage? {
         val images = images(scope)
         val base = id - id % 2
-        return images.firstOrNull { it.index == base + scope % 2 } ?: images.firstOrNull { it.index == id }
+        return images.firstOrNull { it.index == base + parityOf(scope) } ?: images.firstOrNull { it.index == id }
     }
+
+    /** 画像の番号の偶奇。\0 は偶数、ほかは奇数 */
+    private fun parityOf(scope: Int) = if (scope == 0) 0 else 1
 
     /** 画像と同名の .pna（アルファ用のグレースケール画像） */
     fun pnaFor(png: File): File? = files[png.nameWithoutExtension.lowercase() + ".pna"]
@@ -136,25 +143,25 @@ class Balloon private constructor(val dir: File, private val base: Descript, pri
 
     /**
      * パーツの画像。[filenameKey]（arrow.filename など。拡張子なし）か [default] を名前にし、キャラクターごとの
-     * 名前s / 名前k / 名前pN を先に探す。[suffix] は arrow0 の 0 のような後ろに付くもの
+     * 名前s / 名前k / 名前pNdef を先に探す。[suffix] は arrow0 の 0 のような後ろに付くもの
      */
     private fun part(filenameKey: String, default: String, scope: Int, suffix: String = ""): File? {
         val base = value(filenameKey)?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: default
         val own = when (scope) {
             0 -> base + "s"
             1 -> base + "k"
-            else -> base + "p$scope"
+            else -> base + "p${scope}def"
         }
         return files["$own$suffix.png"] ?: files["$base$suffix.png"]
     }
 
-    /** スクロールの矢印。0 が上向き（前に戻れる）、1 が下向き（続きがある）。arrow.filename と arrows / arrowk / arrowpN */
+    /** スクロールの矢印。0 が上向き（前に戻れる）、1 が下向き（続きがある）。arrow.filename と arrows / arrowk / arrowpNdef */
     fun arrowImage(which: Int, scope: Int = 0): File? = part("arrow.filename", "arrow", scope, which.toString())
 
-    /** \![*] の印の画像（marker.filename と markers / markerk / markerpN）。無ければ null（文字の印で出す） */
+    /** \![*] の印の画像（marker.filename と markers / markerk / markerpNdef）。無ければ null（文字の印で出す） */
     fun markerImage(scope: Int): File? = part("marker.filename", "marker", scope)
 
-    /** クリック待ちの印の画像（clickwaitmarker.filename と clickwaits / clickwaitk / clickwaitpN） */
+    /** クリック待ちの印の画像（clickwaitmarker.filename と clickwaits / clickwaitk / clickwaitpNdef） */
     fun clickWaitImage(scope: Int): File? = part("clickwaitmarker.filename", "clickwait", scope)
 
     /** SSTP で届いたスクリプトの印（sstpmarker.filename。既定は sstp_new、無ければ sstp） */
@@ -427,14 +434,14 @@ class Balloon private constructor(val dir: File, private val base: Descript, pri
 
     /**
      * オンラインの印の絵（onlinemarker.filename、既定は online）。online0.png・online1.png… の順に並べたもので、
-     * キャラクターごとの onlines / onlinek / onlinepN があればそちらを使う
+     * キャラクターごとの onlines / onlinek / onlinepNdef があればそちらを使う
      */
     fun onlineImages(scope: Int): List<File> {
         val base = value("onlinemarker.filename")?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: "online"
         val own = when (scope) {
             0 -> base + "s"
             1 -> base + "k"
-            else -> base + "p$scope"
+            else -> base + "p${scope}def"
         }
         fun frames(prefix: String) = generateSequence(0) { it + 1 }.map { files["$prefix$it.png"] }.takeWhile { it != null }.filterNotNull().toList()
         return frames(own).ifEmpty { frames(base) }

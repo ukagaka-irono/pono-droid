@@ -462,7 +462,8 @@ fun SkinBalloon(
     // 1枚ごとに縮めると大きさで文字の大きさが変わるので、いちばん広い画像に合わせて同じ比率で縮める
     // バルーンの dpi（作った画面の DPI）の分も掛ける
     val scale = minOf(density.density * LocalBalloonScale.current * skin.balloon.dpiFactor, maxWidthPx / candidates.maxOf { it.bitmap.width })
-    val style = skin.textStyle(scale / density.density, scale, scopeId)
+    // 文字の色・大きさ・書体は画像ごとの balloons*s.txt で変わることがあるので、画像ごとに作る
+    val styles = remember(skin, candidates, scale, scopeId) { candidates.map { skin.textStyle(scale / density.density, scale, scopeId, it.look) } }
     val scroll = rememberScrollState()
     AutoScroll(items, scroll, autoScroll)
     val onlineFrames by produceState<List<ImageBitmap>>(emptyList(), skin, scopeId, online) {
@@ -477,6 +478,7 @@ fun SkinBalloon(
         // 文字の高さを測って、収まる画像を選ぶ
         val chosen = requested ?: candidates.indices.firstOrNull { i ->
             val area = candidates[i].area
+            val style = styles[i]
             if (candidates[i].look.vertical) {
                 // 縦書きは列の長さを決めて組み、幅が収まるか見る
                 val measured = subcompose("measure$i") { VerticalBalloonBody(items, choices, style, (area.height * scale).toInt()) }
@@ -489,6 +491,7 @@ fun SkinBalloon(
             }
         } ?: candidates.lastIndex
         val image = candidates[chosen]
+        val style = styles[chosen]
         val placeable = subcompose("balloon") {
             SkinFrame(image, skin, scopeId, scale, scroll, onlineFrames, labels, style, clickWait, sstp, onDrag, fixed = { FixedBalloonImages(items, style) }) {
                 if (image.look.vertical) VerticalBalloonBody(items, choices, style, (image.area.height * scale).toInt()) else BalloonBody(items, choices, style)
@@ -1236,7 +1239,7 @@ class BalloonSkin(val balloon: Balloon) {
         Image(bmp.asImageBitmap(), balloon.communicateBox(file, bmp.width, bmp.height), 0, balloon.variant(file))
     }
 
-    /** スクロールの矢印（0 が上、1 が下）。arrow.filename とキャラクターごとの arrows / arrowk / arrowpN。無いバルーンなら null */
+    /** スクロールの矢印（0 が上、1 が下）。arrow.filename とキャラクターごとの arrows / arrowk / arrowpNdef。無いバルーンなら null */
     fun arrow(which: Int, scope: Int = 0): ImageBitmap? = part("arrow$which.$scope") { balloon.arrowImage(which, scope) }
 
     private val online = HashMap<Int, List<ImageBitmap>>()
@@ -1249,38 +1252,38 @@ class BalloonSkin(val balloon: Balloon) {
 
     /**
      * [dpPerPx] は画像の 1px が何 dp になるか、[pxPerPx] は画面の何 px になるか。字が小さくなりすぎないよう 12sp は残す。
-     * font.name・影・太字などの既定もバルーンの descript.txt から取る
+     * font.name・影・太字などの既定もバルーンの descript.txt から取る。[look] は画像ごとの balloons0s.txt などで上書きした設定
      */
-    fun textStyle(dpPerPx: Float, pxPerPx: Float, scope: Int = 0): BalloonTextStyle {
+    fun textStyle(dpPerPx: Float, pxPerPx: Float, scope: Int = 0, look: Balloon = balloon): BalloonTextStyle {
         val simple = BalloonTextStyle.Simple
-        val choiceColor = balloon.choiceColor?.toColor() ?: simple.choiceColor
+        val choiceColor = look.choiceColor?.toColor() ?: simple.choiceColor
         return BalloonTextStyle(
-            textColor = balloon.fontColor?.toColor() ?: simple.textColor,
+            textColor = look.fontColor?.toColor() ?: simple.textColor,
             choiceColor = choiceColor,
             links = LinkDefaults(
                 choiceColor = choiceColor,
-                anchorColor = balloon.anchorColor?.toColor() ?: choiceColor,
-                cursor = balloon.linkLook("cursor"),
-                cursorNotSelect = balloon.linkLook("cursor.notselect"),
-                anchor = balloon.linkLook("anchor"),
-                anchorNotSelect = balloon.linkLook("anchor.notselect"),
-                anchorVisited = balloon.linkLook("anchor.visited"),
+                anchorColor = look.anchorColor?.toColor() ?: choiceColor,
+                cursor = look.linkLook("cursor"),
+                cursorNotSelect = look.linkLook("cursor.notselect"),
+                anchor = look.linkLook("anchor"),
+                anchorNotSelect = look.linkLook("anchor.notselect"),
+                anchorVisited = look.linkLook("anchor.visited"),
             ),
-            fontSize = maxOf(balloon.fontHeight * dpPerPx, 12f).sp,
+            fontSize = maxOf(look.fontHeight * dpPerPx, 12f).sp,
             spPerPx = dpPerPx,
             pxPerPx = pxPerPx,
-            fontFamily = BalloonFonts.family(balloon.fontNames),
-            shadowColor = balloon.shadowColor?.toColor(),
-            shadowOutline = balloon.shadowOutline,
-            bold = balloon.bold,
-            italic = balloon.italic,
-            underline = balloon.underline,
-            strike = balloon.strike,
-            outline = balloon.outline,
-            disabledColor = balloon.disabledColor?.toColor() ?: simple.disabledColor,
-            disabledFlags = listOf("bold", "italic", "underline", "strike").associateWith(balloon::disabledFlag),
-            disabledFontFamily = balloon.disabledFontNames.takeIf { it.isNotEmpty() }?.let(BalloonFonts::family),
-            disabledFontHeight = balloon.disabledFontHeight,
+            fontFamily = BalloonFonts.family(look.fontNames),
+            shadowColor = look.shadowColor?.toColor(),
+            shadowOutline = look.shadowOutline,
+            bold = look.bold,
+            italic = look.italic,
+            underline = look.underline,
+            strike = look.strike,
+            outline = look.outline,
+            disabledColor = look.disabledColor?.toColor() ?: simple.disabledColor,
+            disabledFlags = listOf("bold", "italic", "underline", "strike").associateWith(look::disabledFlag),
+            disabledFontFamily = look.disabledFontNames.takeIf { it.isNotEmpty() }?.let(BalloonFonts::family),
+            disabledFontHeight = look.disabledFontHeight,
             markerImage = marker(scope),
         )
     }
