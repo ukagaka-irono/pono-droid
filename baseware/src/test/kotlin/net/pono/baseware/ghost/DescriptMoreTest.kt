@@ -145,4 +145,20 @@ class DescriptMoreTest {
         File(ghost.dir, "shell/second").mkdirs()
         assertEquals("second", ghost.defaultShellDir()!!.name)
     }
+
+    @Test
+    fun scriptTagsAndVariablesAreDroppedFromNames() {
+        assertEquals("さくら", Ghost.plainText("\\0\\s[10]さくら%username"))
+        assertEquals("a\\b 100%", Ghost.plainText("a\\\\b 100\\%"))
+        assertEquals("名前です", Ghost.plainText("名前\\_w[100]%property[x]です\\![raise,OnX]"))
+        assertEquals("nice", Ghost.plainText("\\nnice"))
+        val dir = tmp.newFolder("g")
+        File(dir, "ghost/master").mkdirs()
+        File(dir, "ghost/master/descript.txt").writeText("charset,UTF-8\r\nname,\\![raise,OnX]ぽの\r\nsakura.name,%usernameさん\r\ncraftman,pono\r\n")
+        val ghost = Ghost(dir)
+        assertEquals("ぽの", ghost.name)
+        assertEquals("さん", ghost.sakuraName)
+        assertEquals("pono", ghost.craftman)
+    }
+
 }

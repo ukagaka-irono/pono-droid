@@ -419,6 +419,13 @@ class MultiGhostTest {
     }
 
     @Test
+    fun markerHeaderSetsTheBalloonMarker() = run {
+        val a = boot("a", mapOf("OnTest" to """\0はい\e"""), headers = mapOf("OnTest" to mapOf("Marker" to "メモ")))
+        a.c.raise("OnTest", emptyList())
+        withTimeout(5000) { a.c.state.first { it.characters[0]?.balloonMarker == "メモ" } }
+    }
+
+    @Test
     fun desktopWallpaperChangeIsSent() = run {
         val platform = object : GhostPlatform by RecordingPlatform() {
             override fun desktopWallpaperColor(): Int = 0x336699

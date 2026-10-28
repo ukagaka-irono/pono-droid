@@ -61,6 +61,15 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="x-ukagaka-link" />
             </intent-filter>
+            <!-- ブラウザなどで落とした .nar を開く（application/x-nar。zip として配られることもある） -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/x-nar" />
+                <data android:mimeType="application/zip" />
+            </intent-filter>
         </activity>
         <!-- ゴーストのフォルダのファイルを、ほかのアプリで開くとき（渡したファイルを画像や音のアプリで開くなど）だけ、その1つを見せる -->
         <provider

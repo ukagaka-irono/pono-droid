@@ -13,9 +13,12 @@ class Ghost(val dir: File) {
     val masterDir = File(dir, "ghost/master")
     val descript: Descript = Descript.read(File(masterDir, "descript.txt"))
 
-    val name: String get() = descript["name"] ?: dir.name
-    val sakuraName: String get() = descript["sakura.name"] ?: name
-    val keroName: String get() = descript["kero.name"] ?: ""
+    val name: String get() = descript["name"]?.let(::plainText)?.takeIf { it.isNotEmpty() } ?: dir.name
+    val sakuraName: String get() = descript["sakura.name"]?.let(::plainText) ?: name
+    val keroName: String get() = descript["kero.name"]?.let(::plainText) ?: ""
+
+    /** craftmanw（無ければ craftman）。名前と同じく、さくらスクリプトのタグや %変数は捨てる */
+    val craftman: String get() = (descript["craftmanw"] ?: descript["craftman"])?.let(::plainText).orEmpty()
     val shioriName: String get() = descript["shiori"] ?: "shiori.dll"
 
     /** descript.txt の charset。SHIORI とのやりとりの最初の文字コードにも使う。 */
@@ -85,6 +88,7 @@ class Ghost(val dir: File) {
 
     val isValid: Boolean get() = File(masterDir, "descript.txt").isFile
 
+
     // pono-droid がゴーストごとに覚えておくこと（初回起動したか、選んだシェルなど）
     private val profileFile = File(dir, "pono/profile.properties")
 
@@ -97,9 +101,57 @@ class Ghost(val dir: File) {
         profileFile.outputStream().use { p.store(it, null) }
     }
 
-    private companion object {
-        const val PROFILE_SHELL = "shell"
-        const val PROFILE_BALLOON = "balloon"
+    companion object {
+        /**
+         * descript.txt の名前などの値。\ や % で始まるもの（さくらスクリプトのタグと %username などの環境変数）は、
+         * 危ないので捨てる（SSP と同じ）。文字として書くなら \\ と \%
+         */
+        private fun ascii(c: Char) = c in 'a'..'z' || c in 'A'..'Z'
+
+        fun plainText(value: String): String = buildString {
+            var i = 0
+            while (i < value.length) {
+                val c = value[i]
+                when {
+                    c == '\\' && i + 1 < value.length && (value[i + 1] == '\\' || value[i + 1] == '%') -> {
+                        append(value[i + 1])
+                        i += 2
+                    }
+                    c == '\\' -> {
+                        // タグ（\0・\_w[100]・\![...] など。名前は \ と _ ! & の後の1文字）と、続く [ ] を飛ばす
+                        i++
+                        while (i < value.length && value[i] in "!_&") i++
+                        if (i < value.length && value[i] != '[') i++
+                        if (i < value.length && value[i] == '[') {
+                            val close = value.indexOf(']', i)
+                            i = if (close < 0) value.length else close + 1
+                        }
+                    }
+                    c == '%' && i + 1 < value.length && (ascii(value[i + 1]) || value[i + 1] == '(') -> {
+                        // %username・%property[...]・%(...) を飛ばす
+                        i++
+                        if (value[i] == '(') {
+                            val close = value.indexOf(')', i)
+                            i = if (close < 0) value.length else close + 1
+                        } else {
+                            // 環境変数の名前は英数字だけ（続く日本語は残す）
+                            while (i < value.length && (ascii(value[i]) || value[i] in '0'..'9' || value[i] == '?')) i++
+                            if (i < value.length && value[i] == '[') {
+                                val close = value.indexOf(']', i)
+                                i = if (close < 0) value.length else close + 1
+                            }
+                        }
+                    }
+                    else -> {
+                        append(c)
+                        i++
+                    }
+                }
+            }
+        }
+
+        private const val PROFILE_SHELL = "shell"
+        private const val PROFILE_BALLOON = "balloon"
 
         /** 簡易バルーンを選んだ印（ディレクトリ名と重ならないよう / を含める） */
         const val BALLOON_SIMPLE = "/simple"

@@ -24,12 +24,47 @@ object UpdateManifest {
      * 1行1ファイルで、項目は 0x01 で区切られる（パス, MD5, size=... など）。
      * updates.txt は行頭に "file," が付く。読めない行は飛ばす。
      */
-    fun parse(text: String): List<UpdateEntry> = text.lineSequence().mapNotNull { raw ->
-        val fields = raw.trimEnd('\r').split('\u0001').map { it.trim() }
-        val path = fields[0].removePrefix("file,").replace('\\', '/').trim()
-        val md5 = fields.drop(1).firstOrNull { md5Pattern.matches(it) }
-        if (path.isEmpty() || md5 == null || path.endsWith("/")) null else UpdateEntry(path, md5.lowercase())
-    }.toList()
+    fun parse(text: String): List<UpdateEntry> {
+        val entries = text.lineSequence().mapNotNull { raw ->
+            val fields = raw.trimEnd('\r').split('\u0001').map { it.trim() }
+            val path = fields[0].removePrefix("file,").replace('\\', '/').trim()
+            val md5 = fields.drop(1).firstOrNull { md5Pattern.matches(it) }
+            if (path.isEmpty() || md5 == null || path.endsWith("/")) null else UpdateEntry(path, md5.lowercase())
+        }.toList()
+        // 全部の行がパーセントエンコード済みなら戻して使う（そうでなければ、URL にするときだけエンコードする）
+        if (entries.isEmpty() || !entries.all { encoded.matches(it.path) } || entries.none { '%' in it.path }) return entries
+        return entries.map { it.copy(path = percentDecode(it.path)) }
+    }
+
+    /**
+     * 一覧のバイト列を読む。先頭の行に charset= の欄（updates.txt なら charset, の行）があればその文字コードで、
+     * 無ければ charset 行か中身（UTF-8 か Shift_JIS）で決める
+     */
+    fun parse(bytes: ByteArray): List<UpdateEntry> {
+        val head = String(bytes, 0, minOf(bytes.size, 4096), Charsets.ISO_8859_1)
+        val declared = Regex("""(?:^|\u0001)charset=([A-Za-z0-9_\-]+)""").find(head.substringBefore('\n'))?.groupValues?.get(1)
+        val charset = TextCharsets.resolve(declared)
+        return parse(if (charset != null) String(bytes, charset).removePrefix("\uFEFF") else TextCharsets.decode(bytes))
+    }
+
+    /** パーセントエンコードの文字（%XX）と、エンコードしなくてよい文字だけの書き方 */
+    private val encoded = Regex("""^([A-Za-z0-9\-._~/!$&'()*+,;=:@]|%[0-9A-Fa-f]{2})*$""")
+
+    /** %XX を UTF-8 のバイトとして戻す（+ は空白にしない） */
+    private fun percentDecode(s: String): String {
+        val out = java.io.ByteArrayOutputStream()
+        var i = 0
+        while (i < s.length) {
+            if (s[i] == '%' && i + 2 < s.length) {
+                out.write(s.substring(i + 1, i + 3).toInt(16))
+                i += 3
+            } else {
+                out.write(s[i].toString().toByteArray())
+                i++
+            }
+        }
+        return out.toString("UTF-8")
+    }
 }
 
 /** ネットワーク更新の途中（OnUpdate.OnDownloadBegin / OnUpdate.OnMD5Compare*） */
@@ -189,8 +224,8 @@ class NetworkUpdater(
                 dest.parentFile?.mkdirs()
                 File(staging, e.path).copyTo(dest, overwrite = true)
             }
-            // 更新で delete.txt が来たら、書かれているファイルを消す（SSP と同じ）
-            if (targets.any { it.path.equals(DELETE_LIST, ignoreCase = true) }) applyDeleteList(root)
+            // 更新で delete.txt（か delete1.txt などの delete[数字].txt）が来たら、書かれているファイルを消す（SSP と同じ）
+            if (targets.any { DELETE_LISTS.matches(it.path.lowercase()) }) applyDeleteList(root)
             UpdateResult.Changed(targets.map { it.path })
         } catch (e: IOException) {
             UpdateResult.Failure("fileio")
@@ -209,13 +244,13 @@ class NetworkUpdater(
         if (https != null) {
             val (result, bytes) = fetchManifestAt(https)
             if (result == FetchResult.Ok) {
-                val entries = UpdateManifest.parse(TextCharsets.decode(bytes))
+                val entries = UpdateManifest.parse(bytes)
                 if (entries.isNotEmpty()) return Manifest(https, entries) to result
             }
         }
         val (result, bytes) = fetchManifestAt(declared)
         if (result != FetchResult.Ok) return null to result
-        return Manifest(declared, UpdateManifest.parse(TextCharsets.decode(bytes))) to result
+        return Manifest(declared, UpdateManifest.parse(bytes)) to result
     }
 
     private fun fetchManifestAt(base: String): Pair<FetchResult, ByteArray> {
@@ -228,6 +263,9 @@ class NetworkUpdater(
 
     companion object {
         const val DELETE_LIST = "delete.txt"
+
+        /** delete.txt と、SSP が読む delete[数字].txt */
+        private val DELETE_LISTS = Regex("""delete\d*\.txt""")
 
         /** pono-droid がゴーストごとに覚えておくもの（profile など）。更新で触らせない */
         const val PONO_DIR = "pono"
@@ -250,13 +288,17 @@ class NetworkUpdater(
          * 書かれたファイルを消す。外を指すパスと pono/ の中は無視する。.nar のインストールでも使う。
          */
         fun applyDeleteList(root: File) {
-            val list = File(root, DELETE_LIST).takeIf { it.isFile } ?: return
+            // delete.txt、次に delete1.txt・delete2.txt… の順（SSP は delete[数字].txt も読む）
+            val lists = root.listFiles { f -> f.isFile && DELETE_LISTS.matches(f.name.lowercase()) }.orEmpty()
+                .sortedBy { it.name.lowercase().removePrefix("delete").removeSuffix(".txt").toIntOrNull() ?: -1 }
             val canonicalRoot = root.canonicalFile
-            for (line in TextCharsets.decode(list.readBytes()).lines()) {
-                val path = line.trim().replace('\\', '/').trimEnd('/')
-                if (path.isEmpty()) continue
-                val target = safeFile(canonicalRoot, path) ?: continue
-                if (target.isDirectory) target.deleteRecursively() else target.delete()
+            for (list in lists) {
+                for (line in TextCharsets.decode(list.readBytes()).lines()) {
+                    val path = line.trim().replace('\\', '/').trimEnd('/')
+                    if (path.isEmpty()) continue
+                    val target = safeFile(canonicalRoot, path) ?: continue
+                    if (target.isDirectory) target.deleteRecursively() else target.delete()
+                }
             }
         }
 

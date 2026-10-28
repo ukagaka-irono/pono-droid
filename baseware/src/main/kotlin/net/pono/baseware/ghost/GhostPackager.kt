@@ -81,14 +81,22 @@ class GhostPackager(private val root: File) {
         val standard = listOf("", "ghost/master/").flatMap { listOf(File(root, it + "updates2.dau"), File(root, it + "updates.txt")) }
         val entries = files(Purpose.UPDATE, (standard + outputs).toSet())
         // 一覧を作る間に消えたファイル（ほかで作っている途中のものなど）は入れない
+        val dateFormat = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
         val lines = entries.mapNotNull { (rel, file) ->
             val sum = runCatching { md5(file) }.getOrNull() ?: return@mapNotNull null
-            "$rel\u0001$sum\u0001size=${file.length()}\u0001"
+            val date = java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(file.lastModified()), java.time.ZoneId.systemDefault())
+            "$rel\u0001$sum\u0001size=${file.length()}\u0001date=${dateFormat.format(date)}\u0001"
         }
         for (out in outputs) {
             out.parentFile?.mkdirs()
             val dau = out.name.lowercase().endsWith(".dau")
-            out.writeText(lines.joinToString("") { (if (dau) it else "file,$it") + "\r\n" }, Charsets.UTF_8)
+            // UTF-8 で書くので、そう書いておく（書かなければ SSP は Shift_JIS と読む）。dau は先頭の行の末尾に charset=、txt は charset, の行
+            val body = if (dau) {
+                lines.mapIndexed { i, l -> (if (i == 0) "${l}charset=UTF-8\u0001" else l) + "\r\n" }.joinToString("")
+            } else {
+                "charset,UTF-8\r\n" + lines.joinToString("") { "file,$it\r\n" }
+            }
+            out.writeText(body, Charsets.UTF_8)
         }
         return entries.size
     }

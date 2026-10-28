@@ -202,7 +202,7 @@ descript/ghost/descript-txt/icon.minimize.md	DONE	icon.minimize,ファイル名	
 descript/ghost/descript-txt/id.md	NA	id,ID名	起動ログに出すだけ。pono-droid には起動ログが無い
 descript/ghost/descript-txt/index.md	NA	descript.txt	一覧のページ
 descript/ghost/descript-txt/install.accept.md	DONE	install.accept,名前1,名前2,名前3...	NarInstaller.accepts で読む
-descript/ghost/descript-txt/introduction_descript.txt.md	PARTIAL	descript.txt（Ghostの）	説明のページ。\ や % で始まる値を捨てる決まりはしていない（名前などをメニューのスクリプトにそのまま入れている）
+descript/ghost/descript-txt/introduction_descript.txt.md	DONE	descript.txt（Ghostの）	説明のページ。名前・sakura.name・kero.name・craftman(w) から \ で始まるタグと %変数を捨てる（\ と \% は文字として残す）
 descript/ghost/descript-txt/kero.balloon.defaultsurface.md	DONE	kero.balloon.defaultsurface,数値	\b が無いときのバルーンの番号（スコープのもの＞全体）。書いていなければ文字の量で選ぶ
 descript/ghost/descript-txt/kero.defaultleft.md	DONE	kero.defaultleft,X座標	scopeName で全部のキャラクターを読む（loadDefaultPositions）
 descript/ghost/descript-txt/kero.defaulttop.md	DONE	kero.defaulttop,Y座標	同上
@@ -1956,7 +1956,7 @@ manual/install.md	DONE	インストール	.nar（zip）のインストール。l
 manual/owner-draw-menu.md	DONE	オーナードローメニュー	メニューはバルーンに出す。絵の指定は決めたとおり作らない
 manual/shell.md	PARTIAL	シェル	surface*.png や element の APNG / GIF / WebP は動く（Android 9 から）。SERIKO のコマより上に出る
 manual/translator.md	IMPOSSIBLE	トランスレータ	MAKOTO（makoto.dll）は Windows の DLL
-manual/update.md	PARTIAL	ネットワーク更新	delete1.txt など delete[数字].txt を読まない（delete.txt だけ）
+manual/update.md	DONE	ネットワーク更新	delete.txt と delete1.txt などの delete[数字].txt を順に読む（更新とインストールの後）
 memo/memo.md	NA	メモ	ベースウェアの比較などのメモ
 memo/shiori-event.md	NA	補足: SHIORI Eventとは	SHIORI Event の説明
 migration/README.md	NA	HTML 版からの移行メモ	仕様書の移行メモ
@@ -2025,7 +2025,7 @@ spec/shiori3/capability.md	NA	実装対応状況の検知	NOTIFY capability の�
 spec/shiori3/chapter0.md	DONE	SHIORI/3.0	SHIORI/3.0 の GET / NOTIFY でやりとりしている
 spec/shiori3/index.md	DONE	SHIORI/3.0	SHIORI/3.0 の GET / NOTIFY でやりとりしている
 spec/shiori3/request.md	DONE	request	SenderType（internal / external と raise・embed・property・sstp・communicate）・SecurityLevel・SecurityOrigin・Status・BaseID・Age・X-SSTP-PassThru-*
-spec/shiori3/response.md	PARTIAL	response	ValueNotify・SecurityLevel・ErrorLevel / ErrorDescription・BalloonOffset・Reference0 のコミュニケート（Age）・X-SSTP-PassThru-* は扱う。Marker と MarkerSend はバルーンの印がまだ無いので出さない
+spec/shiori3/response.md	DONE	response	ValueNotify・SecurityLevel・ErrorLevel / ErrorDescription・BalloonOffset・Marker（バルーンの印）・Reference0 のコミュニケート（Age・MarkerSend は相手のバルーンの印）・X-SSTP-PassThru-* を扱う
 spec/sstp/chapter0.md	DONE	SSTP/1.x	SSTP サーバーがある（設定で選んだとき、端末の中だけ）
 spec/sstp/direct.md	IMPOSSIBLE	Direct SSTP	Windows の WM_COPYDATA。Android には同じものが無い
 spec/sstp/http.md	DONE	SSTP over HTTP	POST /api/sstp/v1 と keep-alive。localhost でない Origin は制限付きで受けるのでなく 403 で断る
@@ -2037,15 +2037,15 @@ spec/sstp/method_give.md	DONE	メソッド：GIVE	Document は OnCommunicate、S
 spec/sstp/method_notify.md	DONE	メソッド：NOTIFY	Event・Reference・IfGhost の保険・Option notify・答えの Script
 spec/sstp/method_send.md	DONE	メソッド：SEND	Sender: First と、SHIORI の答えの X-SSTP-PassThru-* を SSTP の答えに付ける
 spec/sstp/req_res.md	DONE	request/response	X-SSTP-PassThru-* と SecurityOrigin を SHIORI に渡し、Option strict は読めなかったタグとサーフェスを開発用の記録にエラーで残す
-spec/sstp/sstp.md	PARTIAL	概要	9801 だけで待つ。SSP の 9821 では待たない
+spec/sstp/sstp.md	DONE	概要	9801 と、SSP と同じく 9821 で待つ（この端末の中からだけ。9821 が使われていれば 9801 だけ）
 spec/update-file/fields.md	DONE	フィールド詳細	パスと MD5 を使う。size / date は読み飛ばしてよい
-spec/update-file/generation.md	PARTIAL	生成処理	作る一覧が UTF-8 なのに charset を書かない（dau の先頭の charset=、txt の charset, 行）。SSP は Shift_JIS と読む。date= も無い
+spec/update-file/generation.md	DONE	生成処理	作る一覧に date= を付け、UTF-8 と書く（dau は先頭の行の末尾に charset=UTF-8、txt は charset,UTF-8 の行）
 spec/update-file/index.md	DONE	更新定義ファイル	目次
 spec/update-file/overview.md	DONE	概要	updates2.dau、無ければ updates.txt
-spec/update-file/path-handling.md	PARTIAL	パスの扱い	全部の行がパーセントエンコード済みのときに戻していない（ファイル名に %XX が残り、URL は二重にエンコードされる）。MD5 なし・/ で終わる・.. は済み
-spec/update-file/updates2dau.md	PARTIAL	updates2.dau (Version 2)	先頭の charset= の欄を読まず、UTF-8 か CP932 かを中身で決めている（EUC-JP などは読めない）
+spec/update-file/path-handling.md	DONE	パスの扱い	全部の行がパーセントエンコード済みなら戻して使い、そうでなければ URL にするときだけエンコードする。MD5 なし・/ で終わる・.. は外す
+spec/update-file/updates2dau.md	DONE	updates2.dau (Version 2)	先頭の行の charset= の欄の文字コードで読む（無ければ charset 行か中身から UTF-8 か Shift_JIS）
 spec/update-file/updatestxt.md	DONE	updates.txt (Version 3)	charset, 行と file, 行を読む
-spec/web/application-x-nar.md	PARTIAL	application/x-nar MIMEタイプ	共有するときは application/x-nar にしている。ブラウザで落とした .nar を開く VIEW（application/x-nar・zip）を受けていない
+spec/web/application-x-nar.md	DONE	application/x-nar MIMEタイプ	共有するときは application/x-nar。ブラウザなどで落とした .nar（application/x-nar・zip）を開くとインストールする
 spec/web/chapter0.md	NA	Web関連	執筆中の空のページ
 spec/web/index.md	NA	Web関連	目次
 spec/web/x-ukagaka-link.md	PARTIAL	x-ukagaka-link スキーム	type=event だけ。type=install（URL の .nar を落として入れる）と type=homeurl（更新と同じ方法で取ってきて入れる）が無い

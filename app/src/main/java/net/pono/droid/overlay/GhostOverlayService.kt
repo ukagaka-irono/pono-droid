@@ -1052,28 +1052,34 @@ class GhostOverlayService : LifecycleService() {
     }
 
     /** SSTP サーバー（設定で選んだときだけ。この端末の中のアプリからだけ受ける） */
-    private var sstp: SstpServer? = null
+    /** 待っている SSTP サーバー（9801 と、SSP と同じく 9821） */
+    private var sstp: List<SstpServer> = emptyList()
 
     /** 設定とゴーストの起動に合わせて、SSTP サーバーを始める・やめる */
     private fun updateSstp() {
         val want = sessions.isNotEmpty() && OverlaySettings.sstp(OverlaySettings.prefs(this))
         if (!want) {
-            sstp?.stop()
-            sstp = null
+            sstp.forEach { it.stop() }
+            sstp = emptyList()
             return
         }
-        if (sstp != null) return
+        if (sstp.isNotEmpty()) return
         // 宛先（ReceiverGhostName・IfGhost など）のゴーストに渡す。名指しのゴーストが動いていなければ 404
-        val server = SstpServer(
+        fun server(port: Int) = SstpServer(
             lifecycleScope,
             { req ->
                 withContext(Dispatchers.Main) {
                     if (hub.running.isEmpty()) SstpResponse(503) else hub.sstpTarget(req)?.handleSstp(req) ?: SstpResponse(404)
                 }
             },
+            port = port,
             log = { Log.w(TAG, it) },
         )
-        if (server.start()) sstp = server else toast("SSTP のポート ${SstpServer.DEFAULT_PORT} がほかのアプリに使われています")
+        val main = server(SstpServer.DEFAULT_PORT)
+        if (!main.start()) toast("SSTP のポート ${SstpServer.DEFAULT_PORT} がほかのアプリに使われています")
+        // 9821 は使われていても知らせない（9801 だけで足りる）
+        val extra = server(SstpServer.SSP_PORT).takeIf { it.start() }
+        sstp = listOfNotNull(main.takeIf { it.localPort > 0 }, extra)
     }
 
     /** 動いているゴーストをすべて、何も送らずに止める。それぞれの片付けの Job を返す */
@@ -1085,8 +1091,8 @@ class GhostOverlayService : LifecycleService() {
         usbDevices = null
         loadJob?.cancel()
         loadJob = null
-        sstp?.stop()
-        sstp = null
+        sstp.forEach { it.stop() }
+        sstp = emptyList()
         voice?.stop()
         voice = null
         val all = sessions.toList()

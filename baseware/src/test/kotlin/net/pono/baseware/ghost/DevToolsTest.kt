@@ -65,13 +65,15 @@ class DevToolsTest {
         val dau = File(root, "updates2.dau")
         val txt = File(root, "ghost/master/updates.txt")
         GhostPackager(root).createUpdateData(listOf(dau, txt))
-        // "abc" の MD5
+        // "abc" の MD5。date= は更新した日時、先頭の行の末尾に charset=UTF-8
+        val date = Regex("date=\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}")
         assertEquals(
-            "developer_options.txt\u0001${md5(options)}\u0001size=${options.length}\u0001\r\n" +
-                "ghost/master/descript.txt\u0001900150983cd24fb0d6963f7d28e17f72\u0001size=3\u0001\r\n",
-            dau.readText(),
+            "developer_options.txt\u0001${md5(options)}\u0001size=${options.length}\u0001DATE\u0001charset=UTF-8\u0001\r\n" +
+                "ghost/master/descript.txt\u0001900150983cd24fb0d6963f7d28e17f72\u0001size=3\u0001DATE\u0001\r\n",
+            date.replace(dau.readText(), "DATE"),
         )
-        assertTrue(txt.readText().lines().first().startsWith("file,developer_options.txt\u0001"))
+        assertEquals("charset,UTF-8", txt.readText().lines().first())
+        assertTrue(txt.readText().lines()[1].startsWith("file,developer_options.txt\u0001"))
         // 読み戻せる形
         assertEquals(listOf("developer_options.txt", "ghost/master/descript.txt"), net.pono.baseware.update.UpdateManifest.parse(txt.readText()).map { it.path })
     }

@@ -272,6 +272,9 @@ class SstpServer(
 
     companion object {
         const val DEFAULT_PORT = 9801
+
+        /** SSP だけが待つもう1つのポート（spec/sstp/sstp.md） */
+        const val SSP_PORT = 9821
         private const val BACKLOG = 8
         private const val MAX_CONNECTIONS = 8
         const val MAX_REQUEST_BYTES = 256 * 1024

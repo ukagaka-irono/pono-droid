@@ -4678,6 +4678,10 @@ class GhostController(
         r.headers["BalloonOffset"]?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.size >= 2 }?.let { (x, y) ->
             _state.update { it.update(0) { c -> c.copy(balloonOffset = x.coerceIn(-MAX_BALLOON_OFFSET, MAX_BALLOON_OFFSET) to y.coerceIn(-MAX_BALLOON_OFFSET, MAX_BALLOON_OFFSET)) } }
         }
+        // Marker: バルーンの下の追加情報（\![set,balloonmarker] と同じ）
+        r.headers["Marker"]?.trim()?.takeIf { it.isNotEmpty() && method == ShioriMethod.GET && r.value != null }?.let { m ->
+            _state.update { it.update(0) { c -> c.copy(balloonMarker = m.take(MAX_BALLOON_LABEL)) } }
+        }
         // Reference0 があれば、そのゴースト（本体側の名前）に話しかける（コミュニケート）。リソースや OnTranslate では送らない
         val target = r.reference(0)?.trim()
         val value = r.value
@@ -4742,9 +4746,10 @@ class GhostController(
             val origin = RequestOrigin("internal,communicate", age = age, extraHeaders = listOf("Surface" to surfaces))
             val reply = request("OnCommunicate", listOf(sender, script) + extra, origin = origin) ?: return@launch
             if (_state.value.talking || _state.value.waitingChoice) return@launch
-            marker?.let { platform.log("Marker: $it") }
             cancelScript()
             runScript(reply)
+            // 相手が MarkerSend で送ってきたバルーンの印は、こちらのバルーンに出す
+            marker?.trim()?.takeIf { it.isNotEmpty() }?.let { m -> _state.update { it.update(0) { c -> c.copy(balloonMarker = m.take(MAX_BALLOON_LABEL)) } } }
         }
     }
 
@@ -5522,7 +5527,7 @@ class GhostController(
         "name" -> g.name
         "sakuraname" -> g.sakuraName
         "keroname" -> g.keroName
-        "craftmanw" -> g.descript["craftmanw"] ?: g.descript["craftman"].orEmpty()
+        "craftmanw" -> g.craftman
         "craftmanurl" -> g.descript["craftmanurl"].orEmpty()
         "path" -> g.dir.absolutePath + "/"
         "homeurl" -> g.descript["homeurl"].orEmpty()

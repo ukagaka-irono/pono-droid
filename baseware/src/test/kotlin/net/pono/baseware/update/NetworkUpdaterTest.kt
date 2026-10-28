@@ -130,6 +130,28 @@ class NetworkUpdaterTest {
     }
 
     @Test
+    fun readsTheCharsetFieldAndPercentEncodedPaths() {
+        // 先頭の行の charset= で読む（EUC-JP は中身からは決めない）
+        val euc = "ghost/master/日本語.txt\u0001d41d8cd98f00b204e9800998ecf8427e\u0001size=0\u0001charset=EUC-JP\u0001\r\n".toByteArray(charset("EUC-JP"))
+        assertEquals(listOf("ghost/master/日本語.txt"), UpdateManifest.parse(euc).map { it.path })
+        // 全部の行がエンコード済みなら戻す。1行でも生のままなら、どれも戻さない
+        val all = "a%20b.txt\u0001d41d8cd98f00b204e9800998ecf8427e\u0001\r\n%E3%81%82.txt\u0001d41d8cd98f00b204e9800998ecf8427e\u0001\r\n"
+        assertEquals(listOf("a b.txt", "あ.txt"), UpdateManifest.parse(all).map { it.path })
+        val mixed = all + "c d.txt\u0001d41d8cd98f00b204e9800998ecf8427e\u0001\r\n"
+        assertEquals(listOf("a%20b.txt", "%E3%81%82.txt", "c d.txt"), UpdateManifest.parse(mixed).map { it.path })
+    }
+
+    @Test
+    fun numberedDeleteListsAreReadToo() {
+        val dir = ghostDir("a.txt" to "x", "b.txt" to "y", "c.txt" to "z", "delete.txt" to "a.txt\r\n", "delete1.txt" to "b.txt\r\n", "deletex.txt" to "c.txt\r\n")
+        NetworkUpdater.applyDeleteList(dir)
+        assertFalse(File(dir, "a.txt").exists())
+        assertFalse(File(dir, "b.txt").exists())
+        // delete[数字].txt でないものは読まない
+        assertTrue(File(dir, "c.txt").exists())
+    }
+
+    @Test
     fun appliesDeleteListAfterUpdate() = runTest {
         val dir = ghostDir("ghost/master/old.dic" to "x", "ghost/master/keep.dic" to "y", "pono/profile.properties" to "booted=1")
         val deleteList = "ghost/master/old.dic\r\n../outside.txt\r\npono/profile.properties\r\npono\r\n./pono\r\n".toByteArray()

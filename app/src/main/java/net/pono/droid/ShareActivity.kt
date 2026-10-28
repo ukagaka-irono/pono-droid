@@ -37,7 +37,9 @@ class ShareActivity : ComponentActivity() {
             finish()
             return
         }
-        val uris = sharedUris(intent).filter { it.scheme == "content" }
+        // ブラウザなどで落とした .nar を開いた（VIEW。application/x-nar か zip）
+        val viewed = intent.action == Intent.ACTION_VIEW
+        val uris = (if (viewed) listOfNotNull(intent.data) else sharedUris(intent)).filter { it.scheme == "content" }
         // ファイルでなく文字（URL も）を共有された
         val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { uris.isEmpty() && it.isNotBlank() }
         if (text != null) {
@@ -52,16 +54,16 @@ class ShareActivity : ComponentActivity() {
         }
         lifecycleScope.launch {
             try {
-                handle(uris)
+                handle(uris, viewed)
             } finally {
                 finish()
             }
         }
     }
 
-    private suspend fun handle(uris: List<Uri>) {
-        // .nar は SSP と同じくインストールする
-        if (uris.size == 1 && displayName(uris[0])?.lowercase()?.endsWith(".nar") == true) {
+    private suspend fun handle(uris: List<Uri>, viewed: Boolean = false) {
+        // .nar は SSP と同じくインストールする（開いたもの（VIEW）は、名前が .nar でなくても .nar として入れてみる）
+        if (uris.size == 1 && (viewed || displayName(uris[0])?.lowercase()?.endsWith(".nar") == true)) {
             val result = withContext(Dispatchers.IO) { runCatching { GhostStore.install(this@ShareActivity, uris[0]) } }
             toast(result.fold({ GhostStore.describe(it) }, { "インストールできませんでした: ${it.message}" }))
             result.onSuccess { GhostStore.afterInstall(this@ShareActivity, it) }

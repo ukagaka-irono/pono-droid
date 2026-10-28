@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1444・一部だけ 30・作る 0・作れない 239・ベースウェアのことではない 337
+全 2050 項目: 済み 1452・一部だけ 22・作る 0・作れない 239・ベースウェアのことではない 337
 
 ## バルーンの descript.txt など
 
@@ -25,10 +25,9 @@
 
 ## ゴーストの descript.txt
 
-済み 68 項目。
+済み 69 項目。
 
-### 🔧 一部だけ（2）
-- descript.txt（Ghostの） — 説明のページ。\ や % で始まる値を捨てる決まりはしていない（名前などをメニューのスクリプトにそのまま入れている）
+### 🔧 一部だけ（1）
 - seriko.alignmenttodesktop,位置情報 — 書いてあればその吸着にする。どこにも書いていないときは、アプリの設定のキャラクター自由移動が常に制限なら仕様どおり bottom、ゴースト設定なら自由（決めたこと）。最初の設定の常に自由移動では吸着しない
 
 ### ⛔ 作れない（1）
@@ -430,17 +429,11 @@
 
 ## 仕様（SSTP・SHIORI/3.0・SAORI・更新ファイルなど）
 
-済み 67 項目。
+済み 73 項目。
 
-### 🔧 一部だけ（9）
+### 🔧 一部だけ（3）
 - Decompress — gzip（複数のメンバーも）・zlib・deflate は済み。brotli と zstd の展開は部品（ライブラリ）が要るので、まだ 400 unsupported algorithm
 - CompressArchive — overwrite・append・--password は済み。lzma とヘッダの暗号化（headerencrypt）は zip4j に無いので 500 unknown method
-- response — ValueNotify・SecurityLevel・ErrorLevel / ErrorDescription・BalloonOffset・Reference0 のコミュニケート（Age）・X-SSTP-PassThru-* は扱う。Marker と MarkerSend はバルーンの印がまだ無いので出さない
-- 概要 — 9801 だけで待つ。SSP の 9821 では待たない
-- 生成処理 — 作る一覧が UTF-8 なのに charset を書かない（dau の先頭の charset=、txt の charset, 行）。SSP は Shift_JIS と読む。date= も無い
-- パスの扱い — 全部の行がパーセントエンコード済みのときに戻していない（ファイル名に %XX が残り、URL は二重にエンコードされる）。MD5 なし・/ で終わる・.. は済み
-- updates2.dau (Version 2) — 先頭の charset= の欄を読まず、UTF-8 か CP932 かを中身で決めている（EUC-JP などは読めない）
-- application/x-nar MIMEタイプ — 共有するときは application/x-nar にしている。ブラウザで落とした .nar を開く VIEW（application/x-nar・zip）を受けていない
 - x-ukagaka-link スキーム — type=event だけ。type=install（URL の .nar を落として入れる）と type=homeurl（更新と同じ方法で取ってきて入れる）が無い
 
 ### ⛔ 作れない（9）
@@ -462,13 +455,12 @@
 
 ## そのほか（説明のページ）
 
-済み 2 項目。
+済み 3 項目。
 
-### 🔧 一部だけ（4）
+### 🔧 一部だけ（3）
 - バルーン — balloons*s.txt・arrows* など・marker・clickwait・sstp の画像は使う。balloonp*（3人目以降のバルーン画像）と thumbnail.png はまだ
 - ゴースト — thumbnail.png（一覧のサムネイル）・*.ico・ai0.png / ai0_dark.png（AI グラフの絵）を使っていない
 - シェル — surface*.png や element の APNG / GIF / WebP は動く（Android 9 から）。SERIKO のコマより上に出る
-- ネットワーク更新 — delete1.txt など delete[数字].txt を読まない（delete.txt だけ）
 
 ### ⛔ 作れない（1）
 - トランスレータ — MAKOTO（makoto.dll）は Windows の DLL
