@@ -3338,22 +3338,40 @@ class GhostController(
     }
 
     /**
-     * 中クリック（2本指で叩く・長押しメニューの「ゴーストのメニュー（中クリック）」）。SSP と同じく OnMouseDownEx / OnMouseUpEx を送り、
-     * 答えが無ければ OnMouseClickEx（middle）、それにも答えが無ければ古いゴースト向けに OnMouseClick（Reference5 = 2）を送る
+     * 中クリック（2本指で叩く・マウスの中ボタン・長押しメニューの「ゴーストのメニュー（中クリック）」）と、マウスの戻る・進むボタン。
+     * SSP と同じく OnMouseDownEx / OnMouseUpEx を送り、答えが無ければ OnMouseClickEx、それにも答えが無ければ
+     * 古いゴースト向けに OnMouseClick（Reference5 = 2。中ボタンだけ）を送る。
+     * [count] は続けて叩いた回数で、2 なら OnMouseDoubleClickEx、3 以上なら OnMouseMultipleClickEx（Reference7 が回数）を送る。
+     * OnMouseMultipleClickEx に答えが無ければ、ふつうのクリックと同じく奇数回目は OnMouseClickEx、偶数回目は OnMouseDoubleClickEx にする。
+     * [button] は middle・xbutton1・xbutton2、[device] は touch・pen・eraser・mouse
      */
-    fun onMiddleClick(scopeId: Int, x: Int = 0, y: Int = 0, collision: String? = null) {
+    fun onMiddleClick(
+        scopeId: Int, x: Int = 0, y: Int = 0, collision: String? = null, count: Int = 1, button: String = "middle", device: String = "touch",
+    ) {
         if (touchBlocked()) return
         lastUserActivity = System.currentTimeMillis()
-        val refs = listOf(x.toString(), y.toString(), "0", scopeId.toString(), collision.orEmpty(), "middle", "touch")
+        val refs = listOf(x.toString(), y.toString(), "0", scopeId.toString(), collision.orEmpty(), button, device)
         raise("OnMouseDownEx", refs, userInitiated = false)
         scope.launch {
-            val script = request("OnMouseUpEx", refs)
-                ?: request("OnMouseClickEx", refs)
-                ?: request("OnMouseClick", mouseReferences(scopeId, x, y, collision, 2))
-                ?: return@launch
+            val up = request("OnMouseUpEx", refs)
+            suspend fun click() = request("OnMouseClickEx", refs)
+                ?: if (button == "middle") request("OnMouseClick", mouseReferences(scopeId, x, y, collision, 2)) else null
+            val script = when {
+                count <= 1 -> up ?: click()
+                count == 2 -> request("OnMouseDoubleClickEx", refs) ?: up
+                else -> request("OnMouseMultipleClickEx", refs + count.toString())
+                    ?: (if (count % 2 == 0) request("OnMouseDoubleClickEx", refs) else request("OnMouseClickEx", refs))
+                    ?: up
+            } ?: return@launch
             cancelScript()
             runScript(script)
         }
+    }
+
+    /** マウスやペンがキャラクターの上で止まった（OnMouseHover）。指では起きない。[device] は pen・eraser・mouse */
+    fun onMouseHover(scopeId: Int, x: Int, y: Int, collision: String?, device: String) {
+        if (touchBlocked()) return
+        raise("OnMouseHover", listOf(x.toString(), y.toString(), "0", scopeId.toString(), collision.orEmpty(), "0", device), userInitiated = false)
     }
 
     // ---- ウィンドウ（最小化・位置の初期化・重なり・見切れ・大きさ） ----

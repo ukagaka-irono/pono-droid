@@ -124,6 +124,35 @@ class TouchAndWindowTest {
     }
 
     @Test
+    fun middleDoubleClick() = run(mapOf("OnMouseDoubleClickEx" to """\0にかい\e""")) { c, shiori ->
+        c.onMiddleClick(0, 3, 4, "Head", count = 2)
+        assertEquals(listOf("3", "4", "0", "0", "Head", "middle", "touch"), shiori.awaitEvent("OnMouseDoubleClickEx"))
+        c.awaitState { it.says(0, "にかい") }
+        assertEquals(0, shiori.count("OnMouseClickEx"))
+    }
+
+    @Test
+    fun middleMultipleClickFallsBackByCount() = run(emptyMap()) { c, shiori ->
+        // 答えが無ければ、3回目は OnMouseClickEx、4回目は OnMouseDoubleClickEx に戻る
+        c.onMiddleClick(0, button = "xbutton1", device = "mouse", count = 3)
+        assertEquals(listOf("0", "0", "0", "0", "", "xbutton1", "mouse", "3"), shiori.awaitEvent("OnMouseMultipleClickEx"))
+        shiori.awaitEvent("OnMouseClickEx")
+        c.onMiddleClick(0, button = "xbutton1", device = "mouse", count = 4)
+        shiori.awaitCount("OnMouseMultipleClickEx", 2)
+        shiori.awaitEvent("OnMouseDoubleClickEx")
+        delay(200)
+        assertEquals(1, shiori.count("OnMouseClickEx"))
+        // 中ボタンでないので、古いゴースト向けの OnMouseClick は送らない
+        assertEquals(0, shiori.count("OnMouseClick"))
+    }
+
+    @Test
+    fun mouseHover() = run(mapOf("OnMouseHover" to """\0とまった\e""")) { c, shiori ->
+        c.onMouseHover(1, 7, 8, "Face", "pen")
+        assertEquals(listOf("7", "8", "0", "1", "Face", "0", "pen"), shiori.awaitEvent("OnMouseHover"))
+    }
+
+    @Test
     fun minimizeAndRestore() = run(mapOf("OnTest" to """\![set,windowstate,minimize]\e""")) { c, shiori ->
         c.raise("OnTest", emptyList())
         c.awaitState { it.window.minimized }

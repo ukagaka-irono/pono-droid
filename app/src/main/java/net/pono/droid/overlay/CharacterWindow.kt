@@ -10,6 +10,7 @@ import android.graphics.Point
 import android.graphics.Rect
 import android.os.Build
 import android.view.Gravity
+import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -657,6 +658,23 @@ class CharacterWindow(
 
         /** 2本指で触れている。上下になぞるとホイール、動かさずに離すと中クリック */
         private var twoFingers = false
+
+        /** 続けて中クリックした回数（2本指で叩く・マウスの中ボタン）。戻る・進むボタンも同じく数える */
+        private var middleCount = 0
+        private var lastMiddleTime = 0L
+        private var lastMiddleButton = ""
+
+        /** マウスの中・戻る・進むボタンで押している（押したボタンの名前）。左ボタンの操作はしない */
+        private var extraButton: String? = null
+
+        /** 中クリックを1回数えて知らせる */
+        private fun middleClick(event: MotionEvent, x: Float, y: Float, button: String, callbacks: SurfaceTouchCallbacks) {
+            val continued = button == lastMiddleButton && event.eventTime - lastMiddleTime <= multiTapTimeout
+            middleCount = if (continued) middleCount + 1 else 1
+            lastMiddleTime = event.eventTime
+            lastMiddleButton = button
+            callbacks.onMiddleClick(x, y, middleCount, button, pointerDevice(event))
+        }
         private var twoFingerTime = 0L
         private var twoFingerY = 0f
         private var wheeled = false
@@ -673,6 +691,11 @@ class CharacterWindow(
         override fun onTouch(event: MotionEvent, callbacks: SurfaceTouchCallbacks): Boolean {
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    extraButton = if (event.isFromSource(InputDevice.SOURCE_MOUSE)) extraButtonName(event.buttonState) else null
+                    if (extraButton != null) {
+                        cancelLongPress()
+                        return true
+                    }
                     downRawX = event.rawX
                     downRawY = event.rawY
                     downX = event.x
@@ -695,7 +718,7 @@ class CharacterWindow(
                         callbacks.onLongPress(x, y)
                     }.also { surfaceView.postDelayed(it, longPressTimeout) }
                 }
-                MotionEvent.ACTION_POINTER_DOWN -> if (event.pointerCount == 2 && !dragging && !longPressed) {
+                MotionEvent.ACTION_POINTER_DOWN -> if (extraButton == null && event.pointerCount == 2 && !dragging && !longPressed) {
                     // 2本目の指が来たら、1本指の操作（なでる・長押し）はやめる
                     cancelLongPress()
                     twoFingers = true
@@ -708,11 +731,13 @@ class CharacterWindow(
                     twoFingers = false
                     // 動かさずにすぐ離したら中クリック。残った指ではもう何もしない
                     if (!wheeled && event.eventTime - twoFingerTime <= ViewConfiguration.getTapTimeout() * 2L) {
-                        callbacks.onMiddleClick(event.getX(0), event.getY(0))
+                        middleClick(event, event.getX(0), event.getY(0), "middle", callbacks)
                     }
                     longPressed = true
                 }
-                MotionEvent.ACTION_MOVE -> if (twoFingers && event.pointerCount >= 2) {
+                MotionEvent.ACTION_MOVE -> if (extraButton != null) {
+                    // マウスの中・戻る・進むボタンで押したまま動かしても、何もしない
+                } else if (twoFingers && event.pointerCount >= 2) {
                     // 2本指で上下になぞった分だけホイールを回す（上へなら正）
                     val moved = twoFingerY - midY(event)
                     if (abs(moved) >= wheelStep) {
@@ -747,6 +772,11 @@ class CharacterWindow(
                     }
                 }
                 MotionEvent.ACTION_UP -> {
+                    extraButton?.let { button ->
+                        extraButton = null
+                        middleClick(event, event.x, event.y, button, callbacks)
+                        return true
+                    }
                     if (longPressed) {
                         // 長押しはもう知らせてある
                     } else if (stroking) {
@@ -778,6 +808,10 @@ class CharacterWindow(
                     callbacks.onRelease(event.x, event.y)
                 }
                 MotionEvent.ACTION_CANCEL -> {
+                    if (extraButton != null) {
+                        extraButton = null
+                        return true
+                    }
                     cancelLongPress()
                     tapCount = 0
                     if (dragging) {
@@ -791,6 +825,22 @@ class CharacterWindow(
             return true
         }
     }
+}
+
+/** マウスの中・戻る・進むボタンの名前（OnMouseClickEx などの Reference5）。どれでもなければ null */
+private fun extraButtonName(buttons: Int): String? = when {
+    buttons and MotionEvent.BUTTON_TERTIARY != 0 -> "middle"
+    buttons and MotionEvent.BUTTON_BACK != 0 -> "xbutton1"
+    buttons and MotionEvent.BUTTON_FORWARD != 0 -> "xbutton2"
+    else -> null
+}
+
+/** 触れたものの種類（マウスイベントの Reference6）。touch・pen・eraser・mouse */
+internal fun pointerDevice(event: MotionEvent): String = when (event.getToolType(0)) {
+    MotionEvent.TOOL_TYPE_STYLUS -> "pen"
+    MotionEvent.TOOL_TYPE_ERASER -> "eraser"
+    MotionEvent.TOOL_TYPE_MOUSE -> "mouse"
+    else -> "touch"
 }
 
 /** 払った角度（右が 0 度で反時計回り）を、SSP の8方向の名前にする */
@@ -858,8 +908,11 @@ interface SurfaceTouchCallbacks {
     /** 2本指で上下になぞった。[amount] は上へなら正（1目盛り 120） */
     fun onWheel(x: Float, y: Float, amount: Int)
 
-    /** 2本指で叩いた（中クリック） */
-    fun onMiddleClick(x: Float, y: Float)
+    /**
+     * 2本指で叩いた・マウスの中ボタンを押した（中クリック）。マウスの戻る・進むボタンも。
+     * [count] は続けて叩いた回数、[button] は middle・xbutton1・xbutton2、[device] は touch・pen・eraser・mouse
+     */
+    fun onMiddleClick(x: Float, y: Float, count: Int, button: String, device: String)
 
     /** 指が離れた（どの操作の後でも最後に呼ぶ） */
     fun onRelease(x: Float, y: Float)

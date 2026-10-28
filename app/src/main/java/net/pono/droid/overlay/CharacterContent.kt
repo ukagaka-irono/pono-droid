@@ -1,5 +1,12 @@
 package net.pono.droid.overlay
 
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Job
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.foundation.background
@@ -226,6 +233,32 @@ fun CharacterSurface(
                         )
                     }
                 }
+                .pointerInput(Unit) {
+                    // マウスやペンがしばらく止まったら OnMouseHover（指では起きない）
+                    coroutineScope {
+                        var rest: Job? = null
+                        awaitPointerEventScope {
+                            while (true) {
+                                val e = awaitPointerEvent(PointerEventPass.Initial)
+                                val c = e.changes.firstOrNull() ?: continue
+                                rest?.cancel()
+                                val device = when (c.type) {
+                                    PointerType.Mouse -> "mouse"
+                                    PointerType.Stylus -> "pen"
+                                    PointerType.Eraser -> "eraser"
+                                    else -> continue
+                                }
+                                if (e.type != PointerEventType.Move || c.pressed) continue
+                                val at = c.position
+                                rest = launch {
+                                    delay(HOVER_REST_MS)
+                                    val p = imagePoint(at.x, at.y)
+                                    controller.onMouseHover(scopeId, p.first, p.second, hit(p), device)
+                                }
+                            }
+                        }
+                    }
+                }
                 .pointerInteropFilter { event ->
                     if (selecting != null) return@pointerInteropFilter selectTouch(event)
                     touchHandler.onTouch(event, object : SurfaceTouchCallbacks {
@@ -278,9 +311,9 @@ fun CharacterSurface(
                             controller.onMouseWheel(scopeId, p.first, p.second, hit(p), amount)
                         }
 
-                        override fun onMiddleClick(x: Float, y: Float) {
+                        override fun onMiddleClick(x: Float, y: Float, count: Int, button: String, device: String) {
                             val p = imagePoint(x, y)
-                            controller.onMiddleClick(scopeId, p.first, p.second, hit(p))
+                            controller.onMiddleClick(scopeId, p.first, p.second, hit(p), count, button, device)
                         }
 
                         override fun onRelease(x: Float, y: Float) {
@@ -484,3 +517,6 @@ private fun DrawScope.drawCollisions(collisions: List<Collision>, pxPerX: Float,
         if (names) drawContext.canvas.nativeCanvas.drawText(c.id, topLeft.x + 2, topLeft.y + labelPaint.textSize, labelPaint)
     }
 }
+
+/** マウスやペンがこれだけ止まったら OnMouseHover を送る */
+private const val HOVER_REST_MS = 500L

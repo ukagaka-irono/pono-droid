@@ -1555,7 +1555,7 @@ list/shiori-event/install/index.md	NA	インストールイベント	目次の�
 list/shiori-event/mouse/OnMouseClick.md	DONE	OnMouseClick	実装済み
 list/shiori-event/mouse/OnMouseClickEx.md	DONE	OnMouseClickEx	実装済み
 list/shiori-event/mouse/OnMouseDoubleClick.md	DONE	OnMouseDoubleClick	実装済み
-list/shiori-event/mouse/OnMouseDoubleClickEx.md	BUILD	OnMouseDoubleClickEx	2本指で2回続けて叩いたとき（とマウスの中・戻る・進むボタン）に middle などで送る
+list/shiori-event/mouse/OnMouseDoubleClickEx.md	DONE	OnMouseDoubleClickEx	2本指で2回続けて叩いたとき・マウスの中・戻る・進むボタンを2回押したときに middle・xbutton1・xbutton2 で送る
 list/shiori-event/mouse/OnMouseDown.md	DONE	OnMouseDown	実装済み
 list/shiori-event/mouse/OnMouseDownEx.md	DONE	OnMouseDownEx	実装済み
 list/shiori-event/mouse/OnMouseDragEnd.md	DONE	OnMouseDragEnd	実装済み
@@ -1563,12 +1563,12 @@ list/shiori-event/mouse/OnMouseDragStart.md	DONE	OnMouseDragStart	実装済み
 list/shiori-event/mouse/OnMouseEnter.md	DONE	OnMouseEnter	実装済み
 list/shiori-event/mouse/OnMouseEnterAll.md	DONE	OnMouseEnterAll	実装済み
 list/shiori-event/mouse/OnMouseGesture.md	DONE	OnMouseGesture	実装済み
-list/shiori-event/mouse/OnMouseHover.md	BUILD	OnMouseHover	マウスやペンのホバー（ACTION_HOVER_MOVE）が止まったときに送る。指では起きない
+list/shiori-event/mouse/OnMouseHover.md	DONE	OnMouseHover	マウスやペンのホバーが 0.5 秒止まったときに送る（Reference6 は mouse・pen・eraser）。指では起きない
 list/shiori-event/mouse/OnMouseLeave.md	DONE	OnMouseLeave	実装済み
 list/shiori-event/mouse/OnMouseLeaveAll.md	DONE	OnMouseLeaveAll	実装済み
 list/shiori-event/mouse/OnMouseMove.md	DONE	OnMouseMove	実装済み
 list/shiori-event/mouse/OnMouseMultipleClick.md	DONE	OnMouseMultipleClick	実装済み
-list/shiori-event/mouse/OnMouseMultipleClickEx.md	BUILD	OnMouseMultipleClickEx	2本指で3回以上続けて叩いたとき。答えが無ければ ClickEx / DoubleClickEx へ
+list/shiori-event/mouse/OnMouseMultipleClickEx.md	DONE	OnMouseMultipleClickEx	3回以上続けたとき。答えが無ければ奇数回目は OnMouseClickEx、偶数回目は OnMouseDoubleClickEx に戻る
 list/shiori-event/mouse/OnMouseUp.md	DONE	OnMouseUp	実装済み
 list/shiori-event/mouse/OnMouseUpEx.md	DONE	OnMouseUpEx	実装済み
 list/shiori-event/mouse/OnMouseWheel.md	DONE	OnMouseWheel	実装済み
