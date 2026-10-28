@@ -360,6 +360,65 @@ class MultiGhostTest {
     }
 
     @Test
+    fun trayIconComesFromTheGhostFolder() = run {
+        val g = repository.find("a")!!
+        File(g.masterDir, "descript.txt").appendText("icon,a.ico\r\nicon.minimize,..\\..\\..\\outside.ico\r\n")
+        File(g.masterDir, "a.ico").writeBytes(byteArrayOf(0))
+        File(repository.root, "outside.ico").writeBytes(byteArrayOf(0))
+        val again = Ghost(g.dir)
+        assertEquals("a.ico", again.iconFile()?.name)
+        // ゴーストのフォルダの外は使わず、icon に戻る
+        assertEquals("a.ico", again.minimizedIconFile()?.name)
+        val icons: MutableList<File?> = Collections.synchronizedList(mutableListOf())
+        val platform = object : GhostPlatform by RecordingPlatform() {
+            override fun setTrayIcon(file: File?) {
+                icons += file
+            }
+        }
+        val a = boot("a", mapOf("OnTest" to """\![set,tasktrayicon,a.ico,てすと]\e"""), platform = platform)
+        a.c.raise("OnTest", emptyList())
+        withTimeout(5000) { while (icons.isEmpty()) delay(10) }
+        assertEquals("a.ico", icons.single()?.name)
+    }
+
+    private suspend fun GhostController.awaitChoiceId(id: String, refs: List<String>? = null) = withTimeout(5000) {
+        state.first { s ->
+            s.characters.values.any { ch ->
+                ch.balloon?.any { it is BalloonItem.ChoiceItem && it.choice.id == id && (refs == null || it.choice.references == refs) } == true
+            }
+        }
+    }
+
+    @Test
+    fun historyMenuListsRecentGhostsAndCalls() = run {
+        val history = UsageHistory(File(repository.root.parentFile, "pono/history.properties"))
+        history.ghostBooted("b")
+        history.ghostCalled("c")
+        history.ghostCalled("gone")
+        val a = boot("a", mapOf("OnTest" to """\0\q[履歴,pono:history,0]\e"""))
+        a.c.raise("OnTest", emptyList())
+        a.c.awaitChoiceId("pono:history")
+        a.c.onChoice(net.pono.baseware.sakura.Choice("履歴", "pono:history", listOf("0")))
+        // 起動したゴースト（自分の a は除く）と、呼んだゴースト（もう無い gone は除く）。使ったバルーンは無いので出さない
+        a.c.awaitChoiceId("pono:historylist", listOf("0", "call"))
+        a.c.awaitChoiceId("pono:historylist", listOf("0", "ghost"))
+        assertFalse(a.c.state.value.characters.values.any { ch -> ch.balloon?.any { it is BalloonItem.ChoiceItem && it.choice.references == listOf("0", "balloon") } == true })
+        a.c.onChoice(net.pono.baseware.sakura.Choice("ほかのゴーストを呼ぶ", "pono:historylist", listOf("0", "call")))
+        a.c.awaitChoiceId("pono:callghost", listOf("c"))
+    }
+
+    @Test
+    fun balloonMoveSwitchIsRemembered() = run {
+        val a = boot("a", mapOf("OnTest" to """\0\q[動かせる,pono:balloonmove,0]\e"""))
+        assertFalse(a.c.state.value.characters[0]!!.balloonMoveLocked)
+        a.c.raise("OnTest", emptyList())
+        a.c.awaitChoiceId("pono:balloonmove")
+        a.c.onChoice(net.pono.baseware.sakura.Choice("動かせる", "pono:balloonmove", listOf("0")))
+        withTimeout(5000) { a.c.state.first { it.characters[0]?.balloonMoveLocked == true } }
+        assertEquals("1", repository.find("a")!!.loadProfile().getProperty("balloon.move.off"))
+    }
+
+    @Test
     fun desktopWallpaperChangeIsSent() = run {
         val platform = object : GhostPlatform by RecordingPlatform() {
             override fun desktopWallpaperColor(): Int = 0x336699

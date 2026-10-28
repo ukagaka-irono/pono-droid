@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1392・一部だけ 30・作る 12・作れない 278・ベースウェアのことではない 338
+全 2050 項目: 済み 1404・一部だけ 30・作る 12・作れない 266・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -31,7 +31,7 @@
 
 ## ゴーストの descript.txt
 
-済み 56 項目。
+済み 58 項目。
 
 ### 🔨 作る（4）
 - shiori.logo.align,位置情報 — AI グラフを絵で描くとき（今はラベルと値を文字で並べる）の背景画像の基準
@@ -43,10 +43,8 @@
 - descript.txt（Ghostの） — 説明のページ。\ や % で始まる値を捨てる決まりはしていない（名前などをメニューのスクリプトにそのまま入れている）
 - seriko.alignmenttodesktop,位置情報 — 書いてあればその吸着にする。どこにも書いていないときは、アプリの設定のキャラクター自由移動が常に制限なら仕様どおり bottom、ゴースト設定なら自由（決めたこと）。最初の設定の常に自由移動では吸着しない
 
-### ⛔ 作れない（9）
+### ⛔ 作れない（7）
 - cursor,ファイル名 / mousecursor,ファイル名 — マウスカーソルが無い（⛔）
-- icon,ファイル名 — タスクトレイが無い。常駐の通知の小さいアイコンは替えられない（tasktrayicon と同じ扱い）
-- icon.minimize,ファイル名 — 最小化のアイコンを出す場所が無い（最小化は常駐の通知の「表示」で戻す）
 - makoto,ファイル名 — MAKOTO は Windows の DLL（⛔）
 - mousecursor.arrow,ファイル名 — マウスカーソルが無い（⛔）
 - mousecursor.grip,ファイル名 — マウスカーソルが無い（⛔）
@@ -210,7 +208,7 @@
 
 ## さくらスクリプト
 
-済み 337 項目。
+済み 342 項目。
 
 ### 🔧 一部だけ（6）
 - \_l[x,y] — 横書きのバルーンは座標どおり（px・em・lh・%・@ の相対・centerx / centery、\_l の後は左寄せ）。縦書きのバルーンは次の列にするだけ
@@ -220,12 +218,7 @@
 - \!\...\] — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
 - sound play/load/option のオプション — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
 
-### ⛔ 作れない（31）
-- \f[anchormethod,描画方法] — Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）
-- \f[anchornotselectmethod,描画方法] — Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）
-- \f[anchorvisitedmethod,描画方法] — Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）
-- \f[cursormethod,描画方法] — Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）
-- \f[cursornotselectmethod,描画方法] — Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）
+### ⛔ 作れない（26）
 - \6 — アプリは端末の時計を合わせられない（ずれを測るだけ）
 - \![change,calendarskin,カレンダースキン名] — カレンダーの画面が無い（決めたこと）
 - \![execute,calendarplugin,カレンダープラグイン名] — カレンダープラグイン（スケジュールセンサ）は DLL のプラグイン
@@ -365,9 +358,9 @@
 
 ## SHIORI リソース
 
-済み 89 項目。
+済み 94 項目。
 
-### ⛔ 作れない（70）
+### ⛔ 作れない（65）
 - (入力ボックス種類).defaultleft　(入力ボックス種類).defaulttop — 入力の箱は \0 のバルーンの位置に出す（決めたこと）
 - menu.disable.font.color.b — バルーンのメニューに押せない項目が無い（決めたこと）
 - menu.disable.font.color.g — バルーンのメニューに押せない項目が無い（決めたこと）
@@ -386,22 +379,17 @@
 - alignrootbutton.caption — キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
 - alwaysstayontopbutton.caption — オーバーレイはいつも手前（決めたこと・メニューに無い）
 - alwaystrayiconvisiblebutton.caption — タスクトレイが無い（決めたこと・メニューに無い）
-- balloonhistorybutton.caption — 最近使ったものの一覧が無い（決めたこと・メニューに無い）
 - biffallbutton.caption — アカウントごとに分けず、「メールを確認」が全部を確かめる（決めたこと・メニューに無い）
 - calendarbutton.caption — カレンダーの画面が無い（決めたこと・メニューに無い）
-- callghosthistorybutton.caption — 最近使ったものの一覧が無い（決めたこと・メニューに無い）
 - callsstpsendboxbutton.caption — SSTP 送信ボックスが無い（決めたこと・メニューに無い）
 - charsetbutton.caption — 文字コードの選択が無い（決めたこと・メニューに無い）
 - collisionvisiblebutton.caption — Materia の当たり判定表示。メニューに無い（決めたこと・メニューに無い）
 - debugballoonbutton.caption — Materia のバルーンマーカー表示。メニューに無い（決めたこと・メニューに無い）
 - definedsurfaceonlybutton.caption — SSP の互換の切り替え。メニューに無い（決めたこと・メニューに無い）
 - duibutton.caption — DUI が無い（決めたこと・メニューに無い）
-- enableballoonmovebutton.caption — バルーンはいつも縁をつかんで動かせる（止めるのは \![lock,balloonmove] と balloon.dontmove）ので、入り切りのメニューが無い
 - firststaffbutton.caption — バージョン情報の画面が無い（決めたこと・メニューに無い）
-- ghosthistorybutton.caption — 最近使ったものの一覧が無い（決めたこと・メニューに無い）
 - headlinesensehistorybutton.caption — ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
 - headlinesenserootbutton.caption — ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
-- historyrootbutton.caption — 最近使ったものの一覧が無い（決めたこと・メニューに無い）
 - inforootbutton.caption — SSP の情報の下位メニュー。メニューに無い（決めたこと・メニューに無い）
 - messengerbutton.caption — SSP メッセンジャが無い（決めたこと・メニューに無い）
 - pluginhistorybutton.caption — プラグインは作らない（決めたこと・メニューに無い）

@@ -277,8 +277,11 @@ interface GhostPlatform {
      */
     fun showTrayBalloon(title: String, text: String, icon: String) {}
 
-    /** \![set,tasktrayicon,ファイル,文字]。常駐の通知に [text] を出す（アイコンの画像は Android の通知では替えられない） */
+    /** \![set,tasktrayicon,ファイル,文字]。常駐の通知に [text] を出す */
     fun setTrayText(text: String) {}
+
+    /** \![set,tasktrayicon,ファイル,...] のファイル（ゴーストのフォルダの中）。常駐の通知のアイコンにする。null なら descript.txt の icon に戻す */
+    fun setTrayIcon(file: File?) {}
 
     /**
      * ファイルを選ぶ・保存先を選ぶ・フォルダを選ぶ・色を選ぶ画面を出す。答えは [GhostController.onSystemDialogResult] に返す。
@@ -735,7 +738,7 @@ class GhostController(
                 null
             }
             val caller = PreviousGhost(ghost.sakuraName, script ?: lastScript, ghost.name, ghost.dir.absolutePath + "/", shellName = shell.name)
-            if (!platform.callGhost(target.dir.name, caller)) platform.log("${target.name} を呼べませんでした")
+            if (platform.callGhost(target.dir.name, caller)) history?.ghostCalled(target.dir.name) else platform.log("${target.name} を呼べませんでした")
         }
         return true
     }
@@ -3725,6 +3728,9 @@ class GhostController(
             if (ghost.shellDirs.size > 1) add(item("シェル", "pono:shells,$scopeId", "shellrootbutton.caption"))
             add(item("キャラクターの大きさ", "pono:scale,$scopeId", "shellscalerootbutton.caption"))
             if (repository != null) add(item("バルーン", "pono:balloons,$scopeId", "balloonrootbutton.caption"))
+            if (historyGhosts().isNotEmpty() || historyBalloons().isNotEmpty() || historyCalls().isNotEmpty()) {
+                add(item("履歴", "pono:history,$scopeId", "historyrootbutton.caption"))
+            }
             if (ghost.readmeFile() != null) add(item("Read Me", "pono:readme", "readmebutton.caption", "readmebuttoncaption"))
             if (termsFile() != null) add(item("利用規約", "pono:terms-open", "termsbutton.caption"))
             if (aiStates().isNotEmpty()) add(item("AI グラフ", "pono:aistate,$scopeId", "aistatebutton.caption"))
@@ -3735,6 +3741,7 @@ class GhostController(
             if (_state.value.characters.values.any { it.balloonDrag != null }) {
                 add(item("バルーン位置初期化", "pono:resetballoonpos", "resetballoonpositionbutton.caption"))
             }
+            add(item("バルーンを動かせる", "pono:balloonmove,$scopeId", "enableballoonmovebutton.caption", mark = !userBalloonMoveOff))
             add(item("時計合わせ", "pono:sntp", "sntpbutton.caption"))
             add(item("サウンドを鳴らさない", "pono:quiet,$scopeId", "switchquietbutton.caption", mark = soundMuted))
             add(item("読み上げ", "pono:speech,$scopeId", "texttospeechbutton.caption", mark = platform.speechEnabled()))
@@ -3915,6 +3922,43 @@ class GhostController(
             sb.append("\\q[${quote(g.name)},pono:ghost,${quote(g.dir.name)}]\\n")
         }
         sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        return sb.toString()
+    }
+
+    /** 最近起動したゴースト（自分と、もう入っていないものは除く） */
+    private fun historyGhosts(): List<Ghost> =
+        history?.recentGhosts().orEmpty().filter { it != ghost.dir.name }.mapNotNull { repository?.find(it) }
+
+    /** 最近使ったバルーン（もう入っていないものは除く） */
+    private fun historyBalloons(): List<Balloon> = history?.recentBalloons().orEmpty().mapNotNull { repository?.balloons?.find(it) }
+
+    /** 最近呼んだゴースト（今呼べるものだけ） */
+    private fun historyCalls(): List<Ghost> {
+        val callable = callableGhosts().associateBy { it.dir.name }
+        return history?.recentCalledGhosts().orEmpty().mapNotNull { callable[it] }
+    }
+
+    /** メニューの「履歴」。最近のゴースト・バルーン・呼んだゴーストの一覧への入り口（あるものだけ） */
+    private suspend fun historyMenu(scopeId: Int): String {
+        val sb = StringBuilder("\\p[$scopeId]\\_q").append(menuColors())
+        if (historyGhosts().isNotEmpty()) item("ゴースト", "pono:historylist,$scopeId,ghost", "ghosthistorybutton.caption")?.let(sb::append)
+        if (historyBalloons().isNotEmpty()) item("バルーン", "pono:historylist,$scopeId,balloon", "balloonhistorybutton.caption")?.let(sb::append)
+        if (historyCalls().isNotEmpty()) item("ほかのゴーストを呼ぶ", "pono:historylist,$scopeId,call", "callghosthistorybutton.caption")?.let(sb::append)
+        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        return sb.toString()
+    }
+
+    /** 履歴の一覧（[kind] は ghost / balloon / call）。選ぶと切り替える・呼ぶ（メニューのそれぞれと同じ） */
+    private suspend fun historyList(scopeId: Int, kind: String): String {
+        val sb = StringBuilder("\\p[$scopeId]\\_q").append(menuColors())
+        when (kind) {
+            "ghost" -> historyGhosts().forEach { sb.append("\\q[${quote(it.name)},pono:ghost,${quote(it.dir.name)}]\\n") }
+            "balloon" -> historyBalloons().forEach {
+                sb.append("\\q[${quote((if (it.dir == balloon?.dir) "● " else "○ ") + it.name)},pono:balloon,${it.dir.name}]\\n")
+            }
+            "call" -> historyCalls().forEach { sb.append("\\q[${quote(it.name)},pono:callghost,${quote(it.dir.name)}]\\n") }
+        }
+        sb.append("\\q[戻る,pono:history,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -4774,6 +4818,12 @@ class GhostController(
                     "pono:resetballoonpos" -> resetBalloonPositions()
                     "pono:leavepassive" -> _state.update { it.copy(passive = false, induction = false) }
                     "pono:scale" -> scope.launch { runScript(scaleMenu(scopeId)) }
+                    "pono:history" -> scope.launch { runScript(historyMenu(scopeId)) }
+                    "pono:historylist" -> scope.launch { runScript(historyList(scopeId, refs.getOrNull(1).orEmpty())) }
+                    "pono:balloonmove" -> {
+                        toggleBalloonMove()
+                        scope.launch { runScript(basewareMenu(scopeId)) }
+                    }
                     "pono:setscale" -> refs.getOrNull(1)?.toIntOrNull()?.let { platform.setCharacterScale(it) }
                     "pono:scaleother" -> InputRequest.fromOpenTag(
                         "sliderinput", listOf(SCALE_INPUT, "-1", platform.characterScalePercent().toString(), SCALE_MIN.toString(), SCALE_MAX.toString()), inputSerial + 1,
@@ -4959,7 +5009,17 @@ class GhostController(
         return v == "1" || v == "true"
     }
 
-    private fun balloonMoveLocked(scope: Int) = scriptBalloonMoveLock || balloonDontMove(scope)
+    /** メニューの「バルーンを動かせる」を切ってある（ゴーストごとに覚える） */
+    private var userBalloonMoveOff = ghost.loadProfile().getProperty(PROFILE_BALLOON_MOVE_OFF) == "1"
+
+    private fun balloonMoveLocked(scope: Int) = scriptBalloonMoveLock || userBalloonMoveOff || balloonDontMove(scope)
+
+    /** メニューの「バルーンを動かせる」を切り替える */
+    private fun toggleBalloonMove() {
+        userBalloonMoveOff = !userBalloonMoveOff
+        ghost.saveProfile(ghost.loadProfile().apply { setProperty(PROFILE_BALLOON_MOVE_OFF, if (userBalloonMoveOff) "1" else "0") })
+        _state.update { s -> s.copy(characters = s.characters.mapValues { (scope, c) -> c.copy(balloonMoveLocked = balloonMoveLocked(scope)) }) }
+    }
 
     /** 覚えているバルーンのずれ（ゴーストの profile の balloon.drag.スコープ = "x,y"） */
     private fun savedBalloonDrag(scope: Int): Pair<Int, Int>? =
@@ -6115,6 +6175,7 @@ class GhostController(
                     return true
                 }
                 "trayicon", "tasktrayicon" -> {
+                    platform.setTrayIcon(args.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }?.let(::ghostFile))
                     platform.setTrayText(args.getOrNull(1)?.trim().orEmpty())
                     return true
                 }
@@ -6655,6 +6716,9 @@ class GhostController(
 
         /** inputbox.autocomplete の候補の数の上限 */
         private const val MAX_AUTOCOMPLETE = 500
+
+        /** メニューの「バルーンを動かせる」を切ってあるか（ゴーストの profile） */
+        private const val PROFILE_BALLOON_MOVE_OFF = "balloon.move.off"
 
         /** 開発用パレットの「SHIORI 内部のログを取る」を覚えておく名前 */
         private const val PROFILE_ENABLE_LOG = "developer.enable_log"

@@ -54,7 +54,7 @@ class BalloonChoicesTest {
         val (yes, link) = s.choices(0)
         assertEquals(
             ChoiceLooks(
-                cursor = LinkLook(shape = "underline", brush = 0xFF0000),
+                cursor = LinkLook(shape = "underline", brush = 0xFF0000, blend = "notmaskpen"),
                 cursorNotSelect = LinkLook(font = 0x0077FF),
                 anchorNotSelect = LinkLook(font = 0x008000),
                 anchorVisited = LinkLook(shape = "square"),

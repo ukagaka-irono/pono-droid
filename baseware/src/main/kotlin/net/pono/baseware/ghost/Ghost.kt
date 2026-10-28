@@ -39,6 +39,12 @@ class Ghost(val dir: File) {
     /** readme の中身（readme.charset があればその文字コードで読む）。無ければ null */
     fun readmeText(): String? = readmeFile()?.let { f -> runCatching { TextCharsets.decode(f.readBytes(), descript["readme.charset"]) }.getOrNull() }
 
+    /** descript.txt の icon（常駐の通知に出すアイコン。.ico など）。ghost/master の中だけ。無ければ null */
+    fun iconFile(): File? = descript["icon"]?.takeIf { it.isNotBlank() }?.let { TextCharsets.fileIn(masterDir, it) }
+
+    /** descript.txt の icon.minimize（隠している間のアイコン）。無ければ icon */
+    fun minimizedIconFile(): File? = descript["icon.minimize"]?.takeIf { it.isNotBlank() }?.let { TextCharsets.fileIn(masterDir, it) } ?: iconFile()
+
     /** 選んであるシェル（無ければ既定のシェル） */
     fun shellDir(): File? =
         loadProfile().getProperty(PROFILE_SHELL)?.let { name -> shellDirs.firstOrNull { it.name == name } } ?: defaultShellDir()

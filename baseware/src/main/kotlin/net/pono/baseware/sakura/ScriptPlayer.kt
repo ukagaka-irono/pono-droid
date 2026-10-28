@@ -844,7 +844,7 @@ class ScriptPlayer(
 
         /**
          * \f[cursorstyle,...] / \f[anchornotselectfontcolor,...] / \f[anchor.font.color,...] など、選択肢とリンクの見た目。
-         * 扱ったら true。method（描き方）は Android では選べないので読み飛ばす
+         * 扱ったら true。method（Windows の SetROP2 のモード名）は、バルーンの blendmethod と同じく近い重ね方で描く（default で既定に戻す）
          */
         private fun linkLook(name: String, args: List<String>): Boolean {
             val current = looks[scope] ?: ChoiceLooks.Default
@@ -867,7 +867,7 @@ class ScriptPlayer(
                 "color", "brushcolor" -> look.copy(brush = parseColor(args))
                 "pencolor" -> look.copy(pen = parseColor(args))
                 "fontcolor" -> look.copy(font = parseColor(args))
-                "method" -> look
+                "method" -> look.copy(blend = value?.takeIf { it.isNotEmpty() && it != "default" && it != "none" })
                 else -> return false
             }
             looks[scope] = when (prefix) {

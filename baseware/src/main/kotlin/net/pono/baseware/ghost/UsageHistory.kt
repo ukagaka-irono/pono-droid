@@ -31,6 +31,16 @@ class UsageHistory(private val file: File, private val clock: () -> LocalDate = 
     @Synchronized
     fun recentBalloons(): List<String> = list(KEY_BALLOONS)
 
+    /** メニューの「ほかのゴーストを呼ぶ」などで呼んだゴースト（新しいものから） */
+    @Synchronized
+    fun recentCalledGhosts(): List<String> = list(KEY_CALLS)
+
+    @Synchronized
+    fun ghostCalled(dirName: String) {
+        push(KEY_CALLS, dirName)
+        save()
+    }
+
     /** ゴーストを起動した（履歴の先頭に置き、起動回数を数える） */
     @Synchronized
     fun ghostBooted(dirName: String) {
@@ -103,6 +113,7 @@ class UsageHistory(private val file: File, private val clock: () -> LocalDate = 
     private companion object {
         const val KEY_GHOSTS = "recent.ghost"
         const val KEY_BALLOONS = "recent.balloon"
+        const val KEY_CALLS = "recent.call"
         const val MAX_RECENT = 20
         const val KEEP_DAYS = 31
     }

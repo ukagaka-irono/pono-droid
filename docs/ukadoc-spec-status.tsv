@@ -197,8 +197,8 @@ descript/ghost/descript-txt/don-t-2.md	DONE	don't need bind,数値	1 なら着�
 descript/ghost/descript-txt/don-t-3.md	DONE	don't need seriko talk,数値	1 なら interval が talk の口パクを動かさない
 descript/ghost/descript-txt/don-t.md	DONE	don't need onmousemove,数値	1 なら OnMouseMove（なでる）を送らない
 descript/ghost/descript-txt/homeurl.md	DONE	homeurl,URL	ネットワーク更新に使う（SHIORI の homeurl が先）
-descript/ghost/descript-txt/icon.md	IMPOSSIBLE	icon,ファイル名	タスクトレイが無い。常駐の通知の小さいアイコンは替えられない（tasktrayicon と同じ扱い）
-descript/ghost/descript-txt/icon.minimize.md	IMPOSSIBLE	icon.minimize,ファイル名	最小化のアイコンを出す場所が無い（最小化は常駐の通知の「表示」で戻す）
+descript/ghost/descript-txt/icon.md	DONE	icon,ファイル名	常駐の通知の題の左と大きいアイコンに出す（.ico も読む）。ゴーストのフォルダの中だけ
+descript/ghost/descript-txt/icon.minimize.md	DONE	icon.minimize,ファイル名	隠している間は、常駐の通知のアイコンをこれにする（無ければ icon）
 descript/ghost/descript-txt/id.md	NA	id,ID名	起動ログに出すだけ。pono-droid には起動ログが無い
 descript/ghost/descript-txt/index.md	NA	descript.txt	一覧のページ
 descript/ghost/descript-txt/install.accept.md	DONE	install.accept,名前1,名前2,名前3...	NarInstaller.accepts で読む
@@ -864,25 +864,25 @@ list/sakura-script/balloon-text/n.md	DONE	\n	実装済み
 list/sakura-script/balloon-text/note-1.md	PARTIAL	補足	オプションと data:…;base64 は済み。残りは Windows の exe / dll のリソースと --source=（TIFF のページ・PSD のレイヤー・アイコン）で、Android では読めない
 list/sakura-script/choice-marker/f-anchorcolor-f-anchorbrushcolor.md	DONE	\f[anchorcolor,色指定]もしくは\f[anchorbrushcolor,色指定]	実装済み
 list/sakura-script/choice-marker/f-anchorfontcolor.md	DONE	\f[anchorfontcolor,色指定]	実装済み
-list/sakura-script/choice-marker/f-anchormethod.md	IMPOSSIBLE	\f[anchormethod,描画方法]	Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）
+list/sakura-script/choice-marker/f-anchormethod.md	DONE	\f[anchormethod,描画方法]	バルーンの blendmethod と同じく、SetROP2 のモード名を近い重ね方（反転・明るく・暗く）にして塗る。default で既定に戻す
 list/sakura-script/choice-marker/f-anchornotselectcolor-f-anchornotselectbrushcolor.md	DONE	\f[anchornotselectcolor,色指定]もしくは\f[anchornotselectbrushcolor,色指定]	実装済み
 list/sakura-script/choice-marker/f-anchornotselectfontcolor.md	DONE	\f[anchornotselectfontcolor,色指定]	実装済み
-list/sakura-script/choice-marker/f-anchornotselectmethod.md	IMPOSSIBLE	\f[anchornotselectmethod,描画方法]	Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）
+list/sakura-script/choice-marker/f-anchornotselectmethod.md	DONE	\f[anchornotselectmethod,描画方法]	バルーンの blendmethod と同じく、SetROP2 のモード名を近い重ね方（反転・明るく・暗く）にして塗る。default で既定に戻す
 list/sakura-script/choice-marker/f-anchornotselectpencolor.md	DONE	\f[anchornotselectpencolor,色指定]	実装済み
 list/sakura-script/choice-marker/f-anchornotselectstyle.md	DONE	\f[anchornotselectstyle,形状]	実装済み
 list/sakura-script/choice-marker/f-anchorpencolor.md	DONE	\f[anchorpencolor,色指定]	実装済み
 list/sakura-script/choice-marker/f-anchorstyle.md	DONE	\f[anchorstyle,形状]	実装済み
 list/sakura-script/choice-marker/f-anchorvisitedcolor-f-anchorvisitedbrushcolor.md	DONE	\f[anchorvisitedcolor,色指定]もしくは\f[anchorvisitedbrushcolor,色指定]	実装済み
 list/sakura-script/choice-marker/f-anchorvisitedfontcolor.md	DONE	\f[anchorvisitedfontcolor,色指定]	実装済み
-list/sakura-script/choice-marker/f-anchorvisitedmethod.md	IMPOSSIBLE	\f[anchorvisitedmethod,描画方法]	Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）
+list/sakura-script/choice-marker/f-anchorvisitedmethod.md	DONE	\f[anchorvisitedmethod,描画方法]	バルーンの blendmethod と同じく、SetROP2 のモード名を近い重ね方（反転・明るく・暗く）にして塗る。default で既定に戻す
 list/sakura-script/choice-marker/f-anchorvisitedpencolor.md	DONE	\f[anchorvisitedpencolor,色指定]	実装済み
 list/sakura-script/choice-marker/f-anchorvisitedstyle.md	DONE	\f[anchorvisitedstyle,形状]	実装済み
 list/sakura-script/choice-marker/f-cursorcolor-f-cursorbrushcolor.md	DONE	\f[cursorcolor,色指定]もしくは\f[cursorbrushcolor,色指定]	実装済み
 list/sakura-script/choice-marker/f-cursorfontcolor.md	DONE	\f[cursorfontcolor,色指定]	実装済み
-list/sakura-script/choice-marker/f-cursormethod.md	IMPOSSIBLE	\f[cursormethod,描画方法]	Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）
+list/sakura-script/choice-marker/f-cursormethod.md	DONE	\f[cursormethod,描画方法]	バルーンの blendmethod と同じく、SetROP2 のモード名を近い重ね方（反転・明るく・暗く）にして塗る。default で既定に戻す
 list/sakura-script/choice-marker/f-cursornotselectcolor-f-cursornotselectbrushcolor.md	DONE	\f[cursornotselectcolor,色指定]もしくは\f[cursornotselectbrushcolor,色指定]	実装済み
 list/sakura-script/choice-marker/f-cursornotselectfontcolor.md	DONE	\f[cursornotselectfontcolor,色指定]	実装済み
-list/sakura-script/choice-marker/f-cursornotselectmethod.md	IMPOSSIBLE	\f[cursornotselectmethod,描画方法]	Windows GDI のラスタ演算の指定で、Android の描画に同じものが無い（読み飛ばす）
+list/sakura-script/choice-marker/f-cursornotselectmethod.md	DONE	\f[cursornotselectmethod,描画方法]	バルーンの blendmethod と同じく、SetROP2 のモード名を近い重ね方（反転・明るく・暗く）にして塗る。default で既定に戻す
 list/sakura-script/choice-marker/f-cursornotselectpencolor.md	DONE	\f[cursornotselectpencolor,色指定]	実装済み
 list/sakura-script/choice-marker/f-cursornotselectstyle.md	DONE	\f[cursornotselectstyle,形状]	実装済み
 list/sakura-script/choice-marker/f-cursorpencolor.md	DONE	\f[cursorpencolor,色指定]	実装済み
@@ -958,7 +958,7 @@ list/sakura-script/event/bang-restore-wallpaper.md	IMPOSSIBLE	\![restore,wallpap
 list/sakura-script/event/bang-save-wallpaper.md	IMPOSSIBLE	\![save,wallpaper]	同上
 list/sakura-script/event/bang-set-otherghosttalk-true-false-before-after.md	DONE	\![set,otherghosttalk,true|false|before|after]	実装済み
 list/sakura-script/event/bang-set-othersurfacechange-true-false.md	DONE	\![set,othersurfacechange,trueかfalse]	実装済み
-list/sakura-script/event/bang-set-tasktrayicon-.ico-duration-eq-runcount-eq.md	DONE	\![set,tasktrayicon,ファイル名.ico,テキスト(,--duration=待機時間(,--runcount=繰り返し回数))]	常駐の通知に文を出す。Android の通知のアイコンは替えられない
+list/sakura-script/event/bang-set-tasktrayicon-.ico-duration-eq-runcount-eq.md	DONE	\![set,tasktrayicon,ファイル名.ico,テキスト(,--duration=待機時間(,--runcount=繰り返し回数))]	常駐の通知に文を出し、ファイル（.ico など）があれば通知のアイコンにする
 list/sakura-script/event/bang-set-trayballoon.md	DONE	\![set,trayballoon,オプション,オプション,オプション...]	実装済み
 list/sakura-script/event/bang-set-wallpaper.md	DONE	\![set,wallpaper,ファイル名,オプション]	center・tile・stretch・stretch-x・stretch-y・fit・fill と --color。span は画面が1つなので fill と同じ（SSP のウインドウモードと同じ扱い）
 list/sakura-script/event/bang-set-windowstate-bang-stayontop.md	DONE	\![set,windowstate,!stayontop]	同上（何もしない）
@@ -1849,12 +1849,12 @@ list/shiori-resource/ownerdraw-item-name/aistatebutton.caption.md	DONE	aistatebu
 list/shiori-resource/ownerdraw-item-name/alignrootbutton.caption.md	IMPOSSIBLE	alignrootbutton.caption	キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
 list/shiori-resource/ownerdraw-item-name/alwaysstayontopbutton.caption.md	IMPOSSIBLE	alwaysstayontopbutton.caption	オーバーレイはいつも手前（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/alwaystrayiconvisiblebutton.caption.md	IMPOSSIBLE	alwaystrayiconvisiblebutton.caption	タスクトレイが無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/balloonhistorybutton.caption.md	IMPOSSIBLE	balloonhistorybutton.caption	最近使ったものの一覧が無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/balloonhistorybutton.caption.md	DONE	balloonhistorybutton.caption	「履歴」の「バルーン」。最近使ったバルーンに替える（推奨と違えば確かめる）
 list/shiori-resource/ownerdraw-item-name/balloonrootbutton.caption.md	DONE	balloonrootbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/biffallbutton.caption.md	IMPOSSIBLE	biffallbutton.caption	アカウントごとに分けず、「メールを確認」が全部を確かめる（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/biffbutton.caption.md	DONE	biffbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/calendarbutton.caption.md	IMPOSSIBLE	calendarbutton.caption	カレンダーの画面が無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/callghosthistorybutton.caption.md	IMPOSSIBLE	callghosthistorybutton.caption	最近使ったものの一覧が無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/callghosthistorybutton.caption.md	DONE	callghosthistorybutton.caption	「履歴」の「ほかのゴーストを呼ぶ」。最近呼んだゴーストのうち今呼べるもの
 list/shiori-resource/ownerdraw-item-name/callghostrootbutton.caption.md	DONE	callghostrootbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/callsstpsendboxbutton.caption.md	IMPOSSIBLE	callsstpsendboxbutton.caption	SSTP 送信ボックスが無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/caption_menushortcut.md	DONE	ショートカットキー	キーボードは無いので、& の印を表示から消す（&& は &）
@@ -1870,18 +1870,18 @@ list/shiori-resource/ownerdraw-item-name/definedsurfaceonlybutton.caption.md	IMP
 list/shiori-resource/ownerdraw-item-name/dictationbutton.caption.md	DONE	dictationbutton.caption	メニューの音声認識の入り切りの名前（マイクの許可が無ければ設定の画面を開く）
 list/shiori-resource/ownerdraw-item-name/dressuprootbutton.caption.md	DONE	dressuprootbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/duibutton.caption.md	IMPOSSIBLE	duibutton.caption	DUI が無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/enableballoonmovebutton.caption.md	IMPOSSIBLE	enableballoonmovebutton.caption	バルーンはいつも縁をつかんで動かせる（止めるのは \![lock,balloonmove] と balloon.dontmove）ので、入り切りのメニューが無い
+list/shiori-resource/ownerdraw-item-name/enableballoonmovebutton.caption.md	DONE	enableballoonmovebutton.caption	メニューの「バルーンを動かせる」。切るとバルーンを指で動かせない（ゴーストごとに覚える）
 list/shiori-resource/ownerdraw-item-name/entry.md	NA	-	変更できない項目（言語）。pono-droid のメニューに言語は無い
 list/shiori-resource/ownerdraw-item-name/firststaffbutton.caption.md	IMPOSSIBLE	firststaffbutton.caption	バージョン情報の画面が無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/ghostexplorerbutton.caption.md	DONE	ghostexplorerbutton.caption	メニューの「ゴーストの一覧」（pono-droid の画面を開く）の名前
-list/shiori-resource/ownerdraw-item-name/ghosthistorybutton.caption.md	IMPOSSIBLE	ghosthistorybutton.caption	最近使ったものの一覧が無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/ghosthistorybutton.caption.md	DONE	ghosthistorybutton.caption	「履歴」の「ゴースト」。最近起動したゴースト（自分を除く）に切り替える
 list/shiori-resource/ownerdraw-item-name/ghostinstallbutton.caption.md	DONE	ghostinstallbutton.caption	メニューの「ゴーストを入れる」（.nar を選べる pono-droid の画面を開く）の名前
 list/shiori-resource/ownerdraw-item-name/ghostrootbutton.caption.md	DONE	ghostrootbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/headlinesensehistorybutton.caption.md	IMPOSSIBLE	headlinesensehistorybutton.caption	ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/headlinesenserootbutton.caption.md	IMPOSSIBLE	headlinesenserootbutton.caption	ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/helpbutton.caption.md	DONE	helpbutton.caption	メニューの「説明書」（pono-droid の説明を開く）の名前
 list/shiori-resource/ownerdraw-item-name/hidebutton.caption.md	DONE	hidebutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/historyrootbutton.caption.md	IMPOSSIBLE	historyrootbutton.caption	最近使ったものの一覧が無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/historyrootbutton.caption.md	DONE	historyrootbutton.caption	メニューの「履歴」（最近のゴースト・バルーン・呼んだゴーストがあるときだけ）
 list/shiori-resource/ownerdraw-item-name/index.md	NA	オーナードローメニュー項目名	目次のページ
 list/shiori-resource/ownerdraw-item-name/inforootbutton.caption.md	IMPOSSIBLE	inforootbutton.caption	SSP の情報の下位メニュー。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/leavepassivebutton.caption.md	DONE	leavepassivebutton.caption	パッシブモードの間、メニューのいちばん上に出す強制解除の名前

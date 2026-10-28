@@ -6,6 +6,16 @@
     android:gravity="center_vertical"
     android:orientation="horizontal">
 
+    <!-- ゴーストのアイコン（descript.txt の icon）。無ければ出さない -->
+    <ImageView
+        android:id="@+id/notification_icon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="8dp"
+        android:contentDescription="@null"
+        android:scaleType="fitCenter"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/notification_title"
         style="@android:style/TextAppearance.Material.Notification.Title"

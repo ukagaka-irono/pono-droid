@@ -600,6 +600,11 @@ class GhostOverlayService : LifecycleService() {
                         refreshForeground()
                     }
 
+                    override fun setTrayIcon(file: File?) {
+                        trayIcon = file
+                        refreshForeground()
+                    }
+
                     override fun windowGeometry(scope: Int): WindowGeometry? =
                         windows.firstOrNull { it.scopeId == scope }?.geometry(characterScale.toDouble(), balloonScale.toDouble())
 
@@ -1378,6 +1383,26 @@ class GhostOverlayService : LifecycleService() {
     /** \![set,tasktrayicon] で決めた、常駐の通知に出す文（null なら出さない） */
     private var trayText: String? = null
 
+    /** \![set,tasktrayicon] で決めた、常駐の通知のアイコン（null ならゴーストの descript.txt の icon） */
+    private var trayIcon: File? = null
+
+    /** 常駐の通知のアイコンの絵（読み直さないよう、ファイルごとに覚えておく） */
+    private var trayIconCache: Pair<File, Bitmap?>? = null
+
+    /**
+     * 常駐の通知に出すアイコン。\![set,tasktrayicon] のファイルか、先頭のゴーストの icon（隠している間は icon.minimize）。
+     * .ico も Android で読める。読めなければ null（アイコンは出さない）
+     */
+    private fun trayIconBitmap(minimized: Boolean): Bitmap? {
+        val ghost = sessions.firstOrNull()?.controller?.ghost ?: return null
+        val file = trayIcon ?: (if (minimized) ghost.minimizedIconFile() else ghost.iconFile()) ?: return null
+        trayIconCache?.takeIf { it.first == file }?.let { return it.second }
+        val bitmap = runCatching { android.graphics.BitmapFactory.decodeFile(file.path) }.getOrNull()
+            ?.takeIf { it.width in 1..MAX_TRAY_ICON && it.height in 1..MAX_TRAY_ICON }
+        trayIconCache = file to bitmap
+        return bitmap
+    }
+
     /**
      * \![set,trayballoon]。常駐の通知とは別の通知で、ゴーストからのお知らせを出す。触れたら OnTrayBalloonClick、
      * 消したら OnTrayBalloonTimeout（次のお知らせは前のものを置き換える）
@@ -1430,7 +1455,13 @@ class GhostOverlayService : LifecycleService() {
         val title = if (minimized) "ゴーストを隠しています" else "ゴーストが起動しています"
         // 通知は先頭のもの以外は折りたたまれ、標準のボタン（addAction）は隠れてしまう。
         // 折りたたまれた1行の中にもボタンを置いておく
+        val icon = trayIconBitmap(minimized)
         val collapsed = RemoteViews(packageName, R.layout.notification_ghost).apply {
+            // ゴーストのアイコン（descript.txt の icon）があれば、題の左に出す
+            if (icon != null) {
+                setImageViewBitmap(R.id.notification_icon, icon)
+                setViewVisibility(R.id.notification_icon, android.view.View.VISIBLE)
+            }
             setTextViewText(R.id.notification_title, title)
             setViewVisibility(R.id.notification_show, if (minimized) android.view.View.VISIBLE else android.view.View.GONE)
             setOnClickPendingIntent(R.id.notification_show, show)
@@ -1443,6 +1474,7 @@ class GhostOverlayService : LifecycleService() {
             .setContentText(trayText)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setCustomContentView(collapsed)
+            .setLargeIcon(icon)
             // 隠している間は、通知に触れたら出し直す
             .setContentIntent(if (minimized) show else open)
         if (minimized) builder.addAction(0, "表示", show)
@@ -1494,6 +1526,9 @@ class GhostOverlayService : LifecycleService() {
 
         private val WHITESPACE = Regex("[ \t]+")
         private const val EXTRA_GHOST = "ghost"
+
+        /** 常駐の通知のアイコンとして読む絵の大きさの上限（px） */
+        private const val MAX_TRAY_ICON = 512
 
         /** \![execute,dumpsurface] で1つのアニメーションから書き出すコマの数 */
         private const val MAX_DUMP_FRAMES = 1000
