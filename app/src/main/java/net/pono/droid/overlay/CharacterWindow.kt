@@ -627,7 +627,8 @@ class CharacterWindow(
     /**
      * サーフェスに触れたときの処理。指の動きに合わせてウィンドウ自体を動かすので、画面座標（raw）で扱う。
      * タップは SSP と同じく1回ごとに知らせ、続けて叩いた回数を数える（1: クリック、2: ダブル、3以上: 多重）。
-     * 動かさずに押し続けると長押し（右クリックの代わり）で、そのときはタップとして数えない。
+     * 動かさずに押し続けると長押し（震えて知らせる）。そのまま離すと右クリックの代わり、そこから指を動かすとウィンドウを動かす
+     * （当たり判定の上では、すぐ動かすとなでるので、動かしたいときは長押ししてから）。長押しはタップとして数えない。
      * 当たり判定の上をさっと払うと、なでたのに加えてジェスチャー（SSP のタッチパネルの OnMouseGesture）として知らせる
      */
     val touchHandler = object : SurfaceTouchHandler {
@@ -644,7 +645,12 @@ class CharacterWindow(
         private var startX = 0
         private var startY = 0
         private var dragging = false
-        private var longPressed = false
+
+        /** この触り方はもう終わった（2本指で中クリックした後）。残った指では何もしない */
+        private var spent = false
+
+        /** 動かさずに長押しした。離せば長押し（メニュー）、動かせばウィンドウを動かす */
+        private var held = false
 
         /** 当たり判定の上で触れたか。そこから指を動かすと、ウィンドウを動かさずになでる */
         private var strokeArea = false
@@ -709,7 +715,8 @@ class CharacterWindow(
                     startX = params.x
                     startY = params.y
                     dragging = false
-                    longPressed = false
+                    spent = false
+                    held = false
                     stroking = false
                     twoFingers = false
                     strokeArea = callbacks.canStroke(event.x, event.y)
@@ -718,13 +725,12 @@ class CharacterWindow(
                     callbacks.onDown(x, y)
                     cancelLongPress()
                     pendingLongPress = Runnable {
-                        longPressed = true
+                        held = true
                         tapCount = 0
                         surfaceView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                        callbacks.onLongPress(x, y)
                     }.also { surfaceView.postDelayed(it, longPressTimeout) }
                 }
-                MotionEvent.ACTION_POINTER_DOWN -> if (extraButton == null && event.pointerCount == 2 && !dragging && !longPressed) {
+                MotionEvent.ACTION_POINTER_DOWN -> if (extraButton == null && event.pointerCount == 2 && !dragging && !spent && !held) {
                     // 2本目の指が来たら、1本指の操作（なでる・長押し）はやめる
                     cancelLongPress()
                     twoFingers = true
@@ -739,7 +745,7 @@ class CharacterWindow(
                     if (!wheeled && event.eventTime - twoFingerTime <= ViewConfiguration.getTapTimeout() * 2L) {
                         middleClick(event, event.getX(0), event.getY(0), "middle", callbacks)
                     }
-                    longPressed = true
+                    spent = true
                 }
                 MotionEvent.ACTION_MOVE -> if (extraButton != null) {
                     // マウスの中・戻る・進むボタンで押したまま動かしても、何もしない
@@ -754,8 +760,14 @@ class CharacterWindow(
                 } else {
                     val dx = event.rawX - downRawX
                     val dy = event.rawY - downRawY
-                    if (!dragging && !stroking && !longPressed && (abs(dx) > slop || abs(dy) > slop)) {
-                        if (strokeArea) {
+                    if (!dragging && !stroking && !spent && (abs(dx) > slop || abs(dy) > slop)) {
+                        if (held) {
+                            // 長押ししてから動かしたら、当たり判定の上でもウィンドウを動かす
+                            if (!pinned) {
+                                dragging = true
+                                callbacks.onDragStart(downX, downY)
+                            }
+                        } else if (strokeArea) {
                             stroking = true
                             cancelLongPress()
                         } else if (!pinned) {
@@ -789,8 +801,11 @@ class CharacterWindow(
                         middleClicked = false
                         lastMiddleUpTime = event.eventTime
                     }
-                    if (longPressed) {
-                        // 長押しはもう知らせてある
+                    if (spent) {
+                        // 2本指で中クリックした後の指。もう何もしない
+                    } else if (held && !dragging) {
+                        // 長押しして動かさずに離した
+                        callbacks.onLongPress(downX, downY)
                     } else if (stroking) {
                         // なでた後はタップにしない。さっと払ったならジェスチャーも知らせる
                         tapCount = 0

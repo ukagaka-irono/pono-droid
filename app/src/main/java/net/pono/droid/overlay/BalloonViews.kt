@@ -1,5 +1,7 @@
 package net.pono.droid.overlay
 
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerHoverIcon
@@ -288,10 +290,10 @@ data class BalloonLabels(val marker: String? = null, val number: String? = null)
 typealias BalloonDrag = (dx: Int, dy: Int, done: Boolean) -> Unit
 
 /**
- * バルーンをつかんで動かす。選択肢（[hits] に並んだ文の選択肢）の上で触れたときは動かさない。
- * 文が長くて中をスクロールできる（[scrollable]）間だけは、文字の範囲（[inText]）はスクロールのままにし、縁（その外）で動かす。
- * 中の操作より先に指を受け取り、動き出したら（タッチの遊びを超えたら）中には渡さない（止まったまま離せばタップ）。
- * ウィンドウが指について動くので、画面の上の位置で測る。[onDrag] が null なら動かせない
+ * バルーンをつかんで動かす。選択肢（[hits] に並んだ文の選択肢）の上と、文が長くて中をスクロールできる（[scrollable]）間の
+ * 文字の範囲（[inText]）では、すぐ動かせば中の操作（選ぶ・スクロール）にし、長押し（震えて知らせる）してから動かすとバルーンを動かす。
+ * ほかのところは、すぐ動かせば動く。中の操作より先に指を受け取り、動き出したら（タッチの遊びを超えたら）中には渡さない
+ * （止まったまま離せばタップ）。ウィンドウが指について動くので、画面の上の位置で測る。[onDrag] が null なら動かせない
  */
 @Composable
 private fun Modifier.balloonDrag(
@@ -305,14 +307,27 @@ private fun Modifier.balloonDrag(
     val currentDrag by rememberUpdatedState(onDrag)
     val currentInText by rememberUpdatedState(inText)
     val currentScrollable by rememberUpdatedState(scrollable)
+    val haptic by rememberUpdatedState(LocalHapticFeedback.current)
     val slop = with(LocalDensity.current) { 6.dp.toPx() }
     return onGloballyPositioned { coords[0] = it }.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            if (currentScrollable() && currentInText(down.position, size)) return@awaitEachGesture
-            coords[0]?.takeIf { it.isAttached }?.let { from -> if (hits.find(from, down.position, slop) != null) return@awaitEachGesture }
             fun screen(p: Offset) = coords[0]?.takeIf { it.isAttached }?.localToScreen(p) ?: p
             val start = screen(down.position)
+            val inner = (currentScrollable() && currentInText(down.position, size)) ||
+                coords[0]?.takeIf { it.isAttached }?.let { from -> hits.find(from, down.position, slop) != null } == true
+            if (inner) {
+                // 長押しになるまで待つ。その前に離したり動かしたりしたら、中の操作に任せる
+                val early = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                    while (true) {
+                        val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                        if (!change.pressed || (screen(change.position) - start).getDistance() > viewConfiguration.touchSlop) break
+                    }
+                    true
+                }
+                if (early != null) return@awaitEachGesture
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            }
             var dragging = false
             // 送った分（dp）。端数は次に回す
             var sentX = 0
