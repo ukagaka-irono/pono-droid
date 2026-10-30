@@ -50,9 +50,13 @@ class ShareActivity : ComponentActivity() {
         }
         // ブラウザなどで落とした .nar を開いた（VIEW。application/x-nar か zip）
         val viewed = intent.action == Intent.ACTION_VIEW
-        val uris = (if (viewed) listOfNotNull(intent.data) else sharedUris(intent)).filter { it.scheme == "content" }
-        // ファイルでなく文字（URL も）を共有された
-        val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { uris.isEmpty() && it.isNotBlank() }
+        // 自分の FileProvider の URI は受けない（ほかのアプリに、別のゴーストのファイルを起動中のゴーストへ写させないため）。
+        // 読めない Parcelable を混ぜた Intent でも落ちないよう、extras を読むところは包む
+        val uris = runCatching { if (viewed) listOfNotNull(intent.data) else sharedUris(intent) }.getOrDefault(emptyList())
+            .filter { it.scheme == "content" && it.authority?.startsWith(packageName) != true }
+        // ファイルでなく文字（URL も）を共有された。飾り付きの文字（CharSequence）でも受ける
+        val text = runCatching { intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() }.getOrNull()
+            ?.takeIf { uris.isEmpty() && it.isNotBlank() }
         if (text != null) {
             GhostOverlayService.controller.value?.onTextShared(text) ?: toast("ゴーストが起動していません")
             finish()
@@ -203,7 +207,8 @@ class ShareActivity : ComponentActivity() {
         }
         // ゴーストが動いていなければ、アプリが取ってきて入れる
         val fetcher = net.pono.baseware.update.UrlConnectionFetcher("pono-droid")
-        val work = File(cacheDir, "link-install")
+        // 続けて開いたリンクのインストールと書き合わないよう、作業のフォルダは毎回別にする
+        val work = File(cacheDir, "link-install-" + System.nanoTime())
         val nar = withContext(Dispatchers.IO) {
             if (type == "homeurl") {
                 (net.pono.baseware.update.HomeUrlInstaller.fetch(url, work, fetcher) as? net.pono.baseware.update.HomeUrlInstaller.Outcome.Fetched)?.nar

@@ -35,13 +35,15 @@
         </activity>
 
         <!-- 「共有」の受け口。.nar はインストールし、それ以外のファイルは起動中のゴーストに渡す（OnFileDrop2）。
-             アプリの画面とは別のタスクにして、閉じたときに pono-droid の一覧が前に出てこないようにする -->
+             アプリの画面とは別のタスクにして、閉じたときに pono-droid の一覧が前に出てこないようにする。
+             インストールの途中で画面を回しても作り直さない（作り直すと同じ .nar を二重に入れ、前の分は途中で止まる） -->
         <activity
             android:name=".ShareActivity"
             android:exported="true"
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:taskAffinity=""
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|uiMode|density|fontScale|locale|layoutDirection"
             android:label="@string/share_label"
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>

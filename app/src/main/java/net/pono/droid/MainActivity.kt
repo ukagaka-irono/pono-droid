@@ -123,7 +123,6 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     val loading by GhostOverlayService.loading.collectAsState()
     // 一覧を読み終わるまでは「ゴーストがありません」と言わない
     var listed by remember { mutableStateOf(false) }
-    var installing by remember { mutableStateOf(false) }
     val version = remember { AppVersion.of(context) }
     // 消したゴースト向け（recommended.ghost）のバルーン。一緒に消すか聞く
     var leftBalloons by remember { mutableStateOf<Pair<String, List<Balloon>>?>(null) }
@@ -152,23 +151,18 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
         if (Build.VERSION.SDK_INT >= 33) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
+    // 大きな .nar は展開に時間がかかるので、終わるまでボタンを止めて進んでいることを出す。インストールはアプリの中で動かすので、
+    // 途中で画面を回しても止まらず、結果は作り直した画面が受け取る（readme を開く・bootghost を起動するのも GhostStore）
+    val installing by GhostStore.installing.collectAsState()
+    LaunchedEffect(Unit) {
+        GhostStore.installResults.collect { message ->
+            reload()
+            snackbar.showSnackbar(message)
+        }
+    }
     val importNar = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
-        scope.launch {
-            // 大きな .nar は展開に時間がかかるので、終わるまでボタンを止めて進んでいることを出す
-            installing = true
-            val result = try {
-                withContext(Dispatchers.IO) { runCatching { GhostStore.install(context, uri) } }
-            } finally {
-                installing = false
-            }
-            result.onSuccess { r ->
-                reload()
-                // readme があれば開き、package の bootghost があれば起動する
-                GhostStore.afterInstall(context, r)
-            }
-            snackbar.showSnackbar(result.fold({ GhostStore.describe(it) }, { "インストールできませんでした: ${it.message}" }))
-        }
+        GhostStore.installFromApp(context, uri)
     }
 
     leftBalloons?.let { (ghostName, left) ->
@@ -211,9 +205,12 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("ゴーストを他のアプリの上に表示するには、「他のアプリの上に重ねて表示」を許可してください。")
                         Button(onClick = {
-                            context.startActivity(
-                                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")),
-                            )
+                            // 設定の画面が無い端末（Android Go など）でも落ちないよう、開けなければ何もしない
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")),
+                                )
+                            }
                         }) { Text("許可する") }
                     }
                 }
@@ -456,10 +453,8 @@ private fun SettingSwitch(
                 when {
                     on && permission != null && ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED ->
                         request.launch(permission)
-                    on && access != null && !access.granted(context) -> {
-                        asking = true
-                        access.open(context)
-                    }
+                    // 設定の画面を開けない端末では、聞いている途中にしない
+                    on && access != null && !access.granted(context) -> asking = runCatching { access.open(context) }.isSuccess
                     else -> save(on)
                 }
             },

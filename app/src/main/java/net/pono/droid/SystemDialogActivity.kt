@@ -59,6 +59,9 @@ class SystemDialogActivity : ComponentActivity() {
 
     private val createDocument = registerForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
         if (uri == null) return@registerForActivityResult done(null)
+        // 書き込むのはこの画面を閉じた後（ゴーストがファイルを書き終えてから）。閉じると一時的な許可は切れるので、
+        // 書き終えるまで残る許可にしておく（書き終えたら GhostOverlayService が手放す）
+        runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
         val target = SystemDialogFiles.saveTarget(this, uri, request.dir, request.defaultName)
         GhostOverlayService.watchSave(target, uri)
         done(target.absolutePath)

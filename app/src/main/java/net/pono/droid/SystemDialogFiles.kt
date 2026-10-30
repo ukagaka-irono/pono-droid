@@ -26,7 +26,31 @@ object SystemDialogFiles {
     }
 
     fun safeName(name: String, fallback: String): String =
-        name.replace('/', '_').replace('\\', '_').trim().takeIf { it.isNotEmpty() && it != "." && it != ".." } ?: fallback
+        fitBytes(name.replace('/', '_').replace('\\', '_').replace('\u0000', '_').trim())
+            .takeIf { it.isNotEmpty() && it != "." && it != ".." } ?: fallback
+
+    /**
+     * ファイル名の長さの上限は UTF-8 で 255 バイトなので、それを超える名前は拡張子を残して前の部分を短くする
+     * （サロゲートペアの途中では切らない）
+     */
+    private fun fitBytes(name: String): String {
+        if (name.toByteArray(Charsets.UTF_8).size <= MAX_NAME_BYTES) return name
+        val ext = name.substringAfterLast('.', "").takeIf { it.isNotEmpty() && it.length <= 10 && it != name }?.let { ".$it" }.orEmpty()
+        val base = name.dropLast(ext.length)
+        val budget = MAX_NAME_BYTES - ext.toByteArray(Charsets.UTF_8).size
+        var bytes = 0
+        var i = 0
+        while (i < base.length) {
+            val n = Character.charCount(base.codePointAt(i))
+            val b = base.substring(i, i + n).toByteArray(Charsets.UTF_8).size
+            if (bytes + b > budget) break
+            bytes += b
+            i += n
+        }
+        return base.substring(0, i) + ext
+    }
+
+    private const val MAX_NAME_BYTES = 240
 
     /** open: 選んだファイルを [dir]/open/ に写し、写した先を返す */
     fun copyIn(context: Context, uri: Uri, dir: File): File? = runCatching {
@@ -59,9 +83,17 @@ object SystemDialogFiles {
                     }
                     val size = c.getLong(3)
                     if (bytes + size > MAX_BYTES) return
-                    context.contentResolver.openInputStream(DocumentsContract.buildDocumentUriUsingTree(tree, id))?.use { input ->
-                        File(into, name).outputStream().use { bytes += limitedCopy(input, it) }
+                    // 書いてある大きさと中身が違っても、写すのは合計で上限まで（超えたらそのファイルは残さずにやめる）
+                    val file = File(into, name)
+                    val copied = runCatching {
+                        context.contentResolver.openInputStream(DocumentsContract.buildDocumentUriUsingTree(tree, id))?.use { input ->
+                            file.outputStream().use { limitedCopy(input, it, MAX_BYTES - bytes) }
+                        }
+                    }.getOrElse {
+                        file.delete()
+                        return
                     }
+                    bytes += copied ?: 0
                     files++
                 }
             }
@@ -74,14 +106,15 @@ object SystemDialogFiles {
     fun saveTarget(context: Context, uri: Uri, dir: File, defaultName: String): File =
         File(dir, "save/" + displayName(context, uri, defaultName.ifBlank { "file" })).apply { parentFile?.mkdirs(); delete() }
 
-    private fun limitedCopy(input: java.io.InputStream, output: java.io.OutputStream): Long {
+    /** [limit] バイトまで写す。超えたら IOException */
+    private fun limitedCopy(input: java.io.InputStream, output: java.io.OutputStream, limit: Long = MAX_BYTES): Long {
         val buf = ByteArray(64 * 1024)
         var total = 0L
         while (true) {
             val n = input.read(buf)
             if (n < 0) return total
             total += n
-            if (total > MAX_BYTES) throw java.io.IOException("too large")
+            if (total > limit) throw java.io.IOException("too large")
             output.write(buf, 0, n)
         }
     }

@@ -32,6 +32,9 @@ class SerikoAnimator(private val scope: CoroutineScope) {
 
     private var current: SurfaceDefinition? = null
     private var currentBinds: Set<Int> = emptySet()
+
+    /** [layers] がどのサーフェスのものか（[show] を呼ぶ前は前のサーフェス） */
+    val surfaceId: Int? get() = current?.id
     private val jobs = mutableListOf<Job>()
     private val running = HashMap<Int, Job>()
 
@@ -105,6 +108,8 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         // 止めていた always は、いつもの回し方に戻す
         if (halted.remove(id) && IntervalKind.ALWAYS in anim.interval) return
         running[id]?.cancel()
+        // interval で回している回の途中なら、それは止めて \i の方だけを流す（同じ ID が2本動いてちらつかないよう）
+        timedPlays.remove(id)?.cancel()
         running[id] = scope.launch { playOnce(anim) }
     }
 
@@ -244,6 +249,11 @@ class SerikoAnimator(private val scope: CoroutineScope) {
     private val halted = HashSet<Int>()
 
     private suspend fun playTimed(anim: Animation, from: Int = 0) {
+        // \i や start で同じアニメーションを動かしている間は、その回は重ねずに終わるのを待つ
+        running[anim.id]?.takeIf { it.isActive }?.let {
+            it.join()
+            return
+        }
         val job = scope.launch { playOnce(anim, from) }
         timedPlays[anim.id] = job
         try {
@@ -265,13 +275,16 @@ class SerikoAnimator(private val scope: CoroutineScope) {
         }
         if (anim.exclusive) {
             exclusive = anim
-            // ほかに動いているもの（\i や start で動かしたもの）を止める
-            for ((id, job) in running.toList()) {
+            // ほかに動いているもの（\i や start で動かしたものと、interval で回しているその回）を止めて、出していたコマも消す
+            // （途中のコマのまま固まらないよう）
+            for ((id, job) in running.toList() + timedPlays.toList()) {
                 val other = current?.animations?.get(id) ?: continue
                 if (other !== anim && blocked(other)) {
                     job.cancel()
-                    running.remove(id)
+                    if (running[id] === job) running.remove(id)
+                    if (timedPlays[id] === job) timedPlays.remove(id)
                     markStopped(id)
+                    setRaw(raw - id)
                 }
             }
         }
@@ -283,6 +296,8 @@ class SerikoAnimator(private val scope: CoroutineScope) {
                 // \![anim,pause] の間と、ほかの exclusive が動いている間は止まって待つ
                 while (anim.id in paused || blocked(anim)) delay(50)
                 positions[anim.id] = index
+                // 描くコマの無いアニメーションが自分や互いを start し続けても、待ちなしで回り続けないよう間を置く
+                if (frame.method in STARTERS) delay(if (anim.frames.any { !it.isControl }) STARTER_GAP_MS else IDLE_LOOP_MS)
                 when (frame.method) {
                     "start" -> frame.targets.firstOrNull()?.let(::start)
                     "alternativestart" -> frame.targets.randomOrNull()?.let(::start)
@@ -291,14 +306,17 @@ class SerikoAnimator(private val scope: CoroutineScope) {
                     "insert" -> {} // 着せ替えの中でだけ意味がある（bindFrames で扱う）
                     else -> {
                         // ウェイトは、そのコマを描くまでの待ち時間
-                        val wait = if (frame.waitMaxMs > frame.waitMinMs) Random.nextInt(frame.waitMinMs, frame.waitMaxMs + 1) else frame.waitMinMs
-                        delay(maxOf(wait, 16).toLong())
+                        // 上限が Int の最大のときに +1 であふれないよう、Long で選ぶ
+                        val wait = if (frame.waitMaxMs > frame.waitMinMs) Random.nextLong(frame.waitMinMs.toLong(), frame.waitMaxMs.toLong() + 1) else frame.waitMinMs.toLong()
+                        delay(maxOf(wait, 16L))
                         drew = true
-                        when (frame.surface) {
+                        when {
+                            // サーフェスを使わないコマ（import・scaling・move）の番号はいつも -1 なので、止める印ではない
+                            frame.method in NO_SURFACE -> setRaw(raw + (anim.id to frame))
                             // -2 は、ほかの動いているアニメーションを全部止める（このアニメーションは続ける）
-                            STOP_OTHERS -> stopOthers(anim.id)
+                            frame.surface == STOP_OTHERS -> stopOthers(anim.id)
                             // -1 は、このアニメーションを止める（出していたコマも消す）
-                            -1 -> {
+                            frame.surface == -1 -> {
                                 setRaw(raw - anim.id)
                                 break
                             }
@@ -331,5 +349,12 @@ class SerikoAnimator(private val scope: CoroutineScope) {
 
         /** パターンのサーフェス番号 -2 */
         private const val STOP_OTHERS = -2
+
+        /** サーフェス番号を使わないコマ */
+        private val NO_SURFACE = setOf("import", "scaling", "move")
+
+        /** start のコマの前に置く間（描くコマのあるアニメーション）と、描くコマが無いアニメーションでの間 */
+        private const val STARTER_GAP_MS = 16L
+        private const val IDLE_LOOP_MS = 1000L
     }
 }

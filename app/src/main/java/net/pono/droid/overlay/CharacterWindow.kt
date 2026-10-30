@@ -26,6 +26,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.Constraints
+import androidx.core.animation.doOnCancel
 import androidx.core.animation.doOnEnd
 import androidx.core.view.doOnLayout
 import androidx.core.view.drawToBitmap
@@ -257,10 +258,13 @@ class CharacterWindow(
 
     // ---- 重なり順（\v・\![set,zorder]） ----
 
-    /** 重なり順を変えるために、ウィンドウを外す。後から [attach] で付け直すと、付け直した順に上に重なる */
+    /**
+     * 重なり順を変えるために、ウィンドウを外す。後から [attach] で付け直すと、付け直した順に上に重なる。
+     * removeView は外し終わるのが後になり、直後の [attach] から見るとまだ付いているので、すぐ外す方を使う
+     */
     fun detach() {
-        runCatching { windowManager.removeView(surfaceView) }
-        runCatching { windowManager.removeView(balloonView) }
+        runCatching { windowManager.removeViewImmediate(surfaceView) }
+        runCatching { windowManager.removeViewImmediate(balloonView) }
     }
 
     /** [balloon] ならバルーンの、そうでなければサーフェスのウィンドウを付け直す */
@@ -499,6 +503,21 @@ class CharacterWindow(
         setWindowPosition(params.x + if (alignEnd) -dx else dx, params.y - dy, propagate = false)
     }
 
+    /**
+     * 画面の外にはみ出していれば、画面の中に戻す（ドラッグを終えたときと、画面の向きや大きさが変わったとき）。
+     * [save] なら戻した位置を覚える
+     */
+    fun keepOnScreen(save: Boolean) {
+        if (pinned || !surfaceView.isAttachedToWindow || surfaceView.width <= 0) return
+        val own = screenRect()
+        animateTo(own.left, own.top, 0, save = save, sticky = false)
+    }
+
+    /** 画面の向きなどが変わった。配置し直してから [keepOnScreen] する */
+    fun keepOnScreenLater() {
+        surfaceView.post { keepOnScreen(save = true) }
+    }
+
     /** 今の位置を覚える（一緒に動いた相手の分は、動き終えてから） */
     fun savePosition() {
         prefs.edit().putInt(key("x"), params.x).putInt(key("y"), params.y).apply()
@@ -599,7 +618,10 @@ class CharacterWindow(
                 val t = a.animatedValue as Float
                 apply(fromX + ((toX - fromX) * t).toInt(), fromY + ((toY - fromY) * t).toInt())
             }
-            doOnEnd { finish() }
+            // cancel() でも onEnd は呼ばれる。止められたときは行き先へ飛ばさず、その場に残す
+            var cancelled = false
+            doOnCancel { cancelled = true }
+            doOnEnd { if (!cancelled) finish() }
             start()
         }
     }
@@ -694,6 +716,25 @@ class CharacterWindow(
 
         private fun midY(event: MotionEvent) = (event.getY(0) + event.getY(1)) / 2
 
+        /** ドラッグで追っている指（2本目を置いて1本目を離しても、残った指で続ける） */
+        private var activeId = 0
+
+        /** [activeId] の指の画面上の位置。rawX は 0 番の指のものなので、ずれを足して求める */
+        private fun activeRaw(event: MotionEvent): Pair<Float, Float> {
+            val i = event.findPointerIndex(activeId).takeIf { it >= 0 } ?: 0
+            return event.rawX - event.getX(0) + event.getX(i) to event.rawY - event.getY(0) + event.getY(i)
+        }
+
+        /** 今の位置からドラッグを始め直す（スクリプトの \![move] で動いている途中なら止める） */
+        private fun rebaseDrag(event: MotionEvent) {
+            moveAnimator?.cancel()
+            val (rx, ry) = activeRaw(event)
+            downRawX = rx
+            downRawY = ry
+            startX = params.x
+            startY = params.y
+        }
+
         private fun cancelLongPress() {
             pendingLongPress?.let(surfaceView::removeCallbacks)
             pendingLongPress = null
@@ -708,6 +749,7 @@ class CharacterWindow(
                         cancelLongPress()
                         return true
                     }
+                    activeId = event.getPointerId(0)
                     downRawX = event.rawX
                     downRawY = event.rawY
                     downX = event.x
@@ -746,6 +788,13 @@ class CharacterWindow(
                         middleClick(event, event.getX(0), event.getY(0), "middle", callbacks)
                     }
                     spent = true
+                } else if (event.getPointerId(event.actionIndex) == activeId) {
+                    // ドラッグしていた指を離して、ほかの指が残っている。残った指で、今の位置から続ける
+                    val rest = (0 until event.pointerCount).firstOrNull { it != event.actionIndex }
+                    if (rest != null) {
+                        activeId = event.getPointerId(rest)
+                        rebaseDrag(event)
+                    }
                 }
                 MotionEvent.ACTION_MOVE -> if (extraButton != null) {
                     // マウスの中・戻る・進むボタンで押したまま動かしても、何もしない
@@ -758,8 +807,9 @@ class CharacterWindow(
                         callbacks.onWheel(event.getX(0), event.getY(0), (moved / wheelStep).toInt() * WHEEL_DELTA)
                     }
                 } else {
-                    val dx = event.rawX - downRawX
-                    val dy = event.rawY - downRawY
+                    val (rawX, rawY) = activeRaw(event)
+                    var dx = rawX - downRawX
+                    var dy = rawY - downRawY
                     if (!dragging && !stroking && !spent && (abs(dx) > slop || abs(dy) > slop)) {
                         if (held) {
                             // 長押ししてから動かしたら、当たり判定の上でもウィンドウを動かす
@@ -774,6 +824,12 @@ class CharacterWindow(
                             dragging = true
                             cancelLongPress()
                             callbacks.onDragStart(downX, downY)
+                        }
+                        // スクリプトの \![move] で動いている途中につかんだら、動きを止めて今の位置から指に付いてこさせる
+                        if (dragging && moveAnimator?.isRunning == true) {
+                            rebaseDrag(event)
+                            dx = 0f
+                            dy = 0f
                         }
                     }
                     if (stroking) {
@@ -819,6 +875,8 @@ class CharacterWindow(
                     } else if (dragging) {
                         cancelLongPress()
                         savePosition()
+                        // 画面の外まで引っぱったら、中に戻した位置を覚える
+                        keepOnScreen(save = true)
                         tapCount = 0
                         callbacks.onDragEnd(event.x, event.y)
                         onSettled?.invoke()
@@ -844,6 +902,7 @@ class CharacterWindow(
                     tapCount = 0
                     if (dragging) {
                         savePosition()
+                        keepOnScreen(save = true)
                         callbacks.onDragEnd(event.x, event.y)
                         onSettled?.invoke()
                     }

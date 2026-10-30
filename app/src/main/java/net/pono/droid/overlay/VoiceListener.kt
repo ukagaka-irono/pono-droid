@@ -22,6 +22,9 @@ class VoiceListener(private val context: Context, private val onHeard: (String) 
 
     val available: Boolean get() = SpeechRecognizer.isRecognitionAvailable(context)
 
+    /** 聞いている（許可が無いなどで自分で止まったら false） */
+    val isRunning: Boolean get() = running
+
     fun start() {
         if (running || !available) return
         running = true

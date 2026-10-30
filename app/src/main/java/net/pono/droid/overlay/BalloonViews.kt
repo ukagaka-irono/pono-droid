@@ -1323,13 +1323,16 @@ object ImageTransparency {
             inMutable = true
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
-        val bmp = BitmapFactory.decodeFile(file.path, opts) ?: return null
-        if (selfAlpha != false && bmp.hasAlpha()) {
-            if (paintBlack == true) paintKeyBlack(bmp)
-            return bmp
+        val decoded = BitmapFactory.decodeFile(file.path, opts) ?: return null
+        if (selfAlpha != false && decoded.hasAlpha()) {
+            if (paintBlack == true) paintKeyBlack(decoded)
+            return decoded
         }
         // selfAlpha が true でもアルファの無い画像は、.pna か左上の色で抜く
-        if (selfAlpha == true && !bmp.hasAlpha() && pna == null && !colorKey) return bmp
+        if (selfAlpha == true && !decoded.hasAlpha() && pna == null && !colorKey) return decoded
+        // 画像のアルファを使わないなら、透明な画素も元の色に戻して不透明にしてから抜く（ふつうに読むと透明な画素は
+        // 黒になり、左上が透明なら黒い画素がみな抜けてしまう）
+        val bmp = if (decoded.hasAlpha()) opaque(file) ?: decoded else decoded
         val pnaBmp = pna?.takeIf(::fits)?.let { BitmapFactory.decodeFile(it.path) }
         when {
             pnaBmp != null && pnaBmp.width == bmp.width && pnaBmp.height == bmp.height -> {
@@ -1339,6 +1342,27 @@ object ImageTransparency {
             colorKey -> applyColorKey(bmp)
         }
         return bmp
+    }
+
+    /**
+     * 画像のアルファを捨てて、元の色のまま不透明にしたもの（書き換えられる）。asis や use_self_alpha が 0 のときに使う。
+     * 読めなければ null
+     */
+    fun opaque(file: java.io.File): Bitmap? {
+        if (!fits(file)) return null
+        val opts = BitmapFactory.Options().apply {
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+            // 掛け合わせない色で読む（透明な画素の色も残る）
+            inPremultiplied = false
+        }
+        val raw = BitmapFactory.decodeFile(file.path, opts) ?: return null
+        val px = IntArray(raw.width * raw.height)
+        raw.getPixels(px, 0, raw.width, 0, 0, raw.width, raw.height)
+        for (i in px.indices) px[i] = px[i] or 0xFF000000.toInt()
+        val out = Bitmap.createBitmap(raw.width, raw.height, Bitmap.Config.ARGB_8888)
+        out.setPixels(px, 0, raw.width, 0, 0, raw.width, raw.height)
+        out.setHasAlpha(false)
+        return out
     }
 
     /** 左上の色と同じ色の画素を黒にする（透明度はそのまま） */

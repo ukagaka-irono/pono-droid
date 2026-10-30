@@ -133,7 +133,9 @@ class GhostOverlayService : LifecycleService() {
                 val ghost = dirName?.let { GhostStore.repository(this).find(it) }
                 val running = sessions.firstOrNull { it.dirName == dirName }
                 when {
-                    ghost == null || !Settings.canDrawOverlays(this) -> if (sessions.isEmpty()) stopSelf()
+                    ghost == null || !Settings.canDrawOverlays(this) -> if (sessions.isEmpty() && pendingRestarts.isEmpty()) stopSelf()
+                    // 起動し直している途中に、もう一度頼まれた（すばやい2度押しなど）。同じゴーストを2体にしない
+                    dirName in pendingRestarts -> {}
                     // 動いているゴーストの「再起動」やシェル・バルーンの切り替えは、ほかのゴーストを止めずにその場で
                     running != null -> restartInPlace(running, ghost)
                     else -> startOnly(ghost)
@@ -147,6 +149,9 @@ class GhostOverlayService : LifecycleService() {
                 if (sessions.isEmpty()) stopSelf() else refreshForeground()
             }
         }
+        // ゴーストが終わった後に、残っていたお知らせなどから呼ばれた。動いているゴーストも起動の途中のものも無ければ、残らない
+        val idleActions = setOf(ACTION_TRAY_CLICK, ACTION_TRAY_DISMISS, ACTION_SHOW, ACTION_UPDATE)
+        if (intent?.action in idleActions && sessions.isEmpty() && pendingRestarts.isEmpty() && pendingStart?.isActive != true) stopSelf()
         return START_NOT_STICKY
     }
 
@@ -158,7 +163,11 @@ class GhostOverlayService : LifecycleService() {
      * 同じ SHIORI のプロセスに前のゴーストが残らないよう、下ろし終えてから読み込む
      */
     private fun startOnly(ghost: Ghost) {
-        val stopping = teardown()
+        // 起動し直している途中のゴーストも止める（後から起動してきて2体にならないよう）。下ろし終えるのは一緒に待つ
+        val restarting = pendingRestarts.values.toList()
+        pendingRestarts.clear()
+        restarting.forEach { it.job.cancel() }
+        val stopping = teardown() + restarting.mapNotNull { it.stopping }
         pendingStart?.cancel()
         _loading.value = ghost.dir.name
         pendingStart = lifecycleScope.launch {
@@ -167,6 +176,11 @@ class GhostOverlayService : LifecycleService() {
         }
     }
 
+    /** 起動し直している途中のゴースト（ディレクトリ名ごとに、起動を待つ Job と前の SHIORI を下ろす Job） */
+    private val pendingRestarts = HashMap<String, PendingRestart>()
+
+    private class PendingRestart(val job: Job, val stopping: Job?, val slot: Int)
+
     /** 動いているゴースト [s] を、同じ場所（同じ SHIORI のプロセス）で起動し直す。何も送らずに止めてから */
     private fun restartInPlace(s: GhostSession, ghost: Ghost) {
         val i = sessions.indexOf(s)
@@ -174,10 +188,13 @@ class GhostOverlayService : LifecycleService() {
         val stopping = s.teardown()
         publish()
         _loading.value = ghost.dir.name
-        lifecycleScope.launch {
+        val dirName = ghost.dir.name
+        val job = lifecycleScope.launch {
             withTimeoutOrNull(STOP_WAIT_MS) { stopping?.join() }
+            pendingRestarts.remove(dirName)
             startSession(ghost, previous = null, calledBy = null, slot = s.slot, index = i)
         }
+        pendingRestarts[dirName] = PendingRestart(job, stopping, s.slot)
     }
 
     /** 一緒に動いているゴースト（本体側の名前が [sakuraName]）の \p[scope] のウィンドウ（\![move] の --base=本体側の名前/ID） */
@@ -185,7 +202,9 @@ class GhostOverlayService : LifecycleService() {
         sessions.firstOrNull { it.controller?.ghost?.sakuraName == sakuraName }?.window(scope)
 
     /** 使っていない SHIORI のプロセスの番号。どれも使っていれば null */
-    private fun freeSlot(): Int? = (0 until ShioriService.SLOTS).firstOrNull { slot -> sessions.none { it.slot == slot } }
+    private fun freeSlot(): Int? = (0 until ShioriService.SLOTS).firstOrNull { slot ->
+        sessions.none { it.slot == slot } && pendingRestarts.values.none { it.slot == slot }
+    }
 
     /** ゴーストに呼ばれた（\![call,ghost]）。[dirName] のゴーストを一緒に起動する */
     private fun callGhost(dirName: String, caller: PreviousGhost): Boolean {
@@ -195,7 +214,7 @@ class GhostOverlayService : LifecycleService() {
 
     /** 動いているゴーストはそのままにして、[ghost] も起動する（[calledBy] は呼んだゴースト。一覧からなら null） */
     private fun startBeside(ghost: Ghost, calledBy: PreviousGhost?): Boolean {
-        if (sessions.any { it.dirName == ghost.dir.name }) return false
+        if (sessions.any { it.dirName == ghost.dir.name } || ghost.dir.name in pendingRestarts) return false
         val slot = freeSlot() ?: run {
             toast("同時に動かせるゴーストは ${ShioriService.SLOTS} 体までです")
             return false
@@ -415,7 +434,7 @@ class GhostOverlayService : LifecycleService() {
                                 for (frame in anim.frames) {
                                     if (frame.isControl) continue
                                     if (n >= MAX_DUMP_FRAMES) break
-                                    if (writePng(r.render(id, binds + (anim.id to frame), dump.binds), File(dump.dir, "%s%d_%04d.png".format(dump.prefix, id, n)))) count++
+                                    if (writePng(r.render(id, binds + (anim.id to frame), dump.binds), File(dump.dir, "%s%d_%04d.png".format(java.util.Locale.ROOT, dump.prefix, id, n)))) count++
                                     n++
                                 }
                             }
@@ -670,6 +689,15 @@ class GhostOverlayService : LifecycleService() {
                     /** ウェブのページだけ開く。ゴーストのスクリプトに他のアプリ（電話や決済など）を起動させない */
                     override fun openUrl(url: String) {
                         val uri = Uri.parse(url)
+                        // 新しいメールを作る mailto:（\![open,mailer]）は、メールのアプリだけに渡す（ACTION_SENDTO）
+                        if (uri.scheme?.lowercase() == "mailto") {
+                            try {
+                                startActivity(Intent(Intent.ACTION_SENDTO, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            } catch (e: ActivityNotFoundException) {
+                                toast("メールのアプリが見つかりません")
+                            }
+                            return
+                        }
                         if (uri.scheme?.lowercase() !in setOf("http", "https")) {
                             Log.w(TAG, "unsupported url scheme: $url")
                             return
@@ -736,7 +764,8 @@ class GhostOverlayService : LifecycleService() {
             // SHIORI を読み終わるまで、アプリの一覧にも読み込み中と出す（start で読み込み中になる）
             loadingJob = lifecycleScope.launch {
                 c.state.first { it.loading == null }
-                _loading.value = null
+                // ほかのゴーストを読み込んでいる表示は消さない
+                if (_loading.value == dirName) _loading.value = null
             }
         }
 
@@ -860,6 +889,8 @@ class GhostOverlayService : LifecycleService() {
 
         fun window(scope: Int): CharacterWindow? = windows.firstOrNull { it.scopeId == scope }
 
+        fun allWindows(): List<CharacterWindow> = windows.toList()
+
         /** キャラクターの重なりと見切れを調べて、変わっていればゴーストに伝える（OnOverlap / OnOffscreen。ほかのゴーストとのものも） */
         private fun reportLayout() {
             val c = controller ?: return
@@ -881,19 +912,33 @@ class GhostOverlayService : LifecycleService() {
 
         private fun ensureWindows(c: GhostController, scopes: Set<Int>) {
             val shown = windows.map { it.scopeId }.toSet()
+            // 「他のアプリの上に重ねて表示」を取り消された後は、ウィンドウを足すと BadTokenException でアプリごと落ちる
+            if (scopes.any { it !in shown } && !Settings.canDrawOverlays(this@GhostOverlayService)) {
+                overlayRevoked()
+                return
+            }
             // 後から足したウィンドウほど上に重なるので、\1 → 3人目以降 → \0 の順に作る（\0 がいちばん上）
             val order = scopes.filter { it !in shown }.sortedBy { if (it == 0) Int.MAX_VALUE else it }
             val prefs = OverlaySettings.prefs(this@GhostOverlayService)
             val w = c.state.value.window
             for (scope in order) {
                 // 前の版で覚えた位置（ゴーストを分けていない）は、最初の SHIORI のプロセスで動くゴーストだけが使う
-                windows += CharacterWindow(this@GhostOverlayService, scope, c, renderer ?: return, balloonSkin, prefs, dirName, sharedPositionFallback = slot == 0).also {
+                val window = CharacterWindow(this@GhostOverlayService, scope, c, renderer ?: return, balloonSkin, prefs, dirName, sharedPositionFallback = slot == 0)
+                // 確かめた直後に取り消されても落ちないよう、付けられなければ止める
+                try {
+                    window.show()
+                } catch (e: RuntimeException) {
+                    Log.w(TAG, "cannot add the window: $e")
+                    window.dismiss()
+                    overlayRevoked()
+                    return
+                }
+                windows += window.also {
                     it.onShift = { dx, dy -> stickyPartners(scope).forEach { p -> p.shiftBy(dx, dy) } }
                     it.onSettled = {
                         stickyPartners(scope).forEach(CharacterWindow::savePosition)
                         reportLayout()
                     }
-                    it.show()
                     it.setTouchable(!passThrough)
                     it.setHidden(w.minimized)
                     it.applyDefault(w.defaultPositions[scope])
@@ -910,6 +955,8 @@ class GhostOverlayService : LifecycleService() {
             windows.forEach { it.dismiss() }
             windows.clear()
             createWindows(c)
+            // 入力の箱を開いたままなら、作り直した \0 のウィンドウでも文字を打てるようにする
+            applyInput(c)
         }
 
         /** 発言履歴の顔（サーフェスごと。切り出せなかったものは null）。シェルが替わったら作り直す */
@@ -1021,7 +1068,9 @@ class GhostOverlayService : LifecycleService() {
             if (wasListening && any && !voiceAllowed()) refreshForeground()
             return
         }
-        if (voice != null) return
+        // 自分で止まった（許可を取り消された・言語が無い）ものは作り直す（後で許可されたら、また聞けるように）
+        if (voice?.isRunning == true) return
+        voice?.stop()
         // マイクを使う常駐の通知にし直してから聞く（Android 14 からは、通知の種類にマイクが要る）
         refreshForeground()
         // 名前を呼ばれたかどうかは、それぞれのゴーストが見る
@@ -1034,19 +1083,24 @@ class GhostOverlayService : LifecycleService() {
      */
     private fun watchSave(file: File, uri: Uri) {
         lifecycleScope.launch {
-            var lastSize = -1L
-            val until = SystemClock.elapsedRealtime() + SAVE_WAIT_MS
-            while (SystemClock.elapsedRealtime() < until) {
-                kotlinx.coroutines.delay(1000)
-                val size = if (file.isFile) file.length() else -1L
-                if (size >= 0 && size == lastSize) {
-                    val ok = withContext(Dispatchers.IO) {
-                        runCatching { contentResolver.openOutputStream(uri, "wt")?.use { out -> file.inputStream().use { it.copyTo(out) } } != null }.getOrDefault(false)
+            try {
+                var lastSize = -1L
+                val until = SystemClock.elapsedRealtime() + SAVE_WAIT_MS
+                while (SystemClock.elapsedRealtime() < until) {
+                    kotlinx.coroutines.delay(1000)
+                    val size = if (file.isFile) file.length() else -1L
+                    if (size >= 0 && size == lastSize) {
+                        val ok = withContext(Dispatchers.IO) {
+                            runCatching { contentResolver.openOutputStream(uri, "wt")?.use { out -> file.inputStream().use { it.copyTo(out) } } != null }.getOrDefault(false)
+                        }
+                        if (!ok) toast("保存できませんでした")
+                        return@launch
                     }
-                    if (!ok) toast("保存できませんでした")
-                    return@launch
+                    lastSize = size
                 }
-                lastSize = size
+            } finally {
+                // SystemDialogActivity が書き込むために残した許可を手放す
+                runCatching { contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
             }
         }
     }
@@ -1086,6 +1140,8 @@ class GhostOverlayService : LifecycleService() {
     private fun teardown(): List<Job> {
         pendingStart?.cancel()
         pendingStart = null
+        pendingRestarts.values.forEach { it.job.cancel() }
+        pendingRestarts.clear()
         usbJob?.cancel()
         usbJob = null
         usbDevices = null
@@ -1308,6 +1364,8 @@ class GhostOverlayService : LifecycleService() {
             it.onDisplayChanged(metrics.widthPixels, metrics.heightPixels)
             it.onSystemInfoChanged(info)
         }
+        // 回転などで画面が狭くなり、はみ出したキャラクターは中に戻す（配置が終わってから測る）
+        sessions.forEach { s -> s.allWindows().forEach { w -> w.keepOnScreenLater() } }
     }
 
     /** 端末の見た目・言語・フォント・更新。言語名と ID は SSP（Windows）と同じ形にする */
@@ -1519,6 +1577,15 @@ class GhostOverlayService : LifecycleService() {
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
+    /** 「他のアプリの上に重ねて表示」が取り消されていた。ゴーストをすべて止めて、許可を頼む（設定の名前は一覧の画面と同じ言葉で） */
+    private fun overlayRevoked() {
+        if (sessions.isEmpty()) return
+        // トーストは2行で切られうるので、一覧のカードの文より短く。ほかのトーストと同じく「。」は付けない
+        toast("ゴーストを出すには「他のアプリの上に重ねて表示」を許可してください")
+        teardown()
+        stopSelf()
+    }
+
     private fun writePng(bitmap: Bitmap?, file: File): Boolean {
         bitmap ?: return false
         return runCatching { file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } }.getOrDefault(false)
@@ -1597,8 +1664,12 @@ class GhostOverlayService : LifecycleService() {
         private const val SAVE_WAIT_MS = 120_000L
         private const val USB_POLL_MS = 10_000L
 
-        /** 起動し直すとき、前のゴーストの SHIORI を下ろし終えるのを待つ長さ */
-        private const val STOP_WAIT_MS = 5_000L
+        /**
+         * 起動し直すとき、前のゴーストの SHIORI を下ろし終えるのを待つ長さ。下ろすのが時間切れなら SHIORI のプロセスごと止まる
+         * （ShioriSession.UNLOAD_TIMEOUT_MS）ので、それより長く待つ。短いと、同じプロセスに前と次のゴーストが一緒に入り、
+         * サンドボックスで互いのフォルダが見え、前のゴーストの時間切れで次のゴーストまで止まる
+         */
+        private const val STOP_WAIT_MS = net.pono.baseware.shiori.ShioriSession.UNLOAD_TIMEOUT_MS + 5_000L
 
         private val _controller = MutableStateFlow<GhostController?>(null)
 

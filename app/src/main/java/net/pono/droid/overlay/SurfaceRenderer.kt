@@ -23,8 +23,9 @@ import java.io.File
  * 重ね方（描画メソッド）は SSP と同じものを使える。blend-* は [Blend] で1画素ずつ計算する
  */
 class SurfaceRenderer(private val shell: Shell) {
-    private val images = HashMap<File, Bitmap?>()
-    private val opaqueImages = HashMap<File, Bitmap?>()
+    // 読んだ絵は使った順に覚え、合計の大きさで古いものから捨てる（dumpsurface で全サーフェスを読んでも残り続けない）
+    private val images = BitmapCache<File>(MAX_IMAGE_BYTES)
+    private val opaqueImages = BitmapCache<File>(MAX_OPAQUE_BYTES)
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     private fun mode(m: PorterDuff.Mode) = Paint(Paint.FILTER_BITMAP_FLAG).apply { xfermode = PorterDuffXfermode(m) }
     private val replacePaint = mode(PorterDuff.Mode.SRC)
@@ -129,7 +130,7 @@ class SurfaceRenderer(private val shell: Shell) {
     }
 
     /** element を重ねた、アニメーションなしのサーフェス。 */
-    private val bases = HashMap<Int, Bitmap?>()
+    private val bases = BitmapCache<Int>(MAX_BASE_BYTES)
 
     private fun baseImage(id: Int): Bitmap? = bases.getOrPut(id) {
         val elements = shell.surfaces[id]?.elements.orEmpty()
@@ -140,8 +141,8 @@ class SurfaceRenderer(private val shell: Shell) {
         val width = maxOf(png?.width?.toLong() ?: 0L, parts.maxOfOrNull { (e, b) -> e.x.toLong() + b.width } ?: 0L)
         val height = maxOf(png?.height?.toLong() ?: 0L, parts.maxOfOrNull { (e, b) -> e.y.toLong() + b.height } ?: 0L)
         if (width <= 0 || height <= 0) return@getOrPut png
-        // surfaces.txt の座標は信用しない（巨大な値で画像を作らせない）
-        if (width > ImageTransparency.MAX_SIDE || height > ImageTransparency.MAX_SIDE) {
+        // surfaces.txt の座標は信用しない（巨大な値で画像を作らせない）。読む画像と同じく、1辺と画素数の両方に上限
+        if (width > ImageTransparency.MAX_SIDE || height > ImageTransparency.MAX_SIDE || width * height > ImageTransparency.MAX_PIXELS) {
             Log.w("pono", "surface $id is too large to compose: ${width}x$height")
             return@getOrPut png
         }
@@ -220,16 +221,17 @@ class SurfaceRenderer(private val shell: Shell) {
         val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
         android.graphics.BitmapFactory.decodeFile(file.path, bounds)
         if (bounds.outWidth !in 1..ImageTransparency.MAX_SIDE || bounds.outHeight !in 1..ImageTransparency.MAX_SIDE) return@getOrPut null
+        if (bounds.outWidth.toLong() * bounds.outHeight > ImageTransparency.MAX_PIXELS) return@getOrPut null
         val b = runCatching { android.graphics.BitmapFactory.decodeFile(file.path) }.getOrNull() ?: return@getOrPut null
         val px = IntArray(b.width * b.height)
         b.getPixels(px, 0, b.width, 0, 0, b.width, b.height)
         RegionMask.of(b.width, b.height, px, region)
     }
 
-    /** asis で重ねる、透過をやめたサーフェス */
+    /** asis で重ねる、透過をやめたサーフェス（左上の色や .pna で抜く前の、元の色のまま） */
     private fun opaqueImage(id: Int): Bitmap? {
         val file = shell.surfaceImage(id) ?: return baseImage(id)?.let(::opaque)
-        return opaqueImages.getOrPut(file) { load(file)?.let(::opaque) }
+        return opaqueImages.getOrPut(file) { ImageTransparency.opaque(file) }
     }
 
     private fun opaque(b: Bitmap): Bitmap {
@@ -257,7 +259,33 @@ class SurfaceRenderer(private val shell: Shell) {
         /** 多重着せ替えで作った絵を覚えておく数 */
         const val MAX_PARTS = 64
 
+        /** 覚えておく絵の大きさの合計（バイト） */
+        const val MAX_IMAGE_BYTES = 96L * 1024 * 1024
+        const val MAX_OPAQUE_BYTES = 32L * 1024 * 1024
+        const val MAX_BASE_BYTES = 64L * 1024 * 1024
+
         /** 絵は重ねないメソッド（move はずらすだけ、scaling はウィンドウの大きさを変えるだけ、import は別に流す） */
         val NOT_DRAWN = setOf("move", "scaling", "base", "import", "start", "stop", "alternativestart", "alternativestop", "parallelstart", "parallelstop", "insert")
+    }
+}
+
+/** 使った順に覚え、絵の大きさの合計が [maxBytes] を超えたら古いものから捨てる（読めなかった null も覚える） */
+private class BitmapCache<K>(private val maxBytes: Long) {
+    private val map = LinkedHashMap<K, Bitmap?>(16, 0.75f, true)
+    private var bytes = 0L
+
+    fun getOrPut(key: K, make: () -> Bitmap?): Bitmap? {
+        if (map.containsKey(key)) return map[key]
+        val value = make()
+        map[key] = value
+        bytes += value?.allocationByteCount?.toLong() ?: 0L
+        val it = map.entries.iterator()
+        while (bytes > maxBytes && map.size > 1 && it.hasNext()) {
+            val e = it.next()
+            if (e.key == key) continue
+            bytes -= e.value?.allocationByteCount?.toLong() ?: 0L
+            it.remove()
+        }
+        return value
     }
 }

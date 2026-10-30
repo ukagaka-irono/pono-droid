@@ -130,6 +130,7 @@ class SpectrumTap private constructor(
         /** [file] の音の波形を取り出せるようにする。音の無いファイル・読めない形式なら null */
         fun open(file: File): SpectrumTap? {
             val extractor = MediaExtractor()
+            var codec: MediaCodec? = null
             return try {
                 extractor.setDataSource(file.path)
                 val track = (0 until extractor.trackCount).firstOrNull {
@@ -140,11 +141,13 @@ class SpectrumTap private constructor(
                 }
                 extractor.selectTrack(track)
                 val format = extractor.getTrackFormat(track)
-                val codec = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!)
-                codec.configure(format, null, null, 0)
-                codec.start()
-                SpectrumTap(extractor, codec, format.getInteger(MediaFormat.KEY_SAMPLE_RATE))
+                val decoder = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!).also { codec = it }
+                decoder.configure(format, null, null, 0)
+                decoder.start()
+                SpectrumTap(extractor, decoder, format.getInteger(MediaFormat.KEY_SAMPLE_RATE))
             } catch (e: Exception) {
+                // configure や start で失敗しても、作ったデコーダーは放す（数に限りがある）
+                codec?.let { c -> runCatching { c.release() } }
                 extractor.release()
                 null
             }

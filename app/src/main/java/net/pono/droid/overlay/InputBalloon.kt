@@ -356,6 +356,12 @@ private fun InputRequest.label() = when (kind) {
     InputRequest.Kind.TEXTAREA -> "入力（複数行）"
 }
 
-/** --limit= の文字数で切る（textareabox は改行も 1 文字）。[limit] が null なら切らない */
-private fun TextFieldValue.limitedTo(limit: Int?): TextFieldValue =
-    if (limit == null || text.length <= limit) this else copy(text = text.take(limit), selection = TextRange(minOf(selection.start, limit), minOf(selection.end, limit)))
+/**
+ * --limit= の文字数で切る（textareabox は改行も 1 文字）。[limit] が null なら切らない。
+ * 絵文字などのサロゲートペアの途中では切らない（ペアごと落とす）
+ */
+private fun TextFieldValue.limitedTo(limit: Int?): TextFieldValue {
+    if (limit == null || text.length <= limit) return this
+    val end = if (limit > 0 && Character.isHighSurrogate(text[limit - 1])) limit - 1 else limit
+    return copy(text = text.take(end), selection = TextRange(minOf(selection.start, end), minOf(selection.end, end)))
+}

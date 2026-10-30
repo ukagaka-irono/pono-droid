@@ -46,6 +46,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import net.pono.baseware.ghost.AiGraph
 import net.pono.baseware.ghost.AiGraphLogo
+import net.pono.droid.overlay.ImageTransparency
 import java.io.File
 import kotlin.math.PI
 import kotlin.math.cos
@@ -211,7 +212,7 @@ private const val GRID_STEPS = 4
 @Composable
 private fun RadarChart(graph: AiGraph, logo: File?, align: String, logoX: Int, logoY: Int) {
     val background by produceState<ImageBitmap?>(null, logo) {
-        value = logo?.let { f -> withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(f.path)?.asImageBitmap() }.getOrNull() } }
+        value = logo?.let { f -> withContext(Dispatchers.IO) { runCatching { ImageTransparency.size(f)?.let { BitmapFactory.decodeFile(f.path) }?.asImageBitmap() }.getOrNull() } }
     }
     val colors = MaterialTheme.colorScheme
     val labelStyle = MaterialTheme.typography.bodySmall.copy(color = colors.onSurfaceVariant)
@@ -282,7 +283,7 @@ private fun HanayuChart(graph: HanayuGraph) {
         return
     }
     val background by produceState<ImageBitmap?>(null, graph.background) {
-        value = graph.background?.let { f -> withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(f.path)?.asImageBitmap() }.getOrNull() } }
+        value = graph.background?.let { f -> withContext(Dispatchers.IO) { runCatching { ImageTransparency.size(f)?.let { BitmapFactory.decodeFile(f.path) }?.asImageBitmap() }.getOrNull() } }
     }
     val colors = MaterialTheme.colorScheme
     val labelStyle = MaterialTheme.typography.bodySmall.copy(color = colors.onSurfaceVariant)

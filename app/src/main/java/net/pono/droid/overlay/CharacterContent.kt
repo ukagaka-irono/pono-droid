@@ -153,14 +153,20 @@ fun CharacterSurface(
         ends = character.talkEnds
     }
 
-    val bitmap by produceState<Bitmap?>(null, character.surface, layers, character.binds) {
-        value = withContext(Dispatchers.Default) { renderer.render(character.surface, layers, character.binds) }
+    // サーフェスを替えた直後（animator.show の前）は、前のサーフェスのアニメーションのコマを重ねない。着せ替えだけは出しておく
+    val shownLayers = if (animator.surfaceId == character.surface) {
+        layers
+    } else {
+        SerikoAnimator.bindLayers(controller.shell.surfaces[character.surface], character.binds)
+    }
+    val bitmap by produceState<Bitmap?>(null, character.surface, shownLayers, character.binds) {
+        value = withContext(Dispatchers.Default) { renderer.render(character.surface, shownLayers, character.binds) }
     }
 
     val bmp = bitmap ?: return
     val density = LocalDensity.current
     // \![set,scaling] の倍率（負なら反転）に、SERIKO の scaling のコマの倍率を掛ける。大きさは絶対値で決め、向きは描くときに裏返す
-    val scalingFrames = layers.values.filter { it.method == "scaling" }
+    val scalingFrames = shownLayers.values.filter { it.method == "scaling" }
     val animX = scalingFrames.fold(1f) { acc, f -> acc * f.scaleX / 100f }
     val animY = scalingFrames.fold(1f) { acc, f -> acc * f.scaleY / 100f }
     val sx = (character.scaleX * animX).takeIf { it != 0f } ?: 1f
@@ -168,16 +174,24 @@ fun CharacterSurface(
     val pxPerImagePxX = with(density) { (dpPerImagePx * abs(sx)).dp.toPx() }
     val pxPerImagePxY = with(density) { (dpPerImagePx * abs(sy)).dp.toPx() }
 
-    /** 指の位置（ウィンドウの px）をシェル画像の座標にする。反転していれば裏返す */
-    fun imagePoint(x: Float, y: Float): Pair<Int, Int> {
-        val ix = (x / pxPerImagePxX).toInt().let { if (sx < 0) bmp.width - 1 - it else it }
-        val iy = (y / pxPerImagePxY).toInt().let { if (sy < 0) bmp.height - 1 - it else it }
-        return ix to iy
-    }
+    /**
+     * 画像の上の位置（graphicsLayer の反転を戻した、この部品の中の px）をシェル画像の座標にする。
+     * pointerInput の位置はもう反転を戻してあるので、そのまま使う
+     */
+    fun localImagePoint(x: Float, y: Float): Pair<Int, Int> = (x / pxPerImagePxX).toInt() to (y / pxPerImagePxY).toInt()
+
+    /**
+     * pointerInteropFilter の MotionEvent の位置をシェル画像の座標にする。MotionEvent は平行移動しか戻していないので、
+     * 反転（scaleX / scaleY が -1）していれば、この部品の中の位置は符号を変えたものになる
+     */
+    fun imagePoint(x: Float, y: Float): Pair<Int, Int> = localImagePoint(if (sx < 0) -x else x, if (sy < 0) -y else y)
     // base のコマで土台を替えていれば、そのサーフェスの当たり判定を使う。コマを出しているアニメーションの当たり判定も見る
-    val baseSurface = layers.values.lastOrNull { it.method == "base" && it.surface >= 0 }?.surface ?: character.surface
-    val activeAnimations = layers.keys.filter { it >= 0 } + character.binds
-    fun hit(p: Pair<Int, Int>) = controller.shell.surfaces[baseSurface]?.hitTest(p.first, p.second, activeAnimations, renderer::regionMask)
+    val baseSurface = shownLayers.values.lastOrNull { it.method == "base" && it.surface >= 0 }?.surface ?: character.surface
+    val activeAnimations = shownLayers.keys.filter { it >= 0 } + character.binds
+    // アニメーションの当たり判定（animation*.collision）は今のサーフェスの定義から、土台の当たり判定は差し替えた土台から
+    fun hit(p: Pair<Int, Int>) = controller.shell.surfaces[character.surface]?.hitTest(
+        p.first, p.second, activeAnimations, renderer::regionMask, base = controller.shell.surfaces[baseSurface],
+    ) ?: controller.shell.surfaces[baseSurface]?.hitTest(p.first, p.second, emptyList(), renderer::regionMask)
     // surface*.png と element に書いた動く画像（GIF / APNG / WebP）は、SERIKO を書かなくても動かす
     val animatedParts by produceState(emptyList<SurfaceRenderer.AnimatedPart>(), baseSurface) {
         value = withContext(Dispatchers.IO) { renderer.animatedParts(baseSurface) }
@@ -216,7 +230,7 @@ fun CharacterSurface(
     val context = LocalContext.current
     var cursorAt by remember { mutableStateOf<Pair<CursorAction, String?>>(CursorAction.UP to null) }
     val currentHit by rememberUpdatedState(::hit)
-    val currentPoint by rememberUpdatedState(::imagePoint)
+    val currentPoint by rememberUpdatedState(::localImagePoint)
     val loadingNow = state.loading != null
     val cursorIcon = remember(cursorAt, controller.shell, loadingNow) {
         val ghost = controller.ghost

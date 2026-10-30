@@ -16,14 +16,22 @@ class SpeechOutput(private val context: Context) {
     private val pending = ArrayDeque<Pair<Int, String>>()
     private var serial = 0
 
+    /** 音声合成を用意できなかった時刻。しばらくしたら作り直してみる（ずっと読まないままにしない） */
+    private var failedAt = 0L
+
     fun speak(scope: Int, text: String) {
-        val engine = tts ?: TextToSpeech(context.applicationContext) { status ->
+        if (tts == null && failedAt != 0L && System.currentTimeMillis() - failedAt < RETRY_MS) return
+        tts ?: TextToSpeech(context.applicationContext) { status ->
             ready = status == TextToSpeech.SUCCESS
             if (ready) {
+                failedAt = 0L
                 while (pending.isNotEmpty()) pending.removeFirst().let { (s, t) -> say(s, t) }
             } else {
                 Log.w(TAG, "text to speech is not available: $status")
                 pending.clear()
+                failedAt = System.currentTimeMillis()
+                tts?.shutdown()
+                tts = null
             }
         }.also { tts = it }
         if (!ready) {
@@ -55,5 +63,6 @@ class SpeechOutput(private val context: Context) {
     private companion object {
         const val TAG = "pono"
         const val MAX_PENDING = 20
+        const val RETRY_MS = 60_000L
     }
 }

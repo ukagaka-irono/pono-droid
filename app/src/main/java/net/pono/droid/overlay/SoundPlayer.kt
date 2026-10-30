@@ -77,6 +77,7 @@ class SoundPlayer(
             if (options.seekMs == null) sound.player.seekTo(0)
             apply(sound, options)
             sound.player.start()
+            applyRate(sound)
         } else {
             sound.startWhenReady = true
             if (options.seekMs != null) sound.pendingSeek = options
@@ -102,7 +103,12 @@ class SoundPlayer(
     fun resume(file: File?) = forEach(file) { s ->
         if (!s.paused) return@forEach
         s.paused = false
-        if (s.prepared) s.player.start() else s.startWhenReady = true
+        if (s.prepared) {
+            s.player.start()
+            applyRate(s)
+        } else {
+            s.startWhenReady = true
+        }
     }
 
     /** option: 鳴っている音の音量・左右・速さ・位置を変える */
@@ -152,7 +158,10 @@ class SoundPlayer(
                 apply(sound, sound.options)
                 sound.pendingSeek?.let { seek -> apply(sound, SoundOptions(seekMs = seek.seekMs, seekRelative = seek.seekRelative)) }
                 sound.pendingSeek = null
-                if (sound.startWhenReady && !sound.paused) it.start()
+                if (sound.startWhenReady && !sound.paused) {
+                    it.start()
+                    applyRate(sound)
+                }
             }
             player.setOnCompletionListener {
                 if (sound.loop) {
@@ -182,14 +191,19 @@ class SoundPlayer(
         val volume = (o.volume ?: 100) / 100f
         val balance = (o.balance ?: 0) / 100f
         sound.player.setVolume(volume * minOf(1f, 1f - balance), volume * minOf(1f, 1f + balance))
-        if (changed.rate != null) {
-            runCatching { sound.player.playbackParams = sound.player.playbackParams.setSpeed(changed.rate!! / 100f) }
-                .onFailure { Log.w(TAG, "cannot change rate: ${sound.file.name}") }
-        }
+        // 速さを変えると止まっている音も鳴り出すので、鳴っている間だけ変える（止まっていれば鳴らすときに [applyRate]）
+        if (changed.rate != null && sound.player.isPlaying) applyRate(sound)
         changed.seekMs?.let { ms ->
             val to = if (changed.seekRelative) sound.player.currentPosition + ms else ms
             sound.player.seekTo(to.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt())
         }
+    }
+
+    /** 覚えている --rate を当てる。鳴らし始めた直後に呼ぶ */
+    private fun applyRate(sound: Sound) {
+        val rate = sound.options.rate ?: return
+        runCatching { sound.player.playbackParams = sound.player.playbackParams.setSpeed(rate / 100f) }
+            .onFailure { Log.w(TAG, "cannot change rate: ${sound.file.name}") }
     }
 
     /** 新しく指定されたものだけ上書きする（位置は覚えない） */
@@ -248,8 +262,12 @@ class SoundPlayer(
         s.job?.cancel()
         sound.spectrum = null
         onSpectrum(sound.file, s.analyzer.bands, s.analyzer.zero(), s.lastPositionMs)
-        val tap = s.tap
-        if (tap != null) scope.launch(analysis) { tap.close() }
+        // 開くのと同じ1本のスレッドで閉じる。開いている途中に止めても、開き終えてから閉じる（デコーダーを残さない）
+        scope.launch(analysis) {
+            s.opened = true
+            s.tap?.close()
+            s.tap = null
+        }
     }
 
     private fun forEach(file: File?, block: (Sound) -> Unit) {
@@ -268,7 +286,8 @@ class SoundPlayer(
         runCatching { sound.player.release() }
         // 鳴り終わりのイベントは、ほかの音の後始末が済んでから
         if (notify) main.post { onStop(sound.file) }
-        if (sounds.values.none { !it.loop }) {
+        // load で読んだだけの音（まだ鳴らしていない）は待たない
+        if (sounds.values.none { it.started && !it.loop }) {
             finished?.complete(Unit)
             finished = null
         }

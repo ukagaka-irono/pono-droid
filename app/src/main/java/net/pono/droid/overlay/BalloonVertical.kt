@@ -70,7 +70,8 @@ fun VerticalBalloonBody(items: List<BalloonItem>, choices: ChoiceActions, style:
             for (cell in cells) {
                 when (cell) {
                     is Cell.Glyph -> VerticalGlyphCell(cell, choiceList, choices, style)
-                    is Cell.Picture -> BalloonPicture(cell.path, cell.opaque, style.spPerPx, Modifier, cell.options)
+                    // 読めない（まだ読めていない）画像は何も出さないので、Box で包んで cell と measurable の数をそろえる
+                    is Cell.Picture -> Box { BalloonPicture(cell.path, cell.opaque, style.spPerPx, Modifier, cell.options) }
                 }
             }
         },
