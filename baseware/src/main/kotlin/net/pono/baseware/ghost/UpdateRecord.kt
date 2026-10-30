@@ -20,7 +20,7 @@ data class UpdateRecord(val result: String, val time: String) {
         }
 
         fun save(dir: File, result: String, now: Calendar = Calendar.getInstance()) {
-            val time = "%d,%d,%d,%d,%d,%d".format(
+            val time = "%d,%d,%d,%d,%d,%d".format(java.util.Locale.ROOT,
                 now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1, now.get(Calendar.DAY_OF_MONTH),
                 now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), now.get(Calendar.SECOND),
             )

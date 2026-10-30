@@ -106,7 +106,8 @@ object NullOutputStream : OutputStream() {
 class UrlConnectionFetcher(private val userAgent: String) : HttpFetcher {
     override fun fetch(url: String, sink: OutputStream, maxBytes: Long): FetchResult {
         val conn = try {
-            URI(url).toURL().openConnection() as HttpURLConnection
+            // 範囲外のポートは、つなぐときに IllegalArgumentException になる（JVM）ので、先に断る
+            URI(url).takeIf { it.port <= 65535 }!!.toURL().openConnection() as HttpURLConnection
         } catch (e: Exception) {
             return FetchResult.Failed("bad url")
         }
@@ -219,11 +220,7 @@ class NetworkUpdater(
                 if (total > MAX_TOTAL_BYTES) return@withContext UpdateResult.Failure("file too large")
             }
             if (mode == Mode.TEST) return@withContext UpdateResult.Checked(targets.map { it.path })
-            for (e in targets) {
-                val dest = safeFile(root, e.path)!!
-                dest.parentFile?.mkdirs()
-                File(staging, e.path).copyTo(dest, overwrite = true)
-            }
+            replaceAll(targets.map { e -> File(staging, e.path) to safeFile(root, e.path)!! })
             // 更新で delete.txt（か delete1.txt などの delete[数字].txt）が来たら、書かれているファイルを消す（SSP と同じ）
             if (targets.any { DELETE_LISTS.matches(it.path.lowercase()) }) applyDeleteList(root)
             UpdateResult.Changed(targets.map { it.path })
@@ -261,11 +258,37 @@ class NetworkUpdater(
 
     private fun failure(r: FetchResult) = UpdateResult.Failure(describe(r))
 
+    /**
+     * 落としたもの（作業用ディレクトリの中）で、ゴーストのファイルを入れ替える。途中で書けなくなったら、入れ替えた分を元に戻してから
+     * IOException を投げる（半分だけ新しい版にしない）
+     */
+    private fun replaceAll(pairs: List<Pair<File, File>>) {
+        val backup = File(ghostDir.canonicalFile, "$PONO_DIR/update-backup")
+        backup.deleteRecursively()
+        val done = ArrayList<Pair<File, File?>>()
+        try {
+            for ((i, pair) in pairs.withIndex()) {
+                val (from, dest) = pair
+                val saved = if (dest.isFile) File(backup, i.toString()).also { dest.copyTo(it, overwrite = true) } else null
+                done += dest to saved
+                dest.parentFile?.mkdirs()
+                from.copyTo(dest, overwrite = true)
+            }
+        } catch (e: IOException) {
+            for ((dest, saved) in done.asReversed()) {
+                runCatching { if (saved != null) saved.copyTo(dest, overwrite = true) else dest.delete() }
+            }
+            throw e
+        } finally {
+            backup.deleteRecursively()
+        }
+    }
+
     companion object {
         const val DELETE_LIST = "delete.txt"
 
         /** delete.txt と、SSP が読む delete[数字].txt */
-        private val DELETE_LISTS = Regex("""delete\d*\.txt""")
+        val DELETE_LISTS = Regex("""delete\d*\.txt""")
 
         /** pono-droid がゴーストごとに覚えておくもの（profile など）。更新で触らせない */
         const val PONO_DIR = "pono"

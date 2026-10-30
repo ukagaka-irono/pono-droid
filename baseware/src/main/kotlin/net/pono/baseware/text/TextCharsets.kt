@@ -12,7 +12,8 @@ object TextCharsets {
     fun resolve(name: String?): Charset? {
         val n = name?.trim()?.lowercase() ?: return null
         return when (n) {
-            "shift_jis", "sjis", "x-sjis", "cp932", "windows-31j", "ms932" -> CP932
+            // JDK の別名（Shift-JIS・csShiftJIS・ms_kanji など）は Windows の CP932 ではない Shift_JIS になるので、ここで寄せる
+            "shift_jis", "shift-jis", "sjis", "x-sjis", "cp932", "windows-31j", "ms932", "ms_kanji", "csshiftjis", "cswindows31j" -> CP932
             "utf-8", "utf8" -> Charsets.UTF_8
             else -> runCatching { Charset.forName(n) }.getOrNull()
         }
@@ -25,13 +26,12 @@ object TextCharsets {
     fun readLines(file: File): List<String> = decode(file.readBytes()).lines()
 
     fun decode(bytes: ByteArray): String {
-        val body = if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) {
-            bytes.copyOfRange(3, bytes.size)
-        } else {
-            bytes
-        }
+        val bom = bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()
+        val body = if (bom) bytes.copyOfRange(3, bytes.size) else bytes
         val declared = declaredCharset(body)
         if (declared != null) return String(body, declared)
+        // UTF-8 の BOM はそれだけで UTF-8 の印。壊れたバイトが混じっていても、そこだけ置き換えて UTF-8 で読む
+        if (bom) return String(body, Charsets.UTF_8)
         return if (isValidUtf8(body)) String(body, Charsets.UTF_8) else String(body, CP932)
     }
 

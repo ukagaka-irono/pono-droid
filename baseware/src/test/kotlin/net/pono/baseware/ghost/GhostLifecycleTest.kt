@@ -1,6 +1,7 @@
 package net.pono.baseware.ghost
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -9,6 +10,7 @@ import kotlinx.coroutines.withTimeout
 import net.pono.baseware.sakura.Choice
 import net.pono.baseware.sakura.ScriptPlayer
 import net.pono.baseware.shell.Shell
+import net.pono.baseware.shiori.Shiori
 import net.pono.baseware.update.FetchResult
 import net.pono.baseware.update.HttpFetcher
 import org.junit.Assert.assertEquals
@@ -19,6 +21,8 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** 消去（vanish）・利用規約・読み直し・OnCloseAll・TeachBox の開け閉め・\a \+ \_+ */
 class GhostLifecycleTest {
@@ -268,5 +272,37 @@ class GhostLifecycleTest {
         // 簡易バルーンなので読み直すものが無い
         assertTrue(platform.inner.balloonChanges.isEmpty())
         assertFalse(platform.inner.logs.any { it.startsWith("未対応") })
+    }
+
+    @Test
+    fun disposeWhileBootingLeavesNoTimerBehind() = runBlocking<Unit> {
+        val asked = CountDownLatch(1)
+        val answer = CountDownLatch(1)
+        val inner = ScriptedShiori(mapOf("OnFirstBoot" to "\\0hi\\e"))
+        val shiori = object : Shiori by inner {
+            override fun request(request: ByteArray): ByteArray {
+                if ("\r\nID: OnFirstBoot\r\n" in request.toString(Charsets.UTF_8)) {
+                    asked.countDown()
+                    answer.await(5, TimeUnit.SECONDS)
+                }
+                return inner.request(request)
+            }
+        }
+        val scope = testScope()
+        try {
+            val c = testController(tmp.newTestGhost(), shiori, scope)
+            c.start()
+            assertTrue(asked.await(5, TimeUnit.SECONDS))
+            val done = c.dispose()
+            answer.countDown()
+            withTimeout(5000) { done.join() }
+            delay(1500)
+            // 止められたので起動し終えず、毎秒のタイマーも残らない
+            assertFalse(c.state.value.booted)
+            val alive = scope.coroutineContext[Job]!!.children.filter { it.isActive }.toList()
+            assertEquals("still running after dispose: $alive", 0, alive.size)
+        } finally {
+            scope.cancel()
+        }
     }
 }

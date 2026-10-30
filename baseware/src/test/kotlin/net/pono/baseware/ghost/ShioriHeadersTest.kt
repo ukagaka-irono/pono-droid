@@ -7,6 +7,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import net.pono.baseware.net.SstpServer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -84,6 +85,8 @@ class ShioriHeadersTest {
         assertEquals("external,sstp", sent["SenderType"])
         assertEquals("null", sent["SecurityOrigin"])
         val fmo = c.handleSstp(req("EXECUTE SSTP/1.1\nSender: app\nCommand: GetFMO\nCharset: UTF-8\n\n"))
-        assertTrue(fmo.data.orEmpty().contains("${c.uniqueId}.ghostpath\u0001"))
+        // FMO には Owned SSTP の uniqueid ではなく、宛先を選ぶためだけの識別 ID を出す
+        assertTrue(fmo.data.orEmpty().contains("${c.fmoId}.ghostpath\u0001"))
+        assertFalse(fmo.data.orEmpty().contains(c.uniqueId))
     }
 }

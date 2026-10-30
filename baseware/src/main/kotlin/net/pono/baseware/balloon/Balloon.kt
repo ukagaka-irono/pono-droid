@@ -481,7 +481,12 @@ class BalloonRepository(val root: File) {
     fun list(): List<Balloon> =
         root.listFiles { f -> f.isDirectory }?.map(::Balloon)?.filter { it.isValid }?.sortedBy { it.name }.orEmpty()
 
-    fun find(dirName: String): Balloon? = Balloon(File(root, dirName)).takeIf { it.isValid }
+    /** 置き場の中のフォルダ名で探す（../ などで置き場の外を指すものは null） */
+    fun find(dirName: String): Balloon? {
+        val name = dirName.trim()
+        if (name.isEmpty() || name == "." || name == ".." || '/' in name || '\\' in name || '\u0000' in name) return null
+        return Balloon(File(root, name)).takeIf { it.isValid }
+    }
 
     /** バルーンの名前（descript.txt の name）で探す。ゴーストの descript.txt の balloon 指定に使う */
     fun findByName(name: String): Balloon? = list().firstOrNull { it.name == name || it.dir.name == name }

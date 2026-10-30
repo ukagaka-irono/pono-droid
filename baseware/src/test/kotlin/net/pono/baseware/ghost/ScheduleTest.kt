@@ -118,4 +118,18 @@ class ScheduleTest {
         assertEquals("default\u0001今日の会\u0001\u0001\u0001$y,$m,$d,23,0,0\u0001$y,$m,$d,23,30,0\u0001", list[0])
         assertEquals("default\u0001歯医者\u0001\u0001\u0001$y,$m,$d,9,0,0\u0001$y,$m,$d,9,30,0\u0001", list[1])
     }
+
+    @Test
+    fun ancientDailySchedulesDoNotStallTheGhost() = runBlocking<Unit> {
+        val adds = (1..40).joinToString("") { """\![execute,schedule-add,--uid=u$it,--summary=s$it,--start=00010101,--rrule=FREQ=DAILY]""" }
+        val shiori = ScriptedShiori(mapOf("OnFirstBoot" to "$adds\\e"))
+        val scope = testScope()
+        try {
+            testController(tmp.newTestGhost(), shiori, scope).start()
+            // 直す前は 1 件足すごとに全件を 0001 年から数え直すので、数十秒かかる
+            withTimeout(15_000) { while (shiori.count("OnExecuteScheduleComplete") < 40) delay(50) }
+        } finally {
+            scope.cancel()
+        }
+    }
 }

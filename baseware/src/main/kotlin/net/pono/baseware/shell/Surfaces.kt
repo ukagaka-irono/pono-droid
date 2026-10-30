@@ -364,7 +364,14 @@ class SurfaceDefinition(val id: Int) {
      * 指が触れた当たり判定。[active] はいまコマを出しているアニメーション（着せ替えも）で、その animation*.collision を先に見る。
      * アニメーションは animation-sort（既定は番号の大きいものが手前）の順、その後に土台の当たり判定を見る
      */
-    fun hitTest(x: Int, y: Int, active: Collection<Int> = emptyList(), masks: (CollisionRegion) -> RegionMask? = { null }): String? {
+    fun hitTest(
+        x: Int,
+        y: Int,
+        active: Collection<Int> = emptyList(),
+        masks: (CollisionRegion) -> RegionMask? = { null },
+        /** base のコマで土台を差し替えているなら、その土台のサーフェス（土台の当たり判定はそちら、アニメーションのものはこのサーフェス） */
+        base: SurfaceDefinition? = null,
+    ): String? {
         val shown = active.mapNotNull { animations[it] }.filter { it.collisions.isNotEmpty() }
         val order = when (animationSort) {
             SortOrder.ASCEND -> shown.sortedBy { it.id }
@@ -373,7 +380,7 @@ class SurfaceDefinition(val id: Int) {
         // option,background のアニメーションは土台の裏にあるので、土台の当たり判定の後に見る
         val (back, front) = order.partition { it.background }
         for (anim in front) anim.collisions.values.firstOrNull { it.contains(x, y, masks) }?.let { return it.id }
-        orderedCollisions().firstOrNull { it.contains(x, y, masks) }?.let { return it.id }
+        (base ?: this).orderedCollisions().firstOrNull { it.contains(x, y, masks) }?.let { return it.id }
         for (anim in back) anim.collisions.values.firstOrNull { it.contains(x, y, masks) }?.let { return it.id }
         return null
     }
@@ -454,9 +461,13 @@ class SurfaceTable(
                 animationSort = SortOrder.DESCEND
             }
 
+            // 範囲のヘッダは 1 行を何万ものサーフェスに写すので、写した行の合計にも上限を置く（数 KB のファイルで食いつぶさない）
+            var applied = 0
             fun apply(b: Block, line: String) {
                 when (b) {
                     is Block.Surfaces -> for (id in b.ids) {
+                        if (applied >= MAX_APPLIED_LINES) break
+                        applied++
                         if (id !in settled) touched += id
                         applyLine(defs.getOrPut(id) { SurfaceDefinition(id) }, line)
                     }
@@ -630,6 +641,9 @@ class SurfaceTable(
 
         private const val MAX_RANGE_SPAN = 10_000
         private const val MAX_IDS_PER_HEADER = 20_000
+
+        /** surfaces.txt 全体で、サーフェスに写す行の数の上限 */
+        private const val MAX_APPLIED_LINES = 100_000
 
         /** ツールチップの文字の長さの上限 */
         private const val MAX_TOOLTIP = 500
@@ -841,9 +855,13 @@ class SurfaceTable(
         private fun parseWait(s: String?, unit: Int): Pair<Int, Int> {
             if (s == null) return 0 to 0
             val parts = s.split('-')
-            val min = (parts[0].trim().toIntOrNull() ?: 0) * unit
-            val max = (parts.getOrNull(1)?.trim()?.toIntOrNull()?.times(unit)) ?: min
+            // 単位を掛けてあふれたり、選ぶときに +1 であふれたりしないよう、ありうる範囲（0〜10 分）に丸める
+            fun ms(v: String?) = v?.trim()?.toLongOrNull()?.let { (it * unit).coerceIn(0L, MAX_WAIT_MS.toLong()).toInt() }
+            val min = ms(parts[0]) ?: 0
+            val max = ms(parts.getOrNull(1)) ?: min
             return min to maxOf(min, max)
         }
+
+        private const val MAX_WAIT_MS = 600_000
     }
 }

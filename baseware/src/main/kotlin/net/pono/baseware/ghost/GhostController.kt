@@ -421,13 +421,15 @@ data class SurfaceDump(
 /**
  * SHIORI へのリクエストの出どころ。[senderType] は SenderType（internal / external と raise・embed・property・sstp・communicate を
  * カンマで）、[securityOrigin] は SSTP の送り元（無ければ書かない）、[age] はコミュニケートの回数、
- * [extraHeaders] はそのまま足すヘッダ（SSTP の X-SSTP-PassThru-*、コミュニケートの Surface など）
+ * [extraHeaders] はそのまま足すヘッダ（SSTP の X-SSTP-PassThru-*、コミュニケートの Surface など）。
+ * [chain] は \![raise] がいくつ続いて届いたか（答えの ValueNotify の \![raise] も数える）
  */
 internal data class RequestOrigin(
     val senderType: String,
     val securityOrigin: String? = null,
     val age: Int? = null,
     val extraHeaders: List<Pair<String, String>> = emptyList(),
+    val chain: Int = 0,
 ) {
     companion object {
         val INTERNAL = RequestOrigin("internal")
@@ -531,6 +533,10 @@ class GhostController(
     /** runScript した回数。いちばん新しいスクリプトがどれかを見分ける */
     private var scriptRuns = 0
     private var timerJob: Job? = null
+
+    /** ゴーストの状態（scriptJob など）を触るスレッド。IO のスレッドから戻ってくるときに使う */
+    private val ghostDispatcher = scope.coroutineContext[kotlin.coroutines.ContinuationInterceptor] as? kotlinx.coroutines.CoroutineDispatcher
+        ?: Dispatchers.Unconfined
     private val requestLock = Mutex()
     private var clickWaiter: CompletableDeferred<Unit>? = null
     private var choiceWaiter: CompletableDeferred<Choice?>? = null
@@ -606,6 +612,11 @@ class GhostController(
             } else {
                 null
             }
+            // SHIORI に聞いている間に止められていたら（dispose・close）、hub に入らない
+            if (closing) {
+                release()
+                return@launch
+            }
             hub?.join(this@GhostController)
             // ほかのゴーストに呼ばれたなら OnGhostCalled（答えが無ければ OnBoot。SSP と同じ）
             val called = if (!firstBoot && changed == null && previous == null && calledBy != null) {
@@ -621,6 +632,12 @@ class GhostController(
                 updated -> request("OnBasewareUpdated", listOf(basewareVersion.takeWhile { it.isDigit() || it == '.' }, basewareVersion))
                     ?: request("OnBoot", listOf(shell.name, "", "", "", "", "", "", ""))
                 else -> request("OnBoot", listOf(shell.name, "", "", "", "", "", "", ""))
+            }
+            // 起動のイベントを聞いている間に止められていたら、毎秒のタイマーを始めずに片付ける
+            if (closing) {
+                hub?.leave(this@GhostController)
+                release()
+                return@launch
             }
             startTimer()
             if (bootScript != null) {
@@ -893,7 +910,7 @@ class GhostController(
         platform.systemInfo()?.takeIf { it.country.equals("JP", ignoreCase = true) }?.let {
             val today = java.time.LocalDate.now()
             JapaneseHolidays.name(today)?.let { name ->
-                s.notify("OnNotifyHolidayInfo", name, "%04d,%02d,%02d".format(today.year, today.monthValue, today.dayOfMonth), "JP")
+                s.notify("OnNotifyHolidayInfo", name, "%04d,%02d,%02d".format(java.util.Locale.ROOT, today.year, today.monthValue, today.dayOfMonth), "JP")
             }
         }
         platform.deviceInfo()?.let { d ->
@@ -945,7 +962,7 @@ class GhostController(
     private fun osUpdateReferences(info: SystemInfo): List<String> {
         val updated = info.osUpdated ?: return listOf("", "")
         val c = Calendar.getInstance().apply { timeInMillis = updated }
-        val time = "%d,%d,%d,%d,%d,%d".format(
+        val time = "%d,%d,%d,%d,%d,%d".format(java.util.Locale.ROOT,
             c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH),
             c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), c.get(Calendar.SECOND),
         )
@@ -1124,8 +1141,9 @@ class GhostController(
                 NetworkUpdater(t.dir, updateFetcher).update(
                     homeUrl, mode,
                     onReady = { count ->
-                        // Reference0 は「ファイル数 - 1」（SSP の仕様。useorigin1 なら数そのもの）
-                        talkAndWait("${prefix}Ready", refs((count - 1 + origin).toString(), ""))
+                        // Reference0 は「ファイル数 - 1」（SSP の仕様。useorigin1 なら数そのもの）。
+                        // 更新は IO のスレッドで動くので、話すのはゴーストのスレッドに戻してから（scriptJob などを取り合わない）
+                        withContext(ghostDispatcher) { talkAndWait("${prefix}Ready", refs((count - 1 + origin).toString(), "")) }
                     },
                     onProgress = { p ->
                         when (p) {
@@ -1209,7 +1227,7 @@ class GhostController(
                 uid = "", start = d.start, end = d.end, allDay = d.allDay, summary = d.title, description = d.description,
                 location = "", url = "", status = "", categories = "", rrule = "", exdates = emptySet(),
             )
-            GhostSchedule.todayReference(GhostSchedule.DEFAULT_TYPE, d.title, d.description, "", e, day)
+            GhostSchedule.todayReference(GhostSchedule.DEFAULT_TYPE, d.title, d.description, "", e, day, d.start.toLocalDate())
         }
         return schedule.today(day) + subscribedSchedule(day) + user
     }
@@ -1398,6 +1416,12 @@ class GhostController(
     /** Owned SSTP の ID。SHIORI に NOTIFY uniqueid で伝え、この ID の付いた SSTP はゴースト自身と同じに扱う */
     val uniqueId: String = java.util.UUID.randomUUID().toString().replace("-", "")
 
+    /**
+     * GetFMO で見せる識別 ID（ID ヘッダでこのゴーストを宛先に選べる）。Windows の FMO と違い、ここで [uniqueId] を見せると
+     * 端末のどのアプリでも Owned SSTP（制限なし）になれてしまうので、別のものにする
+     */
+    val fmoId: String = java.util.UUID.randomUUID().toString().replace("-", "")
+
     /** SSTP で届いて再生中のスクリプト（runScript の通し番号）。バルーンをタップして止めたら OnSSTPBreak */
     private var sstpRun = -1
 
@@ -1416,8 +1440,8 @@ class GhostController(
     /** EXECUTE Quiet で黙る期限 */
     private var quietUntil = 0L
 
-    /** EXECUTE SetCookie / GetCookie（送り手ごと） */
-    private val sstpCookies = HashMap<String, MutableMap<String, String>>()
+    /** EXECUTE SetCookie / GetCookie（送り手ごと。送り手の数にも上限を置き、古い送り手のものから捨てる） */
+    private val sstpCookies = LinkedHashMap<String, MutableMap<String, String>>()
 
     /**
      * SSTP の要求に答える。SEND / NOTIFY はイベント（答えが無ければ Script ヘッダ。IfGhost で選ぶ）、COMMUNICATE は OnCommunicate、
@@ -1510,7 +1534,7 @@ class GhostController(
             "fullname" to ghost.name,
             "modulestate" to if (session != null) "shiori:running" else "",
         )
-        return values.joinToString("") { (k, v) -> "$uniqueId.$k\u0001$v\r\n" }
+        return values.joinToString("") { (k, v) -> "$fmoId.$k\u0001$v\r\n" }
     }
 
     /** IfGhost の後の Script はそのゴーストだけ、IfGhost より前の Script はほかのゴースト向け（さくら・エミリ宛てもほかのゴースト向け） */
@@ -1569,6 +1593,8 @@ class GhostController(
             "getproperty" -> data(params.firstOrNull()?.let(::property))
             "setcookie" -> {
                 val name = params.getOrNull(0)?.takeIf { it.isNotEmpty() } ?: return SstpResponse(400)
+                // Sender を変えながら送られても、際限なく覚えない
+                if (sender !in sstpCookies && sstpCookies.size >= MAX_SSTP_COOKIE_SENDERS) sstpCookies.remove(sstpCookies.keys.first())
                 val cookies = sstpCookies.getOrPut(sender) { HashMap() }
                 if (cookies.size >= MAX_SSTP_COOKIES && name !in cookies) return SstpResponse(413)
                 cookies[name] = params.getOrNull(1).orEmpty().take(MAX_SSTP_COOKIE_LENGTH)
@@ -1825,6 +1851,9 @@ class GhostController(
     /** 通信中のもの（URL ごと）。同じ URL は重ねて取りに行かない。\![cancel,http,URL] で止める */
     private val httpJobs = HashMap<String, Job>()
 
+    /** 途中のファイル（.part）の通し番号 */
+    private val partSerial = java.util.concurrent.atomic.AtomicInteger()
+
     /** 通信している数。オンラインの印を出す（--nodescript のものは数えない） */
     private var httpShowing = 0
         set(value) {
@@ -1851,8 +1880,9 @@ class GhostController(
         if (cmd.insecure) platform.log("--insecure は使えません（証明書は確かめます）: $url")
         httpGetsInFlight++
         if (!cmd.nodescript) httpShowing++
-        // 結果のイベントは、通信が終わってから話し終わるのを待って送る（--sync で待っているスクリプトとは別に）
-        val job = scope.launch {
+        // 結果のイベントは、通信が終わってから話し終わるのを待って送る（--sync で待っているスクリプトとは別に）。
+        // 始まる前に \![cancel,http] で止められても finally で数を戻すよう、必ず始める（ATOMIC）
+        val job = scope.launch(start = kotlinx.coroutines.CoroutineStart.ATOMIC) {
             val result = try {
                 runHttp(cmd, ::failureRefs)
             } finally {
@@ -1884,7 +1914,8 @@ class GhostController(
         val name = cmd.file?.let(NetworkUpdater::safeFileName) ?: if (memory == null) NetworkUpdater.safeFileName(urlFileName(cmd.url)) else null
         if (memory == null && name == null) return cmd.event("Failure") to failureRefs("fileio")
         val file = name?.let { File(ghost.masterDir, "var/$it") }
-        val part = file?.let { File(it.path + ".part") }
+        // 同じ名前に保存する通信が同時に走っても書き合わないよう、途中のファイルは通信ごとに別の名前にする
+        val part = file?.let { File(it.path + "." + partSerial.incrementAndGet() + ".part") }
         var lastProgress = 0L
         var cookies = ""
         var headerText = ""
@@ -1935,6 +1966,10 @@ class GhostController(
             }
         } catch (e: IOException) {
             HttpOutcome.Failed("fileio")
+        } catch (e: CancellationException) {
+            // 止められた（\![cancel,http]・ゴーストが終わった）。途中のファイルは残さない
+            part?.delete()
+            throw e
         }
         streamer?.finish()
         cmd.log?.let { name ->
@@ -1974,8 +2009,11 @@ class GhostController(
                 cmd.event("") to FeedParser.filter(items, cmd.from, cmd.to, cmd.limit).map { it.reference() }
             }
             "ical" -> {
-                val cal = bytes?.let { ICal.parse(TextCharsets.decode(it)) } ?: return cmd.event("Failure") to failureRefs("parse")
-                cmd.event("") to ICal.references(cal, ICal.range(cmd.from, cmd.to, cmd.expandDays, cmd.expand, cmd.limit))
+                // 細工した .ics の日時の計算で例外が出ても、通信のコルーチンごと落とさず Failure にする
+                runCatching {
+                    val cal = bytes?.let { ICal.parse(TextCharsets.decode(it)) } ?: return cmd.event("Failure") to failureRefs("parse")
+                    cmd.event("") to ICal.references(cal, ICal.range(cmd.from, cmd.to, cmd.expandDays, cmd.expand, cmd.limit))
+                }.getOrElse { cmd.event("Failure") to failureRefs("parse") }
             }
             else -> {
                 // --nofile なら中身（改行はバイト値1）、そうでなければ保存したファイルのフルパス
@@ -2080,6 +2118,10 @@ class GhostController(
                             return@launch
                         }
                         delay(1000L shl (attempt - 1))
+                        if (socket.closing) {
+                            raise(socketEvent(id, "Close"), listOf(id, u, "1000"), userInitiated = false)
+                            return@launch
+                        }
                         continue
                     }
                     socket.session = session
@@ -2112,6 +2154,11 @@ class GhostController(
                         return@launch
                     }
                     delay(1000L shl (attempt - 1))
+                    // つなぎ直しを待っている間に \![close,websocket] されたら、つなぎ直さずに閉じる
+                    if (socket.closing) {
+                        raise(socketEvent(id, "Close"), listOf(id, u, (session.closeCode ?: 1000).toString()), userInitiated = false)
+                        return@launch
+                    }
                 }
             } finally {
                 socket.session?.abort()
@@ -2233,6 +2280,8 @@ class GhostController(
                 val debounce = options["debounce"]?.toLongOrNull()?.coerceIn(0, 60_000) ?: 500
                 val watch = FileWatch(target, debounce)
                 watches[path] = scope.launch {
+                    // 消えたフォルダは見るたびに deleted になるので、また現れるまでは1回だけ知らせる
+                    var deleted = false
                     while (true) {
                         delay(WATCH_INTERVAL_MS)
                         val kind = withContext(Dispatchers.IO) { watch.poll(System.currentTimeMillis()) } ?: continue
@@ -2240,6 +2289,8 @@ class GhostController(
                             raise(failure, listOf(id, path, "notfound"), userInitiated = false)
                             break
                         }
+                        if (kind == "deleted" && deleted) continue
+                        deleted = kind == "deleted"
                         raise(change, listOf(id, path, kind, target.absolutePath), userInitiated = false)
                         if (kind == "deleted" && target.isDirectory.not() && watch.target.parentFile?.isDirectory != true) break
                     }
@@ -2569,8 +2620,14 @@ class GhostController(
             return out.toByteArray().takeIf { outcome is HttpOutcome.Response && outcome.code in 200..299 }
         }
 
-        override fun audio(command: String, file: File) = compatAudio(command, file)
-        override fun houchi() = startHouchi()
+        // 互換モジュールは SHIORI のスレッドから呼ばれる。音（メインが前提）と houchiJob はゴーストのスレッドで触る（頼まれた順に）
+        override fun audio(command: String, file: File) {
+            scope.launch { compatAudio(command, file) }
+        }
+
+        override fun houchi() {
+            scope.launch { startHouchi() }
+        }
         override fun showHanayu(style: String, data: List<Pair<String, Double>>) = showHanayuGraph(style, data)
         override fun hideHanayu() = platform.hideHanayu()
 
@@ -2708,11 +2765,11 @@ class GhostController(
             }
             fun time(millis: Long, ms: Boolean): String {
                 val c = Calendar.getInstance().apply { timeInMillis = millis }
-                val base = "%d,%d,%d,%d,%d,%d".format(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH),
+                val base = "%d,%d,%d,%d,%d,%d".format(java.util.Locale.ROOT, c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH),
                     c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), c.get(Calendar.SECOND))
                 return if (ms) "$base,${c.get(Calendar.MILLISECOND)}" else base
             }
-            val ex = listOf(server, time(r.serverTime, true), time(r.localTime, true), "%.3f".format(r.offsetMs / 1000.0), r.offsetMs.toString())
+            val ex = listOf(server, time(r.serverTime, true), time(r.localTime, true), "%.3f".format(java.util.Locale.ROOT, r.offsetMs / 1000.0), r.offsetMs.toString())
             _state.first { !it.talking && !it.waitingChoice }
             val script = request("OnSNTPCompareEx", ex)
                 ?: request(
@@ -2733,7 +2790,10 @@ class GhostController(
      * 済んだら OnInstallCompleteEx（答えが無ければ OnInstallComplete）と OnInstallCompleteAll、だめなら OnInstallFailure か
      * OnInstallRefuse（シェルなどが別のゴーストを名指ししていた）を送る。シェルと追加ファイルはこのゴーストに入れる
      */
-    suspend fun installNar(nar: File, fromUser: Boolean = false): Result<NarInstaller.Result> {
+    suspend fun installNar(nar: File, fromUser: Boolean = false): Result<NarInstaller.Result> = installNar(nar, fromUser, emptySet())
+
+    /** [rerouted] はこの .nar を回してきたゴースト。package の中身が別々のゴースト宛てでも、同じゴーストの間を回り続けない */
+    private suspend fun installNar(nar: File, fromUser: Boolean, rerouted: Set<GhostController>): Result<NarInstaller.Result> {
         val installer = repository?.installer() ?: return Result.failure(IOException("ゴーストの置き場がありません"))
         // パッシブモード・誘導モードの間にユーザーが入れたものは、入れるがゴーストには知らせない（SSP と同じ）
         val quiet = fromUser && restricted
@@ -2765,10 +2825,10 @@ class GhostController(
             // accept が一緒に起動しているほかのゴーストなら、そちらに入れる（以降のイベントはそちらに）
             val target = (e as? NarInstaller.RefusedException)?.let { r ->
                 hub?.others(this)?.firstOrNull { o -> r.accept.isNotEmpty() && (o.ghost.sakuraName == r.accept || o.ghost.name == r.accept) }
-            }
+            }?.takeIf { it !in rerouted }
             if (e is NarInstaller.RefusedException && target != null) {
                 raise("OnInstallReroute", listOf(e.accept, e.type, e.name), userInitiated = false)
-                return target.installNar(nar, fromUser)
+                return target.installNar(nar, fromUser, rerouted + this)
             }
             if (e is NarInstaller.RefusedException) {
                 raise("OnInstallRefuse", listOf(e.accept, e.type, e.name), userInitiated = false)
@@ -2868,7 +2928,7 @@ class GhostController(
         val (r, bytes) = updateFetcher.fetchBytes(url, MAX_ICAL_BYTES)
         if (r != FetchResult.Ok) return@withContext false
         val text = TextCharsets.decode(bytes)
-        if (ICal.parse(text) == null) return@withContext false
+        if (runCatching { ICal.parse(text) }.getOrNull() == null) return@withContext false
         icalDir.mkdirs()
         icalFile(url).writeText(text)
         true
@@ -2886,8 +2946,8 @@ class GhostController(
     /** 購読している予定表の、[day] の予定（OnScheduleTodayNotify の1件ずつと同じ形） */
     private fun subscribedSchedule(day: java.time.LocalDate): List<String> = icalUrls().flatMap { url ->
         val cal = runCatching { icalFile(url).takeIf { it.isFile }?.readText()?.let(ICal::parse) }.getOrNull() ?: return@flatMap emptyList()
-        cal.events.filter { ICal.occurrences(it, day, day).isNotEmpty() }
-            .map { e -> GhostSchedule.todayReference(GhostSchedule.DEFAULT_TYPE, e.summary, e.description, "", e, day) }
+        cal.events.mapNotNull { e -> ICal.occurrenceStartFor(e, day)?.let { e to it } }
+            .map { (e, startDay) -> GhostSchedule.todayReference(GhostSchedule.DEFAULT_TYPE, e.summary, e.description, "", e, day, startDay) }
     }
 
     /** SSF（さくらスクリプトのファイル）を取ってきて話す。外から来たスクリプトなので、SSTP と同じく危ないタグは使わせない */
@@ -2907,8 +2967,13 @@ class GhostController(
      */
     private suspend fun downloadAndInstall(url: String, scopeId: Int, dropped: Boolean) {
         if (dropped) raise("OnURLDropping", listOf(url, scopeId.toString()), userInitiated = false)
-        val file = File(FileDrop.dir(ghost), NetworkUpdater.safeFileName(url.substringBefore('?').substringAfterLast('/')) ?: "download.nar")
-        file.parentFile?.mkdirs()
+        val name = NetworkUpdater.safeFileName(url.substringBefore('?').substringAfterLast('/')) ?: "download.nar"
+        // 同じ名前の .nar を同時に取ってきても書き合わないよう、空いている名前を先に作って押さえる
+        FileDrop.dir(ghost).mkdirs()
+        val stem = name.substringBeforeLast('.')
+        val file = generateSequence(0) { it + 1 }.map { n ->
+            File(FileDrop.dir(ghost), if (n == 0) name else "$stem-$n" + name.substring(stem.length))
+        }.first { runCatching { it.createNewFile() }.getOrDefault(true) }
         val r = withContext(Dispatchers.IO) {
             runCatching { file.outputStream().use { updateFetcher.fetch(url, it, FileDrop.MAX_TOTAL_BYTES) } }.getOrElse { FetchResult.Failed("fileio") }
         }
@@ -3059,13 +3124,17 @@ class GhostController(
         if (switchTo != null) platform.switchGhost(switchTo.first.dir.name, switchTo.second) else platform.onQuit()
     }
 
-    /** タイマー・WebSocket・ファイルの見張り・音・SHIORI をすべて片付ける */
+    /** タイマー・WebSocket・ファイルの見張り・通信・houchi・音・SHIORI をすべて片付ける */
     private suspend fun release() {
         timerJob?.cancel()
         // WebSocket とファイルの見張りはゴーストが終わるときにすべてやめる
         for (url in sockets.keys.toList()) cancelWebSocket(url)
         watches.values.forEach { it.cancel() }
         watches.clear()
+        // 通信（終わったゴーストのフォルダに書き続けない）と、houchi の毎分のループ（コントローラごと残らない）
+        httpJobs.values.toList().forEach { it.cancel() }
+        houchiJob?.cancel()
+        houchiJob = null
         timers.values.forEach { it.cancel() }
         timers.clear()
         platform.stopSound()
@@ -3101,8 +3170,11 @@ class GhostController(
         val others = ghosts.filter { it.dir.canonicalFile != self && it.dir.canonicalFile !in running }
         val target = when (name.lowercase()) {
             "random" -> others.randomOrNull()
-            "sequential" -> ghosts.getOrNull((ghosts.indexOfFirst { it.dir.canonicalFile == self } + 1) % ghosts.size.coerceAtLeast(1))
-                ?.takeIf { it.dir.canonicalFile != self }
+            // 自分の次から順に、一緒に動いていないものを探す
+            "sequential" -> {
+                val i = ghosts.indexOfFirst { it.dir.canonicalFile == self }
+                (1..ghosts.size).map { ghosts[(i + it).mod(ghosts.size)] }.firstOrNull { it in others }
+            }
             "lastinstalled" -> others.maxByOrNull { it.dir.lastModified() }
             else -> others.firstOrNull { it.name == name || it.sakuraName == name || it.dir.name == name }
         } ?: run {
@@ -3758,7 +3830,6 @@ class GhostController(
             }
             else -> null
         }
-        selecting = true
         _state.update { it.copy(selectMode = SelectMode(scope, initial)).withLocks() }
         raise("OnSelectModeBegin", listOf(scope.toString(), "rect"), userInitiated = false)
     }
@@ -3766,7 +3837,6 @@ class GhostController(
     /** \![leave,selectmode]。選んだ範囲があれば OnSelectModeComplete、無ければ OnSelectModeCancel */
     private fun leaveSelectMode() {
         val mode = _state.value.selectMode ?: return
-        selecting = false
         _state.update { it.copy(selectMode = null).withLocks() }
         val rect = mode.selection
         if (rect == null || rect.isEmpty) {
@@ -4164,7 +4234,7 @@ class GhostController(
             // \![set,property,currentghost.shelllist(名前).menu,hidden] とシェルの descript.txt の menu,hidden
             if (shellMenu(dir) == "hidden" && dir != shell.dir) continue
             val name = Shell.nameOf(dir)
-            sb.append("\\q[${quote((if (dir == shell.dir) "● " else "○ ") + name)},pono:shell,${dir.name}]\\n")
+            sb.append("\\q[${quote((if (dir == shell.dir) "● " else "○ ") + name)},pono:shell,${quote(dir.name)}]\\n")
         }
         // 今のシェルの作者・作者のページ・Read Me（descript.txt の craftman / craftmanurl / readme）
         shell.craftman?.let { sb.append("\\n作者: ").append(literalScript(it)).append("\\n") }
@@ -4215,7 +4285,7 @@ class GhostController(
         when (kind) {
             "ghost" -> historyGhosts().forEach { sb.append("\\q[${quote(it.name)},pono:ghost,${quote(it.dir.name)}]\\n") }
             "balloon" -> historyBalloons().forEach {
-                sb.append("\\q[${quote((if (it.dir == balloon?.dir) "● " else "○ ") + it.name)},pono:balloon,${it.dir.name}]\\n")
+                sb.append("\\q[${quote((if (it.dir == balloon?.dir) "● " else "○ ") + it.name)},pono:balloon,${quote(it.dir.name)}]\\n")
             }
             "call" -> historyCalls().forEach { sb.append("\\q[${quote(it.name)},pono:callghost,${quote(it.dir.name)}]\\n") }
         }
@@ -4227,7 +4297,7 @@ class GhostController(
         val sb = StringBuilder("\\p[$scopeId]\\_q")
         sb.append("\\q[${if (balloon == null) "● " else "○ "}簡易バルーン,pono:balloon,$SIMPLE_BALLOON]\\n")
         for (b in repository?.balloons?.list().orEmpty()) {
-            sb.append("\\q[${quote((if (b.dir == balloon?.dir) "● " else "○ ") + b.name)},pono:balloon,${b.dir.name}]\\n")
+            sb.append("\\q[${quote((if (b.dir == balloon?.dir) "● " else "○ ") + b.name)},pono:balloon,${quote(b.dir.name)}]\\n")
         }
         sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
         return sb.toString()
@@ -4618,19 +4688,22 @@ class GhostController(
 
     fun onChoice(choice: Choice) {
         lastUserActivity = System.currentTimeMillis()
+        // 描くときに題名の前後の空白を落としているので、ID と Reference で見分ける
+        fun same(c: Choice) = c.id == choice.id && c.references == choice.references && c.anchor == choice.anchor
+        val shown = _state.value.characters.values.flatMap { c -> c.balloon.orEmpty() }
+            .filterIsInstance<BalloonItem.ChoiceItem>().map { it.choice }.filter(::same)
+        // 出ている選択肢のどれかがほかのアプリから来たものなら、制限付きとして扱う
+        val chosen = if (shown.any { it.untrusted }) choice.copy(untrusted = true) else choice
         val waiter = choiceWaiter
         if (waiter != null) {
-            waiter.complete(choice)
+            waiter.complete(chosen)
             return
         }
         // 選択肢を待っていないとき（話している途中、\C で続けた後など）も、出ている選択肢なら SSP と同じく選べる
-        // 描くときに題名の前後の空白を落としているので、ID と Reference で見分ける
-        fun same(c: Choice) = c.id == choice.id && c.references == choice.references && c.anchor == choice.anchor
-        val shown = _state.value.characters.values.any { c -> c.balloon?.any { it is BalloonItem.ChoiceItem && same(it.choice) } == true }
-        if (!shown) return
+        if (shown.isEmpty()) return
         cancelScript()
         _state.update { it.copy(talking = false, waitingClick = false, waitingChoice = false) }
-        selectChoice(choice)
+        selectChoice(chosen)
     }
 
     /** 選択肢の長押しの通し番号（指を離したあとに届いたツールチップを捨てるため） */
@@ -4680,9 +4753,9 @@ class GhostController(
     fun raise(event: String, references: List<String>, userInitiated: Boolean = true, sensitive: Boolean = false, chain: Int = 0) =
         raise(event, references, userInitiated, sensitive, chain, RequestOrigin.INTERNAL)
 
-    private fun raise(event: String, references: List<String>, userInitiated: Boolean, sensitive: Boolean, chain: Int, origin: RequestOrigin) {
+    private fun raise(event: String, references: List<String>, userInitiated: Boolean, sensitive: Boolean, chain: Int, origin: RequestOrigin): Job =
         scope.launch {
-            val script = request(event, references, sensitive, origin = origin) ?: return@launch
+            val script = request(event, references, sensitive, origin = origin.copy(chain = chain)) ?: return@launch
             if (!userInitiated && (_state.value.talking || _state.value.waitingChoice)) {
                 // 話さなかったイベントを、次のスクリプトのもとと取り違えないように
                 lastEvent = "" to emptyList()
@@ -4691,7 +4764,6 @@ class GhostController(
             cancelScript()
             runScript(script, chain)
         }
-    }
 
     /** NOTIFY（応答を使わない） */
     private fun notify(event: String, references: List<String>, origin: RequestOrigin = RequestOrigin.INTERNAL) {
@@ -4715,7 +4787,8 @@ class GhostController(
         response?.let { onResponse?.invoke(it) }
         val value = response?.value
         // SecurityLevel: external のスクリプトは、ほかのアプリから届いたものと同じく危ないタグを使わせない
-        if (value != null && response.headers["SecurityLevel"]?.trim()?.lowercase() == "external") rememberExternal(value)
+        val external = value != null && response.headers["SecurityLevel"]?.trim()?.lowercase() == "external"
+        if (external) rememberExternal(value!!)
         logEvent(event, references)
         // 毎秒・毎分のイベントとなでる（OnMouseMove）は多すぎるので、話すときだけ記録する
         if (value != null || event !in timerEvents) {
@@ -4727,7 +4800,8 @@ class GhostController(
         }
         if (value == null || !translate) return value
         lastEvent = event to references
-        return translateScript(s, value, event, references, origin)
+        // OnTranslate で書き換わっても、external の印は書き換えた後のスクリプトに付け直す
+        return translateScript(s, value, event, references, origin).also { if (external && it != value) rememberExternal(it) }
     }
 
     /**
@@ -4766,7 +4840,7 @@ class GhostController(
             }
         }
         // ValueNotify は決まったタグだけ、すぐに動かす（NOTIFY でも）
-        r.headers["ValueNotify"]?.takeIf { it.isNotBlank() }?.let { runValueNotify(it) }
+        r.headers["ValueNotify"]?.takeIf { it.isNotBlank() }?.let { runValueNotify(it, origin.chain) }
         // BalloonOffset: 本体側のバルーンをずらす
         r.headers["BalloonOffset"]?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.size >= 2 }?.let { (x, y) ->
             _state.update { it.update(0) { c -> c.copy(balloonOffset = x.coerceIn(-MAX_BALLOON_OFFSET, MAX_BALLOON_OFFSET) to y.coerceIn(-MAX_BALLOON_OFFSET, MAX_BALLOON_OFFSET)) } }
@@ -4784,7 +4858,7 @@ class GhostController(
     }
 
     /** ValueNotify で動かせるタグ（\![sound]・\![set,trayicon / trayballoon / property]・\![raise] 系・\![notify] 系・\![get,property]） */
-    private fun runValueNotify(script: String) {
+    private fun runValueNotify(script: String, chain: Int) {
         val allowed = SakuraScript.tokenize(script).filterIsInstance<Token.Tag>().filter { t ->
             t.name == "!" && when (t.args.firstOrNull()?.trim()?.lowercase()) {
                 "sound", "raise", "raiseother", "timerraiseother", "notify", "notifyother" -> true
@@ -4797,8 +4871,13 @@ class GhostController(
         val filtered = allowed.joinToString("") { t -> "\\![" + t.args.joinToString(",") { quoteArg(it) } + "]" }
         scope.launch {
             val raised = mutableListOf<RaisedEvent>()
-            runCatching { player.play(filtered, Host(raised)) }.onFailure { platform.log("ValueNotify: ${it.message}") }
-            for ((event, refs, type) in raised) raise(event, refs, userInitiated = false, sensitive = false, chain = 1, origin = RequestOrigin(type))
+            runCatching { player.play(filtered, Host(raised, chain = chain)) }.onFailure { platform.log("ValueNotify: ${it.message}") }
+            // 答えの ValueNotify で自分を起こし続けないよう、runScript の \![raise] と同じ上限で止める
+            if (raised.isNotEmpty() && chain >= MAX_RAISE_CHAIN) {
+                platform.log("ValueNotify の \\![raise] の連鎖が $MAX_RAISE_CHAIN 回を超えたので止めました: ${raised.map { it.event }}")
+                return@launch
+            }
+            for ((event, refs, type) in raised) raise(event, refs, userInitiated = false, sensitive = false, chain = chain + 1, origin = RequestOrigin(type))
         }
     }
 
@@ -4913,6 +4992,9 @@ class GhostController(
         }
     }
 
+    /** 送っている途中の OnSecondChange */
+    private var secondChange: Job? = null
+
     private fun startTimer() {
         timerJob?.cancel()
         if (!_state.value.screenOn) return
@@ -4929,7 +5011,8 @@ class GhostController(
                 // SSTP の EXECUTE Quiet の間も話せない
                 val quiet = System.currentTimeMillis() < quietUntil
                 val refs = listOf(uptimeHours, "0", "0", if (talking || s.passive || s.induction || quiet) "0" else "1", idleSec)
-                raise("OnSecondChange", refs, userInitiated = false)
+                // SHIORI が 1 秒より長くかかっても積み上がらないよう、前の分が終わっていなければその秒は送らない
+                if (secondChange?.isActive != true) secondChange = raise("OnSecondChange", refs, userInitiated = false)
                 val now = Calendar.getInstance()
                 val minute = now.get(Calendar.MINUTE)
                 if (minute != lastMinute) {
@@ -4977,7 +5060,7 @@ class GhostController(
         announceTalk("before", script, source, talkFlags)
         val job = scope.launch {
             val raised = mutableListOf<RaisedEvent>()
-            val host = Host(raised, untrusted, strict)
+            val host = Host(raised, untrusted, strict, chain)
             // 割り込まれずに最後まで話したかどうか（話し終わりの SERIKO、yen-e を動かす）
             var ended = false
             val result = try {
@@ -5011,7 +5094,8 @@ class GhostController(
                 } else {
                     for ((event, refs, type) in raised) raise(event, refs, userInitiated = true, sensitive = false, chain = chain + 1, origin = RequestOrigin(type))
                 }
-                return@launch
+                // 選択肢も出していれば、選ばれるのを待つ（choicetimeout も効かせる）
+                if (!result.hasChoices) return@launch
             }
 
             // パッシブモードでは選択肢もバルーンも時間では消えない（SSP と同じ）
@@ -5020,13 +5104,20 @@ class GhostController(
                 val waiter = CompletableDeferred<Choice?>()
                 choiceWaiter = waiter
                 _state.update { it.copy(waitingChoice = true) }
-                val choice = if (host.choiceTimeoutMs > 0 && !passive) {
-                    withTimeoutOrNull(host.choiceTimeoutMs) { waiter.await() }
-                } else {
-                    waiter.await()
+                // 待っている間に止められても（ほかのスクリプトが割り込んだなど）、選択待ちの印は必ず下ろす
+                val choice = try {
+                    if (host.choiceTimeoutMs > 0 && !passive) {
+                        withTimeoutOrNull(host.choiceTimeoutMs) { waiter.await() }
+                    } else {
+                        waiter.await()
+                    }
+                } finally {
+                    // cancelScript は先に choiceWaiter を外す。後から始まったスクリプトが選択待ちに入っていれば触らない
+                    if (choiceWaiter === waiter || choiceWaiter == null) {
+                        choiceWaiter = null
+                        _state.update { it.copy(waitingChoice = false) }
+                    }
                 }
-                _state.update { it.copy(waitingChoice = false) }
-                choiceWaiter = null
                 if (choice == null) {
                     hideBalloons()
                     raise("OnChoiceTimeout", listOf(script))
@@ -5049,16 +5140,14 @@ class GhostController(
     private var manualBalloonLock = false
     private var manualRepaintLock = false
 
-    /** \![enter,selectmode] の間。サーフェスを描き直さない */
-    private var selecting = false
-
     /**
      * 止めているものに合わせて、止めたときの見た目を持つ（止め始めたときに取り、外したら捨てる）。
-     * \![lock,repaint] はバルーンも止める
+     * \![lock,repaint] はバルーンも止める。\![enter,selectmode] の間（selectMode がある間）もサーフェスを描き直さない
+     * （別のフラグで持つと、シェルの切り替えで selectMode だけが消えたときに止まったままになる）
      */
     private fun GhostState.withLocks() = copy(
         balloonSnapshot = if (balloonLocked || repaintLocked) balloonSnapshot ?: characters else null,
-        surfaceSnapshot = if (repaintLocked || selecting) surfaceSnapshot ?: characters else null,
+        surfaceSnapshot = if (repaintLocked || selectMode != null) surfaceSnapshot ?: characters else null,
     )
 
     /** スクリプトが終わった（止められた）ときに外れるもの: \t と、manual でない \![lock] */
@@ -5071,6 +5160,11 @@ class GhostController(
     private fun selectChoice(choice: Choice) {
         val id = choice.id
         when {
+            // ほかのアプリのスクリプトが本体のメニューの ID を出しても（消去・終了など）、確かめずに動かすことはしない
+            choice.untrusted && id.startsWith("pono:") -> {
+                hideBalloons()
+                platform.log("ほかのアプリから届いた選択肢の $id は動かしません")
+            }
             // pono-droid 自身のメニュー（長押し）
             id.startsWith("pono:") -> {
                 hideBalloons()
@@ -5176,7 +5270,7 @@ class GhostController(
             // script: で始まる ID は、その続きをスクリプトとして再生する（SSP と同じ）
             id.startsWith("script:") -> {
                 cancelScript()
-                runScript(id.removePrefix("script:"))
+                runScript(id.removePrefix("script:"), untrustedScript = choice.untrusted)
             }
             // \_a のジャンパは OnAnchorSelectEx → OnAnchorSelect。選んだものは訪問済みの見た目にする
             choice.anchor -> scope.launch {
@@ -5540,10 +5634,12 @@ class GhostController(
 
     /** 一覧の (名前)・.index(N)・.current のどれを指しているかと、その後ろの名前 */
     private fun <T> listItem(rest: String, items: List<T>, current: T?, resolve: (T, String, Int) -> String?): Pair<T, String>? {
-        val key = rest.substringAfter(").", rest.substringAfter("current.", ""))
+        // (名前) の名前に「通常(冬服)」のような ( ) が入っていても、対応する ) まで読む
+        val close = if (rest.startsWith("(")) closingParen(rest, 0) ?: return null else -1
+        val key = if (close >= 0) rest.substring(close + 1).removePrefix(".") else rest.substringAfter(").", rest.substringAfter("current.", ""))
         val item = when {
             rest.startsWith("(") -> {
-                val selector = rest.substring(1, rest.indexOf(')').takeIf { it > 0 } ?: return null)
+                val selector = rest.substring(1, close)
                 items.firstOrNull { resolve(it, "name", 0) == selector || resolve(it, "sakuraname", 0) == selector || resolve(it, "path", 0)?.trimEnd('/') == selector.trimEnd('/') }
             }
             rest.startsWith(".index(") -> rest.substring(7, rest.indexOf(')').takeIf { it > 7 } ?: return null).toIntOrNull()?.let(items::getOrNull)
@@ -5551,6 +5647,18 @@ class GhostController(
             else -> null
         } ?: return null
         return item to key
+    }
+
+    /** [s] の [open] にある ( に対応する ) の位置（入れ子を数える）。無ければ null */
+    private fun closingParen(s: String, open: Int): Int? {
+        var depth = 0
+        for (i in open until s.length) {
+            when (s[i]) {
+                '(' -> depth++
+                ')' -> if (--depth == 0) return i
+            }
+        }
+        return null
     }
 
     /** SHIORI に聞かないと分からない名前（ghostlist / activeghostlist / currentghost の shiori.変数名） */
@@ -5776,7 +5884,7 @@ class GhostController(
             }
             // rateofuselist(名前).… は、ゴーストの名前・本体側の名前・フォルダ名で選ぶ
             rest.startsWith("(") -> {
-                val selector = rest.substring(1, rest.indexOf(')').takeIf { it > 1 } ?: return null)
+                val selector = rest.substring(1, closingParen(rest, 0)?.takeIf { it > 1 } ?: return null)
                 all.firstOrNull { u ->
                     val g = repository?.find(u.dirName)
                     u.dirName == selector || g?.name == selector || g?.sakuraName == selector
@@ -5787,7 +5895,8 @@ class GhostController(
         val today = h.today()
         val g = repository?.find(u.dirName)
         fun percent(mine: Int, total: Int) = if (total <= 0) "0" else formatNumber(mine * 100.0 / total)
-        return when (rest.substringAfter(").", "")) {
+        val field = (closingParen(rest, rest.indexOf('(').coerceAtLeast(0))?.let { rest.substring(it + 1) } ?: "").removePrefix(".")
+        return when (field) {
             "name" -> g?.name ?: u.dirName
             "sakuraname" -> g?.sakuraName.orEmpty()
             "keroname" -> g?.keroName.orEmpty()
@@ -5997,7 +6106,8 @@ class GhostController(
             }
             // scope(ID).animation.num に書くと、そのアニメーションを \i と同じに足して動かす
             Regex("""^scope\((\d+)\)\.animation\.num$""").matches(key) -> {
-                val scope = key.substringAfter("scope(").substringBefore(')').toIntOrNull() ?: return false
+                // \p と同じ番号まで（それより大きいキャラクターとウィンドウを作らせない）
+                val scope = key.substringAfter("scope(").substringBefore(')').toIntOrNull()?.takeIf { it in 0..MAX_SCOPE } ?: return false
                 val ids = value.split(',').mapNotNull { it.trim().toIntOrNull() }.takeIf { it.isNotEmpty() } ?: return false
                 for (id in ids) _state.update { it.update(scope) { c -> c.command(++animationCounter, AnimationCommand.Start(id)) } }
             }
@@ -6041,6 +6151,8 @@ class GhostController(
         private val raised: MutableList<RaisedEvent>,
         override val untrusted: Boolean = false,
         private val strict: Boolean = false,
+        /** \![raise] がいくつ続いてこのスクリプトになったか。\![notify] もこの続きとして数える */
+        private val chain: Int = 0,
     ) : ScriptHost {
         /** このスクリプトのあいだだけ有効。0 以下なら消さない／待ち続ける */
         var balloonTimeoutMs = this@GhostController.balloonTimeoutMs
@@ -6288,8 +6400,9 @@ class GhostController(
                 // \![set,scaling,倍率] / \![set,scaling,横倍率,縦倍率,時間]（%）。負なら反転。大きすぎる値は抑える。
                 // --time=（か 3 つ目の数）があれば、その時間をかけて変える（--wait は ScriptPlayer が待つ）
                 "scaling" -> {
-                    val x = numbers.getOrNull(0) ?: return false
-                    val y = numbers.getOrNull(1) ?: x
+                    // NaN や Infinity は coerceIn で丸まらず、一度入ると何を指定しても戻らなくなるので受けない
+                    val x = numbers.getOrNull(0)?.takeIf { it.isFinite() } ?: return false
+                    val y = numbers.getOrNull(1)?.takeIf { it.isFinite() } ?: x
                     fun clamp(v: Float) = (v / 100f).coerceIn(-MAX_SCALING, MAX_SCALING)
                     val c0 = _state.value.characters[scope]
                     transition(scope, name, ScriptPlayer.transitionTime(name, args) ?: 0) { t ->
@@ -6520,7 +6633,8 @@ class GhostController(
         override fun addChoice(scope: Int, choice: Choice, looks: ChoiceLooks) {
             talked()
             speak(scope)
-            _state.update { it.update(scope) { c -> c.append(BalloonItem.ChoiceItem(choice, looks)) } }
+            val marked = if (untrusted) choice.copy(untrusted = true) else choice
+            _state.update { it.update(scope) { c -> c.append(BalloonItem.ChoiceItem(marked, looks)) } }
         }
 
         override fun startAnimation(scope: Int, id: Int) = command(scope, AnimationCommand.Start(id))
@@ -6636,8 +6750,19 @@ class GhostController(
             when (kind) {
                 "readme" -> platform.showText(ghost.name, readmeText())
                 "terms" -> return showTerms()
-                "aigraph" -> scope.launch { showAiGraph(0) }
-                "rateofusegraph", "rateofusegraphballoon", "rateofusegraphtotal" -> rateOfUseScript(0)?.let { runScript(it) } ?: return false
+                // 一覧をバルーンに出すときは、今のスクリプトを止めてから（止めないと、前のスクリプトのバルーンのタイムアウトが
+                // 新しい一覧を消し、OnBalloonTimeout も送ってしまう）
+                "aigraph" -> scope.launch {
+                    cancelScript()
+                    showAiGraph(0)
+                }
+                "rateofusegraph", "rateofusegraphballoon", "rateofusegraphtotal" -> {
+                    val script = rateOfUseScript(0) ?: return false
+                    scope.launch {
+                        cancelScript()
+                        runScript(script)
+                    }
+                }
                 // SSP のヘルプの代わりに、pono-droid の説明を開く
                 "help" -> platform.openUrl(HELP_URL)
                 "file" -> return openGhostFile(args.firstOrNull().orEmpty())
@@ -6703,10 +6828,24 @@ class GhostController(
             raised += RaisedEvent(event, references)
         }
 
-        override fun notify(event: String, references: List<String>) = this@GhostController.notify(event, references)
+        override fun notify(event: String, references: List<String>) {
+            // 答えの ValueNotify の \![notify] が自分を呼び続けないよう、\![raise] と同じ上限で止める
+            if (chain >= MAX_RAISE_CHAIN) {
+                platform.log("\\![notify] の連鎖が $MAX_RAISE_CHAIN 回を超えたので止めました: $event")
+                return
+            }
+            this@GhostController.notify(event, references, RequestOrigin.INTERNAL.copy(chain = chain + 1))
+        }
 
-        override suspend fun embed(event: String, references: List<String>): String? =
-            request(event, references, translate = false, origin = RequestOrigin("internal,embed"))
+        override suspend fun embed(event: String, references: List<String>): String? {
+            val embedded = request(event, references, translate = false, origin = RequestOrigin("internal,embed")) ?: return null
+            // SecurityLevel: external の答えを、制限なしのスクリプトの中に埋め込むと制限が外れるので、埋め込まない
+            if (takeExternal(embedded) && !untrusted) {
+                platform.log("\\![embed,$event] の答えは SecurityLevel: external なので埋め込みません")
+                return null
+            }
+            return embedded
+        }
 
         override fun timerRaise(delayMs: Long, once: Boolean, event: String, references: List<String>) {
             timers.remove(event)?.cancel()
@@ -6870,6 +7009,7 @@ class GhostController(
         private const val SSTP_QUIET_MS = 16_000L
         private const val SSTP_NOBREAK_WAIT_MS = 60_000L
         private const val MAX_SSTP_COOKIES = 64
+        private const val MAX_SSTP_COOKIE_SENDERS = 64
         private const val MAX_SSTP_COOKIE_LENGTH = 4096
 
         /** getaistateex で聞くグラフの数 */

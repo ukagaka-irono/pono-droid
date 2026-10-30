@@ -39,6 +39,9 @@ object ICal {
     /** 読む予定の数の上限（細工したファイルで止まらないよう） */
     private const val MAX_EVENTS = 10_000
 
+    /** COUNT のある繰り返しを最初から数えるときに見る日数の上限（約 100 年） */
+    private const val MAX_SCAN_DAYS = 36_600
+
     fun parse(text: String): ICalendar? {
         // 折り返された行（空白で始まる行）をつなぐ
         val lines = mutableListOf<String>()
@@ -51,6 +54,8 @@ object ICal {
         var calscale = ""
         val events = mutableListOf<ICalEvent>()
         var props: MutableList<Triple<String, Map<String, String>, String>>? = null
+        // VEVENT の中の VALARM などの深さ。その中の DURATION や DESCRIPTION は予定のものではない
+        var nested = 0
         for (line in lines) {
             val colon = line.indexOf(':')
             if (colon < 0) continue
@@ -60,9 +65,16 @@ object ICal {
             val key = parts[0].uppercase()
             val params = parts.drop(1).associate { p -> p.substringBefore('=').uppercase() to p.substringAfter('=', "").trim('"') }
             when {
-                key == "BEGIN" && value.equals("VEVENT", true) -> props = mutableListOf()
+                key == "BEGIN" && value.equals("VEVENT", true) -> {
+                    props = mutableListOf()
+                    nested = 0
+                }
+                props != null && key == "BEGIN" -> nested++
+                props != null && key == "END" && nested > 0 -> nested--
+                props != null && nested > 0 -> {}
                 key == "END" && value.equals("VEVENT", true) -> {
-                    props?.let { p -> event(p)?.let { if (events.size < MAX_EVENTS) events += it } }
+                    // 日時の範囲を超える DURATION などで計算が例外になる予定は、その予定だけ捨てる
+                    props?.let { p -> runCatching { event(p) }.getOrNull()?.let { if (events.size < MAX_EVENTS) events += it } }
                     props = null
                 }
                 props != null -> props.add(Triple(key, params, value))
@@ -116,7 +128,30 @@ object ICal {
         if (weeks != null) Duration.ofDays(weeks * 7) else Duration.parse(t)
     }.getOrNull()
 
-    private fun unescape(s: String) = s.replace("\\n", " ").replace("\\N", " ").replace("\\,", ",").replace("\\;", ";").replace("\\\\", "\\")
+    /**
+     * TEXT の値のエスケープ（\\ \, \; \n \N）を戻す。改行は [newline] にする。前から 1 文字ずつ読む
+     * （\\n を先に改行へ戻すと、\\ の後ろの n まで改行になる）
+     */
+    fun unescape(s: String, newline: String = " "): String {
+        if ('\\' !in s) return s
+        val out = StringBuilder(s.length)
+        var i = 0
+        while (i < s.length) {
+            val c = s[i]
+            if (c == '\\' && i + 1 < s.length) {
+                when (val n = s[i + 1]) {
+                    'n', 'N' -> out.append(newline)
+                    '\\', ',', ';' -> out.append(n)
+                    else -> out.append(c).append(n)
+                }
+                i += 2
+            } else {
+                out.append(c)
+                i++
+            }
+        }
+        return out.toString()
+    }
 
     /** 期間の決め方（--from・--to・--expand・--limit）。[mode] が false なら絞らない */
     data class Range(val mode: Boolean, val from: LocalDate, val to: LocalDate, val expand: Boolean, val limit: Int)
@@ -152,7 +187,7 @@ object ICal {
         }
         val limited = if (range.limit > 0) rows.take(range.limit) else rows
         fun date(d: LocalDate) = "${d.year},${d.monthValue},${d.dayOfMonth},,,"
-        fun time(t: LocalDateTime, allDay: Boolean) = if (allDay) date(t.toLocalDate()) else "%d,%d,%d,%d,%d,%d".format(t.year, t.monthValue, t.dayOfMonth, t.hour, t.minute, t.second)
+        fun time(t: LocalDateTime, allDay: Boolean) = if (allDay) date(t.toLocalDate()) else "%d,%d,%d,%d,%d,%d".format(java.util.Locale.ROOT, t.year, t.monthValue, t.dayOfMonth, t.hour, t.minute, t.second)
         val head = listOf(
             cal.name, cal.timezone, cal.calscale.ifEmpty { "GREGORIAN" }, limited.size.toString(), cal.events.size.toString(),
             if (range.mode) date(range.from) else "", if (range.mode) date(range.to) else "",
@@ -167,20 +202,34 @@ object ICal {
 
     /** [from] から [to] までに [e] が「起きている」日（複数日にわたる予定は、その全ての日） */
     fun occurrences(e: ICalEvent, from: LocalDate, to: LocalDate): List<LocalDate> {
-        val length = ChronoUnit.DAYS.between(e.start.toLocalDate(), e.end.toLocalDate()).coerceAtLeast(0)
+        val length = lengthDays(e)
         val out = sortedSetOf<LocalDate>()
-        for (startDay in starts(e, to)) {
+        for (startDay in starts(e, from.minusDays(length), to)) {
             if (startDay in e.exdates) continue
-            for (i in 0..length) {
-                val d = startDay.plusDays(i)
-                if (!d.isBefore(from) && !d.isAfter(to)) out += d
-            }
+            // [from]〜[to] と重なる日だけ（何年も続く予定を 1 日ずつ数えない）
+            val first = maxOf(0L, ChronoUnit.DAYS.between(startDay, from))
+            val last = minOf(length, ChronoUnit.DAYS.between(startDay, to))
+            for (i in first..last) out += startDay.plusDays(i)
         }
         return out.toList()
     }
 
-    /** 繰り返しの始まりの日（[until] まで）。RRULE の FREQ・INTERVAL・COUNT・UNTIL・BYDAY・BYMONTHDAY・BYMONTH を読む */
-    private fun starts(e: ICalEvent, until: LocalDate): Sequence<LocalDate> {
+    /** [from] から [to] までに始まる発生の日（日をまたぐ予定でも、始まる日だけ） */
+    fun occurrenceStarts(e: ICalEvent, from: LocalDate, to: LocalDate): List<LocalDate> =
+        starts(e, from, to).filter { !it.isBefore(from) && it !in e.exdates }.toList()
+
+    /** [day] にかかっている発生の始まりの日（無ければ null） */
+    fun occurrenceStartFor(e: ICalEvent, day: LocalDate): LocalDate? =
+        occurrenceStarts(e, day.minusDays(lengthDays(e)), day).lastOrNull()
+
+    /** 1 回の発生が何日後までかかるか（同じ日に終われば 0） */
+    private fun lengthDays(e: ICalEvent) = ChronoUnit.DAYS.between(e.start.toLocalDate(), e.end.toLocalDate()).coerceAtLeast(0)
+
+    /**
+     * 繰り返しの始まりの日（[since] から [until] まで。COUNT があれば数えるために最初から）。
+     * RRULE の FREQ・INTERVAL・COUNT・UNTIL・BYDAY・BYMONTHDAY・BYMONTH を読む
+     */
+    private fun starts(e: ICalEvent, since: LocalDate, until: LocalDate): Sequence<LocalDate> {
         val first = e.start.toLocalDate()
         if (e.rrule.isBlank()) return sequenceOf(first)
         val rule = e.rrule.split(';').associate { it.substringBefore('=').uppercase() to it.substringAfter('=', "") }
@@ -197,9 +246,13 @@ object ICal {
         val last = listOfNotNull(until, ruleUntil).min()
         return sequence {
             var produced = 0
-            var day = first
+            // 1 日ずつ確かめるので、古い日付からの繰り返しは見たい所から始める（間隔は matches が first から数える）。
+            // COUNT のあるものは最初から数えるしかないので、見る日数に上限を置く（毎分メインスレッドで数える）
+            var day = if (count == null && since.isAfter(first)) since else first
+            var scanned = 0
             while (!day.isAfter(last)) {
                 if (count != null && produced >= count) break
+                if (++scanned > MAX_SCAN_DAYS) break
                 if (matches(day, first, freq, interval, byMonth, byMonthDay, byDay)) {
                     yield(day)
                     produced++

@@ -72,6 +72,9 @@ data class ShioriResponse(
 ) {
     val value: String? get() = headers["Value"]?.takeIf { it.isNotEmpty() }
 
+    /** `Charset` ヘッダ（名前の大文字小文字は問わない。[parse] が答えを読むときと同じ） */
+    val charset: String? get() = headers.entries.firstOrNull { it.key.equals("Charset", ignoreCase = true) }?.value
+
     /** Reference0 などの追加ヘッダ。 */
     fun reference(i: Int): String? = headers["Reference$i"]
 
@@ -99,7 +102,8 @@ data class ShioriResponse(
             val headers = LinkedHashMap<String, String>()
             for (line in lines.drop(1)) {
                 if (line.isEmpty()) break
-                val colon = line.indexOf(": ").takeIf { it > 0 } ?: line.indexOf(':').takeIf { it > 0 } ?: continue
+                // ヘッダの名前に : は入らないので、最初の : で切る（Value:12: 30 の値は 12: 30）
+                val colon = line.indexOf(':').takeIf { it > 0 } ?: continue
                 val key = line.substring(0, colon)
                 val value = line.substring(colon + 1).removePrefix(" ")
                 headers[key] = if (unescape) ShioriRequest.unescape(value) else value

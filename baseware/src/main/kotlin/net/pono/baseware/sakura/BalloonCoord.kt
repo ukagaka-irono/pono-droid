@@ -29,8 +29,14 @@ data class BalloonCoord(val value: Float, val unit: Unit, val relative: Boolean 
                 else -> s.removeSuffix("px")
             }.trim()
             if (!NUMBER.matches(number)) return null
-            return BalloonCoord(number.toFloat(), unit, relative)
+            // 桁の多い数は Infinity になり、@ で引くと NaN になって描けなくなるので、ありうる範囲に丸める
+            return BalloonCoord(number.toFloat().coerceIn(-MAX_VALUE, MAX_VALUE), unit, relative)
         }
+
+        private const val MAX_VALUE = 100_000f
+
+        /** 描く位置（px）の上限。@ を何度足しても描ける範囲に収める */
+        private const val MAX_PX = 1_000_000f
     }
 
     /**
@@ -45,6 +51,7 @@ data class BalloonCoord(val value: Float, val unit: Unit, val relative: Boolean 
             Unit.PERCENT -> value / 100f * em
             Unit.CENTER -> return center
         }
-        return if (relative) pen + v else v
+        val px = if (relative) pen + v else v
+        return if (px.isFinite()) px.coerceIn(-MAX_PX, MAX_PX) else pen
     }
 }

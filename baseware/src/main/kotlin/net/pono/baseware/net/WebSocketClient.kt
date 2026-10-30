@@ -54,7 +54,28 @@ class SocketWebSocketConnector(private val userAgent: String) : WebSocketConnect
         }
         val host = uri.host ?: throw IOException("invalid url")
         val port = if (uri.port > 0) uri.port else if (secure) 443 else 80
-        var socket: Socket = Socket().apply {
+        // 範囲外のポートは InetSocketAddress が IllegalArgumentException を出す。約束どおり IOException にする
+        if (port !in 1..65535) throw IOException("invalid url")
+        val raw = Socket()
+        // つなぐ・ハンドシェイクのどこで失敗しても、ソケットを閉じてから IOException で返す
+        return try {
+            handshake(raw, uri, host, port, secure, headers, protocol)
+        } catch (e: Exception) {
+            runCatching { raw.close() }
+            throw e as? IOException ?: IOException(e.message ?: e.javaClass.simpleName)
+        }
+    }
+
+    private fun handshake(
+        raw: Socket,
+        uri: URI,
+        host: String,
+        port: Int,
+        secure: Boolean,
+        headers: List<Pair<String, String>>,
+        protocol: String?,
+    ): WebSocketSession {
+        var socket: Socket = raw.apply {
             connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
             soTimeout = CONNECT_TIMEOUT_MS
         }
@@ -64,6 +85,7 @@ class SocketWebSocketConnector(private val userAgent: String) : WebSocketConnect
             runCatching { ssl.sslParameters = ssl.sslParameters.apply { serverNames = listOf(SNIHostName(host)) } }
             ssl.startHandshake()
             // SSLSocket だけでは名前を確かめないので、HTTPS と同じ確かめ方をする
+            socket = ssl
             if (!HttpsURLConnection.getDefaultHostnameVerifier().verify(host, ssl.session)) {
                 ssl.close()
                 throw IOException("ssl")
@@ -76,7 +98,6 @@ class SocketWebSocketConnector(private val userAgent: String) : WebSocketConnect
                     UrlConnectionHttpClient.oneline(it.issuerX500Principal.name),
                 )
             }
-            socket = ssl
         }
         val key = Base64.getEncoder().encodeToString(ByteArray(16).also { SecureRandom().nextBytes(it) })
         val path = (uri.rawPath?.ifEmpty { "/" } ?: "/") + (uri.rawQuery?.let { "?$it" } ?: "")

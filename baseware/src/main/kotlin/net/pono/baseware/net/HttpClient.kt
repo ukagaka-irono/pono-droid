@@ -69,7 +69,8 @@ class UrlConnectionHttpClient(private val userAgent: String) : HttpClient {
         onProgress: (bytes: Long, total: Long) -> Unit,
     ): HttpOutcome {
         val conn = try {
-            URI(request.url).toURL().openConnection() as HttpURLConnection
+            // 範囲外のポートは、つなぐときに IllegalArgumentException になる（JVM）ので、先に断る
+            URI(request.url).takeIf { it.port <= 65535 }!!.toURL().openConnection() as HttpURLConnection
         } catch (e: Exception) {
             return HttpOutcome.Failed("invalid url")
         }
@@ -170,7 +171,7 @@ class UrlConnectionHttpClient(private val userAgent: String) : HttpClient {
 
         fun dateTime(millis: Long): String {
             val c = Calendar.getInstance().apply { timeInMillis = millis }
-            return "%d,%d,%d,%d,%d,%d".format(
+            return "%d,%d,%d,%d,%d,%d".format(java.util.Locale.ROOT,
                 c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH),
                 c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), c.get(Calendar.SECOND),
             )

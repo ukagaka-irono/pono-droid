@@ -17,7 +17,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 data class FeedItem(val title: String, val link: String, val updated: LocalDateTime?, val author: String, val content: String) {
     /** タイトル[1]URL[1]更新日時（年,月,日,時,分,秒）[1]作者[1]内容。改行はバイト値1にしない（Reference の中の区切りと混ざるので空白に） */
     fun reference(): String = listOf(
-        title, link, updated?.let { "%d,%d,%d,%d,%d,%d".format(it.year, it.monthValue, it.dayOfMonth, it.hour, it.minute, it.second) }.orEmpty(),
+        title, link, updated?.let { "%d,%d,%d,%d,%d,%d".format(java.util.Locale.ROOT, it.year, it.monthValue, it.dayOfMonth, it.hour, it.minute, it.second) }.orEmpty(),
         author, content,
     ).joinToString("\u0001") { it.replace('\r', ' ').replace('\n', ' ').replace('\u0001', ' ') }
 }

@@ -3,6 +3,7 @@ package net.pono.baseware.ghost
 import net.pono.baseware.net.ICal
 import net.pono.baseware.net.ICalEvent
 import net.pono.baseware.net.ICalendar
+import net.pono.baseware.text.AtomicFiles
 import java.io.File
 import java.time.Duration
 import java.time.LocalDate
@@ -104,23 +105,26 @@ class GhostSchedule(private val file: File, private val name: String) {
             sb.append("END:VEVENT\r\n")
         }
         sb.append("END:VCALENDAR\r\n")
-        file.parentFile?.mkdirs()
-        file.writeText(sb.toString())
+        // 書いている途中で止まっても壊れないよう、書き終えてから置き換える
+        AtomicFiles.writeText(file, sb.toString())
     }
 
     private fun dateLine(key: String, value: String) = if (value.length == 8) "$key;VALUE=DATE:$value\r\n" else "$key:$value\r\n"
 
     private fun escape(s: String) = s.replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\r", "").replace("\n", "\\n")
 
-    private fun unescape(s: String) = s.replace("\\n", "\n").replace("\\,", ",").replace("\\;", ";").replace("\\\\", "\\")
+    /** [escape] の逆。前から 1 文字ずつ読む（\\n を先に改行へ戻すと、スクリプトの \n タグや C:\new が化ける） */
+    private fun unescape(s: String) = ICal.unescape(s, newline = "\n")
 
     /** 今日の予定（OnScheduleTodayNotify の1件ずつ: 種類[1]題[1]説明[1]スクリプト[1]開始[1]終了[1]） */
     fun today(day: LocalDate = LocalDate.now()): List<String> {
         val extras = extras()
         return calendar().events
-            .filter { ICal.occurrences(it, day, day).isNotEmpty() }
-            .sortedWith(compareBy({ it.allDay.not() }, { it.start.toLocalTime() }))
-            .map { e -> todayReference(extras[e.uid]?.type ?: DEFAULT_TYPE, e.summary, e.description, extras[e.uid]?.script.orEmpty(), e, day) }
+            .mapNotNull { e -> ICal.occurrenceStartFor(e, day)?.let { e to it } }
+            .sortedWith(compareBy({ it.first.allDay.not() }, { it.first.start.toLocalTime() }))
+            .map { (e, startDay) ->
+                todayReference(extras[e.uid]?.type ?: DEFAULT_TYPE, e.summary, e.description, extras[e.uid]?.script.orEmpty(), e, day, startDay)
+            }
     }
 
     /** これから知らせる予定（[now] から [withinMinutes] 分のうちに「知らせる時刻」になるもの）。発生の開始時刻と一緒に */
@@ -130,7 +134,9 @@ class GhostSchedule(private val file: File, private val name: String) {
         for (e in calendar().events) {
             if (e.allDay) continue
             val before = (minutes[e.uid] ?: DEFAULT_NOTIFY_MINUTES).toLong()
-            for (day in ICal.occurrences(e, now.toLocalDate(), now.toLocalDate().plusDays(1))) {
+            // 知らせる時刻が今なら、発生はその分だけ先（--notify は 7 日前まで）。日をまたぐ予定は始まる日にだけ知らせる
+            val last = now.plusMinutes(before + withinMinutes).toLocalDate()
+            for (day in ICal.occurrenceStarts(e, now.toLocalDate(), last)) {
                 val start = day.atTime(e.start.toLocalTime())
                 val notifyAt = start.minusMinutes(before)
                 if (!notifyAt.isBefore(now) && notifyAt.isBefore(now.plusMinutes(withinMinutes))) out += e to start
@@ -168,11 +174,22 @@ class GhostSchedule(private val file: File, private val name: String) {
         /** UID に使える文字（ICS の行を壊さないもの） */
         fun validUid(uid: String) = uid.isNotEmpty() && uid.length <= 200 && uid.all { it.isLetterOrDigit() || it in "-_.@" }
 
-        /** OnScheduleTodayNotify の1件。開始・終了は 年,月,日,時,分,秒（時刻の無いものは時分秒が空）。末尾にも区切りが付く */
-        fun todayReference(type: String, caption: String, subtitle: String, script: String, e: ICalEvent?, day: LocalDate): String {
+        /**
+         * OnScheduleTodayNotify の1件。開始・終了は 年,月,日,時,分,秒（時刻の無いものは時分秒が空）。末尾にも区切りが付く。
+         * [startDay] はその日にかかっている発生の始まりの日（日をまたぐ予定では [day] より前のことがある）
+         */
+        fun todayReference(
+            type: String,
+            caption: String,
+            subtitle: String,
+            script: String,
+            e: ICalEvent?,
+            day: LocalDate,
+            startDay: LocalDate = day,
+        ): String {
             fun date(d: LocalDate) = "${d.year},${d.monthValue},${d.dayOfMonth},,,"
             fun time(t: LocalDateTime) = "${t.year},${t.monthValue},${t.dayOfMonth},${t.hour},${t.minute},${t.second}"
-            val begin = e?.takeIf { !it.allDay }?.let { day.atTime(it.start.toLocalTime()) }
+            val begin = e?.takeIf { !it.allDay }?.let { startDay.atTime(it.start.toLocalTime()) }
             val start = begin?.let(::time) ?: date(day)
             // 繰り返しの予定は、その日の発生の終わり（最初の発生と同じ長さ）
             val end = if (e != null && begin != null && e.end != e.start) time(begin.plus(Duration.between(e.start, e.end))) else ""

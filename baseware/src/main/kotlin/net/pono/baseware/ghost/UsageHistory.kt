@@ -1,5 +1,6 @@
 package net.pono.baseware.ghost
 
+import net.pono.baseware.text.AtomicFiles
 import java.io.File
 import java.time.LocalDate
 import java.util.Properties
@@ -105,8 +106,7 @@ class UsageHistory(private val file: File, private val clock: () -> LocalDate = 
 
     private fun save() {
         runCatching {
-            file.parentFile?.mkdirs()
-            file.outputStream().use { props.store(it, null) }
+            AtomicFiles.write(file) { props.store(it, null) }
         }
     }
 

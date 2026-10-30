@@ -46,7 +46,7 @@ class ShioriSession(
     suspend fun request(request: ShioriRequest): ShioriResponse? = call(requestTimeoutMs, request.id) {
         val raw = shiori.request(request.encode(charset, sender, escapeUnknown)) ?: return@call null
         val response = ShioriResponse.parse(raw, charset, force = forceCharset, unescape = escapeUnknown) ?: return@call null
-        if (!forceCharset) response.headers["Charset"]?.let(TextCharsets::resolve)?.let { charset = it }
+        if (!forceCharset) response.charset?.let(TextCharsets::resolve)?.let { charset = it }
         response
     }
 

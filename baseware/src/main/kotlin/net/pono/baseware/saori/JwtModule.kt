@@ -135,6 +135,9 @@ object MiniJson {
         return v
     }
 
+    /** 読む JSON の入れ子の深さの上限 */
+    private const val MAX_DEPTH = 64
+
     fun write(v: Any?): String = StringBuilder().also { write(it, v) }.toString()
 
     private fun write(sb: StringBuilder, v: Any?) {
@@ -188,6 +191,9 @@ object MiniJson {
         var i = 0
         private val bad get() = SaoriException.bad("invalid parameter")
 
+        /** 入れ子の深さ。深すぎるもの（[[[[…）は、スタックを使い切る前に invalid parameter にする */
+        private var depth = 0
+
         fun ws() {
             while (i < s.length && s[i] in " \t\r\n") i++
         }
@@ -195,8 +201,14 @@ object MiniJson {
         fun value(): Any? {
             if (i >= s.length) throw bad
             return when (s[i]) {
-                '{' -> obj()
-                '[' -> arr()
+                '{', '[' -> {
+                    if (++depth > MAX_DEPTH) throw bad
+                    try {
+                        if (s[i] == '{') obj() else arr()
+                    } finally {
+                        depth--
+                    }
+                }
                 '"' -> str()
                 't' -> lit("true", true)
                 'f' -> lit("false", false)

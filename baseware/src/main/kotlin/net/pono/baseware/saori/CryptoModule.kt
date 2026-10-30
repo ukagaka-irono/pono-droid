@@ -269,6 +269,8 @@ object CryptoModule {
     /** N×r×128 バイトが上限（12MiB）まで */
     fun scrypt(password: ByteArray, salt: ByteArray, n: Int, r: Int, p: Int, length: Int): ByteArray {
         if (n.toLong() * r * 128 > MAX_MEMORY_KIB * 1024L || p !in 1..16) throw SaoriException.bad("out of range")
+        // BouncyCastle が受け付けない組（N が 2 以上の 2 の累乗でない、N が 2^(16r) 以上）も、例外ではなく out of range にする
+        if (r < 1 || n < 2 || n and (n - 1) != 0 || (r < 2 && n >= 1 shl 16)) throw SaoriException.bad("out of range")
         return SCrypt.generate(password, salt, n, r, p, length)
     }
 

@@ -18,6 +18,8 @@ data class SurfaceNameTable(val version: Int, val disableNoDefineSurfaces: Boole
     data class Entry(val id: Int, val name: String?)
 
     companion object {
+        private val TRAILING_COMMENT = Regex("""\s+//.*$""")
+
         fun read(file: File): SurfaceNameTable? = runCatching { parse(TextCharsets.decode(file.readBytes())) }.getOrNull()
 
         fun parse(text: String): SurfaceNameTable {
@@ -29,7 +31,8 @@ data class SurfaceNameTable(val version: Int, val disableNoDefineSurfaces: Boole
             var pendingName: String? = null
             var current: Triple<String, Array<Int?>, ArrayList<Entry>>? = null
             for (raw in text.lines()) {
-                val line = raw.trim().trimStart('﻿')
+                // 行末の // から後ろはコメント（空白の後に書いたものだけ。名前の中の // は残す）
+                val line = raw.replace(TRAILING_COMMENT, "").trim().trimStart('﻿')
                 if (line.isEmpty() || line.startsWith("//")) continue
                 when {
                     line == "{" -> if (pendingName != null && current == null) {

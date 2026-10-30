@@ -38,7 +38,8 @@ class GhostHub {
         if (req["Sender"].equals("First", ignoreCase = true)) return all.first()
         val named = req["ReceiverGhostName"] ?: req["Ghost"]
         if (named != null) return all.firstOrNull { it.ghost.sakuraName == named || it.ghost.name == named }
-        req["ID"]?.let { id -> all.firstOrNull { it.uniqueId == id }?.let { return it } }
+        // Owned SSTP の uniqueid か、GetFMO で見せている識別 ID
+        req["ID"]?.let { id -> all.firstOrNull { it.uniqueId == id || it.fmoId == id }?.let { return it } }
         for ((name, value) in req.headers) {
             if (!name.equals("IfGhost", ignoreCase = true)) continue
             val names = value.split(',').map { it.trim() }

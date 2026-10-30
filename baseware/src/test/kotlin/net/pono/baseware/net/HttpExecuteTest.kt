@@ -287,4 +287,14 @@ class HttpExecuteTest {
         assertTrue(log, "こんにちは" in log)
     }
 
+
+    @Test
+    fun hugeDurationInAnIcalIsAFailureNotACrash() {
+        val ics = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:20261001T090000\r\nDURATION:P1000000000000D\r\nSUMMARY:s\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+        run(FakeClient(body = ics.toByteArray()), mapOf("OnTest" to """\![execute,ical-get,https://e.test/c.ics,--async=OnCal]\e""")) { c, shiori, _ ->
+            c.raise("OnTest", emptyList())
+            // 直す前は例外で通信のコルーチンが死に、どちらも届かない（アプリでは落ちる）
+            withTimeout(5000) { while (shiori.count("OnCal") + shiori.count("OnCalFailure") == 0) delay(10) }
+        }
+    }
 }

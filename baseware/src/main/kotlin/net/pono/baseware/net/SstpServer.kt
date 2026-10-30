@@ -1,5 +1,6 @@
 package net.pono.baseware.net
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -94,6 +95,12 @@ class SstpServer(
                 launch(Dispatchers.IO) {
                     try {
                         serve(socket)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // 途中で切られた（RST・Broken pipe）、読み終わる前の時間切れなど。この接続だけ閉じ、待ち受けは続ける
+                        // （ここで抜けると待ち受けのコルーチンごと止まり、アプリでは例外で落ちる）
+                        log("SSTP の接続を閉じました: ${e.javaClass.simpleName} ${e.message}")
                     } finally {
                         connections.decrementAndGet()
                         runCatching { socket.close() }
@@ -113,9 +120,12 @@ class SstpServer(
 
     private suspend fun serve(socket: Socket) {
         socket.soTimeout = READ_TIMEOUT_MS
-        val input = socket.getInputStream().buffered()
+        // 1 バイトずつゆっくり送られても接続の枠を持ち続けられないよう、1 つの要求を読み終えるまでの時間にも上限を置く
+        val deadline = DeadlineInput(socket.getInputStream())
+        val input = deadline.buffered()
         val output = socket.getOutputStream()
         while (true) {
+            deadline.until = System.currentTimeMillis() + REQUEST_DEADLINE_MS
             val head = try {
                 readUntilBlankLine(input) ?: return
             } catch (e: SocketTimeoutException) {
@@ -168,7 +178,7 @@ class SstpServer(
             output.write(body)
             output.flush()
         }
-        val length = headers["content-length"]?.toIntOrNull()
+        val length = headers["content-length"]?.toIntOrNull()?.takeIf { it >= 0 }
         if (method != "POST" || path.substringBefore('?') != "/api/sstp/v1" || length == null || headers.containsKey("transfer-encoding")) {
             reply("404 Not Found", ByteArray(0))
             return false
@@ -178,9 +188,10 @@ class SstpServer(
             return false
         }
         val body = readExactly(input, length) ?: return false
-        // localhost のページでなければ（Origin が別のサイト）、そのページのスクリプトがゴーストを操ることになるので受けない
+        // localhost のページでなければ（Origin が別のサイト）、そのページのスクリプトがゴーストを操ることになるので受けない。
+        // Origin: null（sandbox 付きの iframe・ファイルのページなど）も、どのサイトからでも作れるので受けない
         val origin = headers["origin"]
-        if (origin != null && origin != "null" && !isLocalOrigin(origin)) {
+        if (origin != null && !isLocalOrigin(origin)) {
             reply("403 Forbidden", ByteArray(0))
             return false
         }
@@ -206,7 +217,8 @@ class SstpServer(
     }
 
     private fun isLocalOrigin(origin: String): Boolean {
-        val host = origin.substringAfter("://", "").substringBefore('/').substringBeforeLast(':').trim('[', ']').lowercase()
+        // http://[::1]:8080 や http://[::1] の : は IPv6 の中にもあるので、URI として読む
+        val host = runCatching { java.net.URI(origin.trim()).host }.getOrNull()?.trim('[', ']')?.lowercase() ?: return false
         return host == "localhost" || host == "127.0.0.1" || host == "::1"
     }
 
@@ -241,6 +253,25 @@ class SstpServer(
     private fun charsetLabel(c: Charset): String = if (c == TextCharsets.CP932) "Shift_JIS" else c.name()
 
     private class TooLarge : IOException()
+
+    /** [until]（時刻）を過ぎてから読もうとしたら、時間切れにする */
+    private class DeadlineInput(input: InputStream) : java.io.FilterInputStream(input) {
+        @Volatile var until = Long.MAX_VALUE
+
+        private fun check() {
+            if (System.currentTimeMillis() > until) throw SocketTimeoutException("request too slow")
+        }
+
+        override fun read(): Int {
+            check()
+            return super.read()
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            check()
+            return super.read(b, off, len)
+        }
+    }
 
     /** CR LF CR LF まで読む。つながったまま何も来なければ null */
     private fun readUntilBlankLine(input: InputStream): ByteArray? {
@@ -279,6 +310,9 @@ class SstpServer(
         private const val MAX_CONNECTIONS = 8
         const val MAX_REQUEST_BYTES = 256 * 1024
         private const val READ_TIMEOUT_MS = 5_000
+
+        /** 1 つの要求（頭と本文）を読み終えるまでの上限 */
+        private const val REQUEST_DEADLINE_MS = 15_000L
         private const val HANDLER_TIMEOUT_MS = 30_000L
 
         /** 要求を読む。Charset ヘッダの文字コードで読み直す（無ければ UTF-8）。読めなければ null */

@@ -2,8 +2,18 @@ package net.pono.baseware.sakura
 
 import kotlinx.coroutines.delay
 
-/** [anchor] は \_a（ジャンパ）。選択肢（\q, \__q）とは送るイベントが違う */
-data class Choice(val title: String, val id: String, val references: List<String> = emptyList(), val anchor: Boolean = false)
+/**
+ * [anchor] は \_a（ジャンパ）。選択肢（\q, \__q）とは送るイベントが違う。
+ * [untrusted] はほかのアプリ（SSTP）や SecurityLevel: external のスクリプトが出したもの。選んでも本体のメニュー（pono:）は動かさず、
+ * script: は同じく制限付きで再生する
+ */
+data class Choice(
+    val title: String,
+    val id: String,
+    val references: List<String> = emptyList(),
+    val anchor: Boolean = false,
+    val untrusted: Boolean = false,
+)
 
 enum class TextAlign { LEFT, CENTER, RIGHT }
 
@@ -359,6 +369,7 @@ class ScriptPlayer(
     suspend fun play(script: String, host: ScriptHost): PlayResult {
         val playback = Playback(host)
         playback.run(script, 0)
+        playback.closeOpenAnchor()
         return PlayResult(playback.quit, playback.hasChoices)
     }
 
@@ -401,14 +412,47 @@ class ScriptPlayer(
             for (token in SakuraScript.tokenize(script)) {
                 if (ended) return
                 when (token) {
-                    is Token.Text -> text(token.text, literal = token.literal)
+                    is Token.Text -> text(token.text, literal = token.literal, escaped = token.escapedPercents)
                     is Token.Tag -> tag(token, depth)
                 }
             }
         }
 
-        /** [literal] なら \_? の中の文字で、環境変数も展開しない。%* は \![*] と同じ印 */
-        private suspend fun text(s: String, literal: Boolean = false) {
+        /**
+         * 開いている \__q[ID] / \_a[ID] を閉じて、それまでの文字を選択肢にする（閉じる \__q / \_a か、閉じ忘れたまま
+         * スクリプトが終わったとき。閉じ忘れても文字が黙って消えないように）
+         */
+        fun closeOpenAnchor() {
+            val open = anchor ?: return
+            // \_a のリンクだけなら選択肢を待たない（バルーンのタイムアウトで消える。SSP と同じ）
+            if (!open.anchor) hasChoices = true
+            host.addChoice(scope, open.copy(title = anchorTitle.toString()), looks[scope] ?: ChoiceLooks.Default)
+            anchor = null
+            anchorTitle.clear()
+        }
+
+        /**
+         * [literal] なら \_? の中の文字で、環境変数も展開しない。%* は \![*] と同じ印。
+         * [escaped] は \% と書いた % の位置（そこからは展開を始めず、%* の印にもしない）
+         */
+        private suspend fun text(s: String, literal: Boolean = false, escaped: List<Int> = emptyList()) {
+            if (!literal && escaped.isNotEmpty()) {
+                // \% の所で分けて、それぞれを展開してから % でつなぐ（%名前 は \% をまたがない）
+                val parts = ArrayList<String>()
+                var start = 0
+                for (p in escaped.sorted()) {
+                    parts += s.substring(start, p)
+                    start = p + 1
+                }
+                parts += s.substring(start)
+                if (parts.none { "%*" in it }) return text(parts.joinToString("%") { expandEnv(it, host) }, literal = true)
+                // %* の印もあるときは、分けたまま順に出す
+                parts.forEachIndexed { i, part ->
+                    if (i > 0) text("%", literal = true)
+                    if (part.isNotEmpty()) text(part)
+                }
+                return
+            }
             if (!literal && "%*" in s) {
                 s.split("%*").forEachIndexed { i, piece ->
                     if (i > 0) host.addMarker(scope)
@@ -491,7 +535,7 @@ class ScriptPlayer(
                     }
                     else -> host.clearBalloon(scope)
                 }
-                "w" -> if (!quick) delay((a.firstOrNull()?.toLongOrNull() ?: 1) * unitWaitMs)
+                "w" -> if (!quick) delay((a.firstOrNull()?.trim()?.toLongOrNull() ?: 1) * unitWaitMs)
                 // \__w[animation,ID] はそのアニメーションが終わるまで待つ
                 // \__w[時間] は再生の始め（か \x のクリック）から数えてその時間まで待つ。\__w[clear] で数え直す
                 "__w" -> when (a.firstOrNull()?.trim()?.lowercase()) {
@@ -502,7 +546,7 @@ class ScriptPlayer(
                         delay((until - (System.currentTimeMillis() - waitMark)).coerceAtLeast(0))
                     }
                 }
-                "_w" -> if (!quick) delay(a.firstOrNull()?.toLongOrNull() ?: 0)
+                "_w" -> if (!quick) delay(a.firstOrNull()?.trim()?.toLongOrNull() ?: 0)
                 "_q" -> quick = !quick
                 "x" -> {
                     host.waitClick()
@@ -525,15 +569,10 @@ class ScriptPlayer(
                     host.addChoice(scope, Choice(expandEnv(a[0], host), a[1], a.drop(2)), looks[scope] ?: ChoiceLooks.Default)
                 }
                 "__q", "_a" -> {
-                    val open = anchor
-                    if (open == null && a.isNotEmpty()) {
+                    if (anchor == null && a.isNotEmpty()) {
                         anchor = Choice("", a[0], a.drop(1), anchor = token.name == "_a")
-                    } else if (open != null) {
-                        // \_a のリンクだけなら選択肢を待たない（バルーンのタイムアウトで消える。SSP と同じ）
-                        if (!open.anchor) hasChoices = true
-                        host.addChoice(scope, open.copy(title = anchorTitle.toString()), looks[scope] ?: ChoiceLooks.Default)
-                        anchor = null
-                        anchorTitle.clear()
+                    } else {
+                        closeOpenAnchor()
                     }
                 }
                 // 文字コードで文字を書く。\_u[0x22EE] / \_u[8942]（UCS-2）、\_m[0x41]（ASCII）
@@ -917,20 +956,18 @@ class ScriptPlayer(
     private val envPattern = Regex("""%(m\?|[a-zA-Z][a-zA-Z0-9]*)""")
     private val propertyPattern = Regex("""%property\[([^\]]*)\]""")
 
+    /** %名前 を展開する（\% はタグを読むときに、展開しない文字にしてある） */
     private fun expandEnv(s: String, host: ScriptHost): String {
-        val replaced = if ('%' in s) {
-            val withProperties = propertyPattern.replace(s) { m -> host.property(m.groupValues[1].trim()).orEmpty() }
-            // %selfname2 のような名前もあるので、長い名前から順に試す
-            envPattern.replace(withProperties) { m ->
-                val name = m.groupValues[1]
-                (name.length downTo 1).firstNotNullOfOrNull { len ->
-                    host.envVariable(name.substring(0, len))?.let { it + name.substring(len) }
-                } ?: m.value
-            }
-        } else {
-            s
+        if ('%' !in s) return s
+        val withProperties = propertyPattern.replace(s) { m -> host.property(m.groupValues[1].trim()).orEmpty() }
+        // %selfname2 のような名前もあるので、長い名前から順に試す。名前はどれも短いので、長い英数字の並びの
+        // 全部の長さは試さない（2 乗の時間がかかり、SSTP で長い並びを送られると固まる）
+        return envPattern.replace(withProperties) { m ->
+            val name = m.groupValues[1]
+            (minOf(name.length, MAX_ENV_NAME) downTo 1).firstNotNullOfOrNull { len ->
+                host.envVariable(name.substring(0, len))?.let { it + name.substring(len) }
+            } ?: m.value
         }
-        return replaced.replace(SakuraScript.ESCAPED_PERCENT, '%')
     }
 
     /** SSTP で届いたスクリプトで使ってよい \![...]。入力の箱は開けるが、ブラウザやファイルは開かせない */
@@ -974,6 +1011,9 @@ class ScriptPlayer(
 
         /** \p[N] で使えるキャラクターの番号の上限 */
         const val MAX_SCOPE = 15
+
+        /** %名前 で試す名前の長さの上限（いちばん長い lastobjectname でも 14 文字） */
+        private const val MAX_ENV_NAME = 32
 
         /** \n[パーセント] の上限（何十行分も飛ばさない） */
         const val MAX_LINE_PERCENT = 1000

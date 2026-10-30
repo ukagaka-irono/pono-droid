@@ -70,18 +70,33 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
                 Type.SHELL -> File(target!!.dir, "shell/$dirName")
                 Type.SUPPLEMENT -> target!!.dir
             }
-            if (install["refresh"]?.trim() == "1" && type != Type.SUPPLEMENT) refresh(target2, install["refreshundeletemask"])
-            val canonicalTarget = target2.canonicalFile
-            for (entry in entries) {
-                val out = File(target2, normalize(entry.name)).canonicalFile
-                if (!out.path.startsWith(canonicalTarget.path + File.separator)) {
-                    throw InstallException("不正なパス: ${entry.name}")
+            // ゴーストのフォルダの pono/ は本体の置き場（設定・予定表など）。.nar からは書かせない
+            val intoGhostDir = type == Type.GHOST || type == Type.SUPPLEMENT
+            val files = entries.filterNot { intoGhostDir && normalize(it.name).substringBefore('/').equals(NetworkUpdater.PONO_DIR, ignoreCase = true) }
+            // 先に全部のパスを確かめ、作業用のフォルダに展開し切ってから入れ替える。不正なパスや壊れた .nar で失敗しても、
+            // refresh で前の中身を消してしまったり、半分だけ書いたりしない
+            val staging = kotlin.io.path.createTempDirectory("nar").toFile()
+            try {
+                val canonicalStaging = staging.canonicalFile
+                val outs = files.map { entry ->
+                    val out = File(staging, normalize(entry.name)).canonicalFile
+                    if (!out.path.startsWith(canonicalStaging.path + File.separator)) throw InstallException("不正なパス: ${entry.name}")
+                    entry to out
                 }
-                out.parentFile?.mkdirs()
-                zip.getInputStream(entry).use { input -> out.outputStream().use { input.copyTo(it) } }
+                for ((entry, out) in outs) {
+                    out.parentFile?.mkdirs()
+                    zip.getInputStream(entry).use { input -> out.outputStream().use { input.copyTo(it) } }
+                }
+                if (install["refresh"]?.trim() == "1" && type != Type.SUPPLEMENT) {
+                    refresh(target2, install["refreshundeletemask"], keepDir = if (intoGhostDir) NetworkUpdater.PONO_DIR else null)
+                }
+                target2.mkdirs()
+                staging.copyRecursively(target2, overwrite = true)
+            } finally {
+                staging.deleteRecursively()
             }
-            // 上書きインストールで古いファイルを消す指示があれば従う
-            NetworkUpdater.applyDeleteList(target2)
+            // 上書きインストールで古いファイルを消す指示があれば従う（前の版が残した delete.txt ではなく、この .nar の中のものだけ）
+            if (files.any { NetworkUpdater.DELETE_LISTS.matches(normalize(it.name).lowercase()) }) NetworkUpdater.applyDeleteList(target2)
             val installed = mutableListOf(Installed(type, name, target2))
             if (type == Type.GHOST || type == Type.SHELL) installed += installBundledBalloons(target2, install)
             return Result(type, target2, installed)
@@ -92,12 +107,13 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
     private fun accepts(ghost: Ghost, accept: String): Boolean =
         accept == ghost.sakuraName || accept == ghost.name || ghost.descript["install.accept"]?.split(',')?.any { it.trim() == accept } == true
 
-    /** refresh,1。入れる前に中身を消す（refreshundeletemask の名前のファイルは残す） */
-    private fun refresh(dir: File, mask: String?) {
+    /** refresh,1。入れる前に中身を消す（refreshundeletemask の名前のファイルと、[keepDir] のフォルダの中は残す） */
+    private fun refresh(dir: File, mask: String?, keepDir: String? = null) {
         if (!dir.isDirectory) return
         val keep = mask.orEmpty().split(':').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
-        dir.walkBottomUp().forEach { f ->
-            if (f == dir) return@forEach
+        val kept = keepDir?.let { File(dir, it) }
+        dir.walkBottomUp().onEnter { it != kept }.forEach { f ->
+            if (f == dir || f == kept) return@forEach
             if (f.isFile && f.name.lowercase() !in keep) f.delete()
             if (f.isDirectory && f.listFiles().isNullOrEmpty()) f.delete()
         }

@@ -123,7 +123,9 @@ class TlsMailChecker(private val timeoutMs: Int = 20_000, private val maxItems: 
                     val buf = CharArray(literal)
                     var read = 0
                     while (read < literal) read += r.read(buf, read, literal - read).also { if (it < 0) throw IOException("closed") }
-                    line = line + "\n" + String(buf) + (r.readLine() ?: "")
+                    // literal の後ろ（UID や RFC822.SIZE が続くことがある）は 1 行目に付け、literal の中身（ヘッダ）とは混ぜない
+                    val rest = r.readLine().orEmpty()
+                    line = line + " " + rest + "\n" + String(buf)
                 }
                 if (line.startsWith("$t ")) {
                     if (!line.startsWith("$t OK")) throw if (secret) Kick() else IOException("imap")

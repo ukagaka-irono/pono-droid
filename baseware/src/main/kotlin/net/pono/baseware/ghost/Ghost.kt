@@ -2,6 +2,7 @@ package net.pono.baseware.ghost
 
 import net.pono.baseware.balloon.Balloon
 import net.pono.baseware.balloon.BalloonRepository
+import net.pono.baseware.text.AtomicFiles
 import net.pono.baseware.text.Descript
 import net.pono.baseware.text.TextCharsets
 import java.io.File
@@ -95,13 +96,14 @@ class Ghost(val dir: File) {
     // pono-droid がゴーストごとに覚えておくこと（初回起動したか、選んだシェルなど）
     private val profileFile = File(dir, "pono/profile.properties")
 
+    /** 壊れていて読めなければ、何も覚えていないことにする（起動できなくなるよりよい） */
     fun loadProfile() = Properties().apply {
-        if (profileFile.isFile) profileFile.inputStream().use(::load)
+        if (profileFile.isFile) runCatching { profileFile.inputStream().use(::load) }.onFailure { clear() }
     }
 
+    /** 書いている途中で止まっても壊れないよう、書き終えてから置き換える */
     fun saveProfile(p: Properties) {
-        profileFile.parentFile?.mkdirs()
-        profileFile.outputStream().use { p.store(it, null) }
+        AtomicFiles.write(profileFile) { p.store(it, null) }
     }
 
     companion object {

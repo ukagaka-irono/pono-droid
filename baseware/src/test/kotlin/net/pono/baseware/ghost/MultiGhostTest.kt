@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import net.pono.baseware.net.SstpRequest
 import net.pono.baseware.sakura.ScriptPlayer
 import net.pono.baseware.shell.Shell
@@ -16,14 +17,18 @@ import net.pono.baseware.update.FetchResult
 import net.pono.baseware.update.HttpFetcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 /** 複数のゴーストを同時に動かす（GhostHub）。ゴーストどうしのイベントと \![raiseother]・\![call,ghost] */
 class MultiGhostTest {
@@ -435,5 +440,50 @@ class MultiGhostTest {
         a.c.onDesktopWallpaperChanged(self = true)
         withTimeout(5000) { while (a.shiori.count("OnDesktopWallpaperChange") < 2) delay(10) }
         assertEquals(listOf("update", "self", "", "", "fill", "51,102,153"), a.shiori.awaitEvent("OnDesktopWallpaperChange"))
+    }
+
+    @Test
+    fun packageForTwoRunningGhostsDoesNotBounceForever() = run {
+        fun zip(entries: Map<String, ByteArray>): ByteArray {
+            val bos = ByteArrayOutputStream()
+            ZipOutputStream(bos).use { z -> for ((n, b) in entries) { z.putNextEntry(ZipEntry(n)); z.write(b); z.closeEntry() } }
+            return bos.toByteArray()
+        }
+        fun shellFor(dir: String, accept: String) = zip(mapOf("install.txt" to "type,shell\r\nname,$dir\r\ndirectory,$dir\r\naccept,$accept\r\n".toByteArray()))
+        val pkg = File(tmp.root, "pkg.nar")
+        pkg.writeBytes(zip(linkedMapOf(
+            "install.txt" to "type,package\r\n".toByteArray(),
+            "1.nar" to shellFor("forb", "びい"),
+            "2.nar" to shellFor("fora", "あい"),
+        )))
+        val a = boot("a", emptyMap())
+        boot("b", emptyMap())
+        // 直す前は A → B → A → … と回り続けて戻らない
+        assertNotNull(withTimeoutOrNull(10_000) { a.c.installNar(pkg) })
+    }
+
+    @Test
+    fun sequentialSwitchSkipsAGhostThatIsAlreadyRunning() = run {
+        val switched = Collections.synchronizedList(mutableListOf<String>())
+        val platform = object : GhostPlatform by RecordingPlatform() {
+            override fun switchGhost(dirName: String, previous: PreviousGhost) { switched += dirName }
+        }
+        val a = boot("a", emptyMap(), platform = platform)
+        boot("b", emptyMap())
+        assertTrue(a.c.changeGhost("sequential"))
+        withTimeout(5000) { while (switched.isEmpty()) delay(10) }
+        // 直す前は動いている b に切り替える
+        assertEquals(listOf("c"), switched.toList())
+    }
+
+    @Test
+    fun balloonOutsideTheBalloonFolderIsNotUsed() = run {
+        val outside = File(repository.root.parentFile, "outside").apply { mkdirs() }
+        File(outside, "descript.txt").writeText("charset,UTF-8\r\nname,そと\r\n")
+        File(outside, "balloons0.png").writeBytes(byteArrayOf())
+        val a = boot("a", emptyMap())
+        a.c.changeBalloon("../outside")
+        // 直す前はバルーン置き場の外のものに替わる
+        assertEquals(null, a.c.balloon?.dir?.canonicalFile)
     }
 }

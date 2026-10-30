@@ -12,6 +12,9 @@ class HttpStreamer(private val mode: String, private val emit: (String) -> Unit)
     private val line = ByteArrayOutputStream()
     private val event = StringBuilder()
 
+    /** いまのイベントの data: の行の数（最初の data: が空でも、次の行の前に区切りを入れるため） */
+    private var dataLines = 0
+
     /** 応答の頭が来た（auto のときに決める） */
     fun contentType(type: String) {
         if (mode == "auto") sse = type.lowercase().startsWith("text/event-stream")
@@ -51,8 +54,9 @@ class HttpStreamer(private val mode: String, private val emit: (String) -> Unit)
         when {
             text.isEmpty() -> flushEvent()
             text.startsWith("data:") -> {
-                if (event.isNotEmpty()) event.append('\u0001')
+                if (dataLines > 0) event.append('\u0001')
                 event.append(text.removePrefix("data:").removePrefix(" "))
+                dataLines++
             }
             // コメント（:）や event: / id: / retry: は渡さない
             else -> {}
@@ -60,9 +64,13 @@ class HttpStreamer(private val mode: String, private val emit: (String) -> Unit)
     }
 
     private fun flushEvent() {
-        if (event.isEmpty()) return
+        if (event.isEmpty()) {
+            dataLines = 0
+            return
+        }
         emit(event.toString())
         event.clear()
+        dataLines = 0
     }
 
     private companion object {

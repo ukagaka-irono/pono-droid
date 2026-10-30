@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import net.pono.baseware.net.SstpRequest
 import net.pono.baseware.net.SstpResponse
 import net.pono.baseware.net.SstpServer
@@ -196,5 +197,36 @@ class SstpTest {
         c.onBalloonClick(0)
         assertEquals("0", shiori.awaitEvent("OnSSTPBreak")[1])
         assertFalse(shiori.count("OnBalloonBreak") > 0)
+    }
+
+    @Test
+    fun anotherAppCannotBorrowTheOwnedIdFromGetFmo() = run { c, _, platform ->
+        val fmo = c.handleSstp(req("EXECUTE SSTP/1.1\nCharset: UTF-8\nSender: evil\nCommand: GetFMO\n\n"))
+        val id = fmo.data.orEmpty().lineSequence().first().substringBefore('.')
+        c.handleSstp(req("SEND SSTP/1.4\nCharset: UTF-8\nSender: evil\nID: $id\nScript: \\0\\![open,browser,https://e.test/]\\e\n\n"))
+        delay(1000)
+        // ほかのアプリのスクリプトなので開かせないはず（今は uniqueid と同じなので開く）
+        assertTrue(platform.urls.isEmpty())
+    }
+
+    @Test
+    fun sstpScriptsCannotOfferBasewareMenuChoices() = run { c, _, platform ->
+        c.handleSstp(req("SEND SSTP/1.4\nCharset: UTF-8\nSender: app\nScript: \\0\\q[続ける,pono:vanish-yes]\\e\n\n"))
+        withTimeoutOrNull(5000) {
+            c.state.first { s -> s.characters.values.any { ch -> ch.balloon?.any { it is BalloonItem.ChoiceItem && it.choice.id == "pono:vanish-yes" } == true } }
+        }
+        c.onChoice(net.pono.baseware.sakura.Choice("続ける", "pono:vanish-yes", emptyList()))
+        delay(500)
+        // 直す前は vanish() まで届き「消去できません」のログが出る
+        assertTrue(platform.logs.none { "消去できません" in it })
+    }
+
+    @Test
+    fun cookiesFromManySendersAreBounded() = run { c, _, _ ->
+        repeat(500) { i -> c.handleSstp(req("EXECUTE SSTP/1.1\nCharset: UTF-8\nSender: app$i\nCommand: SetCookie[k,v]\n\n")) }
+        val f = GhostController::class.java.getDeclaredField("sstpCookies").apply { isAccessible = true }
+        val senders = (f.get(c) as Map<*, *>).size
+        // 直す前は 500 送り手分を全部持つ
+        assertTrue("cookies kept for $senders senders", senders <= 64)
     }
 }

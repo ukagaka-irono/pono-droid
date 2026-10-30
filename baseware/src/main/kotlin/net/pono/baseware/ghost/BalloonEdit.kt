@@ -9,7 +9,7 @@ object BalloonEdit {
     fun removeChars(items: List<BalloonItem>, count: Int, start: Int?): List<BalloonItem> {
         val total = items.sumOf(::units)
         val from = (start ?: (total - count)).coerceIn(0, total)
-        val to = (from + count).coerceAtMost(total)
+        val to = (from.toLong() + count).coerceAtMost(total.toLong()).toInt()
         if (from >= to) return items
         val out = mutableListOf<BalloonItem>()
         var pos = 0

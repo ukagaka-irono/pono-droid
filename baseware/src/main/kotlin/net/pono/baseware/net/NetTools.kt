@@ -106,6 +106,8 @@ object NetTools {
         var total = 0L
         archiveErrors {
             ZipFile(zip, password?.toCharArray()).use { z ->
+                // UTF-8 の印の無い名前は、日本の Windows で作った ZIP と同じく CP932 で読む（zip4j の既定は Cp437）
+                z.charset = net.pono.baseware.text.TextCharsets.CP932
                 if (!z.isValidZipFile) throw ArchiveException("corrupted")
                 val headers = z.fileHeaders
                 if (password == null && headers.any { it.isEncrypted }) throw ArchiveException("password required")

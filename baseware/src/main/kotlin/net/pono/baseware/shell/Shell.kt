@@ -179,24 +179,45 @@ class Shell(val dir: File) {
     /** surfacetable.txt（サーフェステストの名前とグループ）。無ければ null */
     val surfaceNames: SurfaceNameTable? by lazy { files["surfacetable.txt"]?.let(SurfaceNameTable::read) }
 
-    /** ファイル名の大文字小文字は区別しない（Windows 由来のため）。シェルのフォルダの外を指していれば null */
+    /**
+     * ファイル名の大文字小文字は区別しない（Windows 由来のため。parts\Eye.PNG のようなサブフォルダの中も）。
+     * シェルのフォルダの外を指していれば null
+     */
     fun file(name: String): File? {
         val path = name.replace('\\', '/')
-        return if ('/' in path) {
-            val root = runCatching { dir.canonicalFile }.getOrNull() ?: return null
-            val file = runCatching { File(dir, path).canonicalFile }.getOrNull() ?: return null
-            file.takeIf { it.path.startsWith(root.path + File.separator) && it.isFile }
-        } else {
-            files[path.lowercase()]
+        if ('/' !in path) return files[path.lowercase()]
+        val root = runCatching { dir.canonicalFile }.getOrNull() ?: return null
+        var cur = dir
+        for (seg in path.split('/')) {
+            cur = when (seg) {
+                "", "." -> cur
+                ".." -> cur.parentFile ?: return null
+                else -> childIgnoringCase(cur, seg)
+            }
         }
+        val file = runCatching { cur.canonicalFile }.getOrNull() ?: return null
+        return file.takeIf { it.path.startsWith(root.path + File.separator) && it.isFile }
     }
 
-    /** surfaceN.png。surface0000.png のような0埋めの名前も探す。 */
-    fun surfaceImage(id: Int): File? =
-        file("surface$id.png") ?: file("surface%04d.png".format(id))
+    /** [parent] の中の [name]。同じ名前が無ければ、大文字小文字を無視して探す（無ければそのままの名前） */
+    private fun childIgnoringCase(parent: File, name: String): File {
+        val exact = File(parent, name)
+        if (exact.exists()) return exact
+        return parent.listFiles()?.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: exact
+    }
 
-    /** 画像と同名の .pna（アルファ用のグレースケール画像） */
-    fun pnaFor(png: File): File? = file(png.nameWithoutExtension + ".pna")
+    /** surfaceN.png。surface0000.png のような0埋めの名前も探す（端末の言語の数字ではなく 0〜9 で）。 */
+    fun surfaceImage(id: Int): File? =
+        file("surface$id.png") ?: file("surface%04d.png".format(java.util.Locale.ROOT, id))
+
+    /** 画像と同名の .pna（アルファ用のグレースケール画像）。画像と同じフォルダで探す */
+    fun pnaFor(png: File): File? {
+        val parent = png.parentFile ?: return null
+        val pna = childIgnoringCase(parent, png.nameWithoutExtension + ".pna")
+        val root = runCatching { dir.canonicalFile }.getOrNull() ?: return null
+        val canonical = runCatching { pna.canonicalFile }.getOrNull() ?: return null
+        return canonical.takeIf { it.path.startsWith(root.path + File.separator) && it.isFile }
+    }
 
     fun hasSurface(id: Int): Boolean = surfaceImage(id) != null || surfaces[id]?.elements?.isNotEmpty() == true
 

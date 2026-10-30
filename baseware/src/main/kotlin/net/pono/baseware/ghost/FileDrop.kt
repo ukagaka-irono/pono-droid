@@ -28,10 +28,30 @@ object FileDrop {
             .trim().trim('.')
             .takeIf { it.isNotEmpty() } ?: "file$index"
         val ext = cleaned.substringAfterLast('.', "").takeIf { it.isNotEmpty() && it.length <= 10 && it != cleaned }
-        val base = (if (ext != null) cleaned.dropLast(ext.length + 1) else cleaned).take(MAX_NAME - 12).ifEmpty { "file$index" }
+        val base = takeBytes((if (ext != null) cleaned.dropLast(ext.length + 1) else cleaned).take(MAX_NAME - 12), MAX_BASE_BYTES)
+            .ifEmpty { "file$index" }
         fun withSuffix(n: Int) = (if (n == 1) base else "$base ($n)") + (ext?.let { ".$it" } ?: "")
         var n = 1
         while (withSuffix(n).lowercase() in taken.map { it.lowercase() }) n++
         return withSuffix(n)
+    }
+
+    /**
+     * ファイル名の長さの上限は文字数ではなくバイト数（UTF-8 で 255 バイト）なので、本体の部分は [MAX_BASE_BYTES] まで。
+     * 拡張子（10 文字）と「 (番号)」を足しても収まる。サロゲートペアの途中では切らない
+     */
+    private const val MAX_BASE_BYTES = 200
+
+    private fun takeBytes(s: String, max: Int): String {
+        var bytes = 0
+        var i = 0
+        while (i < s.length) {
+            val cp = s.codePointAt(i)
+            val n = String(Character.toChars(cp)).toByteArray(Charsets.UTF_8).size
+            if (bytes + n > max) break
+            bytes += n
+            i += Character.charCount(cp)
+        }
+        return s.substring(0, i)
     }
 }

@@ -531,6 +531,14 @@ internal object PerlRegex {
                     append(Matcher.quoteReplacement(r[i + 1].toString()))
                     i += 2
                 }
+                // ${1} は Java では名前付きの組の書き方なので、番号なら $1 にする（${name} はそのまま）
+                c == '$' && i + 1 < r.length && r[i + 1] == '{' && r.indexOf('}', i + 2).let { e ->
+                    e > i + 2 && r.substring(i + 2, e).all { it.isDigit() }
+                } -> {
+                    val e = r.indexOf('}', i + 2)
+                    append('$').append(r, i + 2, e)
+                    i = e + 1
+                }
                 c == '$' && i + 1 < r.length && (r[i + 1].isDigit() || r[i + 1] == '{') -> {
                     append(c)
                     i++
