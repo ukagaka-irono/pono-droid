@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 日本語の端末での名前 -->
+    <string name="app_name">pono どろいど</string>
+    <string name="product_name">pono どろいど</string>
+</resources>

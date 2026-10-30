@@ -1,5 +1,6 @@
 package net.pono.droid
 
+import androidx.compose.ui.res.stringResource
 import java.io.File
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.platform.LocalDensity
@@ -195,7 +196,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("pono-droid") },
+                title = { Text(stringResource(R.string.product_name)) },
                 actions = { TextButton(onClick = onShowLicenses) { Text("ライセンス") } },
             )
         },
@@ -364,7 +365,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                 item(key = "setting:mail") { MailAccountRow(onMessage = { scope.launch { snackbar.showSnackbar(it) } }) }
                 item(key = "version") {
                     Text(
-                        "pono-droid バージョン $version",
+                        stringResource(R.string.product_name) + " バージョン $version",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),

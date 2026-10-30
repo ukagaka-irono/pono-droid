@@ -1,5 +1,6 @@
 package net.pono.droid
 
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -68,14 +69,14 @@ fun LicensesScreen(onBack: () -> Unit) {
         ) {
             item {
                 Text(
-                    "pono-droid バージョン ${AppVersion.of(context)}",
+                    stringResource(R.string.product_name) + " バージョン ${AppVersion.of(context)}",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
             item {
                 Text(
-                    "pono-droid と、利用しているソフトウェアのライセンスです。名前をタップすると全文を表示します。",
+                    stringResource(R.string.product_name) + " と、利用しているソフトウェアのライセンスです。名前をタップすると全文を表示します。",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )

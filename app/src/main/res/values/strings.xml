@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">pono-droid</string>
+    <!-- 画面の中に出す名前（app_name と違い、debug / benchmark でも変えない） -->
+    <string name="product_name">pono-droid</string>
     <string name="notification_update">更新</string>
     <string name="notification_stop">終了</string>
     <string name="notification_show">表示</string>
