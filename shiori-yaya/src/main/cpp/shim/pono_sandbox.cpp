@@ -60,8 +60,11 @@ void Denied(const char *what, const char *path) {
     __android_log_print(ANDROID_LOG_WARN, "pono", "sandbox: denied %s %s", what, path ? path : "(null)");
 }
 
-// . と .. を字面で畳んで絶対パスにする
-std::string Normalize(const char *path) {
+// 絶対パスにして、前から 1 段ずつ realpath でシンボリックリンクを解決する。.. は解決した後の親に戻る
+// （/proc/self/root/.. や /data/user/0/.. は、字面で畳んだ所とは別の所を指すので、先に畳んではいけない）。
+// まだ無い所から後ろは字面でつなぐ（無いディレクトリの下にリンクは無い）。
+// realpath と getcwd は libc の中で完結するので、ここで横取りした関数は呼ばれない
+std::string Canonical(const char *path) {
     std::string in;
     if (path[0] != '/') {
         char cwd[PATH_MAX];
@@ -69,42 +72,34 @@ std::string Normalize(const char *path) {
     } else {
         in = path;
     }
-    std::vector<std::string> parts;
+    std::string cur = "/";
+    bool missing = false;
+    char buf[PATH_MAX];
     size_t i = 0;
     while (i <= in.size()) {
         size_t j = in.find('/', i);
         if (j == std::string::npos) j = in.size();
         std::string seg = in.substr(i, j - i);
-        if (seg == "..") {
-            if (!parts.empty()) parts.pop_back();
-        } else if (!seg.empty() && seg != ".") {
-            parts.push_back(seg);
-        }
         i = j + 1;
-    }
-    std::string out;
-    for (const std::string &p : parts) out += "/" + p;
-    return out.empty() ? "/" : out;
-}
-
-// シンボリックリンクも解決する。まだ無いファイルは、ある所までを realpath して残りをつなぐ
-// （realpath は libc の中で完結するので、ここで横取りした関数は呼ばれない）
-std::string Canonical(const char *path) {
-    std::string norm = Normalize(path);
-    std::string head = norm;
-    std::string tail;
-    char buf[PATH_MAX];
-    while (true) {
-        if (realpath(head.c_str(), buf)) {
-            std::string r = buf;
-            if (tail.empty()) return r;
-            return (r == "/" ? std::string() : r) + tail;
+        if (seg.empty() || seg == ".") continue;
+        if (seg == "..") {
+            size_t slash = cur.rfind('/');
+            cur = slash == 0 ? "/" : cur.substr(0, slash);
+            if (missing && realpath(cur.c_str(), buf)) {
+                cur = buf;
+                missing = false;
+            }
+            continue;
         }
-        size_t slash = head.rfind('/');
-        if (head == "/" || slash == std::string::npos) return norm;
-        tail = head.substr(slash) + tail;
-        head = slash == 0 ? "/" : head.substr(0, slash);
+        std::string next = (cur == "/" ? std::string() : cur) + "/" + seg;
+        if (!missing && realpath(next.c_str(), buf)) {
+            cur = buf;
+        } else {
+            cur = next;
+            missing = true;
+        }
     }
+    return cur;
 }
 
 bool Under(const std::string &path, const std::string &root) {
@@ -142,25 +137,40 @@ bool WritesWith(int flags) {
 // 内蔵モジュール 1 つ分の「ライブラリ」。dlopen はこれのアドレスを返し、dlsym はモジュールごとの関数を返す
 namespace {
 
-const int kSaoriSlots = 16;
+const int kSaoriSlots = 32;
 
+// 同じ名前のモジュールは同じ枠を使い、dlopen と dlclose の数で使っている数を数える。誰も使わなくなった枠は空けて使い回す
+// （同じプロセスで前のゴーストが開いた分で枠が埋まり、後のゴーストの SAORI が黙って失敗しないように）
 struct SaoriSlot {
     char name[64];
+    int refs;
 };
 
 std::mutex g_saori_lock;
 SaoriSlot g_saori_slots[kSaoriSlots];
-int g_saori_used = 0;
 
 SaoriSlot *SaoriSlotFor(const char *module) {
     std::lock_guard<std::mutex> guard(g_saori_lock);
-    for (int i = 0; i < g_saori_used; ++i) {
-        if (strcmp(g_saori_slots[i].name, module) == 0) return &g_saori_slots[i];
+    for (SaoriSlot &s : g_saori_slots) {
+        if (s.refs > 0 && strcmp(s.name, module) == 0) {
+            s.refs++;
+            return &s;
+        }
     }
-    if (g_saori_used >= kSaoriSlots) return nullptr;
-    SaoriSlot *slot = &g_saori_slots[g_saori_used++];
-    strncpy(slot->name, module, sizeof(slot->name) - 1);
-    return slot;
+    for (SaoriSlot &s : g_saori_slots) {
+        if (s.refs == 0) {
+            memset(s.name, 0, sizeof(s.name));
+            strncpy(s.name, module, sizeof(s.name) - 1);
+            s.refs = 1;
+            return &s;
+        }
+    }
+    return nullptr;
+}
+
+void SaoriSlotRelease(SaoriSlot *slot) {
+    std::lock_guard<std::mutex> guard(g_saori_lock);
+    if (slot->refs > 0) slot->refs--;
 }
 
 int SaoriSlotIndex(void *handle) {
@@ -208,7 +218,8 @@ template <int N> int SaoriLoad(char *h, long) {
 template <int N> int SaoriUnload() { return 1; }
 template <int N> char *SaoriRequestPlain(char *h, long *len) { return SaoriRequest(N, h, len); }
 
-#define PONO_SAORI_SLOTS(F) F(0), F(1), F(2), F(3), F(4), F(5), F(6), F(7), F(8), F(9), F(10), F(11), F(12), F(13), F(14), F(15)
+#define PONO_SAORI_SLOTS(F) F(0), F(1), F(2), F(3), F(4), F(5), F(6), F(7), F(8), F(9), F(10), F(11), F(12), F(13), F(14), F(15), \
+    F(16), F(17), F(18), F(19), F(20), F(21), F(22), F(23), F(24), F(25), F(26), F(27), F(28), F(29), F(30), F(31)
 #define PONO_LOAD_ID(n) reinterpret_cast<void *>(&SaoriLoadWithId<n>)
 #define PONO_UNLOAD_ID(n) reinterpret_cast<void *>(&SaoriUnloadWithId<n>)
 #define PONO_REQUEST_ID(n) reinterpret_cast<void *>(&SaoriRequestWithId<n>)
@@ -281,8 +292,13 @@ void *__wrap_dlsym(void *handle, const char *symbol) {
     return nullptr;
 }
 
-// 開けるのは内蔵モジュールだけなので、閉じるものも無い
-int __wrap_dlclose(void *handle) { return SaoriSlotIndex(handle) >= 0 ? 0 : -1; }
+// 開けるのは内蔵モジュールだけ。閉じたら枠の使っている数を減らす
+int __wrap_dlclose(void *handle) {
+    int n = SaoriSlotIndex(handle);
+    if (n < 0) return -1;
+    SaoriSlotRelease(&g_saori_slots[n]);
+    return 0;
+}
 
 pid_t __wrap_fork(void) {
     Denied("fork", "");

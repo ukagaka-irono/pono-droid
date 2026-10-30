@@ -93,6 +93,12 @@ class NativeShioriTest {
             		_r = TOSTR(FOPEN(_path, 'r'))
             		FCLOSE(_path)
             	}
+            	elseif _cmd == 'fcopy-in' {
+            		_r = TOSTR(FCOPY(_path, 'copied.txt'))
+            	}
+            	elseif _cmd == 'fcopy-out' {
+            		_r = TOSTR(FCOPY('inside.txt', _path))
+            	}
             	elseif _cmd == 'loadlib' {
             		_r = TOSTR(LOADLIB(_path))
             	}
@@ -195,6 +201,16 @@ class NativeShioriTest {
             assertEquals("0", ask("fopen-w", evil.path))
             assertFalse(evil.exists())
             assertEquals("0", ask("fopen-r", secret.path))
+            // シンボリックリンクの先の .. で回り込んでも読めない（/proc/self/root は /、/data/user/0 は /data/data）
+            assertEquals("0", ask("fopen-r", "/proc/self/root/.." + secret.path))
+            val pkg = context.packageName
+            assertEquals("0", ask("fopen-r", "/data/user/0/../data/$pkg/files/${secret.name}"))
+            // FCOPY は std::fstream で開く（libc++ の中の fopen も横取りされる）
+            assertEquals("0", ask("fcopy-in", secret.path))
+            assertFalse(File(dir, "copied.txt").exists())
+            val evilCopy = File(context.filesDir, "yaya-test-evil-copy.txt")
+            assertEquals("0", ask("fcopy-out", evilCopy.path))
+            assertFalse(evilCopy.exists())
             // システムのファイルは読むだけなら許す
             assertEquals("1", ask("fopen-r", "/system/etc/hosts"))
 
@@ -361,6 +377,9 @@ class NativeShioriTest {
             local f = io.popen("id")
             r[#r+1] = f and "popen" or "nopopen"
             r[#r+1] = package.loadlib("${File(context.applicationInfo.nativeLibraryDir, "libyaya.so").path}", "luaopen_x") and "loadlib" or "noloadlib"
+            r[#r+1] = load(string.dump(function() return 1 end)) and "bytecode" or "nobytecode"
+            r[#r+1] = (debug.getregistry or debug.setupvalue or debug.upvaluejoin) and "debug" or "nodebug"
+            r[#r+1] = debug.traceback and "traceback" or "notraceback"
             return table.concat(r, ",")
             """.trimIndent(),
         )
@@ -368,7 +387,7 @@ class NativeShioriTest {
             // 相対パスは ghost/master 基準ではなく作業ディレクトリ基準なので、書き込み先は書かずに結果だけ見る
             val value = request(ShioriEngine.KAGARI, dir, Charsets.UTF_8)
             assertTrue("$value", value?.startsWith("noread,") == true)
-            assertTrue("$value", value?.endsWith(",nopopen,noloadlib") == true)
+            assertTrue("$value", value?.endsWith(",nopopen,noloadlib,nobytecode,nodebug,traceback") == true)
             Thread.sleep(300)
             assertFalse(marker.exists())
         } finally {

@@ -143,10 +143,13 @@ add_library(kagari SHARED
     ${LUA_SOURCES}
     kagari/kagari.cpp
     kagari/kagari_unix.cpp
+    shim/pono_lua.c
     jni_kagari.cpp)
 set_source_files_properties(kagari/kagari.cpp kagari/kagari_unix.cpp PROPERTIES COMPILE_OPTIONS -w)
 target_include_directories(kagari PRIVATE ${LUA_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/sol2/include ${CMAKE_CURRENT_SOURCE_DIR}/kagari)
 # LUA_USE_LINUX は dlopen 版の C モジュール読み込みと popen を使う（どちらもサンドボックスで止まる）
 target_compile_definitions(kagari PRIVATE LUA_USE_LINUX)
 target_compile_options(kagari PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>)
+# バイトコードを読ませず、debug ライブラリを絞る（shim/pono_lua.c）
+target_link_options(kagari PRIVATE -Wl,--wrap=lua_load -Wl,--wrap=luaopen_debug)
 pono_shiori_library(kagari)

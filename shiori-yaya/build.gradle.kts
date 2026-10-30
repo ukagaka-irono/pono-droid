@@ -266,7 +266,9 @@ android {
                     "-DYAYA_GENERATED_DIR=${generatedDir.get().asFile.absolutePath.replace('\\', '/')}",
                     "-DSATORI_GENERATED_DIR=${satoriGeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
                     "-DKAWARI_GENERATED_DIR=${kawariGeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
-                    "-DANDROID_STL=c++_shared",
+                    // libc++ を各 .so に入れる。c++_shared だと std::fstream などが libc++_shared.so の中から fopen を呼び、
+                    // --wrap（pono_sandbox）を通らない
+                    "-DANDROID_STL=c++_static",
                 )
             }
         }
