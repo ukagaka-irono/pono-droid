@@ -172,9 +172,16 @@ class GhostRepository(val root: File, val balloons: BalloonRepository = BalloonR
     }
 
     fun list(): List<Ghost> =
-        root.listFiles { f -> f.isDirectory }?.map(::Ghost)?.filter { it.isValid }?.sortedBy { it.name }.orEmpty()
+        root.listFiles { f -> f.isDirectory }?.mapNotNull(::readable)?.filter { it.isValid }?.sortedBy { it.name }.orEmpty()
 
-    fun find(dirName: String): Ghost? = Ghost(File(root, dirName)).takeIf { it.isValid }
+    fun find(dirName: String): Ghost? = readable(File(root, dirName))?.takeIf { it.isValid }
+
+    /** 読めないゴースト（descript.txt をほかのプロセスが使っている間など）は、無いものとして飛ばす */
+    private fun readable(dir: File): Ghost? = try {
+        Ghost(dir)
+    } catch (_: java.io.IOException) {
+        null
+    }
 
     fun installer() = NarInstaller(root, balloons.root)
 

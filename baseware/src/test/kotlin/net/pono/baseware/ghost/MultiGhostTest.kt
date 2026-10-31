@@ -164,6 +164,18 @@ class MultiGhostTest {
     }
 
     @Test
+    fun percentPropertyWaitsForTheOtherGhost() = run {
+        // %property[…] でも、ほかのゴーストの ext.名前・shiori.変数名 は答えを待って文に入れる（動いていなければ空）
+        val a = boot("a", mapOf("OnSay" to """\0%property[activeghostlist(びい).ext.mood]/%property[ghostlist(ゴーストB).shiori.hp]/%property[ghostlist(ゴーストC).shiori.hp]/\e"""))
+        boot("b", mapOf("property.get" to "くもり", "hp" to "42"))
+        a.c.raise("OnSay", emptyList())
+        val s = withTimeout(10_000) {
+            a.c.state.first { st -> st.characters[0]?.balloon.orEmpty().filterIsInstance<BalloonItem.Text>().joinToString("") { it.text }.endsWith("/") && !st.talking }
+        }
+        assertEquals("くもり/42//", s.characters[0]!!.balloon!!.filterIsInstance<BalloonItem.Text>().joinToString("") { it.text })
+    }
+
+    @Test
     fun responseReference0TalksToTheOtherGhost() = run {
         // A の答えの Reference0 が B の本体側の名前なら、B に OnCommunicate が届く
         val a = boot("a", mapOf("OnTalk" to """\0\s[5]Bさん元気？\e"""), headers = mapOf("OnTalk" to mapOf("Reference0" to "びい", "Reference1" to "おまけ")))

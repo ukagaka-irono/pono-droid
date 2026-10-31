@@ -19,6 +19,8 @@ import net.pono.baseware.ghost.testScope
 import net.pono.baseware.sakura.ScriptPlayer
 import net.pono.baseware.shell.Shell
 import net.pono.baseware.shiori.Shiori
+import net.pono.baseware.update.FetchResult
+import net.pono.baseware.update.HttpFetcher
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -81,6 +83,7 @@ class PluginHostTest {
         ghostReplies: Map<String, String>,
         pluginReplies: (String) -> Map<String, String> = { emptyMap() },
         descriptExtra: String = "",
+        fetcher: HttpFetcher = HttpFetcher { _, _, _ -> FetchResult.HttpError(404) },
         block: suspend Setup.() -> Unit,
     ) = runBlocking<Unit> {
         val scope = testScope()
@@ -96,7 +99,7 @@ class PluginHostTest {
             val shiori = ScriptedShiori(ghostReplies)
             val c = GhostController(
                 ghost = ghost, shell = Shell(ghost.shellDir()!!), shioriFactory = { _, _ -> shiori }, scope = scope,
-                platform = RecordingPlatform(), player = ScriptPlayer(charWaitMs = 0), hub = hub, plugins = host,
+                platform = RecordingPlatform(), player = ScriptPlayer(charWaitMs = 0), hub = hub, plugins = host, updateFetcher = fetcher,
             )
             c.start()
             withTimeout(5000) { c.state.first { it.booted } }
@@ -112,6 +115,37 @@ class PluginHostTest {
 
     private suspend fun Setup.awaitChoice(id: String) = withTimeout(5000) {
         c.state.first { s -> s.characters.values.any { ch -> ch.balloon?.any { it is BalloonItem.ChoiceItem && it.choice.id == id } == true } }
+    }
+
+    /** \![updateother,--plugin=名前] は、そのプラグインの descript.txt の homeurl から更新し、新しいファイルで動かし直す */
+    @Test
+    fun networkUpdateOfAPlugin() {
+        // 一覧に new.txt（中身は hi）だけがある更新サーバー
+        val fetcher = HttpFetcher { url, sink, _ ->
+            when {
+                url == "https://e.test/plugin/updates2.dau" -> {
+                    sink.write("new.txt\u000149f68a5c8493ec2c0bf489821c21fc3b\u0001size=2\r\n".toByteArray())
+                    FetchResult.Ok
+                }
+                url == "https://e.test/plugin/new.txt" -> {
+                    sink.write("hi".toByteArray())
+                    FetchResult.Ok
+                }
+                else -> FetchResult.HttpError(404)
+            }
+        }
+        run(
+            mapOf("OnPlug" to """\![updateother,--plugin=テストプラグイン]\e"""),
+            descriptExtra = "homeurl,https://e.test/plugin/\r\n",
+            fetcher = fetcher,
+        ) {
+            val versions = plugin.count("version")
+            c.raise("OnPlug", emptyList())
+            assertEquals(listOf("テストプラグイン\u0001plugin\u0001OK\u00011"), shiori.awaitEvent("OnUpdateResultEx"))
+            assertEquals("hi", File(host.plugins.single().dir, "new.txt").readText())
+            // 読み込み直したので、もう一度 version を聞く
+            withTimeout(5000) { while (plugin.count("version") <= versions) delay(10) }
+        }
     }
 
     @Test

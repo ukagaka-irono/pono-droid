@@ -293,6 +293,12 @@ interface ScriptHost {
     /** `%property[名前]`。知らない名前なら null */
     fun property(name: String): String? = null
 
+    /**
+     * スクリプトの中の `%property[名前]`。SHIORI やほかのゴースト・プラグインに聞かないと分からないもの（activeghostlist(…).ext.名前・
+     * shiori.変数名・pluginlist(…).ext.名前）は、その答えを待つ（再生はそこで止まる）
+     */
+    suspend fun propertyWaiting(name: String): String? = property(name)
+
     /** `\![reload,shiori]` など。[what] は shiori / shell / balloon / ghost / descript ... */
     fun reload(what: String) {}
 
@@ -466,7 +472,7 @@ class ScriptPlayer(
                     start = p + 1
                 }
                 parts += s.substring(start)
-                if (parts.none { "%*" in it }) return text(parts.joinToString("%") { expandEnv(it, host) }, literal = true)
+                if (parts.none { "%*" in it }) return text(parts.map { expandEnv(it, host) }.joinToString("%"), literal = true)
                 // %* の印もあるときは、分けたまま順に出す
                 parts.forEachIndexed { i, part ->
                     if (i > 0) text("%", literal = true)
@@ -993,9 +999,16 @@ class ScriptPlayer(
     private val propertyPattern = Regex("""%property\[([^\]]*)\]""")
 
     /** %名前 を展開する（\% はタグを読むときに、展開しない文字にしてある） */
-    private fun expandEnv(s: String, host: ScriptHost): String {
+    private suspend fun expandEnv(s: String, host: ScriptHost): String {
         if ('%' !in s) return s
-        val withProperties = propertyPattern.replace(s) { m -> host.property(m.groupValues[1].trim()).orEmpty() }
+        // %property[…] は答えを待つことがあるので、1 つずつ置き換える
+        val withProperties = StringBuilder()
+        var last = 0
+        for (m in propertyPattern.findAll(s)) {
+            withProperties.append(s, last, m.range.first).append(host.propertyWaiting(m.groupValues[1].trim()).orEmpty())
+            last = m.range.last + 1
+        }
+        withProperties.append(s, last, s.length)
         // %selfname2 のような名前もあるので、長い名前から順に試す。名前はどれも短いので、長い英数字の並びの
         // 全部の長さは試さない（2 乗の時間がかかり、SSTP で長い並びを送られると固まる）
         return envPattern.replace(withProperties) { m ->

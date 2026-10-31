@@ -183,7 +183,7 @@ currentghost.shelllist(…).menu、scope(ID).x / y / rect / surface.x / surface.
 balloon.scope(ID).x / y / rect / scaling / vertical / validwidth / validheight / lines（書ける範囲の全体 validrect）/ .initial（書き始めの basepos から）/
 basepos.x / y（origin）/ char_width（1行は文字の高さの 1.4 倍）/ background.color（画像でいちばん多い色）、
 ghostlist(…).shiori（SHIORI の名前）、ghostlist / activeghostlist / currentghost の shiori.変数名（動いているゴーストの SHIORI に、変数名を ID にして GET で聞く。
-SHIORI を待つので \![get,property] でだけ使え、%property[] では空）、seriko.surfacelist.all / defined、seriko.sticky-window / zorder、seriko.tooltip.*、
+\![get,property] でも %property[] でも答えを待つ。%property[] は 5 秒まで）、seriko.surfacelist.all / defined、seriko.sticky-window / zorder、seriko.tooltip.*、
 sound.count / sound.index(ID).* / sound(名前).*、mousecursor・seriko.cursor（カーソルは無いので書いたものを返すだけ）、sakura / kero / char*.bind.menu、
 history.ghost / balloon、rateofuselist.index(順位).*（起動回数・分・週・月・割合）、developer.log.script / error / network / update。
 \![set,property] は [SET有効] のうち shelllist(…).menu・*.bind.menu・sticky-window・zorder・tooltip・sound の position / playing / pause・カーソル

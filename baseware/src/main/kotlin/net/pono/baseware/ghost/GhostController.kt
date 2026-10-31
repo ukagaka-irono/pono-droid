@@ -1098,7 +1098,7 @@ class GhostController(
     /** バルーンのオンラインの印は、\![enter,onlinemode] の間とネットワーク更新の間に出す */
     private fun refreshOnline() = _state.update { it.copy(online = onlineMode || updating || httpShowing > 0) }
 
-    /** ネットワーク更新するもの。[type] は ghost / shell / balloon、[name] は名前（OnUpdateResultEx） */
+    /** ネットワーク更新するもの。[type] は ghost / shell / balloon / plugin、[name] は名前（OnUpdateResultEx） */
     private class UpdateTarget(val type: String, val name: String, val dir: File, val homeUrl: String?)
 
     /**
@@ -1139,7 +1139,10 @@ class GhostController(
             ?.trim()?.takeIf { it.isNotEmpty() }
     }
 
-    /** \![updateother,--shell=名前,--balloon=名前]。入っているシェルとバルーンを名前で更新し、OnUpdateResultEx でまとめる */
+    /**
+     * \![updateother,--shell=名前,--balloon=名前,--plugin=名前]。入っているシェル・バルーン・プラグインを名前で更新し、
+     * OnUpdateResultEx でまとめる。プラグインは descript.txt の homeurl から、更新したら読み込み直す
+     */
     fun updateOther(args: List<String>) {
         val opts = args.map { it.trim() }.filter { it.startsWith("--") }
         val options = opts.filter { it.startsWith("--option=") }.flatMap { it.removePrefix("--option=").split('+', ',') }.map { it.trim().lowercase() }.toSet()
@@ -1150,7 +1153,9 @@ class GhostController(
                     ?.let { UpdateTarget("shell", it.name, it.dir, it.descript["homeurl"]) }
                 o.startsWith("--balloon=") -> repository?.balloons?.list()?.firstOrNull { it.name == name || it.dir.name == name }
                     ?.let { UpdateTarget("balloon", it.name, it.dir, it.descript["homeurl"]) }
-                // プラグイン・ヘッドライン・言語は pono-droid に無い
+                o.startsWith("--plugin=") -> plugins?.plugins?.firstOrNull { it.name == name || it.dir.name == name }
+                    ?.let { UpdateTarget("plugin", it.name, it.dir, it.descript["homeurl"]) }
+                // ヘッドライン・言語は pono-droid に無い
                 else -> null
             }
         }
@@ -1244,6 +1249,8 @@ class GhostController(
                 }
                 is UpdateResult.Changed -> {
                     if (ghostSide) reloadShiori()
+                    // プラグインは、新しいファイルで動かし直す
+                    if (t.type == "plugin") plugins?.restart(t.dir)
                     raise("${prefix}Complete", refs("changed", result.files.joinToString(",")))
                     row(true, result.files.size.toString())
                 }
@@ -7097,6 +7104,10 @@ class GhostController(
 
         override fun property(name: String): String? = this@GhostController.property(name)
 
+        // SHIORI やほかのゴースト・プラグインに聞くものは、答えを待つ（答えなければ空）
+        override suspend fun propertyWaiting(name: String): String? =
+            if (asksShiori(name)) withTimeoutOrNull(PROPERTY_WAIT_MS) { shioriProperty(name) } else this@GhostController.property(name)
+
         override fun reload(what: String) {
             when (what) {
                 "shiori" -> scope.launch { reloadShiori() }
@@ -7379,6 +7390,9 @@ class GhostController(
 
         /** ゴーストを切り替えるとき、前のゴーストが話し終わるのを待つ長さ */
         const val CHANGE_WAIT_MS = 30_000L
+
+        /** %property[…] で SHIORI やほかのゴーストの答えを待つ長さ */
+        const val PROPERTY_WAIT_MS = 5_000L
 
         /** メニューと [changeBalloon] で簡易バルーンを表す名前（ディレクトリ名と重ならないよう / を含める） */
         const val SIMPLE_BALLOON = "/simple"

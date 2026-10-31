@@ -72,6 +72,13 @@ class PluginHost(
         l.lock.withLock { withContext(Dispatchers.IO) { runCatching { l.engine.unload() } } }
     }
 
+    /** フォルダ [dir] のプラグインを止めて、descript.txt から読み直して動かし直す（ネットワーク更新の後） */
+    suspend fun restart(dir: File) {
+        val canonical = dir.canonicalFile
+        repository.list().firstOrNull { it.dir.canonicalFile == canonical }?.let { unload(it) }
+        repository.list().firstOrNull { it.dir.canonicalFile == canonical }?.let { load(it) }
+    }
+
     private suspend fun reload() {
         unloadAll()
         for (p in repository.list()) load(p)
