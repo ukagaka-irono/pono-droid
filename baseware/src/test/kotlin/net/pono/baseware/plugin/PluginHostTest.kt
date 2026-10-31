@@ -226,7 +226,7 @@ class PluginHostTest {
         val root = tmp.newFolder("ghosts")
         val nar = File(tmp.root, "p.nar")
         ZipOutputStream(FileOutputStream(nar)).use { z ->
-            for ((name, text) in listOf("install.txt" to "type,plugin\r\ndirectory,myplug\r\nname,マイプラグ\r\n", "descript.txt" to "name,マイプラグ\r\nid,X-1\r\nfilename,yaya.dll\r\n")) {
+            for ((name, text) in listOf("install.txt" to "type,plugin\r\ndirectory,myplug\r\nname,マイプラグ\r\n", "descript.txt" to "name,マイプラグ\r\nid,X-1\r\nfilename,yaya.dll\r\n", "system\\" to "", "system\\a.dic" to "dic")) {
                 z.putNextEntry(ZipEntry(name))
                 z.write(text.toByteArray())
                 z.closeEntry()
@@ -236,5 +236,7 @@ class PluginHostTest {
         assertEquals(NarInstaller.Type.PLUGIN, r.type)
         assertEquals(File(root.parentFile, "plugin/myplug").canonicalFile, r.dir.canonicalFile)
         assertTrue(Plugin(r.dir).isValid)
+        // \\ で終わるフォルダの項目（古いアーカイバ）はフォルダとして扱い、その中のファイルも入る
+        assertEquals("dic", File(r.dir, "system/a.dic").readText())
     }
 }

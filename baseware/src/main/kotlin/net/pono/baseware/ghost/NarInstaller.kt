@@ -44,7 +44,8 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File, p
         val zip = openZip(nar, Charsets.UTF_8) ?: openZip(nar, TextCharsets.CP932)
             ?: throw InstallException("nar を開けません")
         zip.use {
-            val entries = zip.entries().toList().filterNot { it.isDirectory }
+            // 古いアーカイバは「system\」のように \ で終わる名前でフォルダを入れることがある（ファイルとして作ると、その中に書けなくなる）
+            val entries = zip.entries().toList().filterNot { it.isDirectory || it.name.endsWith("\\") }
             val installEntry = entries.firstOrNull { normalize(it.name).equals("install.txt", ignoreCase = true) }
                 ?: throw InstallException("install.txt がありません")
             val install = Descript.parse(TextCharsets.decode(zip.getInputStream(installEntry).readBytes()))
