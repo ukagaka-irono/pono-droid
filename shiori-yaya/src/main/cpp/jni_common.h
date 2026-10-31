@@ -135,6 +135,96 @@ private:
 
 }  // namespace pono
 
+namespace pono {
+
+// SHIORI を SAORI として使うとき（ゴーストが yaya.dll・satori.dll などを SAORI として読む。YAYA as SAORI や
+// ninix-saori の saori_yaya などと同じ）。shim/pono_sandbox.cpp の dlopen がこのライブラリを開き、
+// pono_saori_guest.cpp と同じ pono_guest_* を呼ぶ。SAORI の要求は、そのままエンジンの request に渡す。
+// SHIORI 側（ShioriJni）とは別の鍵にする（同じエンジンのゴーストが自分を SAORI として呼ぶと、ShioriJni の鍵を持ったまま来る）
+class EngineSaori {
+public:
+    explicit EngineSaori(const ShioriEngine &engine) : engine_(engine) {}
+
+    // SHIORI の側のサンドボックスと同じ決まりにする（\n で区切ったディレクトリ）
+    static void Policy(const char *allowed, const char *guarded, const char *readable) {
+        EachLine(guarded, pono_sandbox_protect);
+        EachLine(allowed, pono_sandbox_allow);
+        EachLine(readable, pono_sandbox_allow_read);
+    }
+
+    // [path] は malloc したもの（エンジンが free する）。ID（1 から）を返し、失敗なら 0
+    long Load(char *path, long len) {
+        std::lock_guard<std::mutex> guard(lock_);
+        long id;
+        try {
+            id = engine_.load(path, len);
+        } catch (...) {
+            id = -1;
+        }
+        return id >= 0 ? id + 1 : 0;
+    }
+
+    // 入力はここで（またはエンジンが）free し、malloc した答えを返す
+    char *Request(long id, char *request, long *len) {
+        std::lock_guard<std::mutex> guard(lock_);
+        char *res;
+        try {
+            res = engine_.request(id - 1, request, len);
+        } catch (...) {
+            res = nullptr;
+        }
+        if (res != nullptr && !engine_.requestFreesInput) free(request);
+        return res;
+    }
+
+    int Unload(long id) {
+        std::lock_guard<std::mutex> guard(lock_);
+        try {
+            return engine_.unload(id - 1) ? 1 : 0;
+        } catch (...) {
+            return 0;
+        }
+    }
+
+private:
+    template <typename F>
+    static void EachLine(const char *text, F f) {
+        if (text == nullptr) return;
+        std::string s(text);
+        size_t i = 0;
+        while (i <= s.size()) {
+            size_t j = s.find('\n', i);
+            if (j == std::string::npos) j = s.size();
+            std::string one = s.substr(i, j - i);
+            if (!one.empty()) f(one.c_str());
+            i = j + 1;
+        }
+    }
+
+    ShioriEngine engine_;
+    std::mutex lock_;
+};
+
+}  // namespace pono
+
+// SHIORI を SAORI として読むときの入口（pono_guest_*）を作る
+#define PONO_DEFINE_ENGINE_SAORI(ENGINE)                                                                      \
+    static pono::EngineSaori g_engine_saori(ENGINE);                                                            \
+    extern "C" __attribute__((visibility("default"))) void pono_guest_policy(const char *allowed,               \
+                                                                            const char *guarded,               \
+                                                                            const char *readable) {            \
+        pono::EngineSaori::Policy(allowed, guarded, readable);                                                  \
+    }                                                                                                           \
+    extern "C" __attribute__((visibility("default"))) long pono_guest_load(char *path, long len) {              \
+        return g_engine_saori.Load(path, len);                                                                  \
+    }                                                                                                           \
+    extern "C" __attribute__((visibility("default"))) char *pono_guest_request(long id, char *req, long *len) { \
+        return g_engine_saori.Request(id, req, len);                                                            \
+    }                                                                                                           \
+    extern "C" __attribute__((visibility("default"))) int pono_guest_unload(long id) {                         \
+        return g_engine_saori.Unload(id);                                                                       \
+    }
+
 // Kotlin の net.pono.shiori.yaya.<CLASS>（load / request / unload を持つ object）の入口を作る
 #define PONO_DEFINE_SHIORI_JNI(CLASS, ENGINE)                                                                       \
     static pono::ShioriJni g_shiori_jni(ENGINE);                                                                    \

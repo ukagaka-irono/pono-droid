@@ -389,6 +389,58 @@ class NativeShioriTest {
         assertFalse(evil.exists())
     }
 
+    /**
+     * SHIORI を SAORI として使う（YAYA as SAORI。ninix-saori の saori_yaya と同じ）。YAYA のゴーストが yaya_saori/yaya.dll を
+     * SAORI として読むと、同じ libyaya.so の別の YAYA が yaya_saori の辞書で答える
+     */
+    @Test
+    fun yayaAsSaori() {
+        val dir = File(root, "yaya-as-saori").apply { deleteRecursively(); mkdirs() }
+        File(dir, "yaya.txt").writeText("charset, UTF-8\r\ndic, test.dic\r\n", Charsets.US_ASCII)
+        val saori = File(dir, "yaya_saori").apply { mkdirs() }
+        File(saori, "yaya.dll").writeBytes(ByteArray(4))
+        File(saori, "yaya.txt").writeText("charset, UTF-8\r\ndic, saori.dic\r\n", Charsets.US_ASCII)
+        File(saori, "saori.dic").writeText(
+            """
+            request
+            {
+            	_crlf = CHR(13) + CHR(10)
+            	_arg = ''
+            	_lines = SPLIT(_argv[0], _crlf)
+            	foreach _lines; _x {
+            		if SUBSTR(_x, 0, 11) == 'Argument0: ' {
+            			_arg = ERASE(_x, 0, 11)
+            		}
+            	}
+            	'SAORI/1.0 200 OK' + _crlf + 'Charset: UTF-8' + _crlf + 'Result: saori:' + _arg + _crlf + _crlf
+            }
+            """.trimIndent().replace("\n", "\r\n"),
+            Charsets.UTF_8,
+        )
+        File(dir, "test.dic").writeText(
+            """
+            request
+            {
+            	_crlf = CHR(13) + CHR(10)
+            	_r = LOADLIB('yaya_saori/yaya.dll')
+            	_res = REQUESTLIB('yaya_saori/yaya.dll', 'EXECUTE SAORI/1.0' + _crlf + 'Charset: UTF-8' + _crlf + 'Sender: test' + _crlf + 'Argument0: こんにちは' + _crlf + _crlf)
+            	_r = UNLOADLIB('yaya_saori/yaya.dll')
+            	_v = ''
+            	_lines = SPLIT(_res, _crlf)
+            	foreach _lines; _x {
+            		if SUBSTR(_x, 0, 8) == 'Result: ' {
+            			_v = ERASE(_x, 0, 8)
+            		}
+            	}
+            	'SHIORI/3.0 200 OK' + _crlf + 'Charset: UTF-8' + _crlf + 'Value: ' + _v + _crlf + _crlf
+            }
+            """.trimIndent().replace("\n", "\r\n"),
+            Charsets.UTF_8,
+        )
+        val value = request(ShioriEngine.YAYA, dir, Charsets.UTF_8).orEmpty()
+        assertEquals("saori:こんにちは", value)
+    }
+
     /** 湊（minato）。config.toml と talks/main.mnt を読み、OnBoot のトークが返る */
     @Test
     fun minatoDictionary() {

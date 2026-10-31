@@ -21,3 +21,6 @@ const pono::ShioriEngine kSatori = {SatoriLoad, SatoriRequest, SatoriUnload, tru
 }  // namespace
 
 PONO_DEFINE_SHIORI_JNI(SatoriNative, kSatori)
+
+// ゴーストがこの SHIORI を SAORI として読むとき（YAYA as SAORI など）
+PONO_DEFINE_ENGINE_SAORI(kSatori)

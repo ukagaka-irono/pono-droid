@@ -277,6 +277,14 @@ const NativeSaoriLib kNativeSaoris[] = {
     {"saori_qrcode", "libsaori_qrcode.so"},
     {"resizedpng", "libsaori_resizedpng.so"},
     {"piechart", "libsaori_piechart.so"},
+    // SHIORI を SAORI として（YAYA as SAORI・ninix-saori の saori_yaya などと同じ）。中身は SHIORI の .so（jni_common.h の
+    // PONO_DEFINE_ENGINE_SAORI）
+    {"yaya", "libyaya.so"},
+    {"aya", "libyaya.so"},
+    {"aya5", "libyaya.so"},
+    {"satori", "libsatori.so"},
+    {"kawari", "libkawari.so"},
+    {"kawari8", "libkawari.so"},
 };
 
 const int kNativeSlots = 8;

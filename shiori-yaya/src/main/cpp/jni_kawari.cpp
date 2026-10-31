@@ -38,3 +38,6 @@ const pono::ShioriEngine kKawari = {KawariLoad, KawariRequest, KawariUnload, tru
 }  // namespace
 
 PONO_DEFINE_SHIORI_JNI(KawariNative, kKawari)
+
+// ゴーストがこの SHIORI を SAORI として読むとき（YAYA as SAORI など）
+PONO_DEFINE_ENGINE_SAORI(kKawari)

@@ -20,3 +20,6 @@ const pono::ShioriEngine kYaya = {YayaLoad, YayaRequest, YayaUnload, false};
 }  // namespace
 
 PONO_DEFINE_SHIORI_JNI(YayaNative, kYaya)
+
+// ゴーストがこの SHIORI を SAORI として読むとき（YAYA as SAORI など）
+PONO_DEFINE_ENGINE_SAORI(kYaya)
