@@ -380,10 +380,22 @@ class CharacterWindow(
         val bounds = screenBounds()
         originCache?.takeIf { originFor == bounds }?.let { return it }
         val loc = IntArray(2).also(surfaceView::getLocationOnScreen)
-        val x = if (alignEnd) loc[0] + surfaceView.width + params.x else loc[0] - params.x
-        return Point(x, loc[1] + surfaceView.height + params.y).also {
-            originCache = it
-            originFor = bounds
+        val w = surfaceView.width
+        val h = surfaceView.height
+        // x / y が負（画面の外へ引っぱった）なら、WindowManager がウィンドウを原点の側の端まで押し戻しているので、
+        // その端が原点。反対の端に付いているときは押し戻されたかどうか分からないので、測ったものを覚えない
+        val x = when {
+            params.x < 0 -> if (alignEnd) loc[0] + w else loc[0]
+            alignEnd -> loc[0] + w + params.x
+            else -> loc[0] - params.x
+        }
+        val y = if (params.y < 0) loc[1] + h else loc[1] + h + params.y
+        val pushedFromFarSide = (if (alignEnd) loc[0] <= bounds.left else loc[0] + w >= bounds.right) || loc[1] <= bounds.top
+        return Point(x, y).also {
+            if (!pushedFromFarSide) {
+                originCache = it
+                originFor = bounds
+            }
         }
     }
 

@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -126,17 +127,24 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     val version = remember { AppVersion.of(context) }
     // 消したゴースト向け（recommended.ghost）のバルーン。一緒に消すか聞く
     var leftBalloons by remember { mutableStateOf<Pair<String, List<Balloon>>?>(null) }
+    val listState = rememberLazyListState()
 
     suspend fun reload() {
         val repo = GhostStore.repository(context)
         // 壊れたゴーストやバルーンがあっても一覧は出す（出なければ消すこともできない）
-        ghosts = withContext(Dispatchers.IO) {
+        val loaded = withContext(Dispatchers.IO) {
             runCatching { repo.list() }.getOrDefault(emptyList()).map { ghost ->
                 runCatching { GhostItem(ghost, repo.balloons) }.getOrElse { GhostItem(ghost, emptyList(), null, emptyList(), null) }
             }
         }
-        balloons = withContext(Dispatchers.IO) { runCatching { repo.balloons.list() }.getOrDefault(emptyList()) }
+        val loadedBalloons = withContext(Dispatchers.IO) { runCatching { repo.balloons.list() }.getOrDefault(emptyList()) }
+        // 一覧はいちばん上に出ていた項目に合わせて位置を保つので、読み終わったときや入れたときに上に足された行が見えなくなる
+        // （「設定」が先頭に見える）。いちばん上を見ていたなら、いちばん上のままにする
+        val atTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+        ghosts = loaded
+        balloons = loadedBalloons
         listed = true
+        if (atTop) listState.requestScrollToItem(0)
     }
 
     LaunchedEffect(Unit) { reload() }
@@ -233,7 +241,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
             } else if (ghosts.isEmpty()) {
                 Text("ゴーストがありません。.nar ファイルをインストールしてください。", style = MaterialTheme.typography.bodyMedium)
             }
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(ghosts, key = { it.ghost.dir.name }) { item ->
                     val dirName = item.ghost.dir.name
                     val isRunning = dirName in running
