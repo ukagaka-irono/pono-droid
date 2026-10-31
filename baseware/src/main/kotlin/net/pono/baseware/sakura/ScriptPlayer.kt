@@ -13,7 +13,12 @@ data class Choice(
     val references: List<String> = emptyList(),
     val anchor: Boolean = false,
     val untrusted: Boolean = false,
+    /** \__q[…] と \__q の間に置いた \_b[ファイル,inline] の画像。画像を押しても選べる（文字が無くても） */
+    val image: ChoiceImage? = null,
 )
+
+/** 選択肢の中の画像（[path] は読んでよいと確かめた後の絶対パス） */
+data class ChoiceImage(val path: String, val opaque: Boolean, val options: BalloonImageOptions = BalloonImageOptions())
 
 enum class TextAlign { LEFT, CENTER, RIGHT }
 
@@ -170,6 +175,9 @@ interface ScriptHost {
      * [opaque] なら左上の色を抜かない
      */
     fun addImage(scope: Int, file: String, x: Int?, y: Int?, opaque: Boolean, options: BalloonImageOptions = BalloonImageOptions()) {}
+
+    /** 選択肢の中に置く \_b[ファイル,inline] の画像。出せない（無い・外の）ファイルなら null */
+    fun choiceImage(file: String, opaque: Boolean, options: BalloonImageOptions): ChoiceImage? = null
 
     /** `\_l[x,y]`。ここから後の文字を書く位置（null の方は動かさない） */
     fun locate(scope: Int, x: BalloonCoord?, y: BalloonCoord?) {}
@@ -394,6 +402,9 @@ class ScriptPlayer(
         private var anchor: Choice? = null
         private val anchorTitle = StringBuilder()
 
+        /** 開いている選択肢の中の画像（\_b[ファイル,inline]） */
+        private var anchorImage: ChoiceImage? = null
+
         // \f の飾り（キャラクターごと）
         private val styles = HashMap<Int, TextStyle>()
 
@@ -435,9 +446,10 @@ class ScriptPlayer(
             val open = anchor ?: return
             // \_a のリンクだけなら選択肢を待たない（バルーンのタイムアウトで消える。SSP と同じ）
             if (!open.anchor) hasChoices = true
-            host.addChoice(scope, open.copy(title = anchorTitle.toString()), looks[scope] ?: ChoiceLooks.Default)
+            host.addChoice(scope, open.copy(title = anchorTitle.toString(), image = anchorImage), looks[scope] ?: ChoiceLooks.Default)
             anchor = null
             anchorTitle.clear()
+            anchorImage = null
         }
 
         /**
@@ -529,6 +541,11 @@ class ScriptPlayer(
                     val rest = a.drop(1).map { it.trim() }
                     val inline = rest.firstOrNull()?.lowercase() == "inline"
                     val (options, opaque) = BalloonImageOptions.parse(if (inline) rest.drop(1) else rest.drop(2))
+                    // \__q の中の inline の画像は、その選択肢の一部にする（画像だけのボタン）
+                    if (inline && anchor != null) {
+                        anchorImage = host.choiceImage(file, opaque, options) ?: anchorImage
+                        return@let
+                    }
                     host.addImage(
                         scope, file,
                         if (inline) null else rest.getOrNull(0)?.toIntOrNull() ?: 0,

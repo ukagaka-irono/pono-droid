@@ -213,6 +213,41 @@ class PluginHostTest {
     }
 
     @Test
+    fun getPropertyInAPluginScriptAnswersThePlugin() = run(
+        emptyMap(),
+        { id ->
+            when (id) {
+                "OnMenuExec" -> mapOf("Script" to "\\![get,property,OnSize,currentghost.name]\\e")
+                "OnSize" -> mapOf("Script" to "\\0名前は%(r)\\e".replace("%(r)", "テスト"))
+                else -> emptyMap()
+            }
+        },
+    ) {
+        c.onMouseLongPress(0, 0, 0, null)
+        awaitChoice("pono:plugins")
+        c.onChoice(Choice("プラグイン", "pono:plugins", listOf("0")))
+        awaitChoice("pono:plugin")
+        c.onChoice(Choice("テストプラグイン", "pono:plugin", listOf("testplugin")))
+        // プラグインのスクリプトの \![get,property] の答えはプラグインへ（ゴーストには送らない）
+        assertEquals(listOf("テスト"), plugin.await("OnSize").references)
+        c.awaitText("名前はテスト")
+        assertEquals(0, shiori.count("OnSize"))
+    }
+
+    @Test
+    fun installCompleteResendsTheListsOnce() = run(emptyMap()) {
+        plugin.await("OnGhostBoot")
+        val before = plugin.count("balloonpathlist")
+        host.installComplete(listOf("balloon"), listOf("新しいバルーン"), listOf("/b/new/"))
+        host.installComplete(listOf("balloon"), listOf("新しいバルーン"), listOf("/b/new/"))
+        assertEquals(listOf("balloon", "新しいバルーン", "/b/new/"), plugin.await("OnInstallComplete").references)
+        delay(300)
+        // 一覧を送り直してから知らせる。同じ知らせは1回だけ
+        assertEquals(before + 1, plugin.count("balloonpathlist"))
+        assertEquals(1, plugin.count("OnInstallComplete"))
+    }
+
+    @Test
     fun pluginListProperties() = run(emptyMap(), { id -> if (id == "property.get") mapOf("Value" to "42") else emptyMap() }) {
         assertEquals("1", c.property("pluginlist.count"))
         assertEquals("テストプラグイン", c.property("pluginlist.index(0).name"))

@@ -55,6 +55,7 @@ std::mutex g_lock;
 // realpath 済み、末尾の / なし
 std::vector<std::string> g_allowed;
 std::vector<std::string> g_protected;
+std::vector<std::string> g_readable;
 
 void Denied(const char *what, const char *path) {
     __android_log_print(ANDROID_LOG_WARN, "pono", "sandbox: denied %s %s", what, path ? path : "(null)");
@@ -118,6 +119,9 @@ bool Allowed(const char *path, bool write, const char *what) {
     if (write) {
         Denied(what, path);
         return false;
+    }
+    for (const std::string &r : g_readable) {
+        if (Under(canon, r)) return true;
     }
     for (const std::string &p : g_protected) {
         if (Under(canon, p)) {
@@ -257,6 +261,15 @@ void pono_sandbox_forget(const char *dir) {
             return;
         }
     }
+}
+
+void pono_sandbox_allow_read(const char *dir) {
+    std::string canon = Canonical(dir);
+    std::lock_guard<std::mutex> guard(g_lock);
+    for (const std::string &r : g_readable) {
+        if (r == canon) return;
+    }
+    g_readable.push_back(canon);
 }
 
 void pono_sandbox_protect(const char *dir) {

@@ -9,9 +9,10 @@ internal interface NativeBinding {
     /**
      * @param allowedDir 辞書が読み書きしてよいディレクトリ（UTF-8）
      * @param protectedDir 辞書に読ませないディレクトリ（UTF-8。空なら無し）
+     * @param readableDirs [protectedDir] の中でも読むだけならよいディレクトリ（UTF-8、改行区切り。空なら無し）
      * @return VM の ID（0 以下なら失敗）
      */
-    fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray): Long
+    fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray, readableDirs: ByteArray): Long
 
     fun request(id: Long, request: ByteArray): ByteArray?
 
@@ -23,7 +24,7 @@ internal object YayaNative : NativeBinding {
         System.loadLibrary("yaya")
     }
 
-    external override fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray): Long
+    external override fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray, readableDirs: ByteArray): Long
 
     external override fun request(id: Long, request: ByteArray): ByteArray?
 
@@ -35,7 +36,7 @@ internal object SatoriNative : NativeBinding {
         System.loadLibrary("satori")
     }
 
-    external override fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray): Long
+    external override fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray, readableDirs: ByteArray): Long
 
     external override fun request(id: Long, request: ByteArray): ByteArray?
 
@@ -47,7 +48,7 @@ internal object KawariNative : NativeBinding {
         System.loadLibrary("kawari")
     }
 
-    external override fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray): Long
+    external override fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray, readableDirs: ByteArray): Long
 
     external override fun request(id: Long, request: ByteArray): ByteArray?
 
@@ -59,7 +60,7 @@ internal object KagariNative : NativeBinding {
         System.loadLibrary("kagari")
     }
 
-    external override fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray): Long
+    external override fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray, readableDirs: ByteArray): Long
 
     external override fun request(id: Long, request: ByteArray): ByteArray?
 
@@ -112,7 +113,7 @@ class NativeShiori(private val engine: ShioriEngine, private val sandbox: Sandbo
      * ほかのファイルは読むだけなら許す（タイムゾーンなどシステムのもの）。
      * ネイティブコードの読み込み（SAORI など）とプロセスの起動（EXECUTE など）は範囲によらず止める。
      */
-    class Sandbox(val allowedDir: File, val protectedDir: File?) {
+    class Sandbox(val allowedDir: File, val protectedDir: File?, val readableDirs: List<File> = emptyList()) {
         companion object {
             /** [masterDir] が .../ghost/master なら、そのゴースト全体（シェルも）を触れるようにする */
             fun forGhost(context: Context, masterDir: File): Sandbox {
@@ -121,6 +122,18 @@ class NativeShiori(private val engine: ShioriEngine, private val sandbox: Sandbo
                     ?.parentFile
                     ?: masterDir
                 return Sandbox(ghostDir, context.dataDir)
+            }
+
+            /**
+             * プラグイン（files/plugin/名前/ の中の [dllDir]）。そのプラグインのフォルダは読み書きでき、ゴーストとバルーンの置き場は
+             * 読むだけならよい（SSP と同じく ghostpathlist・balloonpathlist を伝えるので、バルーンを選ぶプラグインなどが読む）
+             */
+            fun forPlugin(context: Context, dllDir: File): Sandbox {
+                val root = File(context.filesDir, "plugin").canonicalFile
+                var dir = dllDir.canonicalFile
+                while (dir.parentFile != null && dir.parentFile != root) dir = dir.parentFile!!
+                if (dir.parentFile != root) dir = dllDir
+                return Sandbox(dir, context.dataDir, listOf(File(context.filesDir, "ghost"), File(context.filesDir, "balloon")))
             }
         }
     }
@@ -141,6 +154,7 @@ class NativeShiori(private val engine: ShioriEngine, private val sandbox: Sandbo
                 (dir.absolutePath.trimEnd('/') + "/").toByteArray(Charsets.UTF_8),
                 sandbox.allowedDir.absolutePath.toByteArray(Charsets.UTF_8),
                 sandbox.protectedDir?.absolutePath?.toByteArray(Charsets.UTF_8) ?: ByteArray(0),
+                sandbox.readableDirs.joinToString("\n") { it.absolutePath }.toByteArray(Charsets.UTF_8),
             )
         }
         return id > 0

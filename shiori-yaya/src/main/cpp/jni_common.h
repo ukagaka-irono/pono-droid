@@ -33,13 +33,22 @@ class ShioriJni {
 public:
     explicit ShioriJni(const ShioriEngine &engine) : engine_(engine) {}
 
-    jlong Load(JNIEnv *env, jbyteArray dir, jbyteArray allowedDir, jbyteArray protectedDir) {
+    jlong Load(JNIEnv *env, jbyteArray dir, jbyteArray allowedDir, jbyteArray protectedDir, jbyteArray readableDirs) {
         // エンジンはスレッドセーフではないので、呼び出しを1つずつにする
         std::lock_guard<std::mutex> guard(lock_);
         pono_saori_attach(env);
         std::string allowed = ToString(env, allowedDir);
         std::string guarded = ToString(env, protectedDir);
         if (!guarded.empty()) pono_sandbox_protect(guarded.c_str());
+        // 読むだけならよいディレクトリ（改行区切り。プラグインのときだけ）
+        std::string readable = ToString(env, readableDirs);
+        for (size_t i = 0; i < readable.size();) {
+            size_t j = readable.find('\n', i);
+            if (j == std::string::npos) j = readable.size();
+            std::string one = readable.substr(i, j - i);
+            if (!one.empty()) pono_sandbox_allow_read(one.c_str());
+            i = j + 1;
+        }
         if (!allowed.empty()) pono_sandbox_allow(allowed.c_str());
 
         jsize len;
@@ -130,8 +139,8 @@ private:
 #define PONO_DEFINE_SHIORI_JNI(CLASS, ENGINE)                                                                       \
     static pono::ShioriJni g_shiori_jni(ENGINE);                                                                    \
     extern "C" JNIEXPORT jlong JNICALL Java_net_pono_shiori_yaya_##CLASS##_load(                                    \
-        JNIEnv *env, jobject, jbyteArray dir, jbyteArray allowedDir, jbyteArray protectedDir) {                     \
-        return g_shiori_jni.Load(env, dir, allowedDir, protectedDir);                                              \
+        JNIEnv *env, jobject, jbyteArray dir, jbyteArray allowedDir, jbyteArray protectedDir, jbyteArray readable) { \
+        return g_shiori_jni.Load(env, dir, allowedDir, protectedDir, readable);                                    \
     }                                                                                                               \
     extern "C" JNIEXPORT jbyteArray JNICALL Java_net_pono_shiori_yaya_##CLASS##_request(                            \
         JNIEnv *env, jobject, jlong handle, jbyteArray req) {                                                       \

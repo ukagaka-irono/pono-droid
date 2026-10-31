@@ -35,6 +35,8 @@ class PluginHost(
     /** ゴーストとバルーンの置き場（installedghostname・ghostpathlist などを伝える） */
     private val ghosts: GhostRepository? = null,
     private val log: (String) -> Unit = {},
+    /** プラグインとのやりとりの記録（開発用。要求と答えの要点） */
+    private val trace: (String) -> Unit = {},
     private val loadTimeoutMs: Long = 30_000,
     private val requestTimeoutMs: Long = 10_000,
 ) {
@@ -150,7 +152,13 @@ class PluginHost(
                 log("プラグイン「${l.plugin.name}」が $id に応えません")
                 return@withLock null
             }
-            PluginProtocol.parse(bytes, l.charset)
+            PluginProtocol.parse(bytes, l.charset).also { r ->
+                // 毎秒のものは多すぎるので、ほかの要求と答えだけ残す（ゴーストの platform.log と同じ考え）
+                if (id != "OnSecondChange" || r?.event != null || r?.script != null) {
+                    trace("${l.plugin.name}: ${if (notify) "NOTIFY" else "GET"} $id $references -> ${r?.statusCode ?: "(読めない答え)"}" +
+                        (r?.event?.let { " Event=$it ${r.references}" } ?: "") + (r?.script?.let { " Script=${it.take(120)}" } ?: ""))
+                }
+            }
         }
 
     /** 送って、答えのイベントやスクリプトをゴーストに渡す（NOTIFY の答えは使わない）。答えの状態コードを返す */
@@ -245,17 +253,35 @@ class PluginHost(
 
     /** 何かをインストールした（OnInstallComplete）。種類・名前・パスは 0x01 でつなぐ */
     fun installComplete(types: List<String>, names: List<String>, paths: List<String>) {
+        val refs = listOf(types.joinToString("\u0001"), names.joinToString("\u0001"), paths.joinToString("\u0001"))
+        // アプリの画面から入れると、画面とゴーストの両方から届くことがある。同じものは1回だけ
+        synchronized(this) {
+            val now = System.currentTimeMillis()
+            if (refs == lastInstall && now - lastInstallAt < SAME_INSTALL_MS) return
+            lastInstall = refs
+            lastInstallAt = now
+        }
         if ("plugin" in types) {
             lastInstalled = paths.getOrNull(types.indexOf("plugin"))
-            // 入ったプラグインを読み込んでから知らせる
+            // 入ったプラグインを読み込んでから知らせる（読み込みのときに一覧も送る）
             scope.launch {
                 reload()
-                everyone(notify = false, "OnInstallComplete", listOf(types.joinToString("\u0001"), names.joinToString("\u0001"), paths.joinToString("\u0001")), null)
+                everyone(notify = false, "OnInstallComplete", refs, null)
             }
             return
         }
-        everyone(notify = false, "OnInstallComplete", listOf(types.joinToString("\u0001"), names.joinToString("\u0001"), paths.joinToString("\u0001")), null)
+        // ゴーストやバルーンが増えたので、installedghostname・balloonpathlist などを送り直してから知らせる
+        val all = synchronized(loaded) { loaded.values.toList() }
+        for (l in all) {
+            scope.launch {
+                for ((id, r) in installInfo()) call(l, notify = true, id, r, null)
+                send(l, notify = false, "OnInstallComplete", refs, null)
+            }
+        }
     }
+
+    @Volatile private var lastInstall: List<String>? = null
+    @Volatile private var lastInstallAt = 0L
 
     /**
      * ゴーストが話した（OnOtherGhostTalk）。descript.txt の otherghosttalk が [timing]（before / after）のプラグインにだけ送る。
@@ -296,5 +322,8 @@ class PluginHost(
     companion object {
         /** Target のこの値は、起動中の全部のゴースト */
         const val ALL_GHOSTS = "__SYSTEM_ALL_GHOST__"
+
+        /** 同じインストールの知らせを1回にまとめる時間 */
+        private const val SAME_INSTALL_MS = 10_000L
     }
 }

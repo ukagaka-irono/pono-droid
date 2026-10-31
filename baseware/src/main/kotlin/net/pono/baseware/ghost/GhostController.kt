@@ -45,6 +45,7 @@ import net.pono.baseware.net.HttpRequest
 import net.pono.baseware.net.HttpStreamer
 import net.pono.baseware.net.ICal
 import net.pono.baseware.net.UrlConnectionHttpClient
+import net.pono.baseware.sakura.ChoiceImage
 import net.pono.baseware.sakura.Choice
 import net.pono.baseware.sakura.ChoiceLooks
 import net.pono.baseware.sakura.MoveCommand
@@ -3553,6 +3554,18 @@ class GhostController(
     private fun soundFile(name: String): File? = ghostFile(name)
 
     /** ghost/master からの相対パス（か絶対パス）のファイル。ゴーストのディレクトリの外は使わない（画像・音） */
+    /**
+     * \_b で出してよい、ゴーストのフォルダの外の画像（絶対パス）。バルーンとプラグインの置き場の中だけ
+     * （バルーンを選ぶプラグインが、入っているバルーンの画像を並べるため）。読んで出すだけで、書きはしない
+     */
+    private fun sharedImageFile(name: String): File? {
+        val raw = name.trim().replace('\\', '/')
+        if (!raw.startsWith("/")) return null
+        val canonical = runCatching { File(raw).canonicalFile }.getOrNull()?.takeIf { it.isFile } ?: return null
+        val roots = listOfNotNull(repository?.balloons?.root, plugins?.repository?.root).map { it.canonicalFile }
+        return canonical.takeIf { f -> roots.any { f.path.startsWith(it.path + File.separator) } }
+    }
+
     private fun ghostFile(name: String): File? {
         val raw = name.trim().replace('\\', '/')
         val file = if (raw.startsWith("/")) File(raw) else File(ghost.masterDir, raw)
@@ -5182,7 +5195,12 @@ class GhostController(
                 if (chain >= MAX_RAISE_CHAIN) {
                     platform.log("\\![raise] の連鎖が $MAX_RAISE_CHAIN 回を超えたので止めました: ${raised.map { it.event }}")
                 } else {
-                    for ((event, refs, type) in raised) raise(event, refs, userInitiated = true, sensitive = false, chain = chain + 1, origin = RequestOrigin(type))
+                    for ((event, refs, type) in raised) {
+                        // プラグインから来たスクリプトの \![get,property] の答えは、そのプラグインに返す（バルーンの大きさを聞くプラグインなど）
+                        val p = fromPlugin?.first
+                        if (p != null && "property" in type && plugins?.raise(p.id, event, refs, notify = false, caller = this@GhostController) {} == true) continue
+                        raise(event, refs, userInitiated = true, sensitive = false, chain = chain + 1, origin = RequestOrigin(type))
+                    }
                 }
                 // 選択肢も出していれば、選ばれるのを待つ（choicetimeout も効かせる）
                 if (!result.hasChoices) return@launch
@@ -6677,8 +6695,14 @@ class GhostController(
             }
         }
 
+        override fun choiceImage(file: String, opaque: Boolean, options: BalloonImageOptions): ChoiceImage? {
+            val f = (if (file.startsWith("data:", ignoreCase = true)) dataImage(file) else ghostFile(file) ?: sharedImageFile(file))
+                ?: return null.also { platform.log("画像が見つかりません: ${file.take(80)}") }
+            return ChoiceImage(f.path, opaque, options)
+        }
+
         override fun addImage(scope: Int, file: String, x: Int?, y: Int?, opaque: Boolean, options: BalloonImageOptions) {
-            val f = (if (file.startsWith("data:", ignoreCase = true)) dataImage(file) else ghostFile(file))
+            val f = (if (file.startsWith("data:", ignoreCase = true)) dataImage(file) else ghostFile(file) ?: sharedImageFile(file))
                 ?: return platform.log("画像が見つかりません: ${file.take(80)}")
             _state.update { it.update(scope) { c -> c.append(BalloonItem.Image(f.path, x, y, opaque, options)) } }
         }

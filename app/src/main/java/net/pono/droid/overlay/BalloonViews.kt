@@ -1020,6 +1020,16 @@ private fun BalloonText(
                     }
                     val look = lookOf(ranges.size)
                     val start = length
+                    // \__q の中の画像は、選択肢の範囲の中に1文字として置く（押すと選べる）
+                    run.choice.image?.let { pic ->
+                        pictureSize(pic.path, pic.options)?.let { (w, h) ->
+                            val id = "choiceimg$index"
+                            appendInlineContent(id, "□")
+                            inlineContent[id] = InlineTextContent(
+                                with(density) { Placeholder((w * style.spPerPx).dp.toSp(), (h * style.spPerPx).dp.toSp(), PlaceholderVerticalAlign.TextBottom) },
+                            ) { BalloonPicture(pic.path, pic.opaque, style.spPerPx, Modifier, pic.options) }
+                        }
+                    }
                     withStyle(SpanStyle(color = look.font, fontWeight = FontWeight.Medium, shadow = style.linkShadow(look))) { append(run.choice.title) }
                     ranges += start until length
                 }

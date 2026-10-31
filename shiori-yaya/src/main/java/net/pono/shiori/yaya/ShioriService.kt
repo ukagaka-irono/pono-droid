@@ -20,7 +20,7 @@ open class ShioriService : Service() {
         override fun load(engine: String, dir: String, host: IShioriHost?): Long = synchronized(lock) {
             val kind = runCatching { ShioriEngine.valueOf(engine) }.getOrNull() ?: return 0
             val masterDir = File(dir)
-            val shiori = NativeShiori(kind, NativeShiori.Sandbox.forGhost(this@ShioriService, masterDir))
+            val shiori = NativeShiori(kind, sandboxFor(masterDir))
             // 内蔵 SAORI の要求は、そのゴーストの本体へ（本体のプロセスは、この呼び出しを待っているスレッドで答える）
             if (host != null) shiori.setSaoriHandler { request, module -> host.saori(request, module) ?: ByteArray(0) }
             if (!shiori.load(masterDir)) return 0
@@ -41,6 +41,9 @@ open class ShioriService : Service() {
         // lock は取らない。request で固まっているときに呼ばれても答えられるように
         override fun getPid(): Int = Process.myPid()
     }
+
+    /** 読み込む SHIORI（[masterDir]）に触らせてよい範囲。ゴーストはそのゴーストのフォルダだけ */
+    protected open fun sandboxFor(masterDir: File): NativeShiori.Sandbox = NativeShiori.Sandbox.forGhost(this, masterDir)
 
     override fun onBind(intent: Intent): IBinder = binder
 
@@ -75,5 +78,7 @@ class ShioriService2 : ShioriService()
 /** 3体目のゴーストの SHIORI（:shiori3） */
 class ShioriService3 : ShioriService()
 
-/** プラグイン（:plugin）。プラグインごとに、そのフォルダの中だけを触れるようにして読み込む */
-class PluginService : ShioriService()
+/** プラグイン（:plugin）。プラグインごとに、そのフォルダの中だけを触れるようにして読み込む（ゴーストとバルーンの置き場は読むだけ） */
+class PluginService : ShioriService() {
+    override fun sandboxFor(masterDir: File): NativeShiori.Sandbox = NativeShiori.Sandbox.forPlugin(this, masterDir)
+}

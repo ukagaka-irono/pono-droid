@@ -113,6 +113,7 @@ class GhostOverlayService : LifecycleService() {
         PluginHost(
             GhostStore.plugins(this), hub, RemoteShiori.pluginFactory(this), lifecycleScope, GhostStore.repository(this),
             log = { Log.i(TAG, it) },
+            trace = { Log.i(TAG, "plugin: $it") },
         )
     }
 
