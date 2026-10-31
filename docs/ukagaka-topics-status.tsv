@@ -1,0 +1,46 @@
+topic	repository	language	license	state	note
+ukagaka-saori	ukatech/csaori	C	None	PARTIAL	SAORI の土台と、中の SAORI・プラグインの集まり。textcopy・saori_cpuid・cpuusage などは互換 SAORI（CompatSaori）で済み。残りは中身ごとに仕分ける（多くは Windows 専用）
+ukagaka-saori	nikolat/akari-as-saori	None	None	IMPOSSIBLE	AKARI（akari.dll）のソースが見つからない（決めたこと）
+ukagaka-saori	tukinami/saori-resized-png	Rust	MIT	BUILD	Rust。元のソースから Android 用に作る
+ukagaka-saori	YAYA-shiori/yaya-as-saori	None	NOASSERTION	BUILD	YAYA を SAORI として使う。pono-droid の YAYA で動かす
+ukagaka-saori	nikolat/MahjongUtil	C++	NOASSERTION	BUILD	C++。NDK で作る（ライセンスを確かめる）
+ukagaka-saori	tukinami/saori-pie-chart	Rust	MIT	BUILD	Rust。元のソースから Android 用に作る
+ukagaka-saori	nikolat/saori-qrcode	Rust	NOASSERTION	BUILD	Rust。元のソースから Android 用に作る（ライセンスを確かめる）
+ukagaka-saori	tukinami/saori-resized-png-mini	Rust	MIT	BUILD	Rust。元のソースから Android 用に作る
+ukagaka-saori	Tatakinov/TexasHoldemUtil	C++	MIT	BUILD	C++。NDK で作る
+ukagaka-saori	Tatakinov/ninix-saori	C++	MIT	BUILD	C++。ninix 用の SAORI の集まり。NDK で作る
+ukagaka-saori	Tatakinov/mahjong_nodoka	C++	MIT	BUILD	C++。NDK で作る
+ukagaka-saori	tukinami/saori-calcs	Rust	MIT	BUILD	Rust。元のソースから Android 用に作る
+ukagaka-saori	Tatakinov/saori_budoux	C++	MIT	BUILD	C++。NDK で作る
+ukagaka-saori	tukinami/saori-japanese-gengou	Rust	MIT	BUILD	Rust。元のソースから Android 用に作る
+ukagaka-shiori	YAYA-shiori/yaya-shiori	C++	BSD-3-Clause	DONE	SHIORI として動く（shiori-yaya）
+ukagaka-shiori	ukatech/satoriya-shiori	C++	BSD-2-Clause	DONE	SHIORI として動く（shiori-yaya）
+ukagaka-shiori	YAYA-shiori/yaya-dic	None	Unlicense	DONE	YAYA の辞書（データ）。YAYA で動く
+ukagaka-shiori	ekicyou/pasta	Rust	MIT	BUILD	Rust＋Lua の SHIORI。元のソースから Android 用に作る
+ukagaka-shiori	Tatakinov/kagari_shiori	C++	MIT	DONE	SHIORI として動く（shiori-yaya）
+ukagaka-shiori	nikolat/dnproxy	C#	CC0-1.0	IMPOSSIBLE	.NET Framework の SHIORI。Android では動かない（決めたこと）
+ukagaka-shiori	steve02081504/powershiori	PowerShell	None	IMPOSSIBLE	PowerShell の SHIORI。Android では動かない（決めたこと）
+ukagaka-shiori	cronfox/quickshiori	C++	NOASSERTION	BUILD	C++ と QuickJS の SHIORI。WinRT の部分を除いて作れるか調べる（ライセンスを確かめる）
+ukagaka-shiori	yanashi-interface/nashi-shiori-studio	C++	NOASSERTION	IMPOSSIBLE	WebView2（Windows）を使う開発環境。アーカイブ済み（決めたこと）
+ukagaka-shiori	mizuki-yura/minato	Rust	MIT	BUILD	Rust の SHIORI。元のソースから Android 用に作る
+ukagaka-shiori	ponapalt/aya5-shiori	C++	None	IMPOSSIBLE	ライセンスの書かれていないコードで、APK に入れられない（AYA5 の辞書は YAYA でおおむね動く）
+ukagaka-shiori	Tatakinov/kotori	Lua	NOASSERTION	BUILD	Lua の SHIORI。Lua の部品（conv・fh・lua-utf8・luachild など）を Android 用に用意する（ライセンスを確かめる）
+ukagaka-plugin	apxxxxxxe/Bouyomi	Go	None	IMPOSSIBLE	棒読みちゃん（Windows）と Windows の exe を使う（決めたこと）
+ukagaka-plugin	ambergon/ukagakaPlugin_getWindowTitle	C#	None	IMPOSSIBLE	Windows のウィンドウの題名を読む exe を使う（決めたこと）
+ukagaka-plugin	nikolat/wallet_of_unyu	None	CC0-1.0	PLUGIN	YAYA のプラグイン。PLUGIN/2.0 を作れば動く
+ukagaka-plugin	ambergon/ukagakaPlugin_CeVIO-Talker	C#	None	IMPOSSIBLE	CeVIO AI（Windows）と .NET の exe を使う（決めたこと）
+ukagaka-plugin	opera7133/SSP-AIVOICE	C#	None	IMPOSSIBLE	A.I.VOICE（Windows）と .NET の exe を使う（決めたこと）
+ukagaka-plugin	nikolat/ukaten	None	None	IMPOSSIBLE	AKARI（akari.dll）のプラグイン。ソースが見つからない（決めたこと）
+ukagaka-plugin	ambergon/UkagakaPlugin_DBdiary	None	None	PLUGIN	YAYA のプラグイン。PLUGIN/2.0 を作れば動く
+ukagaka-plugin	nikolat/nostryu	TypeScript	CC0-1.0	IMPOSSIBLE	SHIOLINK で Node.js を動かす。Android では動かない（決めたこと）
+ukagaka-plugin	ambergon/ukagakaPlugin_CeVIO-TalkerV2	None	None	IMPOSSIBLE	CeVIO AI（Windows）を使う（決めたこと）
+ukagaka-plugin	Tatakinov/kagari_as_plugin	Lua	NOASSERTION	PLUGIN	Kagari のプラグイン。PLUGIN/2.0 と、Lua の部品（socket・ssl・lanes など）の Android 用が要る
+ukagaka-plugin	nikolat/ukadonyu	None	NOASSERTION	IMPOSSIBLE	AKARI（akari.dll）のプラグイン。ソースが見つからない（決めたこと）
+ukagaka-plugin	nikolat/balloonselector	None	NOASSERTION	PLUGIN	YAYA のプラグイン。PLUGIN/2.0 を作れば動く
+ukagaka-plugin	nikolat/sudohaikuyu	None	NOASSERTION	IMPOSSIBLE	AKARI（akari.dll）のプラグイン。ソースが見つからない（決めたこと）
+ukagaka-plugin	JiayuYangX/tmidi_msg	C++	None	IMPOSSIBLE	TMIDI Player（Windows）のメッセージを受ける DLL（決めたこと）
+ukagaka-plugin	nikolat/CharameLNetwork	CSS	None	PLUGIN	YAYA のプラグイン。PLUGIN/2.0 を作れば動く
+ukagaka-plugin	YAYA-shiori/stampcollection	Python	None	PLUGIN	YAYA のプラグイン。tamac.exe（Windows）を使うところは動かない
+ukagaka-plugin	arsuren/ghost-messenger	Kotlin	MIT	NA	伺かのものではない（Android のメッセージアプリ。タグの付け間違い）
+ukagaka-plugin	lost-nd-xxx/UkagakaGhostMessenger	PowerShell	NOASSERTION	PLUGIN	YAYA のプラグイン。ugm_server.exe（Windows）を使うところは動かない
+ukagaka-plugin	tyvy14/CD-Player_Plugin	None	None	PLUGIN	YAYA のプラグイン。CD ドライブの再生は Android では動かない
