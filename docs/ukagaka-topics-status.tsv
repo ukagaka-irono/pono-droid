@@ -3,12 +3,12 @@ ukagaka-saori	ukatech/csaori	C	None	PARTIAL	SAORI の土台と、中の SAORI・
 ukagaka-saori	nikolat/akari-as-saori	None	None	IMPOSSIBLE	AKARI（akari.dll）のソースが見つからない（決めたこと）
 ukagaka-saori	tukinami/saori-resized-png	Rust	MIT	BUILD	Rust。元のソースから Android 用に作る
 ukagaka-saori	YAYA-shiori/yaya-as-saori	None	NOASSERTION	BUILD	YAYA を SAORI として使う。pono-droid の YAYA で動かす
-ukagaka-saori	nikolat/MahjongUtil	C++	NOASSERTION	BUILD	C++。NDK で作る（ライセンスを確かめる）
+ukagaka-saori	nikolat/MahjongUtil	C++	NOASSERTION	DONE	ソースから libsaori_mahjongutil.so を作る（MahjongUtil.dll の代わり）。土台の csaori の Windows の部分は書き直した（shim/pono_csaori.cpp）。実機で readme の例と同じ答えを確かめた
 ukagaka-saori	tukinami/saori-pie-chart	Rust	MIT	BUILD	Rust。元のソースから Android 用に作る
 ukagaka-saori	nikolat/saori-qrcode	Rust	NOASSERTION	BUILD	Rust。元のソースから Android 用に作る（ライセンスを確かめる）
 ukagaka-saori	tukinami/saori-resized-png-mini	Rust	MIT	BUILD	Rust。元のソースから Android 用に作る
 ukagaka-saori	Tatakinov/TexasHoldemUtil	C++	MIT	DONE	ソースから libsaori_texasholdem.so を作る（TexasHoldemUtil.dll の代わり）。実機で YAYA から呼んで確かめた
-ukagaka-saori	Tatakinov/ninix-saori	C++	MIT	BUILD	C++。ninix 用の SAORI の集まり。NDK で作る
+ukagaka-saori	Tatakinov/ninix-saori	C++	MIT	BUILD	SAORI の集まり。SHIORI を SAORI として使うもの（saori_yaya・saori_satori・saori_kawari）はこれから。saori_curl は libcurl、call_translator は別のプロセスの起動が要る。example は見本
 ukagaka-saori	Tatakinov/mahjong_nodoka	C++	MIT	DONE	ソースから libsaori_nodoka.so を作る（ゴーストの nodoka.dll の代わりに、SHIORI のサンドボックスの中で動く）。実機で YAYA から呼んで確かめた
 ukagaka-saori	tukinami/saori-calcs	Rust	MIT	BUILD	Rust。元のソースから Android 用に作る
 ukagaka-saori	Tatakinov/saori_budoux	C++	MIT	DONE	ソースから libsaori_budoux.so を作る（budoux.dll の代わり。ゴーストの model.json を読む。JSON は nlohmann/json v3.12.0）。実機で YAYA から呼んで確かめた

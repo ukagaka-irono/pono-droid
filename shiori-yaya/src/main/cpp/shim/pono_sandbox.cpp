@@ -254,6 +254,7 @@ const NativeSaoriLib kNativeSaoris[] = {
     {"nodoka", "libsaori_nodoka.so"},
     {"texasholdemutil", "libsaori_texasholdem.so"},
     {"budoux", "libsaori_budoux.so"},
+    {"mahjongutil", "libsaori_mahjongutil.so"},
 };
 
 const int kNativeSlots = 8;

@@ -201,3 +201,31 @@ add_library(saori_budoux SHARED
 target_include_directories(saori_budoux PRIVATE ${SAORI_DIR}/saori_budoux ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
 target_compile_options(saori_budoux PRIVATE ${PONO_SAORI_UTIL})
 pono_saori_library(saori_budoux)
+
+# MahjongUtil は csaori（Windows の SAORI の土台）の上にある。麻雀の計算（MahjongUtil.cpp・mj_*）と csaori.h だけを元のソースから使い、
+# Windows の csaori_base.h・csaori_util.h は shim/compat/csaori の Android 用に差し替える（実装は csaori.cpp の分も shim/pono_csaori.cpp）。
+# 元のソースは同じフォルダの csaori_base.h を先に読むので、使うものをビルドのフォルダに写して、差し替えの見出しと並べる
+set(MAHJONGUTIL_SRC ${SAORI_DIR}/MahjongUtil/MahjongUtil)
+set(MAHJONGUTIL_GEN ${CMAKE_CURRENT_BINARY_DIR}/mahjongutil)
+set(MAHJONGUTIL_FILES
+    MahjongUtil.cpp MahjongUtil.h csaori.h
+    mj_common.cpp mj_common.h mj_machi.cpp mj_machi.h mj_score.cpp mj_score.h mj_shanten.cpp mj_shanten.h)
+foreach(f ${MAHJONGUTIL_FILES})
+    configure_file(${MAHJONGUTIL_SRC}/${f} ${MAHJONGUTIL_GEN}/${f} COPYONLY)
+endforeach()
+foreach(f csaori_base.h csaori_util.h)
+    configure_file(${CMAKE_CURRENT_SOURCE_DIR}/shim/compat/csaori/${f} ${MAHJONGUTIL_GEN}/${f} COPYONLY)
+endforeach()
+add_library(saori_mahjongutil SHARED
+    ${MAHJONGUTIL_GEN}/MahjongUtil.cpp
+    ${MAHJONGUTIL_GEN}/mj_common.cpp
+    ${MAHJONGUTIL_GEN}/mj_machi.cpp
+    ${MAHJONGUTIL_GEN}/mj_score.cpp
+    ${MAHJONGUTIL_GEN}/mj_shanten.cpp
+    shim/pono_csaori.cpp)
+target_include_directories(saori_mahjongutil PRIVATE ${MAHJONGUTIL_GEN})
+# MahjongUtil.cpp が CreateInstance を持つ（Windows の vcxproj と同じ）
+target_compile_definitions(saori_mahjongutil PRIVATE CUSTOM_CREATE_INSTANCE)
+# 見出しの中の「クラス名::関数名」（MSVC だけが通す書き方）を通す
+target_compile_options(saori_mahjongutil PRIVATE -fms-extensions)
+pono_saori_library(saori_mahjongutil)

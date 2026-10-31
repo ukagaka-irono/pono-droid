@@ -248,7 +248,7 @@ class NativeShioriTest {
         File(dir, "yaya.txt").writeText("charset, UTF-8\r\ndic, test.dic\r\n", Charsets.US_ASCII)
         File(dir, "saori").mkdirs()
         // ゴーストに同梱されている（ことになっている）Windows の DLL。中身は読まない
-        for (n in listOf("nodoka.dll", "TexasHoldemUtil.dll", "budoux.dll")) File(dir, "saori/$n").writeBytes(ByteArray(4))
+        for (n in listOf("nodoka.dll", "TexasHoldemUtil.dll", "budoux.dll", "MahjongUtil.dll")) File(dir, "saori/$n").writeBytes(ByteArray(4))
         File(dir, "saori/model.json").writeText("""{"UW4":{"に":1000}}""", Charsets.UTF_8)
         val dic = """
             request
@@ -258,11 +258,13 @@ class NativeShioriTest {
             	_r = LOADLIB('saori/nodoka.dll')
             	_r = LOADLIB('saori/TexasHoldemUtil.dll')
             	_r = LOADLIB('saori/budoux.dll')
+            	_r = LOADLIB('saori/MahjongUtil.dll')
             	_n = saoriresult(REQUESTLIB('saori/nodoka.dll', _head + 'Argument0: shanten' + _crlf + 'Argument1: 3m4m4m5m5m6m6m7m7m8m9m<1m2m3m>' + _crlf + 'Argument2: 1m2m3m3m4m4m5m5m6m6m7m7m8m9m' + _crlf + _crlf))
             	_t = saoriresult(REQUESTLIB('saori/TexasHoldemUtil.dll', _head + 'Argument0: hand' + _crlf + 'Argument1: S1' + _crlf + 'Argument2: S13' + _crlf + 'Argument3: S12' + _crlf + 'Argument4: S11' + _crlf + 'Argument5: S10' + _crlf + _crlf))
             	_b = saoriresult(REQUESTLIB('saori/budoux.dll', _head + 'Argument0: あなたに寄り添う' + _crlf + _crlf))
+            	_m = REQUESTLIB('saori/MahjongUtil.dll', _head + 'Argument0: shanten' + _crlf + 'Argument1: 1m2m3m5p6p7p8p9p9p2s3s4s4s' + _crlf + _crlf)
             	_r = UNLOADLIB('saori/nodoka.dll')
-            	'SHIORI/3.0 200 OK' + _crlf + 'Charset: UTF-8' + _crlf + 'Value: ' + _n + '|' + _t + '|' + _b + _crlf + _crlf
+            	'SHIORI/3.0 200 OK' + _crlf + 'Charset: UTF-8' + _crlf + 'Value: ' + _n + '|' + _t + '|' + _b + '|' + saoriresult(_m) + '|' + saorivalue0(_m) + _crlf + _crlf
             }
 
             saoriresult
@@ -271,6 +273,18 @@ class NativeShioriTest {
             	_lines = SPLIT(_argv[0], CHR(13) + CHR(10))
             	foreach _lines; _x {
             		if SUBSTR(_x, 0, 8) == 'Result: ' {
+            			_r = ERASE(_x, 0, 8)
+            		}
+            	}
+            	_r
+            }
+
+            saorivalue0
+            {
+            	_r = ''
+            	_lines = SPLIT(_argv[0], CHR(13) + CHR(10))
+            	foreach _lines; _x {
+            		if SUBSTR(_x, 0, 8) == 'Value0: ' {
             			_r = ERASE(_x, 0, 8)
             		}
             	}
@@ -288,6 +302,10 @@ class NativeShioriTest {
         assertEquals(value, tiles("6m4m3m7m9m"), tiles(n.getOrNull(2).orEmpty()))
         assertTrue(value, !texas.isNullOrEmpty())
         assertTrue(value, (budoux?.toIntOrNull() ?: 0) >= 1)
+        // MahjongUtil の readme の例1（csaori の土台を書き直したもので動く）
+        val m = value.split('|')
+        assertEquals(value, "1", m.getOrNull(3))
+        assertEquals(value, "9p9p,1m2m3m,5p7p,6p8p,2s3s4s,4s", m.getOrNull(4))
     }
 
     /** 内蔵 SAORI（SAORI over DirectSSTP）。辞書が internal_* を呼ぶと、setSaoriHandler の先に要求が届いて答えが戻る */

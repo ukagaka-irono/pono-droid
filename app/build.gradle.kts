@@ -80,6 +80,8 @@ abstract class GenerateLicenseAssets : DefaultTask() {
             Entry("mahjong_nodoka", "MIT", "https://github.com/Tatakinov/mahjong_nodoka", read("saori/mahjong_nodoka/LICENSE").trim()),
             Entry("TexasHoldemUtil", "MIT", "https://github.com/Tatakinov/TexasHoldemUtil", read("saori/TexasHoldemUtil/LICENSE").trim()),
             Entry("saori_budoux", "MIT", "https://github.com/Tatakinov/saori_budoux", read("saori/saori_budoux/LICENSE").trim()),
+            // 伺かゴースト用ライセンスと修正 BSD ライセンスの両方が書いてある（csaori.h も同じ配布物のもの）
+            Entry("MahjongUtil", "BSD-3-Clause", "https://github.com/nikolat/MahjongUtil", read("saori/MahjongUtil/license.txt").trim()),
             // json.hpp の先頭には SPDX の印しか無いので、文面は MIT の LICENSE.MIT と同じものを書く
             Entry(
                 "JSON for Modern C++", "MIT", "https://github.com/nlohmann/json",
