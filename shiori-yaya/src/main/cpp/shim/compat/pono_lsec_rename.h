@@ -1,0 +1,47 @@
+// luasec は luasocket の C のソースの古い写し（luasec/src/luasocket）を中に持つ。luasocket と同じ .so（libkagari.so）に
+// 入れると名前がぶつかるので、luasec の側をビルドのときに -include でこの見出しを先に読ませ、名前に lsec_ を付ける
+#pragma once
+
+#define buffer_open lsec_buffer_open
+#define buffer_init lsec_buffer_init
+#define buffer_meth_getstats lsec_buffer_meth_getstats
+#define buffer_meth_setstats lsec_buffer_meth_setstats
+#define buffer_meth_send lsec_buffer_meth_send
+#define buffer_meth_receive lsec_buffer_meth_receive
+#define buffer_isempty lsec_buffer_isempty
+#define io_init lsec_io_init
+#define io_strerror lsec_io_strerror
+#define timeout_init lsec_timeout_init
+#define timeout_get lsec_timeout_get
+#define timeout_getstart lsec_timeout_getstart
+#define timeout_getretry lsec_timeout_getretry
+#define timeout_markstart lsec_timeout_markstart
+#define timeout_gettime lsec_timeout_gettime
+#define timeout_open lsec_timeout_open
+#define timeout_meth_settimeout lsec_timeout_meth_settimeout
+#define timeout_lua_sleep lsec_timeout_lua_sleep
+#define socket_waitfd lsec_socket_waitfd
+#define socket_open lsec_socket_open
+#define socket_close lsec_socket_close
+#define socket_destroy lsec_socket_destroy
+#define socket_select lsec_socket_select
+#define socket_create lsec_socket_create
+#define socket_bind lsec_socket_bind
+#define socket_listen lsec_socket_listen
+#define socket_shutdown lsec_socket_shutdown
+#define socket_connect lsec_socket_connect
+#define socket_accept lsec_socket_accept
+#define socket_send lsec_socket_send
+#define socket_sendto lsec_socket_sendto
+#define socket_recv lsec_socket_recv
+#define socket_recvfrom lsec_socket_recvfrom
+#define socket_write lsec_socket_write
+#define socket_read lsec_socket_read
+#define socket_setblocking lsec_socket_setblocking
+#define socket_setnonblocking lsec_socket_setnonblocking
+#define socket_gethostbyaddr lsec_socket_gethostbyaddr
+#define socket_gethostbyname lsec_socket_gethostbyname
+#define socket_hoststrerror lsec_socket_hoststrerror
+#define socket_strerror lsec_socket_strerror
+#define socket_ioerror lsec_socket_ioerror
+#define socket_gaistrerror lsec_socket_gaistrerror

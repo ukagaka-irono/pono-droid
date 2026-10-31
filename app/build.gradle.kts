@@ -90,6 +90,14 @@ abstract class GenerateLicenseAssets : DefaultTask() {
             Entry("里々（SATORI）", "BSD 2-Clause", "https://github.com/ukatech/satoriya-shiori", read("satori/LICENSE").trim()),
             Entry("華和梨（KAWARI）", "BSD", "https://github.com/kawari/kawari", read("kawari/LICENSE").trim()),
             Entry("Kagari", "MIT", "https://github.com/Tatakinov/kagari_shiori", read("kagari/LICENSE").trim()),
+            // Kagari に入れる Lua の C のモジュール（luamod/）
+            Entry("luautf8", "MIT", "https://github.com/starwing/luautf8", read("luamod/luautf8/LICENSE").trim()),
+            Entry("lua-iconv", "MIT", "https://github.com/ittner/lua-iconv", read("luamod/lua-iconv/COPYING").trim()),
+            Entry("luachild", "Unlicense", "https://github.com/Tatakinov/luachild", read("luamod/luachild/COPYING.txt").trim()),
+            Entry("LuaSocket", "MIT", "https://github.com/lunarmodules/luasocket", read("luamod/luasocket/LICENSE").trim()),
+            Entry("Lua Lanes", "MIT", "https://github.com/LuaLanes/lanes", read("luamod/lanes/COPYRIGHT").trim()),
+            Entry("LuaSec", "MIT", "https://github.com/lunarmodules/luasec", read("luamod/luasec/LICENSE").trim()),
+            Entry("BoringSSL", "Apache-2.0", "https://boringssl.googlesource.com/boringssl", read("luamod/boringssl/LICENSE").trim()),
             // ゴーストに同梱の SAORI の代わりに、ソースから作るもの（saori/）
             Entry("mahjong_nodoka", "MIT", "https://github.com/Tatakinov/mahjong_nodoka", read("saori/mahjong_nodoka/LICENSE").trim()),
             Entry("TexasHoldemUtil", "MIT", "https://github.com/Tatakinov/TexasHoldemUtil", read("saori/TexasHoldemUtil/LICENSE").trim()),

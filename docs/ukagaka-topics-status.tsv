@@ -24,7 +24,7 @@ ukagaka-shiori	cronfox/quickshiori	C++	NOASSERTION	BUILD	C++ と QuickJS の SHI
 ukagaka-shiori	yanashi-interface/nashi-shiori-studio	C++	NOASSERTION	IMPOSSIBLE	WebView2（Windows）を使う開発環境。アーカイブ済み（決めたこと）
 ukagaka-shiori	mizuki-yura/minato	Rust	MIT	DONE	SHIORI として動く（shiori-yaya の libminato.so。Rust、Windows の winapi は src/main/rust/pono-winapi に替える）。descript の minato.dll か config.toml と talks/main.mnt で選ぶ。実機で確かめた
 ukagaka-shiori	ponapalt/aya5-shiori	C++	None	IMPOSSIBLE	ライセンスの書かれていないコードで、APK に入れられない（AYA5 の辞書は YAYA でおおむね動く）
-ukagaka-shiori	Tatakinov/kotori	Lua	NOASSERTION	BUILD	Lua の SHIORI。Lua の部品（conv・fh・lua-utf8・luachild など）を Android 用に用意する（ライセンスを確かめる）
+ukagaka-shiori	Tatakinov/kotori	Lua	MIT	DONE	kotori（Kagari の SHIORI の Lua の部品）が require する C のモジュール（iconv・lua-utf8・fh・luachild・saori_universal.native）を libkagari.so に入れ、package.preload から読ませる。fh と saori_universal.native は元のソースが無いので自前。luachild のプロセスの起動はサンドボックスが止める。モジュールは実機で確かめた（kotori を使うゴースト全体ではまだ）
 ukagaka-plugin	apxxxxxxe/Bouyomi	Go	None	IMPOSSIBLE	棒読みちゃん（Windows）と Windows の exe を使う（決めたこと）
 ukagaka-plugin	ambergon/ukagakaPlugin_getWindowTitle	C#	None	IMPOSSIBLE	Windows のウィンドウの題名を読む exe を使う（決めたこと）
 ukagaka-plugin	nikolat/wallet_of_unyu	None	CC0-1.0	DONE	YAYA のプラグイン。PLUGIN/2.0 で動く（実機では未確認）
@@ -34,7 +34,7 @@ ukagaka-plugin	nikolat/ukaten	None	None	IMPOSSIBLE	AKARI（akari.dll）のプラ
 ukagaka-plugin	ambergon/UkagakaPlugin_DBdiary	None	None	DONE	YAYA のプラグイン。PLUGIN/2.0 で動く（実機では未確認）
 ukagaka-plugin	nikolat/nostryu	TypeScript	CC0-1.0	IMPOSSIBLE	SHIOLINK で Node.js を動かす。Android では動かない（決めたこと）
 ukagaka-plugin	ambergon/ukagakaPlugin_CeVIO-TalkerV2	None	None	IMPOSSIBLE	CeVIO AI（Windows）を使う（決めたこと）
-ukagaka-plugin	Tatakinov/kagari_as_plugin	Lua	NOASSERTION	BUILD	Kagari のプラグインは PLUGIN/2.0 で読み込めるようになった。Lua の部品（socket・ssl・lanes など）の Android 用がまだ
+ukagaka-plugin	Tatakinov/kagari_as_plugin	Lua	MIT	DONE	Kagari のプラグインは PLUGIN/2.0 で読める。corelib の C のモジュール（socket・mime は luasocket、ssl は luasec と BoringSSL、lanes、ほかは kotori と同じ）を libkagari.so に入れた。DANE と TLS 1.3 の暗号の組の指定は BoringSSL に無いので使えない。モジュールは実機で確かめた
 ukagaka-plugin	nikolat/ukadonyu	None	NOASSERTION	IMPOSSIBLE	AKARI（akari.dll）のプラグイン。ソースが見つからない（決めたこと）
 ukagaka-plugin	nikolat/balloonselector	None	NOASSERTION	DONE	YAYA のプラグイン。実機（moto g05）で、メニューから開いてバルーンを選び、切り替わるのを確かめた（一覧の最初のバルーンが出ないのはプラグイン自身の数え方で、SSP でも同じ）
 ukagaka-plugin	nikolat/sudohaikuyu	None	NOASSERTION	IMPOSSIBLE	AKARI（akari.dll）のプラグイン。ソースが見つからない（決めたこと）

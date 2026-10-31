@@ -56,3 +56,25 @@
 [submodule "shiori-yaya/src/main/cpp/pasta"]
 	path = shiori-yaya/src/main/cpp/pasta
 	url = https://github.com/ekicyou/pasta.git
+[submodule "shiori-yaya/src/main/cpp/luamod/luautf8"]
+	path = shiori-yaya/src/main/cpp/luamod/luautf8
+	url = https://github.com/starwing/luautf8.git
+[submodule "shiori-yaya/src/main/cpp/luamod/lua-iconv"]
+	path = shiori-yaya/src/main/cpp/luamod/lua-iconv
+	url = https://github.com/ittner/lua-iconv.git
+[submodule "shiori-yaya/src/main/cpp/luamod/luachild"]
+	path = shiori-yaya/src/main/cpp/luamod/luachild
+	url = https://github.com/Tatakinov/luachild.git
+[submodule "shiori-yaya/src/main/cpp/luamod/luasocket"]
+	path = shiori-yaya/src/main/cpp/luamod/luasocket
+	url = https://github.com/lunarmodules/luasocket.git
+[submodule "shiori-yaya/src/main/cpp/luamod/lanes"]
+	path = shiori-yaya/src/main/cpp/luamod/lanes
+	url = https://github.com/LuaLanes/lanes.git
+[submodule "shiori-yaya/src/main/cpp/luamod/luasec"]
+	path = shiori-yaya/src/main/cpp/luamod/luasec
+	url = https://github.com/lunarmodules/luasec.git
+[submodule "shiori-yaya/src/main/cpp/luamod/boringssl"]
+	path = shiori-yaya/src/main/cpp/luamod/boringssl
+	url = https://github.com/google/boringssl.git
+	shallow = true

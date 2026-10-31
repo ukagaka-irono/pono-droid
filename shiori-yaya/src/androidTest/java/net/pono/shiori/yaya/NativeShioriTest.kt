@@ -595,6 +595,42 @@ class NativeShioriTest {
         assertEquals("\\0ぽのさん、Kagari です", request(ShioriEngine.KAGARI, dir, Charsets.UTF_8, "ぽの"))
     }
 
+    /**
+     * Kagari のゴースト・プラグイン（kotori・kagari_as_plugin の corelib）が require する C のモジュール。
+     * Windows の DLL や Linux の .so ではなく、libkagari.so に入れたものが package.preload から読まれる。
+     * saori_universal.native はソースから作った SAORI（calcs.dll の代わりの libsaori_calcs.so）を呼べる
+     */
+    @Test
+    fun kagariLuaModules() {
+        val dir = File(root, "kagari-modules").apply { deleteRecursively(); mkdirs() }
+        File(dir, "saori").mkdirs()
+        File(dir, "saori/calcs.dll").writeBytes(ByteArray(4))
+        writeLuaGhost(
+            "kagari-modules",
+            """
+            local r = {}
+            r[#r+1] = tostring(require("lua-utf8").len("あいう"))
+            r[#r+1] = require("iconv").new("UTF-8", "CP932"):iconv("\130\160")
+            local fh = require("fh")
+            r[#r+1] = (type(fh.readable) == "function" and type(fh.blocking) == "function") and "fh" or "nofh"
+            r[#r+1] = type(require("luachild")) == "table" and "luachild" or "noluachild"
+            r[#r+1] = type(require("socket.core").tcp) == "function" and "socket" or "nosocket"
+            r[#r+1] = (require("mime.core").b64("pono"))
+            r[#r+1] = type(require("lanes.core")) == "table" and "lanes" or "nolanes"
+            r[#r+1] = require("ssl.context").create("tlsv1_2") and "ssl" or "nossl"
+            local Native = require("saori_universal.native")
+            local saori = Native("${dir.path}/saori/calcs.dll")
+            saori:load("${dir.path}/saori/")
+            local res = saori:request("EXECUTE SAORI/1.0\r\nCharset: UTF-8\r\nSender: test\r\nArgument0: \r\nArgument1: 1+2\r\n\r\n")
+            saori:unload()
+            r[#r+1] = res:match("Result: ([^\r\n]*)") or res
+            return table.concat(r, ",")
+            """.trimIndent(),
+        )
+        val value = request(ShioriEngine.KAGARI, dir, Charsets.UTF_8)
+        assertEquals("3,あ,fh,luachild,socket,cG9ubw==,lanes,ssl,3", value)
+    }
+
     @Test
     fun kagariSandboxBlocksFilesShellAndNativeModules() {
         val secret = File(context.filesDir, "kagari-secret.txt").apply { writeText("secret") }

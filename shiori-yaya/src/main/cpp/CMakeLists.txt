@@ -141,19 +141,78 @@ set(LUA_SOURCES
 list(TRANSFORM LUA_SOURCES PREPEND ${LUA_DIR}/)
 set_source_files_properties(${LUA_SOURCES} PROPERTIES COMPILE_OPTIONS -w)
 
+# Kagari のゴースト・プラグイン（kotori・kagari_as_plugin の corelib）が require する C のモジュール。Windows の DLL・Linux の
+# .so の代わりにソースから作って libkagari.so に入れ、package.preload に置く（shim/pono_lua_modules.c）:
+#   lua-utf8（luautf8）・iconv（lua-iconv。中身は shim/pono_iconv.cpp）・luachild・fh・saori_universal.native（自前）・
+#   socket.core・mime.core（luasocket）・lanes.core（lanes）・ssl.core など（luasec。TLS は BoringSSL）
+set(LUAMOD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/luamod)
+set(LUAMOD_SOCKET ${LUAMOD_DIR}/luasocket/src)
+set(LUAMOD_LANES ${LUAMOD_DIR}/lanes/src)
+set(LUAMOD_LSEC ${LUAMOD_DIR}/luasec/src)
+set(LUAMOD_SOURCES
+    ${LUAMOD_DIR}/luautf8/lutf8lib.c
+    ${LUAMOD_DIR}/lua-iconv/luaiconv.c
+    ${LUAMOD_DIR}/luachild/luachild_common.c
+    ${LUAMOD_DIR}/luachild/luachild_posix.c
+    ${LUAMOD_DIR}/luachild/luachild_lua_5_3.c
+    ${LUAMOD_SOCKET}/auxiliar.c ${LUAMOD_SOCKET}/buffer.c ${LUAMOD_SOCKET}/compat.c ${LUAMOD_SOCKET}/except.c
+    ${LUAMOD_SOCKET}/inet.c ${LUAMOD_SOCKET}/io.c ${LUAMOD_SOCKET}/luasocket.c ${LUAMOD_SOCKET}/options.c
+    ${LUAMOD_SOCKET}/select.c ${LUAMOD_SOCKET}/tcp.c ${LUAMOD_SOCKET}/timeout.c ${LUAMOD_SOCKET}/udp.c
+    ${LUAMOD_SOCKET}/usocket.c ${LUAMOD_SOCKET}/mime.c
+    ${LUAMOD_LANES}/lanes.c ${LUAMOD_LANES}/cancel.c ${LUAMOD_LANES}/compat.c ${LUAMOD_LANES}/threading.c
+    ${LUAMOD_LANES}/tools.c ${LUAMOD_LANES}/state.c ${LUAMOD_LANES}/linda.c ${LUAMOD_LANES}/deep.c
+    ${LUAMOD_LANES}/keeper.c ${LUAMOD_LANES}/universe.c)
+set(LUAMOD_LSEC_SOURCES
+    ${LUAMOD_LSEC}/options.c ${LUAMOD_LSEC}/x509.c ${LUAMOD_LSEC}/context.c ${LUAMOD_LSEC}/ssl.c
+    ${LUAMOD_LSEC}/config.c ${LUAMOD_LSEC}/ec.c
+    ${LUAMOD_LSEC}/luasocket/buffer.c ${LUAMOD_LSEC}/luasocket/io.c ${LUAMOD_LSEC}/luasocket/timeout.c
+    ${LUAMOD_LSEC}/luasocket/usocket.c)
+# サブモジュールの警告は直さない
+set_source_files_properties(${LUAMOD_SOURCES} ${LUAMOD_LSEC_SOURCES} PROPERTIES COMPILE_OPTIONS -w)
+# Lua 本体にも luaopen_utf8 があるので、luautf8 の入口の名前を変える
+set_source_files_properties(${LUAMOD_DIR}/luautf8/lutf8lib.c PROPERTIES COMPILE_DEFINITIONS luaopen_utf8=pono_luaopen_lua_utf8)
+# <iconv.h> を自前の CP932 対応のもの（shim/iconv.h）にする
+set_source_files_properties(${LUAMOD_DIR}/lua-iconv/luaiconv.c PROPERTIES INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/shim)
+# luachild は POSIX 版を使う（元の rockspec と同じ）
+set_source_files_properties(
+    ${LUAMOD_DIR}/luachild/luachild_common.c ${LUAMOD_DIR}/luachild/luachild_posix.c ${LUAMOD_DIR}/luachild/luachild_lua_5_3.c
+    PROPERTIES COMPILE_DEFINITIONS USE_POSIX
+    COMPILE_OPTIONS "-w;-include;${CMAKE_CURRENT_SOURCE_DIR}/shim/compat/pono_luachild_spawn.h")
+# lanes は pthread_mutexattr_settype に _GNU_SOURCE が要る（元の Makefile と同じ）
+set_source_files_properties(${LUAMOD_LANES}/threading.c ${LUAMOD_LANES}/lanes.c PROPERTIES COMPILE_DEFINITIONS _GNU_SOURCE)
+# luasec の中の luasocket の写しは、luasocket と名前がぶつかるので lsec_ を付ける。BoringSSL に無い関数は埋める
+set_source_files_properties(${LUAMOD_LSEC_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "-w;-include;${CMAKE_CURRENT_SOURCE_DIR}/shim/compat/pono_lsec_rename.h;-include;${CMAKE_CURRENT_SOURCE_DIR}/shim/compat/pono_lsec_boringssl.h"
+    INCLUDE_DIRECTORIES "${LUAMOD_LSEC};${LUAMOD_LSEC}/luasocket")
+
+# BoringSSL（luasec の TLS）。アセンブラは使わない。テストや道具は作らない（EXCLUDE_FROM_ALL で、リンクする ssl・crypto だけ）
+set(OPENSSL_NO_ASM ON CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+add_subdirectory(${LUAMOD_DIR}/boringssl ${CMAKE_CURRENT_BINARY_DIR}/boringssl EXCLUDE_FROM_ALL)
+
 add_library(kagari SHARED
     ${LUA_SOURCES}
+    ${LUAMOD_SOURCES}
+    ${LUAMOD_LSEC_SOURCES}
+    $<TARGET_OBJECTS:pono_iconv>
     kagari/kagari.cpp
     kagari/kagari_unix.cpp
     shim/pono_lua.c
+    shim/pono_lua_modules.c
+    shim/pono_lua_fh.c
+    shim/pono_lua_saori.c
+    shim/pono_lanes_inline.c
     jni_kagari.cpp)
+target_link_libraries(kagari PRIVATE ssl crypto)
+set_source_files_properties(shim/pono_lanes_inline.c PROPERTIES INCLUDE_DIRECTORIES ${LUAMOD_LANES})
 set_source_files_properties(kagari/kagari.cpp kagari/kagari_unix.cpp PROPERTIES COMPILE_OPTIONS -w)
 target_include_directories(kagari PRIVATE ${LUA_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/sol2/include ${CMAKE_CURRENT_SOURCE_DIR}/kagari)
 # LUA_USE_LINUX は dlopen 版の C モジュール読み込みと popen を使う（どちらもサンドボックスで止まる）
 target_compile_definitions(kagari PRIVATE LUA_USE_LINUX)
 target_compile_options(kagari PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>)
-# バイトコードを読ませず、debug ライブラリを絞る（shim/pono_lua.c）
-target_link_options(kagari PRIVATE -Wl,--wrap=lua_load -Wl,--wrap=luaopen_debug)
+# バイトコードを読ませず、debug ライブラリを絞る（shim/pono_lua.c）。package を開くときに C のモジュールを足す（shim/pono_lua_modules.c）
+target_link_options(kagari PRIVATE -Wl,--wrap=lua_load -Wl,--wrap=luaopen_debug -Wl,--wrap=luaopen_package)
 pono_shiori_library(kagari)
 
 # ---- ソースから作る SAORI ----
