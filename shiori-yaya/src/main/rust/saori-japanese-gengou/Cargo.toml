@@ -1,0 +1,23 @@
+# saori-japanese-gengou の Android 用のビルド（:shiori-yaya:prepareRustSaoriSources が元のソースと並べて写す）。
+# 依存は元の Cargo.toml と同じ。Windows だけの winapi は使わない（lib.rs と chars.rs は src/main/rust のものに替える）。
+# 版は Cargo.lock で決める
+[package]
+name = "saori-japanese-gengou"
+version = "1.0.3"
+edition = "2021"
+publish = false
+
+[dependencies]
+chrono = "0.4.45"
+
+[lib]
+name = "japanesegengou"
+path = "src/lib.rs"
+crate-type = ["staticlib"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+
+[workspace]

@@ -229,3 +229,46 @@ target_compile_definitions(saori_mahjongutil PRIVATE CUSTOM_CREATE_INSTANCE)
 # 見出しの中の「クラス名::関数名」（MSVC だけが通す書き方）を通す
 target_compile_options(saori_mahjongutil PRIVATE -fms-extensions)
 pono_saori_library(saori_mahjongutil)
+
+# ---- Rust の SAORI ----
+# tukinami さんたちの Rust の SAORI（サブモジュール saori/saori-*）。Gradle（prepareRustSaoriSources）が RUST_SAORI_DIR に
+# Android 用の lib.rs・chars.rs と並べて写したものを、cargo で staticlib にしてから libsaori_<名前>.so に入れる。
+# 入口は shim/pono_saori_rust.cpp。cargo の出力は RUST_TARGET_DIR に、Rust の target ごとに分かれる
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+    set(RUST_TARGET aarch64-linux-android)
+elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
+    set(RUST_TARGET armv7-linux-androideabi)
+elseif(ANDROID_ABI STREQUAL "x86")
+    set(RUST_TARGET i686-linux-android)
+elseif(ANDROID_ABI STREQUAL "x86_64")
+    set(RUST_TARGET x86_64-linux-android)
+else()
+    message(FATAL_ERROR "Rust SAORI: unknown ABI ${ANDROID_ABI}")
+endif()
+
+# [crate] は Cargo.toml の package の名前、[lib] は lib の名前（lib<名前>.a になる）
+function(pono_rust_saori target crate lib)
+    set(dir ${RUST_SAORI_DIR}/${crate})
+    set(archive ${RUST_TARGET_DIR}/${RUST_TARGET}/release/lib${lib}.a)
+    file(GLOB_RECURSE sources CONFIGURE_DEPENDS ${dir}/src/*.rs)
+    add_custom_command(
+        OUTPUT ${archive}
+        COMMAND ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${RUST_TARGET_DIR}
+            ${CARGO} build --release --locked --quiet --target ${RUST_TARGET} --manifest-path ${dir}/Cargo.toml
+        DEPENDS ${sources} ${dir}/Cargo.toml ${dir}/Cargo.lock
+        COMMENT "cargo build ${crate} (${RUST_TARGET})"
+        VERBATIM)
+    add_custom_target(${target}_cargo DEPENDS ${archive})
+    add_library(${target} SHARED shim/pono_saori_rust.cpp)
+    add_dependencies(${target} ${target}_cargo)
+    # Rust の std が使うもの（cargo rustc -- --print native-static-libs の -ldl -llog -lunwind -lm -lc）
+    target_link_libraries(${target} PRIVATE ${archive} dl unwind m)
+    pono_saori_library(${target})
+endfunction()
+
+pono_rust_saori(saori_calcs saori-calcs calcs)
+pono_rust_saori(saori_japanesegengou saori-japanese-gengou japanesegengou)
+pono_rust_saori(saori_resizedpngmini saori-resized-png-mini resizedpngmini)
+pono_rust_saori(saori_qrcode saori-qrcode saori_qrcode)
+pono_rust_saori(saori_resizedpng saori-resized-png resizedpng)
+pono_rust_saori(saori_piechart saori-pie-chart piechart)

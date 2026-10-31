@@ -33,6 +33,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # Rust の SAORI（shiori-yaya/src/main/rust）。runner に入っている rustup に Android の target を足す
+      - name: Add Rust Android targets
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
       # Android SDK は runner に入っている。compileSdk 37 のプラットフォームと NDK / CMake は
       # 足りなければ Android Gradle Plugin がビルド中にインストールする
       - name: Build debug APK and run unit tests

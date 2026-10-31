@@ -1,0 +1,24 @@
+# saori-resized-png の Android 用のビルド（:shiori-yaya:prepareRustSaoriSources が元のソースと並べて写す）。
+# 依存は元の Cargo.toml と同じ。Windows だけの winapi は使わない（lib.rs と chars.rs は src/main/rust のものに替える）。
+# 版は Cargo.lock で決める
+[package]
+name = "saori-resized-png"
+version = "1.0.5"
+edition = "2021"
+publish = false
+
+[dependencies]
+image = "0.25.10"
+fast_image_resize = "6.1.0"
+
+[lib]
+name = "resizedpng"
+path = "src/lib.rs"
+crate-type = ["staticlib"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+
+[workspace]

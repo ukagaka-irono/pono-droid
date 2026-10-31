@@ -255,6 +255,12 @@ const NativeSaoriLib kNativeSaoris[] = {
     {"texasholdemutil", "libsaori_texasholdem.so"},
     {"budoux", "libsaori_budoux.so"},
     {"mahjongutil", "libsaori_mahjongutil.so"},
+    {"calcs", "libsaori_calcs.so"},
+    {"japanesegengou", "libsaori_japanesegengou.so"},
+    {"resizedpngmini", "libsaori_resizedpngmini.so"},
+    {"saori_qrcode", "libsaori_qrcode.so"},
+    {"resizedpng", "libsaori_resizedpng.so"},
+    {"piechart", "libsaori_piechart.so"},
 };
 
 const int kNativeSlots = 8;

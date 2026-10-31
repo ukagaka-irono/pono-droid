@@ -32,3 +32,21 @@
 [submodule "shiori-yaya/src/main/cpp/saori/MahjongUtil"]
 	path = shiori-yaya/src/main/cpp/saori/MahjongUtil
 	url = https://github.com/nikolat/MahjongUtil.git
+[submodule "shiori-yaya/src/main/cpp/saori/saori-calcs"]
+	path = shiori-yaya/src/main/cpp/saori/saori-calcs
+	url = https://github.com/tukinami/saori-calcs.git
+[submodule "shiori-yaya/src/main/cpp/saori/saori-japanese-gengou"]
+	path = shiori-yaya/src/main/cpp/saori/saori-japanese-gengou
+	url = https://github.com/tukinami/saori-japanese-gengou.git
+[submodule "shiori-yaya/src/main/cpp/saori/saori-resized-png-mini"]
+	path = shiori-yaya/src/main/cpp/saori/saori-resized-png-mini
+	url = https://github.com/tukinami/saori-resized-png-mini.git
+[submodule "shiori-yaya/src/main/cpp/saori/saori-qrcode"]
+	path = shiori-yaya/src/main/cpp/saori/saori-qrcode
+	url = https://github.com/nikolat/saori-qrcode.git
+[submodule "shiori-yaya/src/main/cpp/saori/saori-resized-png"]
+	path = shiori-yaya/src/main/cpp/saori/saori-resized-png
+	url = https://github.com/tukinami/saori-resized-png.git
+[submodule "shiori-yaya/src/main/cpp/saori/saori-pie-chart"]
+	path = shiori-yaya/src/main/cpp/saori/saori-pie-chart
+	url = https://github.com/tukinami/saori-pie-chart.git

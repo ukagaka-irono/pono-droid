@@ -36,6 +36,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # Rust の SAORI（shiori-yaya/src/main/rust）。runner に入っている rustup に Android の target を足す
+      - name: Add Rust Android targets
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+
       - name: Prepare signing key
         env:
           PONO_KEYSTORE_BASE64: ${{ secrets.PONO_KEYSTORE_BASE64 }}

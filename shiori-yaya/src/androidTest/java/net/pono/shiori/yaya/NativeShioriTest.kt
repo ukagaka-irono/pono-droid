@@ -1,5 +1,7 @@
 package net.pono.shiori.yaya
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
@@ -15,6 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.charset.Charset
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -306,6 +309,84 @@ class NativeShioriTest {
         val m = value.split('|')
         assertEquals(value, "1", m.getOrNull(3))
         assertEquals(value, "9p9p,1m2m3m,5p7p,6p8p,2s3s4s,4s", m.getOrNull(4))
+    }
+
+    /**
+     * ソースから作った Rust の SAORI（calcs.dll・japanesegengou.dll・saori_qrcode.dll・resizedpngmini.dll・resizedpng.dll・
+     * piechart.dll の代わりの libsaori_*.so）。パスの引数は Windows の区切り（\）でも読み書きでき、書く先はサンドボックスの中
+     */
+    @Test
+    fun rustSaorisBuiltFromSource() {
+        val dir = File(root, "rust-saori").apply { deleteRecursively(); mkdirs() }
+        File(dir, "yaya.txt").writeText("charset, UTF-8\r\ndic, test.dic\r\n", Charsets.US_ASCII)
+        val saori = File(dir, "saori").apply { mkdirs() }
+        // サンドボックスの外（アプリのファイル）には書けない
+        val evil = File(context.filesDir, "rust-saori-evil.png").apply { delete() }
+        for (n in listOf("calcs.dll", "japanesegengou.dll", "saori_qrcode.dll", "resizedpngmini.dll", "resizedpng.dll", "piechart.dll")) {
+            File(saori, n).writeBytes(ByteArray(4))
+        }
+        // japanese-gengou は DLL のフォルダの gengou_lists を読む（同梱のものと同じ書き方）
+        File(saori, "gengou_lists").mkdirs()
+        File(saori, "gengou_lists/005_meijiIkou.txt").writeText(
+            "// 1868-10-23_****\r\n明治,1868-01-25,1912-07-29\r\n大正,1912-07-30,1926-12-24\r\n昭和,1926-12-25,1989-01-07\r\n" +
+                "平成,1989-01-08,2019-04-30\r\n令和,2019-05-01,****\r\n",
+            Charsets.UTF_8,
+        )
+        // 3×2 の PNG
+        FileOutputStream(File(saori, "in.png")).use {
+            Bitmap.createBitmap(3, 2, Bitmap.Config.ARGB_8888).compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        val dic = """
+            request
+            {
+            	_crlf = CHR(13) + CHR(10)
+            	_head = 'EXECUTE SAORI/1.0' + _crlf + 'Charset: UTF-8' + _crlf + 'Sender: test' + _crlf + 'SecurityLevel: Local' + _crlf
+            	_r = LOADLIB('saori/calcs.dll')
+            	_r = LOADLIB('saori/japanesegengou.dll')
+            	_r = LOADLIB('saori/saori_qrcode.dll')
+            	_r = LOADLIB('saori/resizedpngmini.dll')
+            	_r = LOADLIB('saori/resizedpng.dll')
+            	_r = LOADLIB('saori/piechart.dll')
+            	_c = saoriline(REQUESTLIB('saori/calcs.dll', _head + 'Argument0: ' + _crlf + 'Argument1: 1+2*3' + _crlf + _crlf), 'Result')
+            	_g = saoriline(REQUESTLIB('saori/japanesegengou.dll', _head + 'Argument0: 2019' + _crlf + 'Argument1: 5' + _crlf + 'Argument2: 1' + _crlf + _crlf), 'Result')
+            	_q = saoriline(REQUESTLIB('saori/saori_qrcode.dll', _head + 'Argument0: text' + _crlf + 'Argument1: pono' + _crlf + _crlf), 'Result')
+            	_r = REQUESTLIB('saori/saori_qrcode.dll', _head + 'Argument0: image' + _crlf + 'Argument1: pono' + _crlf + 'Argument2: out\qr.png' + _crlf + _crlf)
+            	_r = REQUESTLIB('saori/saori_qrcode.dll', _head + 'Argument0: image' + _crlf + 'Argument1: pono' + _crlf + 'Argument2: ${evil.path}' + _crlf + _crlf)
+            	_i = REQUESTLIB('saori/resizedpngmini.dll', _head + 'Argument0: GetImageInfo' + _crlf + 'Argument1: in.png' + _crlf + _crlf)
+            	_m = saoriline(REQUESTLIB('saori/resizedpngmini.dll', _head + 'Argument0: ToResizedPng' + _crlf + 'Argument1: in.png' + _crlf + 'Argument2: out\mini.png' + _crlf + 'Argument3: 6' + _crlf + 'Argument4: 4' + _crlf + _crlf), 'Result')
+            	_t = saoriline(REQUESTLIB('saori/resizedpng.dll', _head + 'Argument0: GetImageType' + _crlf + 'Argument1: out\mini.png' + _crlf + _crlf), 'Result')
+            	_p = saoriline(REQUESTLIB('saori/piechart.dll', _head + 'Argument0: out\pie.png' + _crlf + 'Argument1: 100' + _crlf + 'Argument2: 100' + _crlf + 'Argument3: 40' + _crlf + 'Argument4: 0' + _crlf + 'Argument5: 0' + _crlf + 'Argument6: 0' + _crlf + 'Argument7: sans-serif' + _crlf + 'Argument8: 10' + _crlf + 'Argument9: 20' + _crlf + 'Argument10: Red' + _crlf + 'Argument11: 0.5' + _crlf + 'Argument12: #fe5555' + _crlf + 'Argument13: Other' + _crlf + 'Argument14: 0.5' + _crlf + 'Argument15: #999' + _crlf + _crlf), 'Result')
+            	_r = UNLOADLIB('saori/calcs.dll')
+            	'SHIORI/3.0 200 OK' + _crlf + 'Charset: UTF-8' + _crlf + 'Value: ' + _c + '|' + _g + '|' + REPLACE(_q, CHR(10), '/') + '|' + saoriline(_i, 'Value0') + 'x' + saoriline(_i, 'Value1') + '|' + _m + '|' + _t + '|' + _p + _crlf + _crlf
+            }
+
+            saoriline
+            {
+            	_r = ''
+            	_key = _argv[1] + ': '
+            	_lines = SPLIT(_argv[0], CHR(13) + CHR(10))
+            	foreach _lines; _x {
+            		if SUBSTR(_x, 0, STRLEN(_key)) == _key {
+            			_r = ERASE(_x, 0, STRLEN(_key))
+            		}
+            	}
+            	_r
+            }
+        """.trimIndent().replace("\n", "\r\n")
+        File(dir, "test.dic").writeText(dic, Charsets.UTF_8)
+        File(saori, "out").mkdirs()
+        val value = request(ShioriEngine.YAYA, dir, Charsets.UTF_8).orEmpty()
+        val v = value.split('|')
+        assertEquals(value, "7", v.getOrNull(0))
+        assertTrue(value, v.getOrNull(1).orEmpty().startsWith("令和"))
+        assertTrue(value, v.getOrNull(2).orEmpty().contains('#'))
+        assertTrue(value, File(saori, "out/qr.png").length() > 0)
+        assertEquals(value, "3x2", v.getOrNull(3))
+        assertEquals(value, "0", v.getOrNull(4))
+        assertEquals(value, 6, BitmapFactory.decodeFile(File(saori, "out/mini.png").path)?.width)
+        assertEquals(value, "PNG", v.getOrNull(5))
+        assertEquals(value, 100, BitmapFactory.decodeFile(File(saori, "out/pie.png").path)?.width)
+        assertFalse(evil.exists())
     }
 
     /** 内蔵 SAORI（SAORI over DirectSSTP）。辞書が internal_* を呼ぶと、setSaoriHandler の先に要求が届いて答えが戻る */

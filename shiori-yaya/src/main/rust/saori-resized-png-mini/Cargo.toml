@@ -1,0 +1,30 @@
+# saori-resized-png-mini の Android 用のビルド（:shiori-yaya:prepareRustSaoriSources が元のソースと並べて写す）。
+# 依存は元の Cargo.toml と同じ。Windows だけの winapi は使わない（lib.rs と chars.rs は src/main/rust のものに替える）。
+# 版は Cargo.lock で決める
+[package]
+name = "saori-resized-png-mini"
+version = "1.1.3"
+edition = "2021"
+publish = false
+
+[dependencies]
+resize = "0.8.9"
+rgb = "0.8.53"
+png = "0.18.1"
+gif = "0.14.2"
+jpeg-decoder = "0.3.2"
+tinybmp = "0.7.0"
+embedded-graphics = "0.8.2"
+image-webp = "0.2.4"
+
+[lib]
+name = "resizedpngmini"
+path = "src/lib.rs"
+crate-type = ["staticlib"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+
+[workspace]

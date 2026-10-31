@@ -21,6 +21,11 @@ abstract class GenerateLicenseAssets : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val apacheLicense: RegularFileProperty
 
+    /** Rust の SAORI が入れる crate のライセンス（:shiori-yaya:collectRustSaoriLicenses が書いたもの） */
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val rustLicenses: RegularFileProperty
+
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
@@ -50,6 +55,15 @@ abstract class GenerateLicenseAssets : DefaultTask() {
                 .joinToString("\n") { it.replace(Regex("""^\s*(//|\*\*|\*(?=\s|$))"""), "").trimEnd() }
                 .trimIndent()
         }
+
+        // ==== <名前> <版> の見出しの後に License: と URL: の行、空行、文面
+        val rustEntries = rustLicenses.get().asFile.readText().replace("\r\n", "\n").split("\n==== ").drop(1).map { block ->
+            val title = block.substringBefore('\n')
+            val license = block.substringAfter("\nLicense: ").substringBefore('\n')
+            val url = block.substringAfter("\nURL: ").substringBefore('\n')
+            Entry(title.removePrefix("~"), license, url, block.substringAfter("\n\n").trim())
+        }
+        if (rustEntries.isEmpty()) throw GradleException("no entries in ${rustLicenses.get().asFile}")
 
         val entries = listOf(
             Entry(
@@ -82,6 +96,13 @@ abstract class GenerateLicenseAssets : DefaultTask() {
             Entry("saori_budoux", "MIT", "https://github.com/Tatakinov/saori_budoux", read("saori/saori_budoux/LICENSE").trim()),
             // 伺かゴースト用ライセンスと修正 BSD ライセンスの両方が書いてある（csaori.h も同じ配布物のもの）
             Entry("MahjongUtil", "BSD-3-Clause", "https://github.com/nikolat/MahjongUtil", read("saori/MahjongUtil/license.txt").trim()),
+            // Rust の SAORI（中で使う crate と Rust の標準ライブラリは後ろにまとめて並ぶ）
+            Entry("saori-calcs", "MIT", "https://github.com/tukinami/saori-calcs", read("saori/saori-calcs/LICENSE").trim()),
+            Entry("saori-japanese-gengou", "MIT", "https://github.com/tukinami/saori-japanese-gengou", read("saori/saori-japanese-gengou/LICENSE").trim()),
+            Entry("saori-resized-png-mini", "MIT", "https://github.com/tukinami/saori-resized-png-mini", read("saori/saori-resized-png-mini/LICENSE").trim()),
+            Entry("saori-resized-png", "MIT", "https://github.com/tukinami/saori-resized-png", read("saori/saori-resized-png/LICENSE").trim()),
+            Entry("saori-pie-chart", "MIT", "https://github.com/tukinami/saori-pie-chart", read("saori/saori-pie-chart/LICENSE").trim()),
+            Entry("saori-qrcode", "CC0-1.0", "https://github.com/nikolat/saori-qrcode", read("saori/saori-qrcode/LICENSE").trim()),
             // json.hpp の先頭には SPDX の印しか無いので、文面は MIT の LICENSE.MIT と同じものを書く
             Entry(
                 "JSON for Modern C++", "MIT", "https://github.com/nlohmann/json",
@@ -267,6 +288,7 @@ abstract class GenerateLicenseAssets : DefaultTask() {
                 "Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.\n" +
                     "See https://llvm.org/LICENSE.txt for license information.",
             ),
+            *rustEntries.toTypedArray(),
             Entry("Apache License 2.0", "Apache-2.0", "https://www.apache.org/licenses/LICENSE-2.0", apacheLicense.get().asFile.readText().trim()),
         )
 
@@ -297,6 +319,7 @@ val generateLicenseAssets = tasks.register<GenerateLicenseAssets>("generateLicen
     cppDir.set(rootProject.layout.projectDirectory.dir("shiori-yaya/src/main/cpp"))
     // pono-droid 自体のライセンスファイル（Apache License 2.0 の全文）をそのまま使う
     apacheLicense.set(rootProject.layout.projectDirectory.file("LICENSE"))
+    rustLicenses.set(rootProject.layout.projectDirectory.file("shiori-yaya/src/main/rust/licenses.txt"))
     outputDir.set(layout.buildDirectory.dir("generated/licenses"))
 }
 
