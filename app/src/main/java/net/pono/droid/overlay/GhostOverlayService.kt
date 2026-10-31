@@ -1,6 +1,7 @@
 package net.pono.droid.overlay
 
 import net.pono.baseware.ghost.NarInstaller
+import net.pono.baseware.plugin.Plugin
 import net.pono.baseware.plugin.PluginHost
 import android.app.ActivityManager
 import android.app.KeyguardManager
@@ -1654,6 +1655,12 @@ class GhostOverlayService : LifecycleService() {
 
         /** 動いているサービス（\![open,dialog,save] の保存先を見張るため） */
         private var instance: GhostOverlayService? = null
+
+        /** プラグインを消す。動いていれば先に止めて外す */
+        suspend fun uninstallPlugin(context: Context, plugin: Plugin): Boolean {
+            instance?.pluginHost?.unload(plugin)
+            return withContext(Dispatchers.IO) { GhostStore.plugins(context).uninstall(plugin) }
+        }
 
         /** アプリの画面や共有から入れたものを、動いているプラグインに知らせる（プラグインなら読み込み直す） */
         fun pluginInstalled(result: NarInstaller.Result) {

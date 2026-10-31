@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1458・一部だけ 15・作る 0・作れない 240・ベースウェアのことではない 337
+全 2050 項目: 済み 1511・一部だけ 16・作る 0・作れない 185・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -138,29 +138,14 @@
 
 ## プラグイン
 
-済み 0 項目。
+済み 15 項目。
 
-### ⛔ 作れない（16）
-- charset,文字コード — プラグインは作らない（⛔）
-- craftman,作者名 — プラグインは作らない（⛔）
-- craftmanurl,URL — プラグインは作らない（⛔）
-- craftmanw,作者名 — プラグインは作らない（⛔）
-- filename,dll — プラグインは作らない（⛔。Windows の DLL）
-- homeurl,URL — プラグインは作らない（⛔）
-- id,ID — プラグインは作らない（⛔）
-- descript.txt — プラグインは作らない（⛔）
-- descript.txt（Pluginの） — プラグインは作らない（⛔）
-- name,プラグイン名 — プラグインは作らない（⛔）
-- otherghosttalk,オプション — プラグインは作らない（⛔）
-- readme.charset,文字コード — プラグインは作らない（⛔）
-- readme,ファイル名 — プラグインは作らない（⛔）
-- secondchangeinterval,秒数 — プラグインは作らない（⛔）
-- type,種別 — プラグインは作らない（⛔）
-- Plugin設定 — プラグインは作らない（⛔）
+### 🔧 一部だけ（1）
+- homeurl,URL — pluginlist(…).homeurl で読める。プラグインのネットワーク更新はまだ無い
 
 ## さくらスクリプト
 
-済み 343 項目。
+済み 348 項目。
 
 ### 🔧 一部だけ（5）
 - \_l[x,y] — 横書きのバルーンは座標どおり（px・em・lh・%・@ の相対・centerx / centery、\_l の後は左寄せ）。縦書きのバルーンは次の列にするだけ
@@ -169,17 +154,13 @@
 - \!\...\] — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
 - sound play/load/option のオプション — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
 
-### ⛔ 作れない（26）
+### ⛔ 作れない（21）
 - \6 — アプリは端末の時計を合わせられない（ずれを測るだけ）
 - \![change,calendarskin,カレンダースキン名] — カレンダーの画面が無い（決めたこと）
 - \![execute,calendarplugin,カレンダープラグイン名] — カレンダープラグイン（スケジュールセンサ）は DLL のプラグイン
 - \![execute,headline,ヘッドライン名] — ヘッドラインセンサーは作らない（決めたこと）
-- \![notifyplugin,プラグインのIDまたは名前,イベント名,r0,r1,r2...] — プラグインは作らない（決めたこと）
-- \![raiseplugin,プラグインのIDまたは名前,イベント名,r0,r1,r2...] — プラグインは作らない（決めたこと）
 - \![restore,wallpaper] — Android 13 からアプリが今の壁紙を読めないので戻せない
 - \![save,wallpaper] — 同上
-- \![timernotifyplugin,時間,繰り返すか否か,プラグインのIDまたは名前,イベント名,r0,r1,r2...] — プラグインは作らない（決めたこと）
-- \![timerraiseplugin,時間,繰り返すか否か,プラグインのIDまたは名前,イベント名,r0,r1,r2...] — プラグインは作らない（決めたこと）
 - \![execute,emptyrecyclebin] — Android にごみ箱が無い（決めたこと）
 - \![load,makoto] — MAKOTO は Windows の DLL
 - \![reload,makoto] — 同上
@@ -190,7 +171,6 @@
 - \![open,calendarskinexplorer] — カレンダーの画面が無い（決めたこと）
 - \![open,headlinesensorexplorer] — ヘッドラインセンサーは作らない（決めたこと）
 - \![open,messenger] — SSP のメッセンジャーが無い（決めたこと）
-- \![open,pluginexplorer] — プラグインは作らない（決めたこと）
 - \![sound,cdplay,トラックNo.] — 音楽 CD は Android に無い
 - \![effect,プラグイン名,速度倍率,パラメータ] — DLL のプラグイン
 - \![effect2,追加サーフェスID,プラグイン名,速度倍率,パラメータ] — DLL のプラグイン
@@ -216,27 +196,19 @@
 
 ## プロパティシステム
 
-済み 180 項目。
+済み 188 項目。
 
 ### 🔧 一部だけ（2）
 - activeghostlist(ゴースト名/本体側名/パス).ext.拡張プロパティ名 — 読むと相手に property.get、書くと property.set を送る（\![get,property] など待てるところだけ。%property[…] はその場で答えが要るので空）
 - activeghostlist.index(ID).ext.拡張プロパティ名 — activeghostlist(…).ext と同じ（index(ID) で選んだゴーストに property.get / set。%property[…] では空）
 
-### ⛔ 作れない（14）
+### ⛔ 作れない（6）
 - headlinelist.count — ヘッドラインセンサーは作らない（決めたこと）
 - headlinelist.index(ID).汎用プロパティ名 — ヘッドラインセンサーは作らない（決めたこと）
 - headlinelist(ヘッドライン名/パス).汎用プロパティ名 — ヘッドラインセンサーは作らない（決めたこと）
 - history.headline.count — ヘッドラインセンサーは作らない（決めたこと）
 - history.headline.index(ID).汎用プロパティ名 — ヘッドラインセンサーは作らない（決めたこと）
 - history.headline(ヘッドライン名/パス).汎用プロパティ名 — ヘッドラインセンサーは作らない（決めたこと）
-- history.plugin(プラグイン名/パス/ID).汎用プロパティ名 — プラグインは作らない（決めたこと）
-- history.plugin.count — プラグインは作らない（決めたこと）
-- history.plugin.index(ID).汎用プロパティ名 — プラグインは作らない（決めたこと）
-- pluginlist(プラグイン名/パス/ID).ext.拡張プロパティ名 — プラグインは作らない（決めたこと）
-- pluginlist(プラグイン名/パス/ID).汎用プロパティ名 — プラグインは作らない（決めたこと）
-- pluginlist.count — プラグインは作らない（決めたこと）
-- pluginlist.index(ID).ext.拡張プロパティ名 — プラグインは作らない（決めたこと）
-- pluginlist.index(ID).汎用プロパティ名 — プラグインは作らない（決めたこと）
 
 ### ― ベースウェアのことではない（5）
 - プロパティシステム — 目次のページ
@@ -247,9 +219,9 @@
 
 ## SHIORI イベント
 
-済み 263 項目。
+済み 265 項目。
 
-### ⛔ 作れない（53）
+### ⛔ 作れない（51）
 - OnBasewareUpdating — アプリの更新は Play ストアが行い、置き換える前にアプリへ知らせが来ない
 - OnCacheRestore — ゴーストキャッシュが無い（決めたこと）
 - OnCacheSuspend — ゴーストキャッシュが無い（決めたこと）
@@ -287,8 +259,6 @@
 - installedcalendarpluginname — カレンダーのプラグインは作らない（決めたこと）
 - installedcalendarskinname — カレンダーの画面が無い（決めたこと）
 - installedheadlinename — ヘッドラインセンサーは作らない（決めたこと）
-- installedplugin — プラグインは作らない（決めたこと）
-- pluginpathlist — プラグインは作らない（決めたこと）
 - OnDisplayHandover — オーバーレイは1つの画面にしか出ない（決めたこと）
 - OnRecycleBinEmpty — Android にごみ箱が無い（決めたこと）
 - OnRecycleBinEmptyFromOther — Android にごみ箱が無い（決めたこと）
@@ -309,9 +279,9 @@
 
 ## SHIORI リソース
 
-済み 94 項目。
+済み 96 項目。
 
-### ⛔ 作れない（65）
+### ⛔ 作れない（63）
 - (入力ボックス種類).defaultleft　(入力ボックス種類).defaulttop — 入力の箱は \0 のバルーンの位置に出す（決めたこと）
 - menu.disable.font.color.b — バルーンのメニューに押せない項目が無い（決めたこと）
 - menu.disable.font.color.g — バルーンのメニューに押せない項目が無い（決めたこと）
@@ -343,8 +313,6 @@
 - headlinesenserootbutton.caption — ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
 - inforootbutton.caption — SSP の情報の下位メニュー。メニューに無い（決めたこと・メニューに無い）
 - messengerbutton.caption — SSP メッセンジャが無い（決めたこと・メニューに無い）
-- pluginhistorybutton.caption — プラグインは作らない（決めたこと・メニューに無い）
-- pluginrootbutton.caption — プラグインは作らない（決めたこと・メニューに無い）
 - purgeghostcachebutton.caption — ゴーストキャッシュが無い（決めたこと・メニューに無い）
 - rateofuseballoonbutton.caption — Materia の使用率の下位メニュー。rateofusebutton で足りる（決めたこと・メニューに無い）
 - rateofuserootbutton.caption — Materia の使用率の下位メニュー。rateofusebutton で足りる（決めたこと・メニューに無い）
@@ -400,36 +368,16 @@
 
 ## プラグインのイベント
 
-済み 0 項目。
+済み 20 項目。
 
-### ⛔ 作れない（21）
-- PLUGIN Eventリスト — プラグインに送るイベントの一覧。プラグインは作らない
-- OnChoiceSelect(Ex)/OnAnchorSelect(Ex)/\q等に指定された任意名イベント — プラグインに送るもの。プラグインは作らない
-- OnGhostBoot — プラグインに送るもの。プラグインは作らない
-- OnGhostExit — プラグインに送るもの。プラグインは作らない
-- OnGhostInfoUpdate — プラグインに送るもの。プラグインは作らない
-- OnInstallComplete — プラグインに送るもの。プラグインは作らない
-- OnMenuExec — プラグインに送るもの。プラグインは作らない
-- OnOtherGhostTalk — プラグインに送るもの。プラグインは作らない
-- OnSecondChange — プラグインに送るもの。プラグインは作らない
-- balloonpathlist — プラグインに送るもの。プラグインは作らない
-- \![raiseplugin]および\![notifyplugin]に指定された任意名イベント — プラグインに送るもの。プラグインは作らない
-- ghostpathlist — プラグインに送るもの。プラグインは作らない
-- headlinepathlist — プラグインに送るもの。プラグインは作らない
-- PLUGIN Event — プラグインに送るイベントの一覧。プラグインは作らない
-- installedballoonname — プラグインに送るもの。プラグインは作らない
-- installedghostname — プラグインに送るもの。プラグインは作らない
-- installedplugin — プラグインに送るもの。プラグインは作らない
-- pluginpathlist — プラグインに送るもの。プラグインは作らない
-- property.get — プラグインに送るもの。プラグインは作らない
-- property.set — プラグインに送るもの。プラグインは作らない
-- version — プラグインに送るもの。プラグインは作らない
+### ― ベースウェアのことではない（1）
+- headlinepathlist — pono-droid にヘッドライン（ヘッドラインセンサ）は無いので送らない
 
 ## 仕様（SSTP・SHIORI/3.0・SAORI・更新ファイルなど）
 
-済み 75 項目。
+済み 76 項目。
 
-### ⛔ 作れない（10）
+### ⛔ 作れない（9）
 - DLL共通仕様 — Windows の DLL の決まり。pono-droid は SHIORI を組み込みで動かす
 - FMO/Mutex — Windows だけの仕組み
 - FMO用Mutex — Windows の名前つき Mutex
@@ -437,7 +385,6 @@
 - FMO/Mutex — Windows だけの仕組み
 - Mutex — Windows の名前つき Mutex（ssp / sakura）。ほかのアプリから見る手段が無い
 - HEADLINE/2.0 — ヘッドラインは Windows の DLL。決めたとおり作らない
-- PLUGIN/2.0 — プラグインは Windows の DLL。決めたとおり作らない
 - CompressArchive — overwrite・append・--password・lzma（ZIP の方式 14 を自分で書く。--password と一緒なら WinZip AES-256。ExtractArchive でも読める）は済み。headerencrypt（中央ディレクトリの暗号化）は PKWARE だけの仕様で公開された実装が無く、500 unknown method（決めたこと）
 - Direct SSTP — Windows の WM_COPYDATA。Android には同じものが無い
 

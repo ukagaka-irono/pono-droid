@@ -296,22 +296,22 @@ descript/install/narignore-updateignore-narinclude-updateinclude.md	DONE	.narign
 descript/install/updates_def-txt/entry.md	DONE	相対パス,ignore	更新データを作るとき、相対パス,ignore のファイルを外す（フォルダは書けない。developer_options.txt の方が勝つ）
 descript/install/updates_def-txt/index.md	NA	updates_def.txt	一覧のページ
 descript/install/updates_def-txt/note-1.md	NA	補足	旧仕様の説明
-descript/plugin/descript-txt/charset.md	IMPOSSIBLE	charset,文字コード	プラグインは作らない（⛔）
-descript/plugin/descript-txt/craftman.md	IMPOSSIBLE	craftman,作者名	プラグインは作らない（⛔）
-descript/plugin/descript-txt/craftmanurl.md	IMPOSSIBLE	craftmanurl,URL	プラグインは作らない（⛔）
-descript/plugin/descript-txt/craftmanw.md	IMPOSSIBLE	craftmanw,作者名	プラグインは作らない（⛔）
-descript/plugin/descript-txt/filename.md	IMPOSSIBLE	filename,dll	プラグインは作らない（⛔。Windows の DLL）
-descript/plugin/descript-txt/homeurl.md	IMPOSSIBLE	homeurl,URL	プラグインは作らない（⛔）
-descript/plugin/descript-txt/id.md	IMPOSSIBLE	id,ID	プラグインは作らない（⛔）
-descript/plugin/descript-txt/index.md	IMPOSSIBLE	descript.txt	プラグインは作らない（⛔）
-descript/plugin/descript-txt/introduction_descript.txt.md	IMPOSSIBLE	descript.txt（Pluginの）	プラグインは作らない（⛔）
-descript/plugin/descript-txt/name.md	IMPOSSIBLE	name,プラグイン名	プラグインは作らない（⛔）
-descript/plugin/descript-txt/otherghosttalk.md	IMPOSSIBLE	otherghosttalk,オプション	プラグインは作らない（⛔）
-descript/plugin/descript-txt/readme.charset.md	IMPOSSIBLE	readme.charset,文字コード	プラグインは作らない（⛔）
-descript/plugin/descript-txt/readme.md	IMPOSSIBLE	readme,ファイル名	プラグインは作らない（⛔）
-descript/plugin/descript-txt/secondchangeinterval.md	IMPOSSIBLE	secondchangeinterval,秒数	プラグインは作らない（⛔）
-descript/plugin/descript-txt/type.md	IMPOSSIBLE	type,種別	プラグインは作らない（⛔）
-descript/plugin/index.md	IMPOSSIBLE	Plugin設定	プラグインは作らない（⛔）
+descript/plugin/descript-txt/charset.md	DONE	charset,文字コード	descript.txt の charset で読む（無ければ中身から決める）
+descript/plugin/descript-txt/craftman.md	DONE	craftman,作者名	descript.txt（name・id・filename は必須。\ や % で始まるタグは捨てる）を読む
+descript/plugin/descript-txt/craftmanurl.md	DONE	craftmanurl,URL	アプリのプラグインの一覧の「作者のページ」と pluginlist(…).craftmanurl（http か https のときだけ）
+descript/plugin/descript-txt/craftmanw.md	DONE	craftmanw,作者名	descript.txt（name・id・filename は必須。\ や % で始まるタグは捨てる）を読む
+descript/plugin/descript-txt/filename.md	DONE	filename,dll	実体の DLL の名前で、動かすエンジンを選ぶ（yaya.dll・aya5.dll は YAYA、kagari.dll は Kagari、kawari.dll は華和梨、satori.dll は里々）。プラグインのフォルダの外は指せない
+descript/plugin/descript-txt/homeurl.md	PARTIAL	homeurl,URL	pluginlist(…).homeurl で読める。プラグインのネットワーク更新はまだ無い
+descript/plugin/descript-txt/id.md	DONE	id,ID	descript.txt（name・id・filename は必須。\ や % で始まるタグは捨てる）を読む
+descript/plugin/descript-txt/index.md	DONE	descript.txt	descript.txt（name・id・filename は必須。\ や % で始まるタグは捨てる）を読む
+descript/plugin/descript-txt/introduction_descript.txt.md	DONE	descript.txt（Pluginの）	descript.txt（name・id・filename は必須。\ や % で始まるタグは捨てる）を読む
+descript/plugin/descript-txt/name.md	DONE	name,プラグイン名	descript.txt（name・id・filename は必須。\ や % で始まるタグは捨てる）を読む
+descript/plugin/descript-txt/otherghosttalk.md	DONE	otherghosttalk,オプション	false / 0 / true / 1 / after / before で、OnOtherGhostTalk を話し終わった直後か話す直前に送る
+descript/plugin/descript-txt/readme.charset.md	DONE	readme.charset,文字コード	インストールしたときに開く。アプリのプラグインの一覧の「説明を読む」でも開ける
+descript/plugin/descript-txt/readme.md	DONE	readme,ファイル名	インストールしたときに開く。アプリのプラグインの一覧の「説明を読む」でも開ける
+descript/plugin/descript-txt/secondchangeinterval.md	DONE	secondchangeinterval,秒数	この間隔で OnSecondChange を送る（0 なら送らない。既定は 1）
+descript/plugin/descript-txt/type.md	DONE	type,種別	descript.txt（name・id・filename は必須。\ や % で始まるタグは捨てる）を読む
+descript/plugin/index.md	DONE	Plugin設定	PLUGIN/2.0 に対応。プラグインは :plugin のプロセスで、filename の yaya.dll・kagari.dll・kawari.dll・satori.dll を pono-droid の YAYA・Kagari・華和梨・里々で動かす（Windows の DLL は動かせない）。要求・答え（Target・Event・EventOption・Reference・Script・ScriptOption）・Sender・\![raiseplugin] / \![notifyplugin] に対応
 descript/shell-surfaces/cursor-brace/index.md	NA	cursorブレス	目次のページ（cursor ブレスはマウスカーソルが無いので使わない）
 descript/shell-surfaces/cursor-brace/introduction_cursorbrace.md	DONE	cursorブレス記述例	sakura.cursor / kero.cursor / charN.cursor を読み、マウスやペンのカーソルを当たり判定ごとに替える
 descript/shell-surfaces/cursor-brace/mousedown-star.md	DONE	mousedown\*,当たり判定ID,ファイル名	当たり判定の上でボタンを押している間のカーソル（既定は finger、Bust は grip）
@@ -597,27 +597,27 @@ dev/ownerdraw.md	NA	オーナードローメニューの設定	作る人向け�
 dev/shell-error.md	NA	エラーメッセージの解消	シェルを作る人向けの説明
 dev/shell.md	NA	シェルの作成	シェルを作る人向けの説明。中身は surfaces.txt の組で見る
 dev/update.md	NA	ネットワーク更新への対応	更新に対応する人向けの説明。updates.txt での代わりは済み
-list/plugin-event/index.md	IMPOSSIBLE	PLUGIN Eventリスト	プラグインに送るイベントの一覧。プラグインは作らない
-list/plugin-event/plugin-event/OnChoiceSelect-Ex-OnAnchorSelect-Ex-q.md	IMPOSSIBLE	OnChoiceSelect(Ex)/OnAnchorSelect(Ex)/\q等に指定された任意名イベント	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/OnGhostBoot.md	IMPOSSIBLE	OnGhostBoot	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/OnGhostExit.md	IMPOSSIBLE	OnGhostExit	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/OnGhostInfoUpdate.md	IMPOSSIBLE	OnGhostInfoUpdate	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/OnInstallComplete.md	IMPOSSIBLE	OnInstallComplete	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/OnMenuExec.md	IMPOSSIBLE	OnMenuExec	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/OnOtherGhostTalk.md	IMPOSSIBLE	OnOtherGhostTalk	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/OnSecondChange.md	IMPOSSIBLE	OnSecondChange	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/balloonpathlist.md	IMPOSSIBLE	balloonpathlist	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/bang-raiseplugin-bang-notifyplugin.md	IMPOSSIBLE	\![raiseplugin]および\![notifyplugin]に指定された任意名イベント	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/ghostpathlist.md	IMPOSSIBLE	ghostpathlist	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/headlinepathlist.md	IMPOSSIBLE	headlinepathlist	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/index.md	IMPOSSIBLE	PLUGIN Event	プラグインに送るイベントの一覧。プラグインは作らない
-list/plugin-event/plugin-event/installedballoonname.md	IMPOSSIBLE	installedballoonname	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/installedghostname.md	IMPOSSIBLE	installedghostname	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/installedplugin.md	IMPOSSIBLE	installedplugin	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/pluginpathlist.md	IMPOSSIBLE	pluginpathlist	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/property.get.md	IMPOSSIBLE	property.get	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/property.set.md	IMPOSSIBLE	property.set	プラグインに送るもの。プラグインは作らない
-list/plugin-event/plugin-event/version.md	IMPOSSIBLE	version	プラグインに送るもの。プラグインは作らない
+list/plugin-event/index.md	DONE	PLUGIN Eventリスト	PLUGIN/2.0 に対応。プラグインは :plugin のプロセスで、filename の yaya.dll・kagari.dll・kawari.dll・satori.dll を pono-droid の YAYA・Kagari・華和梨・里々で動かす（Windows の DLL は動かせない）。要求・答え（Target・Event・EventOption・Reference・Script・ScriptOption）・Sender・\![raiseplugin] / \![notifyplugin] に対応
+list/plugin-event/plugin-event/OnChoiceSelect-Ex-OnAnchorSelect-Ex-q.md	DONE	OnChoiceSelect(Ex)/OnAnchorSelect(Ex)/\q等に指定された任意名イベント	プラグインのスクリプトかイベントへの答えにあった選択肢・アンカーが選ばれたら、その1回だけ同じイベントを送る（ゴーストが答えなければプラグインの答えを話す）
+list/plugin-event/plugin-event/OnGhostBoot.md	DONE	OnGhostBoot	ゴーストが起動し終えたら・終わるとき・シェルが変わったときに送る（HWND は Android に無いので 0 を並べる。ID は Owned SSTP の uniqueid）
+list/plugin-event/plugin-event/OnGhostExit.md	DONE	OnGhostExit	ゴーストが起動し終えたら・終わるとき・シェルが変わったときに送る（HWND は Android に無いので 0 を並べる。ID は Owned SSTP の uniqueid）
+list/plugin-event/plugin-event/OnGhostInfoUpdate.md	DONE	OnGhostInfoUpdate	ゴーストが起動し終えたら・終わるとき・シェルが変わったときに送る（HWND は Android に無いので 0 を並べる。ID は Owned SSTP の uniqueid）
+list/plugin-event/plugin-event/OnInstallComplete.md	DONE	OnInstallComplete	アプリの画面・共有・ゴーストからのインストールの後に送る。プラグインが入ったときは読み込み直してから
+list/plugin-event/plugin-event/OnMenuExec.md	DONE	OnMenuExec	メニューの「プラグイン」から選ぶと送る（答えは呼んだゴーストへ）
+list/plugin-event/plugin-event/OnOtherGhostTalk.md	DONE	OnOtherGhostTalk	otherghosttalk の設定に従って送る（Reference2 は break・sstp-send・plugin-script・plugin-event など）
+list/plugin-event/plugin-event/OnSecondChange.md	DONE	OnSecondChange	secondchangeinterval の秒ごとに GET で送る。答えのスクリプトは最初に起動したゴーストへ
+list/plugin-event/plugin-event/balloonpathlist.md	DONE	balloonpathlist	読み込みの直後に NOTIFY で送る
+list/plugin-event/plugin-event/bang-raiseplugin-bang-notifyplugin.md	DONE	\![raiseplugin]および\![notifyplugin]に指定された任意名イベント	\![raiseplugin] は GET、\![notifyplugin] は NOTIFY で送る（Sender はゴースト名）
+list/plugin-event/plugin-event/ghostpathlist.md	DONE	ghostpathlist	読み込みの直後に NOTIFY で送る
+list/plugin-event/plugin-event/headlinepathlist.md	NA	headlinepathlist	pono-droid にヘッドライン（ヘッドラインセンサ）は無いので送らない
+list/plugin-event/plugin-event/index.md	DONE	PLUGIN Event	PLUGIN/2.0 に対応。プラグインは :plugin のプロセスで、filename の yaya.dll・kagari.dll・kawari.dll・satori.dll を pono-droid の YAYA・Kagari・華和梨・里々で動かす（Windows の DLL は動かせない）。要求・答え（Target・Event・EventOption・Reference・Script・ScriptOption）・Sender・\![raiseplugin] / \![notifyplugin] に対応
+list/plugin-event/plugin-event/installedballoonname.md	DONE	installedballoonname	読み込みの直後に NOTIFY で送る
+list/plugin-event/plugin-event/installedghostname.md	DONE	installedghostname	読み込みの直後に NOTIFY で送る（ゴースト名・\0 名・\1 名）
+list/plugin-event/plugin-event/installedplugin.md	DONE	installedplugin	読み込みの直後に NOTIFY で送る（名前と ID を 0x01 でつなぐ）
+list/plugin-event/plugin-event/pluginpathlist.md	DONE	pluginpathlist	読み込みの直後に NOTIFY で送る
+list/plugin-event/plugin-event/property.get.md	DONE	property.get	pluginlist(…).ext.名前 を読むときに送り、Value を返す
+list/plugin-event/plugin-event/property.set.md	DONE	property.set	pluginlist(…).ext.名前 に書くときに送る（204 か 200 なら成功）
+list/plugin-event/plugin-event/version.md	DONE	version	読み込みの直後に GET で送る。答えの Charset を以後の要求の文字コードにする（無ければ Shift_JIS）
 list/propertysystem/index.md	NA	プロパティシステム	目次のページ
 list/propertysystem/property-system/activeghostlist-.ext.md	PARTIAL	activeghostlist(ゴースト名/本体側名/パス).ext.拡張プロパティ名	読むと相手に property.get、書くと property.set を送る（\![get,property] など待てるところだけ。%property[…] はその場で答えが要るので空）
 list/propertysystem/property-system/activeghostlist.current.md	DONE	activeghostlist.current.汎用プロパティ名	自分を返す
@@ -738,17 +738,17 @@ list/propertysystem/property-system/history.ghost.md	DONE	history.ghost(ゴー�
 list/propertysystem/property-system/history.headline.count.md	IMPOSSIBLE	history.headline.count	ヘッドラインセンサーは作らない（決めたこと）
 list/propertysystem/property-system/history.headline.index-ID.md	IMPOSSIBLE	history.headline.index(ID).汎用プロパティ名	ヘッドラインセンサーは作らない（決めたこと）
 list/propertysystem/property-system/history.headline.md	IMPOSSIBLE	history.headline(ヘッドライン名/パス).汎用プロパティ名	ヘッドラインセンサーは作らない（決めたこと）
-list/propertysystem/property-system/history.plugin-ID.md	IMPOSSIBLE	history.plugin(プラグイン名/パス/ID).汎用プロパティ名	プラグインは作らない（決めたこと）
-list/propertysystem/property-system/history.plugin.count.md	IMPOSSIBLE	history.plugin.count	プラグインは作らない（決めたこと）
-list/propertysystem/property-system/history.plugin.index-ID.md	IMPOSSIBLE	history.plugin.index(ID).汎用プロパティ名	プラグインは作らない（決めたこと）
+list/propertysystem/property-system/history.plugin-ID.md	DONE	history.plugin(プラグイン名/パス/ID).汎用プロパティ名	メニューから使ったプラグイン（新しいものから。動いているものだけ）
+list/propertysystem/property-system/history.plugin.count.md	DONE	history.plugin.count	メニューから使ったプラグイン（新しいものから。動いているものだけ）
+list/propertysystem/property-system/history.plugin.index-ID.md	DONE	history.plugin.index(ID).汎用プロパティ名	メニューから使ったプラグイン（新しいものから。動いているものだけ）
 list/propertysystem/property-system/index.md	NA	プロパティシステム	目次のページ
 list/propertysystem/property-system/introduction_propertysystem.md	NA	プロパティシステム	説明のページ（%property と get/set,property は別の行で扱う）
 list/propertysystem/property-system/note-1.md	DONE	補足	talking・choosing・minimizing・induction・passive・timecritical・nouserbreak・online・opening(communicate/input/teach/textarea/dialog)・balloon(0=0/1=0)
-list/propertysystem/property-system/pluginlist-ID-.ext.md	IMPOSSIBLE	pluginlist(プラグイン名/パス/ID).ext.拡張プロパティ名	プラグインは作らない（決めたこと）
-list/propertysystem/property-system/pluginlist-ID.md	IMPOSSIBLE	pluginlist(プラグイン名/パス/ID).汎用プロパティ名	プラグインは作らない（決めたこと）
-list/propertysystem/property-system/pluginlist.count.md	IMPOSSIBLE	pluginlist.count	プラグインは作らない（決めたこと）
-list/propertysystem/property-system/pluginlist.index-ID-.ext.md	IMPOSSIBLE	pluginlist.index(ID).ext.拡張プロパティ名	プラグインは作らない（決めたこと）
-list/propertysystem/property-system/pluginlist.index-ID.md	IMPOSSIBLE	pluginlist.index(ID).汎用プロパティ名	プラグインは作らない（決めたこと）
+list/propertysystem/property-system/pluginlist-ID-.ext.md	DONE	pluginlist(プラグイン名/パス/ID).ext.拡張プロパティ名	そのプラグインに property.get / property.set を送る
+list/propertysystem/property-system/pluginlist-ID.md	DONE	pluginlist(プラグイン名/パス/ID).汎用プロパティ名	name・id・path・craftman・craftmanw・craftmanurl・homeurl・filename・index（名前・パス・ID で選ぶ）
+list/propertysystem/property-system/pluginlist.count.md	DONE	pluginlist.count	インストール済みのプラグインの数
+list/propertysystem/property-system/pluginlist.index-ID-.ext.md	DONE	pluginlist.index(ID).ext.拡張プロパティ名	そのプラグインに property.get / property.set を送る
+list/propertysystem/property-system/pluginlist.index-ID.md	DONE	pluginlist.index(ID).汎用プロパティ名	name・id・path・craftman・craftmanw・craftmanurl・homeurl・filename・index（名前・パス・ID で選ぶ）
 list/propertysystem/property-system/rateofuselist-.bootminute.md	DONE	rateofuselist(名前).bootminute	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
 list/propertysystem/property-system/rateofuselist-.bootminutemonthly.md	DONE	rateofuselist(名前).bootminutemonthly	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
 list/propertysystem/property-system/rateofuselist-.bootminuteweekly.md	DONE	rateofuselist(名前).bootminuteweekly	rateofuselist(名前). の形も読む（ゴーストの名前・本体側の名前・フォルダ名で選ぶ）
@@ -950,10 +950,10 @@ list/sakura-script/event/bang-execute-headline.md	IMPOSSIBLE	\![execute,headline
 list/sakura-script/event/bang-executesntp.md	DONE	\![executesntp]	実装済み
 list/sakura-script/event/bang-notify-r0-r1-r2.md	DONE	\![notify,イベント名,r0,r1,r2...]	実装済み
 list/sakura-script/event/bang-notifyother-r0-r1-r2.md	DONE	\![notifyother,ゴースト名,イベント名,r0,r1,r2...]	実装済み
-list/sakura-script/event/bang-notifyplugin-ID-r0-r1-r2.md	IMPOSSIBLE	\![notifyplugin,プラグインのIDまたは名前,イベント名,r0,r1,r2...]	プラグインは作らない（決めたこと）
+list/sakura-script/event/bang-notifyplugin-ID-r0-r1-r2.md	DONE	\![notifyplugin,プラグインのIDまたは名前,イベント名,r0,r1,r2...]	プラグインに NOTIFY で送る。見つからなければ OnNotifyPluginFailure（notfound）
 list/sakura-script/event/bang-raise-r0-r1-r2.md	DONE	\![raise,イベント名,r0,r1,r2...]	実装済み
 list/sakura-script/event/bang-raiseother-r0-r1-r2.md	DONE	\![raiseother,ゴースト名,イベント名,r0,r1,r2...]	実装済み
-list/sakura-script/event/bang-raiseplugin-ID-r0-r1-r2.md	IMPOSSIBLE	\![raiseplugin,プラグインのIDまたは名前,イベント名,r0,r1,r2...]	プラグインは作らない（決めたこと）
+list/sakura-script/event/bang-raiseplugin-ID-r0-r1-r2.md	DONE	\![raiseplugin,プラグインのIDまたは名前,イベント名,r0,r1,r2...]	プラグインに送る（名前・ID・パス・random・lastinstalled で選ぶ）。見つからなければ OnRaisePluginFailure（notfound）、GET の答えが 200 以外ならその状態コード
 list/sakura-script/event/bang-restore-wallpaper.md	IMPOSSIBLE	\![restore,wallpaper]	Android 13 からアプリが今の壁紙を読めないので戻せない
 list/sakura-script/event/bang-save-wallpaper.md	IMPOSSIBLE	\![save,wallpaper]	同上
 list/sakura-script/event/bang-set-otherghosttalk-true-false-before-after.md	DONE	\![set,otherghosttalk,true|false|before|after]	実装済み
@@ -966,10 +966,10 @@ list/sakura-script/event/bang-set-windowstate-minimize.md	DONE	\![set,windowstat
 list/sakura-script/event/bang-set-windowstate-stayontop.md	DONE	\![set,windowstate,stayontop]	オーバーレイはいつもいちばん上
 list/sakura-script/event/bang-timernotify-r0-r1-r2.md	DONE	\![timernotify,時間,繰り返すか否か,イベント名,r0,r1,r2...]	実装済み
 list/sakura-script/event/bang-timernotifyother-r0-r1-r2.md	DONE	\![timernotifyother,時間,繰り返すか否か,ゴースト名,イベント名,r0,r1,r2...]	実装済み
-list/sakura-script/event/bang-timernotifyplugin-ID-r0-r1-r2.md	IMPOSSIBLE	\![timernotifyplugin,時間,繰り返すか否か,プラグインのIDまたは名前,イベント名,r0,r1,r2...]	プラグインは作らない（決めたこと）
+list/sakura-script/event/bang-timernotifyplugin-ID-r0-r1-r2.md	DONE	\![timernotifyplugin,時間,繰り返すか否か,プラグインのIDまたは名前,イベント名,r0,r1,r2...]	時間ごと（繰り返すかが 0 なら繰り返し、1 以上なら1回）に送る。同じプラグインの同じイベントは上書き、時間 0 で取り消し
 list/sakura-script/event/bang-timerraise-r0-r1-r2.md	DONE	\![timerraise,時間,繰り返すか否か,イベント名,r0,r1,r2...]	実装済み
 list/sakura-script/event/bang-timerraiseother-r0-r1-r2.md	DONE	\![timerraiseother,時間,繰り返すか否か,ゴースト名,イベント名,r0,r1,r2...]	実装済み
-list/sakura-script/event/bang-timerraiseplugin-ID-r0-r1-r2.md	IMPOSSIBLE	\![timerraiseplugin,時間,繰り返すか否か,プラグインのIDまたは名前,イベント名,r0,r1,r2...]	プラグインは作らない（決めたこと）
+list/sakura-script/event/bang-timerraiseplugin-ID-r0-r1-r2.md	DONE	\![timerraiseplugin,時間,繰り返すか否か,プラグインのIDまたは名前,イベント名,r0,r1,r2...]	時間ごと（繰り返すかが 0 なら繰り返し、1 以上なら1回）に送る。同じプラグインの同じイベントは上書き、時間 0 で取り消し
 list/sakura-script/event/bang-update-platform.md	DONE	\![update,platform]	実装済み
 list/sakura-script/event/bang-update.md	DONE	\![update,更新対象(,オプション,オプション...)]	ghost+shell+balloon と all、オプションを読む。結果は OnUpdateResult
 list/sakura-script/event/bang-updatebymyself.md	DONE	\![updatebymyself(,オプション,オプション...)]	実装済み
@@ -1112,7 +1112,7 @@ list/sakura-script/open/bang-open-mailer.md	DONE	\![open,mailer,パラメータ]
 list/sakura-script/open/bang-open-messenger.md	IMPOSSIBLE	\![open,messenger]	SSP のメッセンジャーが無い（決めたこと）
 list/sakura-script/open/bang-open-passwordinput-ID.md	DONE	\![open,passwordinput,ID,表示時間,テキスト,オプション]	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
 list/sakura-script/open/bang-open-pictureviewer.md	DONE	\![open,pictureviewer,(ファイル名)]	ビューアは持たないので、ファイルを指定されたら見られるほかのアプリで開く（ファイルが無ければ何もしない）
-list/sakura-script/open/bang-open-pluginexplorer.md	IMPOSSIBLE	\![open,pluginexplorer]	プラグインは作らない（決めたこと）
+list/sakura-script/open/bang-open-pluginexplorer.md	DONE	\![open,pluginexplorer]	アプリの一覧（プラグインの欄で、説明・作者のページ・削除）を開く
 list/sakura-script/open/bang-open-rateofusegraph.md	DONE	\![open,rateofusegraph]	実装済み
 list/sakura-script/open/bang-open-rateofusegraphballoon.md	DONE	\![open,rateofusegraphballoon]	実装済み
 list/sakura-script/open/bang-open-rateofusegraphtotal.md	DONE	\![open,rateofusegraphtotal]	実装済み
@@ -1491,7 +1491,7 @@ list/shiori-event/dialogbox/index.md	NA	ダイアログボックスイベント	
 list/shiori-event/event-send-failure/OnNotifyOtherFailure.md	DONE	OnNotifyOtherFailure	実装済み
 list/shiori-event/event-send-failure/OnNotifyPluginFailure.md	DONE	OnNotifyPluginFailure	プラグインは無いので、\![notifyplugin] / \![timernotifyplugin] は notfound で送る
 list/shiori-event/event-send-failure/OnRaiseOtherFailure.md	DONE	OnRaiseOtherFailure	実装済み
-list/shiori-event/event-send-failure/OnRaisePluginFailure.md	DONE	OnRaisePluginFailure	プラグインは無いので、\![raiseplugin] / \![timerraiseplugin] は notfound で送る
+list/shiori-event/event-send-failure/OnRaisePluginFailure.md	DONE	OnRaisePluginFailure	OnRaisePluginFailure（notfound・状態コード）
 list/shiori-event/event-send-failure/index.md	NA	イベント送信失敗イベント	目次のページ
 list/shiori-event/file-drop/OnArchiveViewerOpen.md	DONE	OnArchiveViewerOpen	答えの無い zip などを書庫を開けるアプリで開いて送る（\![execute,dropdefault,file] でも）
 list/shiori-event/file-drop/OnDirectoryDrop.md	IMPOSSIBLE	OnDirectoryDrop	Android の共有ではフォルダーを渡せない
@@ -1630,12 +1630,12 @@ list/shiori-event/notify/installedcalendarskinname.md	IMPOSSIBLE	installedcalend
 list/shiori-event/notify/installedghostname.md	DONE	installedghostname	起動時に入っているゴーストの名前を NOTIFY（installedsakuraname / installedkeroname の後、同じ並び）
 list/shiori-event/notify/installedheadlinename.md	IMPOSSIBLE	installedheadlinename	ヘッドラインセンサーは作らない（決めたこと）
 list/shiori-event/notify/installedkeroname.md	DONE	installedkeroname	起動時に入っているゴーストの kero.name を、installedghostname の前に同じ並びで NOTIFY
-list/shiori-event/notify/installedplugin.md	IMPOSSIBLE	installedplugin	プラグインは作らない（決めたこと）
+list/shiori-event/notify/installedplugin.md	DONE	installedplugin	起動時に NOTIFY で送る（名前と ID を 0x01 でつなぐ）
 list/shiori-event/notify/installedsakuraname.md	DONE	installedsakuraname	起動時に入っているゴーストの sakura.name を、installedghostname の前に同じ並びで NOTIFY
 list/shiori-event/notify/installedshellname.md	DONE	installedshellname	起動時にこのゴーストのシェルの名前を NOTIFY
 list/shiori-event/notify/otherghostname.md	DONE	otherghostname	一緒に動いているゴーストの名前と \0・\1 のサーフェスを、起動時と増減したときに NOTIFY
 list/shiori-event/notify/ownerghostname.md	DONE	ownerghostname	実装済み
-list/shiori-event/notify/pluginpathlist.md	IMPOSSIBLE	pluginpathlist	プラグインは作らない（決めたこと）
+list/shiori-event/notify/pluginpathlist.md	DONE	pluginpathlist	起動時に NOTIFY で送る（プラグインの置き場の絶対パス）
 list/shiori-event/notify/rateofusegraph.md	DONE	rateofusegraph	使用率を出すとき（\![open,rateofusegraph] など）に1体ずつ13項目をバイト値1でつないで送る
 list/shiori-event/notify/uniqueid.md	DONE	uniqueid	実装済み
 list/shiori-event/os-state/OnBatteryChargingStart.md	DONE	OnBatteryChargingStart	実装済み
@@ -1886,8 +1886,8 @@ list/shiori-resource/ownerdraw-item-name/index.md	NA	オーナードローメニ
 list/shiori-resource/ownerdraw-item-name/inforootbutton.caption.md	IMPOSSIBLE	inforootbutton.caption	SSP の情報の下位メニュー。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/leavepassivebutton.caption.md	DONE	leavepassivebutton.caption	パッシブモードの間、メニューのいちばん上に出す強制解除の名前
 list/shiori-resource/ownerdraw-item-name/messengerbutton.caption.md	IMPOSSIBLE	messengerbutton.caption	SSP メッセンジャが無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/pluginhistorybutton.caption.md	IMPOSSIBLE	pluginhistorybutton.caption	プラグインは作らない（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/pluginrootbutton.caption.md	IMPOSSIBLE	pluginrootbutton.caption	プラグインは作らない（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/pluginhistorybutton.caption.md	DONE	pluginhistorybutton.caption	メニューの「履歴」の「プラグイン」の項目名を替えられる
+list/shiori-resource/ownerdraw-item-name/pluginrootbutton.caption.md	DONE	pluginrootbutton.caption	メニューの「プラグイン」の項目名を替えられる
 list/shiori-resource/ownerdraw-item-name/portalrootbutton.caption.md	DONE	portalrootbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/purgeghostcachebutton.caption.md	IMPOSSIBLE	purgeghostcachebutton.caption	ゴーストキャッシュが無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/quitbutton.caption.md	DONE	quitbutton.caption	実装済み
@@ -1967,7 +1967,7 @@ spec/fmo-mutex/fmo.md	IMPOSSIBLE	FMO (File Mapping Object)	Windows の共有メ�
 spec/fmo-mutex/index.md	IMPOSSIBLE	FMO/Mutex	Windows だけの仕組み
 spec/fmo-mutex/mutex.md	IMPOSSIBLE	Mutex	Windows の名前つき Mutex（ssp / sakura）。ほかのアプリから見る手段が無い
 spec/headline.md	IMPOSSIBLE	HEADLINE/2.0	ヘッドラインは Windows の DLL。決めたとおり作らない
-spec/plugin.md	IMPOSSIBLE	PLUGIN/2.0	プラグインは Windows の DLL。決めたとおり作らない
+spec/plugin.md	DONE	PLUGIN/2.0	PLUGIN/2.0 に対応。プラグインは :plugin のプロセスで、filename の yaya.dll・kagari.dll・kawari.dll・satori.dll を pono-droid の YAYA・Kagari・華和梨・里々で動かす（Windows の DLL は動かせない）。要求・答え（Target・Event・EventOption・Reference・Script・ScriptOption）・Sender・\![raiseplugin] / \![notifyplugin] に対応
 spec/saori-ex/async.md	DONE	非同期の呼び出し	--async= で 204 を返し、結果は OnInternalSaoriComplete / Failure（識別子が On で始まればその名前と＋Failure）で届ける。同時に動くのは CPU の数（2～4）まで。SHIORI を読み込み直したら届けない
 spec/saori-ex/chapter0.md	DONE	SAORI over DirectSSTP	YAYA の FUNCTIONEX / LOADLIB（拡張子なしの internal_* を DLL として読ませるビルドのときのパッチと、dlopen の差し替え）と里々の（internal_…）から、本体の内蔵モジュールを呼べる
 spec/saori-ex/compat.md	DONE	互換モジュール	10 個とも本体が DLL の代わりに答える（YAYA・里々などが DLL として読んだとき、Direct SSTP の Module でも）。GetInternetIP は外のサービスに問い合わせるので 500。houchi は画面が消えている間を放置とみて 1 分ごとに OnHouchi を NOTIFY。hanayu は AI グラフの画面で radar・棒・折れ線を出す

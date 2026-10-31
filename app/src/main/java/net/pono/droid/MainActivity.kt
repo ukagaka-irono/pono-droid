@@ -1,5 +1,6 @@
 package net.pono.droid
 
+import net.pono.baseware.plugin.Plugin
 import androidx.compose.ui.res.stringResource
 import java.io.File
 import androidx.compose.ui.unit.Dp
@@ -118,6 +119,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     val snackbar = remember { SnackbarHostState() }
     var ghosts by remember { mutableStateOf<List<GhostItem>>(emptyList()) }
     var balloons by remember { mutableStateOf<List<Balloon>>(emptyList()) }
+    var plugins by remember { mutableStateOf<List<Plugin>>(emptyList()) }
     var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     // 動いているゴーストすべて（ほかのゴーストに呼ばれて起動したものも）
     val running by GhostOverlayService.runningGhosts.collectAsState()
@@ -138,11 +140,13 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
             }
         }
         val loadedBalloons = withContext(Dispatchers.IO) { runCatching { repo.balloons.list() }.getOrDefault(emptyList()) }
+        val loadedPlugins = withContext(Dispatchers.IO) { runCatching { GhostStore.plugins(context).list() }.getOrDefault(emptyList()) }
         // 一覧はいちばん上に出ていた項目に合わせて位置を保つので、読み終わったときや入れたときに上に足された行が見えなくなる
         // （「設定」が先頭に見える）。いちばん上を見ていたなら、いちばん上のままにする
         val atTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
         ghosts = loaded
         balloons = loadedBalloons
+        plugins = loadedPlugins
         listed = true
         if (atTop) listState.requestScrollToItem(0)
     }
@@ -315,6 +319,34 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                                 val ok = withContext(Dispatchers.IO) { GhostStore.repository(context).balloons.uninstall(balloon) }
                                 reload()
                                 snackbar.showSnackbar(if (ok) "削除しました: ${balloon.name}" else "削除できませんでした: ${balloon.name}")
+                            }
+                        },
+                    )
+                }
+                if (plugins.isNotEmpty()) {
+                    item(key = "plugins-header") {
+                        Text("プラグイン", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                    }
+                }
+                items(plugins, key = { "plugin:" + it.dir.name }) { plugin ->
+                    PluginRow(
+                        plugin = plugin,
+                        onReadme = {
+                            scope.launch {
+                                withContext(Dispatchers.IO) { plugin.readmeText() }?.let { TextViewerActivity.start(context, plugin.name, it) }
+                            }
+                        },
+                        onCraftmanUrl = { url ->
+                            if (runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.isFailure) {
+                                scope.launch { snackbar.showSnackbar("ページを開けるアプリがありません") }
+                            }
+                        },
+                        onUninstall = {
+                            scope.launch {
+                                // 動いていたプラグインは、止めてから消す
+                                val ok = GhostOverlayService.uninstallPlugin(context, plugin)
+                                reload()
+                                snackbar.showSnackbar(if (ok) "削除しました: ${plugin.name}" else "削除できませんでした: ${plugin.name}")
                             }
                         },
                     )
@@ -678,6 +710,47 @@ private fun BalloonRow(balloon: Balloon, inUse: Boolean, onReadme: () -> Unit, o
             onDismissRequest = { confirm = false },
             title = { Text("バルーンを削除") },
             text = { Text("「${balloon.name}」を削除しますか？ このバルーンを選んでいたゴーストは、ゴーストの指定のバルーンか簡易バルーンに戻ります。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = false
+                    onUninstall()
+                }) { Text("削除") }
+            },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("やめる") } },
+        )
+    }
+}
+
+/**
+ * インストール済みのプラグイン1つ。削除は確かめてから。readme があれば「説明を読む」、craftmanurl があれば「作者のページ」を出す
+ */
+@Composable
+private fun PluginRow(plugin: Plugin, onReadme: () -> Unit, onCraftmanUrl: (String) -> Unit, onUninstall: () -> Unit) {
+    var confirm by remember { mutableStateOf(false) }
+    val hasReadme = remember(plugin) { plugin.readmeFile() != null }
+    val url = plugin.craftmanUrl
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(plugin.name, style = MaterialTheme.typography.bodyLarge)
+                    plugin.craftmanW.takeIf { it.isNotEmpty() }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                }
+                TextButton(onClick = { confirm = true }) { Text("削除") }
+            }
+            if (hasReadme || url != null) {
+                Row {
+                    if (hasReadme) TextButton(onClick = onReadme) { Text("説明を読む") }
+                    url?.let { TextButton(onClick = { onCraftmanUrl(it) }) { Text("作者のページ") } }
+                }
+            }
+        }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("プラグインを削除") },
+            text = { Text("「${plugin.name}」を削除しますか？ プラグインが保存していた内容も消え、元に戻せません。") },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false

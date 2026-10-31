@@ -62,6 +62,14 @@ class PluginHost(
 
     fun stop(): Job = scope.launch { unloadAll() }
 
+    /** [plugin] を止めて外す（消す前に。止めるときに書く保存ファイルが、消した後に残らないように） */
+    suspend fun unload(plugin: Plugin) {
+        val l = synchronized(loaded) { loaded.remove(key(plugin)) } ?: return
+        l.secondChange?.cancel()
+        synchronized(timers) { timers.keys.filter { it.first == key(plugin) }.forEach { timers.remove(it)?.cancel() } }
+        l.lock.withLock { withContext(Dispatchers.IO) { runCatching { l.engine.unload() } } }
+    }
+
     private suspend fun reload() {
         unloadAll()
         for (p in repository.list()) load(p)
