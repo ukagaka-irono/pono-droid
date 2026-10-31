@@ -1,5 +1,7 @@
 package net.pono.baseware.ghost
 
+import net.pono.baseware.plugin.PluginHost
+import net.pono.baseware.plugin.Plugin
 import net.pono.baseware.sakura.BalloonCoord
 import net.pono.baseware.sakura.BalloonImageOptions
 import kotlinx.coroutines.CancellationException
@@ -486,11 +488,22 @@ class GhostController(
     private val hub: GhostHub? = null,
     /** ほかのゴーストに呼ばれて起動したとき、呼んだゴースト（OnGhostCalled を送る） */
     private val calledBy: PreviousGhost? = null,
+    /** インストール済みのプラグイン（アプリが1つ持ち、どのゴーストにも同じものを渡す）。null ならプラグインは無い */
+    private val plugins: PluginHost? = null,
 ) {
     /** \![set,otherghosttalk]（false / before / after）と \![set,othersurfacechange] */
     @Volatile private var otherGhostTalk = "false"
 
     @Volatile private var otherSurfaceChange = false
+
+    /** 次に話すスクリプトがプラグインから来たもの（プラグインと、OnOtherGhostTalk の plugin-script / plugin-event） */
+    private var nextPluginSource: Pair<Plugin, String>? = null
+
+    /** いま話しているスクリプトがプラグインから来たものなら、そのプラグイン（選択肢が選ばれたら、その1回だけプラグインにも伝える） */
+    private var pluginChoice: Plugin? = null
+
+    /** プラグインに OnGhostBoot を送った（終わるときに OnGhostExit を送る） */
+    private var pluginsBooted = false
 
     /** いま話しているスクリプトのもとになったイベントと Reference（OnOtherGhostTalk で伝える） */
     private var lastEvent: Pair<String, List<String>> = "" to emptyList()
@@ -647,6 +660,10 @@ class GhostController(
             }
             if (previous?.reload != true) announceBoot(bootScript.orEmpty())
             _state.update { it.copy(booted = true) }
+            plugins?.let {
+                pluginsBooted = true
+                it.ghostBooted(this@GhostController)
+            }
         }
     }
 
@@ -697,6 +714,36 @@ class GhostController(
         return null
     }
 
+    /**
+     * プラグインの答え（PLUGIN/2.0 の Event・Script）。Event はこのゴーストに送り（EventOption: notify なら NOTIFY）、話すものが無ければ Script を話す。
+     * ScriptOption の notranslate なら OnTranslate を通さず、nobreak なら今のトークを話し終えてから話す
+     */
+    internal fun fromPlugin(plugin: Plugin, event: String?, references: List<String>, notify: Boolean, script: String?, options: Set<String>) {
+        if (closing) return
+        scope.launch {
+            var play: String? = null
+            var flag = "plugin-script"
+            if (event != null) {
+                if (notify) {
+                    requestResponse(event, references, ShioriMethod.NOTIFY, RequestOrigin.INTERNAL)
+                } else {
+                    play = request(event, references)
+                    if (play != null) flag = "plugin-event"
+                }
+            }
+            if (play == null && script != null) {
+                lastEvent = "" to emptyList()
+                val s = session
+                play = if ("notranslate" in options || s == null) script else translateScript(s, script, "", emptyList(), RequestOrigin.INTERNAL)
+            }
+            val text = play ?: return@launch
+            if ("nobreak" in options) _state.first { !it.talking }
+            cancelScript()
+            nextPluginSource = plugin to flag
+            runScript(text)
+        }
+    }
+
     /** \![raiseother] / \![notifyother]。[ghosts] はゴースト名か本体側の名前を 0x01 でつないだものか、__SYSTEM_ALL_GHOST__ */
     private fun raiseOther(ghosts: String, event: String, references: List<String>, notify: Boolean) {
         val others = hub?.others(this).orEmpty()
@@ -723,11 +770,16 @@ class GhostController(
 
     /** 話し始め（before）か話し終わり（after）に、otherghosttalk を入れているほかのゴーストへ OnOtherGhostTalk */
     private fun announceTalk(timing: String, script: String, source: Pair<String, List<String>>, flags: List<String>) {
-        val h = hub ?: return
-        // メニューなど、イベントから来たのでもほかのアプリから届いたのでもないスクリプトは話したうちに入れない
-        if (source.first.isEmpty() && "sstp-send" !in flags) return
+        // メニューなど、イベントから来たのでもほかのアプリ・プラグインから届いたのでもないスクリプトは話したうちに入れない
+        if (source.first.isEmpty() && flags.none { it == "sstp-send" || it.startsWith("plugin-") }) return
         // OnOtherGhostTalk への答えをまた伝えると、2体が互いに答え続けるので伝えない
         if (source.first == "OnOtherGhostTalk") return
+        // descript.txt の otherghosttalk を入れているプラグインにも
+        plugins?.ghostTalked(
+            this, if (timing == "before") Plugin.OtherGhostTalk.BEFORE else Plugin.OtherGhostTalk.AFTER,
+            flags.joinToString(","), source.first, script, source.second,
+        )
+        val h = hub ?: return
         for (o in h.others(this)) {
             val want = o.otherGhostTalk
             if (want == "false" || (if (want == "before") "before" else "after") != timing) continue
@@ -790,6 +842,27 @@ class GhostController(
     }
 
     /** メニューの「ほかのゴーストを呼ぶ」の一覧 */
+    /** メニューの「プラグイン」。読み込めて動いているプラグインを並べ、選ぶと OnMenuExec を送る */
+    private fun pluginsMenu(scopeId: Int): String {
+        val sb = StringBuilder("\\p[$scopeId]\\_q")
+        for (p in plugins?.running.orEmpty()) sb.append("\\q[${quote(p.name)},pono:plugin,${quote(p.dir.name)}]\\n")
+        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        return sb.toString()
+    }
+
+    /** 最近メニューから使ったプラグイン（もう動いていないものは除く） */
+    private fun historyPlugins(): List<Plugin> {
+        val running = plugins?.running.orEmpty().associateBy { it.dir.name }
+        return history?.recentPlugins().orEmpty().mapNotNull { running[it] }
+    }
+
+    /** メニューでプラグインが選ばれた */
+    private fun execPlugin(dirName: String) {
+        val p = plugins?.running?.firstOrNull { it.dir.name == dirName } ?: return
+        history?.pluginUsed(p.dir.name)
+        plugins.menuExec(p, this)
+    }
+
     private fun callGhostsMenu(scopeId: Int): String {
         val sb = StringBuilder("\\p[$scopeId]\\_q")
         for (g in callableGhosts()) sb.append("\\q[${quote(g.name)},pono:callghost,${quote(g.dir.name)}]\\n")
@@ -871,6 +944,10 @@ class GhostController(
         repository?.balloons?.list()?.takeIf { it.isNotEmpty() }?.let { list -> s.notify("installedballoonname", *list.map { it.name }.toTypedArray()) }
         repository?.root?.let { s.notify("ghostpathlist", it.absolutePath + "/") }
         repository?.balloons?.root?.let { s.notify("balloonpathlist", it.absolutePath + "/") }
+        plugins?.let { p ->
+            p.plugins.takeIf { it.isNotEmpty() }?.let { list -> s.notify("installedplugin", *list.map { "${it.name}\u0001${it.id}" }.toTypedArray()) }
+            s.notify("pluginpathlist", p.repository.root.absolutePath + "/")
+        }
         s.notify("capability", *CAPABILITIES.toTypedArray())
         platform.mailAccounts().takeIf { it.isNotEmpty() }?.let { list -> s.notify("configuredbiffname", *list.map { it.name }.toTypedArray()) }
         otherGhostNames().takeIf { it.isNotEmpty() }?.let { s.notify("otherghostname", *it.toTypedArray()) }
@@ -1578,7 +1655,8 @@ class GhostController(
             "getghostnamelist" -> lines(repository?.list()?.map { it.name } ?: listOf(ghost.name))
             "getshellnamelist" -> lines(ghost.shellDirs.map { Shell.nameOf(it) })
             "getballoonnamelist" -> lines(repository?.balloons?.list()?.map { it.name }.orEmpty())
-            "getheadlinenamelist", "getpluginnamelist" -> SstpResponse(204)
+            "getheadlinenamelist" -> SstpResponse(204)
+            "getpluginnamelist" -> plugins?.plugins?.takeIf { it.isNotEmpty() }?.let { list -> lines(list.map { it.name }) } ?: SstpResponse(204)
             "getstatus" -> data(property("currentghost.status"))
             // 一緒に動いているゴーストを FMO の形で（ウィンドウハンドルは Android に無いので 0）
             "getfmo" -> data((hub?.running ?: listOf(this@GhostController)).joinToString("") { it.fmoEntry() } + "\r\n")
@@ -2806,6 +2884,7 @@ class GhostController(
             val items = r.installed
             lastInstalledObject = items.firstOrNull()?.name
             items.firstOrNull { it.type == NarInstaller.Type.GHOST }?.let { lastInstalledGhost = it.name }
+            plugins?.installComplete(items.map { it.type.id }, items.map { it.name }, items.map { it.dir.absolutePath + "/" })
             val refs = listOf(
                 items.joinToString("\u0001") { it.type.id },
                 items.joinToString("\u0001") { it.name },
@@ -3127,6 +3206,10 @@ class GhostController(
     /** タイマー・WebSocket・ファイルの見張り・通信・houchi・音・SHIORI をすべて片付ける */
     private suspend fun release() {
         timerJob?.cancel()
+        if (pluginsBooted) {
+            pluginsBooted = false
+            plugins?.ghostExited(this)
+        }
         // WebSocket とファイルの見張りはゴーストが終わるときにすべてやめる
         for (url in sockets.keys.toList()) cancelWebSocket(url)
         watches.values.forEach { it.cancel() }
@@ -3385,6 +3468,7 @@ class GhostController(
             notify("OnNotifyShellInfo", listOf(next.name, dir.absolutePath + "/", next.surfaceIds().joinToString(",")))
             dressupInfo().takeIf { it.isNotEmpty() }?.let { notify("OnNotifyDressupInfo", it) }
             raise("OnShellChanged", listOf(next.name, ghost.name, dir.absolutePath + "/"))
+            plugins?.ghostInfoUpdated(this@GhostController)
         }
     }
 
@@ -4028,6 +4112,7 @@ class GhostController(
         if (!short) {
             if ((repository?.list()?.size ?: 0) > 1) add(item("ゴースト切り替え", "pono:ghosts,$scopeId", "ghostrootbutton.caption"))
             if (callableGhosts().isNotEmpty()) add(item("ほかのゴーストを呼ぶ", "pono:callghosts,$scopeId", "callghostrootbutton.caption"))
+            if (plugins?.running?.isNotEmpty() == true) add(item("プラグイン", "pono:plugins,$scopeId", "pluginrootbutton.caption"))
             if (ghost.shellDirs.size > 1) add(item("シェル", "pono:shells,$scopeId", "shellrootbutton.caption"))
             add(item("キャラクターの大きさ", "pono:scale,$scopeId", "shellscalerootbutton.caption"))
             if (repository != null) add(item("バルーン", "pono:balloons,$scopeId", "balloonrootbutton.caption"))
@@ -4275,6 +4360,7 @@ class GhostController(
         if (historyGhosts().isNotEmpty()) item("ゴースト", "pono:historylist,$scopeId,ghost", "ghosthistorybutton.caption")?.let(sb::append)
         if (historyBalloons().isNotEmpty()) item("バルーン", "pono:historylist,$scopeId,balloon", "balloonhistorybutton.caption")?.let(sb::append)
         if (historyCalls().isNotEmpty()) item("ほかのゴーストを呼ぶ", "pono:historylist,$scopeId,call", "callghosthistorybutton.caption")?.let(sb::append)
+        if (historyPlugins().isNotEmpty()) item("プラグイン", "pono:historylist,$scopeId,plugin", "pluginhistorybutton.caption")?.let(sb::append)
         sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
         return sb.toString()
     }
@@ -4288,6 +4374,7 @@ class GhostController(
                 sb.append("\\q[${quote((if (it.dir == balloon?.dir) "● " else "○ ") + it.name)},pono:balloon,${quote(it.dir.name)}]\\n")
             }
             "call" -> historyCalls().forEach { sb.append("\\q[${quote(it.name)},pono:callghost,${quote(it.dir.name)}]\\n") }
+            "plugin" -> historyPlugins().forEach { sb.append("\\q[${quote(it.name)},pono:plugin,${quote(it.dir.name)}]\\n") }
         }
         sb.append("\\q[戻る,pono:history,$scopeId]\\e")
         return sb.toString()
@@ -5056,7 +5143,10 @@ class GhostController(
         val run = ++scriptRuns
         val source = lastEvent
         lastEvent = "" to emptyList()
-        val talkFlags = listOfNotNull(if (untrusted) "sstp-send" else null)
+        val fromPlugin = nextPluginSource
+        nextPluginSource = null
+        pluginChoice = fromPlugin?.first
+        val talkFlags = listOfNotNull(if (untrusted) "sstp-send" else null, fromPlugin?.second)
         announceTalk("before", script, source, talkFlags)
         val job = scope.launch {
             val raised = mutableListOf<RaisedEvent>()
@@ -5159,6 +5249,39 @@ class GhostController(
 
     private fun selectChoice(choice: Choice) {
         val id = choice.id
+        // プラグインから来たスクリプトの選択肢なら、その1回だけ同じイベントをプラグインにも送る。
+        // 先にゴーストに聞き、ゴーストが答えなかったときだけプラグインの答えを話す
+        val hook = pluginChoice.takeIf { !id.startsWith("pono:") && !id.startsWith("script:") }
+        pluginChoice = null
+        val host = plugins
+        if (hook != null && host != null) {
+            val events = when {
+                choice.anchor -> listOf("OnAnchorSelectEx" to listOf(choice.title, id) + choice.references, "OnAnchorSelect" to listOf(id) + choice.references)
+                id.startsWith("On") -> listOf(id to choice.references)
+                else -> listOf("OnChoiceSelectEx" to listOf(choice.title, id) + choice.references, "OnChoiceSelect" to listOf(id) + choice.references)
+            }
+            scope.launch {
+                if (choice.anchor) _state.update { it.copy(visitedAnchors = it.visitedAnchors + id) }
+                var script: String? = null
+                for ((event, refs) in events) {
+                    script = request(event, refs)
+                    if (script != null) break
+                }
+                val reply = host.choiceSelected(hook, events, this@GhostController)
+                when {
+                    script != null -> {
+                        cancelScript()
+                        runScript(script)
+                    }
+                    reply != null -> reply()
+                    else -> {
+                        cancelScript()
+                        hideBalloons()
+                    }
+                }
+            }
+            return
+        }
         when {
             // ほかのアプリのスクリプトが本体のメニューの ID を出しても（消去・終了など）、確かめずに動かすことはしない
             choice.untrusted && id.startsWith("pono:") -> {
@@ -5235,6 +5358,8 @@ class GhostController(
                     "pono:ghosts" -> runScript(ghostsMenu(scopeId))
                     "pono:ghost" -> refs.firstOrNull()?.let { changeGhost(it, byUser = true) }
                     "pono:callghosts" -> runScript(callGhostsMenu(scopeId))
+                    "pono:plugins" -> runScript(pluginsMenu(scopeId))
+                    "pono:plugin" -> refs.firstOrNull()?.let(::execPlugin)
                     "pono:callghost" -> refs.firstOrNull()?.let { callGhost(it, raiseEvent = true, byUser = true) }
                     // descript.txt の recommended.balloon と違うものに替えるときは、先に確かめる（SSP の警告と同じ）
                     "pono:balloon" -> refs.firstOrNull()?.let { dir ->
@@ -5539,6 +5664,9 @@ class GhostController(
             }
             n.startsWith("history.ghost") -> historyProperty(n.removePrefix("history.ghost"), history?.recentGhosts().orEmpty().mapNotNull { repository?.find(it) }) { g, key, i -> ghostProperty(g, key, i) }
             n.startsWith("history.balloon") -> historyProperty(n.removePrefix("history.balloon"), history?.recentBalloons().orEmpty().mapNotNull { repository?.balloons?.find(it) }) { b, key, i -> balloonProperty(b, key, i) }
+            n.startsWith("history.plugin") -> historyProperty(n.removePrefix("history.plugin"), historyPlugins()) { p, key, i -> pluginProperty(p, key, i) }
+            n == "pluginlist.count" -> (plugins?.plugins?.size ?: 0).toString()
+            n.startsWith("pluginlist") -> listProperty(n.removePrefix("pluginlist"), plugins?.plugins.orEmpty(), null) { p, key, i -> pluginProperty(p, key, i) }
             n.startsWith("rateofuselist.") || n.startsWith("rateofuselist(") -> rateOfUseProperty(n.removePrefix("rateofuselist").removePrefix("."))
             n.startsWith("developer.log.") -> developerLogProperty(n.removePrefix("developer.log."))
             n.startsWith("system.os.") -> osProperty(n.removePrefix("system.os."))
@@ -5664,7 +5792,7 @@ class GhostController(
     /** SHIORI に聞かないと分からない名前（ghostlist / activeghostlist / currentghost の shiori.変数名） */
     private fun asksShiori(name: String): Boolean =
         (".shiori." in name && (name.startsWith("ghostlist") || name.startsWith("activeghostlist") || name.startsWith("currentghost.shiori."))) ||
-            (".ext." in name && name.startsWith("activeghostlist"))
+            (".ext." in name && (name.startsWith("activeghostlist") || name.startsWith("pluginlist")))
 
     /** [property] と同じだが、shiori.変数名 はそのゴーストの SHIORI に聞く */
     private suspend fun propertyAsking(name: String): String? = if (asksShiori(name)) shioriProperty(name) else property(name)
@@ -5674,6 +5802,12 @@ class GhostController(
      * 動いていないゴーストのものは分からないので null
      */
     private suspend fun shioriProperty(name: String): String? {
+        // pluginlist(…).ext.名前 は、そのプラグインに property.get で聞く
+        if (name.startsWith("pluginlist")) {
+            val (p, key) = listItem(name.removePrefix("pluginlist"), plugins?.plugins.orEmpty(), null) { p, k, i -> pluginProperty(p, k, i) } ?: return null
+            val ext = key.removePrefix("ext.").takeIf { key.startsWith("ext.") && it.isNotEmpty() } ?: return null
+            return plugins?.propertyGet(p, ext)
+        }
         val target: Ghost
         val variable: String
         if (name.startsWith("currentghost.shiori.")) {
@@ -5708,6 +5842,14 @@ class GhostController(
      * activeghostlist(…).ext.名前 に書く。そのゴーストに property.set（名前, 値）を送る。動いていなければ false。
      * 答え（204 なら成功）は待たない
      */
+    private fun setPluginExtProperty(name: String, value: String): Boolean {
+        val host = plugins ?: return false
+        val (p, key) = listItem(name.removePrefix("pluginlist"), host.plugins, null) { p, k, i -> pluginProperty(p, k, i) } ?: return false
+        val ext = key.removePrefix("ext.").takeIf { key.startsWith("ext.") && it.isNotEmpty() } ?: return false
+        scope.launch { if (!host.propertySet(p, ext, value)) platform.log("property.set が失敗しました: $name") }
+        return true
+    }
+
     private fun setExtProperty(name: String, value: String): Boolean {
         val (g, key) = listItem(name.removePrefix("activeghostlist"), hub?.running?.map { it.ghost } ?: listOf(ghost), ghost) { g, k, i ->
             ghostProperty(g, k, i)
@@ -5870,6 +6012,22 @@ class GhostController(
     }
 
     /** history.ghost(名前) / .index(N) / .count。使ったものから順 */
+    /** プラグインの汎用プロパティ（name・id・path・craftman・craftmanw・craftmanurl・homeurl・filename・index） */
+    private fun pluginProperty(p: Plugin, key: String, index: Int): String? = when (key) {
+        "name" -> p.name
+        "id" -> p.id
+        "path" -> p.dir.absolutePath + "/"
+        "craftman" -> p.craftman
+        "craftmanw" -> p.craftmanW
+        "craftmanurl" -> p.craftmanUrl.orEmpty()
+        "homeurl" -> p.homeUrl
+        "filename" -> p.filename
+        "index" -> index.toString()
+        // listItem が (名前) で探すときに聞く
+        "sakuraname" -> null
+        else -> null
+    }
+
     private fun <T> historyProperty(rest: String, items: List<T>, resolve: (T, String, Int) -> String?): String? =
         if (rest == ".count") items.size.toString() else listProperty(rest, items, null, resolve)
 
@@ -6078,6 +6236,7 @@ class GhostController(
      */
     fun setProperty(name: String, value: String): Boolean {
         if (name.trim().startsWith("activeghostlist") && ".ext." in name) return setExtProperty(name.trim(), value)
+        if (name.trim().startsWith("pluginlist") && ".ext." in name) return setPluginExtProperty(name.trim(), value)
         val key = name.trim().removePrefix("currentghost.")
         if (!name.trim().startsWith("currentghost.")) return false
         when {
@@ -6787,7 +6946,7 @@ class GhostController(
                     if (address.isNotEmpty() && !MAIL_ADDRESS.matches(address)) return false
                     platform.openUrl("mailto:$address")
                 }
-                "configurationdialog", "ghostexplorer", "shellexplorer", "balloonexplorer", "dressupexplorer" -> platform.openSettings()
+                "configurationdialog", "ghostexplorer", "shellexplorer", "balloonexplorer", "dressupexplorer", "pluginexplorer" -> platform.openSettings()
                 "dialog" -> return openSystemDialog(args)
                 "backlogviewer" -> platform.openDeveloperScreen("backlog")
                 "errorlog" -> platform.openDeveloperScreen("log")
@@ -6827,6 +6986,16 @@ class GhostController(
         override fun raise(event: String, references: List<String>) {
             raised += RaisedEvent(event, references)
         }
+
+        override fun raisePlugin(plugin: String, event: String, references: List<String>, notify: Boolean): Boolean {
+            val host = plugins ?: return false
+            return host.raise(plugin, event, references, notify, this@GhostController) { status ->
+                this@GhostController.raise("OnRaisePluginFailure", listOf(status, plugin, event) + references, userInitiated = false)
+            }
+        }
+
+        override fun timerRaisePlugin(delayMs: Long, repeat: Boolean, plugin: String, event: String, references: List<String>, notify: Boolean): Boolean =
+            plugins?.timer(delayMs, repeat, plugin, event, references, notify, this@GhostController) ?: false
 
         override fun notify(event: String, references: List<String>) {
             // 答えの ValueNotify の \![notify] が自分を呼び続けないよう、\![raise] と同じ上限で止める

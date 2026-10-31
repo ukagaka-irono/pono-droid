@@ -255,6 +255,15 @@ interface ScriptHost {
     /** `\![embed,...]`。イベントを送り、返ってきたスクリプトをその場に埋め込む。null なら何も入れない */
     suspend fun embed(event: String, references: List<String>): String? = null
 
+    /**
+     * `\![raiseplugin]` / `\![notifyplugin]`（[notify]）。プラグイン（名前・ID・パス・random・lastinstalled）が無ければ false
+     * （OnRaisePluginFailure / OnNotifyPluginFailure を送る）
+     */
+    fun raisePlugin(plugin: String, event: String, references: List<String>, notify: Boolean): Boolean = false
+
+    /** `\![timerraiseplugin]` / `\![timernotifyplugin]`。[repeat] なら [delayMs] ごとに繰り返す。プラグインが無ければ false */
+    fun timerRaisePlugin(delayMs: Long, repeat: Boolean, plugin: String, event: String, references: List<String>, notify: Boolean): Boolean = false
+
     /** `\![timerraise,時間,一回だけか,イベント,...]`。[delayMs] が 0 なら取り消し */
     fun timerRaise(delayMs: Long, once: Boolean, event: String, references: List<String>) {}
 
@@ -778,13 +787,19 @@ class ScriptPlayer(
                     !quick && a.drop(2).any { it.trim().equals("--wait", ignoreCase = true) } -> host.awaitTransition(scope, a[1].lowercase())
                 }
                 // ウィンドウの重なりや他のゴースト・プラグインなど、pono-droid に無いものは黙って飛ばす
-                // pono-droid にプラグインは無いので、どれも見つからなかったと知らせる
+                // プラグインが見つからなければ、OnRaisePluginFailure などで知らせる
                 "raiseplugin", "notifyplugin" -> if (a.size >= 3) {
-                    host.raise(pluginFailure(a[0]), listOf("notfound", a[1], a[2]) + a.drop(3))
+                    if (!host.raisePlugin(a[1], a[2], a.drop(3), notify = a[0] == "notifyplugin")) {
+                        host.raise(pluginFailure(a[0]), listOf("notfound", a[1], a[2]) + a.drop(3))
+                    }
                 }
-                // \![timerraiseplugin,ミリ秒,回数,プラグイン,イベント,...]
+                // \![timerraiseplugin,ミリ秒,繰り返すか,プラグイン,イベント,...]。繰り返すかは 0 なら繰り返し、1 以上なら1回だけ
                 "timerraiseplugin", "timernotifyplugin" -> if (a.size >= 5) {
-                    host.raise(pluginFailure(a[0]), listOf("notfound", a[3], a[4]) + a.drop(5))
+                    val delay = a[1].trim().toLongOrNull()?.coerceAtLeast(0) ?: 0
+                    val repeat = (a[2].trim().toIntOrNull() ?: 1) == 0
+                    if (!host.timerRaisePlugin(delay, repeat, a[3], a[4], a.drop(5), notify = a[0] == "timernotifyplugin")) {
+                        host.raise(pluginFailure(a[0]), listOf("notfound", a[3], a[4]) + a.drop(5))
+                    }
                 }
                 in silentCommands -> {}
                 else -> host.unknownTag(token)

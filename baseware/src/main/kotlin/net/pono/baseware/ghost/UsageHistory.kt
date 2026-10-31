@@ -61,6 +61,16 @@ class UsageHistory(private val file: File, private val clock: () -> LocalDate = 
         save()
     }
 
+    /** メニューから使ったプラグイン（フォルダ名。新しいものから） */
+    @Synchronized
+    fun recentPlugins(): List<String> = list(KEY_PLUGINS)
+
+    @Synchronized
+    fun pluginUsed(dirName: String) {
+        push(KEY_PLUGINS, dirName)
+        save()
+    }
+
     @Synchronized
     fun balloonUsed(dirName: String) {
         push(KEY_BALLOONS, dirName)
@@ -114,6 +124,7 @@ class UsageHistory(private val file: File, private val clock: () -> LocalDate = 
         const val KEY_GHOSTS = "recent.ghost"
         const val KEY_BALLOONS = "recent.balloon"
         const val KEY_CALLS = "recent.call"
+        const val KEY_PLUGINS = "recent.plugin"
         const val MAX_RECENT = 20
         const val KEEP_DAYS = 31
     }

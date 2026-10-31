@@ -13,14 +13,14 @@ import java.util.zip.ZipFile
  * 受け取るゴースト（[install] の target。install.txt の accept と名前が合うもの）に入れ、package は中の .nar を順に入れる。
  * ゴーストやシェルの .nar に同梱のバルーンがあれば、そのバルーンもバルーン置き場に入れる（SSP と同じ）。
  */
-class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
+class NarInstaller(private val ghostRoot: File, private val balloonRoot: File, private val pluginRoot: File = File(ghostRoot.parentFile, "plugin")) {
 
     open class InstallException(message: String) : IOException(message)
 
     /** install.txt の accept が受け取るゴーストと合わない（OnInstallRefuse） */
     class RefusedException(val accept: String, val type: String, val name: String) : InstallException("refused")
 
-    enum class Type(val id: String) { GHOST("ghost"), BALLOON("balloon"), SHELL("shell"), SUPPLEMENT("supplement") }
+    enum class Type(val id: String) { GHOST("ghost"), BALLOON("balloon"), SHELL("shell"), SUPPLEMENT("supplement"), PLUGIN("plugin") }
 
     /** 入れたもの1つ。[name] は install.txt の name（無ければ directory） */
     data class Installed(val type: Type, val name: String, val dir: File)
@@ -55,7 +55,8 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
                 "balloon" -> Type.BALLOON
                 "shell" -> Type.SHELL
                 "supplement" -> Type.SUPPLEMENT
-                else -> throw InstallException("ゴースト・シェル・バルーン・追加ファイル以外（type=${install["type"]}）は入れられません")
+                "plugin" -> Type.PLUGIN
+                else -> throw InstallException("ゴースト・シェル・バルーン・追加ファイル・プラグイン以外（type=${install["type"]}）は入れられません")
             }
             val dirName = install["directory"]?.let(::safeName) ?: throw InstallException("install.txt に directory がありません")
             val name = install["name"]?.trim()?.takeIf { it.isNotEmpty() } ?: dirName
@@ -67,6 +68,7 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File) {
             val target2 = when (type) {
                 Type.GHOST -> File(ghostRoot, dirName)
                 Type.BALLOON -> File(balloonRoot, dirName)
+                Type.PLUGIN -> File(pluginRoot, dirName)
                 Type.SHELL -> File(target!!.dir, "shell/$dirName")
                 Type.SUPPLEMENT -> target!!.dir
             }
