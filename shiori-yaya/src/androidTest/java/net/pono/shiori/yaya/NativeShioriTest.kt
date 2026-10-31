@@ -238,6 +238,58 @@ class NativeShioriTest {
         }
     }
 
+    /**
+     * ソースから作った SAORI（nodoka.dll・TexasHoldemUtil.dll・budoux.dll の代わりの libsaori_*.so）。
+     * YAYA の LOADLIB が DLL の名前で開き、答えが戻る。budoux はゴーストのフォルダの model.json を読む（サンドボックスの中）
+     */
+    @Test
+    fun nativeSaorisBuiltFromSource() {
+        val dir = File(root, "native-saori").apply { mkdirs() }
+        File(dir, "yaya.txt").writeText("charset, UTF-8\r\ndic, test.dic\r\n", Charsets.US_ASCII)
+        File(dir, "saori").mkdirs()
+        // ゴーストに同梱されている（ことになっている）Windows の DLL。中身は読まない
+        for (n in listOf("nodoka.dll", "TexasHoldemUtil.dll", "budoux.dll")) File(dir, "saori/$n").writeBytes(ByteArray(4))
+        File(dir, "saori/model.json").writeText("""{"UW4":{"に":1000}}""", Charsets.UTF_8)
+        val dic = """
+            request
+            {
+            	_crlf = CHR(13) + CHR(10)
+            	_head = 'EXECUTE SAORI/1.0' + _crlf + 'Charset: UTF-8' + _crlf + 'Sender: test' + _crlf + 'SecurityLevel: Local' + _crlf
+            	_r = LOADLIB('saori/nodoka.dll')
+            	_r = LOADLIB('saori/TexasHoldemUtil.dll')
+            	_r = LOADLIB('saori/budoux.dll')
+            	_n = saoriresult(REQUESTLIB('saori/nodoka.dll', _head + 'Argument0: shanten' + _crlf + 'Argument1: 3m4m4m5m5m6m6m7m7m8m9m<1m2m3m>' + _crlf + 'Argument2: 1m2m3m3m4m4m5m5m6m6m7m7m8m9m' + _crlf + _crlf))
+            	_t = saoriresult(REQUESTLIB('saori/TexasHoldemUtil.dll', _head + 'Argument0: hand' + _crlf + 'Argument1: S1' + _crlf + 'Argument2: S13' + _crlf + 'Argument3: S12' + _crlf + 'Argument4: S11' + _crlf + 'Argument5: S10' + _crlf + _crlf))
+            	_b = saoriresult(REQUESTLIB('saori/budoux.dll', _head + 'Argument0: あなたに寄り添う' + _crlf + _crlf))
+            	_r = UNLOADLIB('saori/nodoka.dll')
+            	'SHIORI/3.0 200 OK' + _crlf + 'Charset: UTF-8' + _crlf + 'Value: ' + _n + '|' + _t + '|' + _b + _crlf + _crlf
+            }
+
+            saoriresult
+            {
+            	_r = ''
+            	_lines = SPLIT(_argv[0], CHR(13) + CHR(10))
+            	foreach _lines; _x {
+            		if SUBSTR(_x, 0, 8) == 'Result: ' {
+            			_r = ERASE(_x, 0, 8)
+            		}
+            	}
+            	_r
+            }
+        """.trimIndent().replace("\n", "\r\n")
+        File(dir, "test.dic").writeText(dic, Charsets.UTF_8)
+        val value = request(ShioriEngine.YAYA, dir, Charsets.UTF_8).orEmpty()
+        val (nodoka, texas, budoux) = value.split('|').let { Triple(it.getOrNull(0), it.getOrNull(1), it.getOrNull(2)) }
+        // README の例と同じ答え（有効牌・不要牌の並びは集合の並びなので、順番は問わない）
+        fun tiles(t: String) = t.chunked(2).toSet()
+        val n = nodoka.orEmpty().split(',')
+        assertEquals(value, "0", n.getOrNull(0))
+        assertEquals(value, tiles("6m8m9m7m3m2m5m4m"), tiles(n.getOrNull(1).orEmpty()))
+        assertEquals(value, tiles("6m4m3m7m9m"), tiles(n.getOrNull(2).orEmpty()))
+        assertTrue(value, !texas.isNullOrEmpty())
+        assertTrue(value, (budoux?.toIntOrNull() ?: 0) >= 1)
+    }
+
     /** 内蔵 SAORI（SAORI over DirectSSTP）。辞書が internal_* を呼ぶと、setSaoriHandler の先に要求が届いて答えが戻る */
     @Test
     fun internalSaoriFromDictionaries() {
@@ -271,8 +323,8 @@ class NativeShioriTest {
             {
             	_crlf = CHR(13) + CHR(10)
             	_head = 'EXECUTE SAORI/1.0' + _crlf + 'Charset: UTF-8' + _crlf + 'Sender: test' + _crlf + 'SecurityLevel: Local' + _crlf
-            	LOADLIB('internal_crypto')
-            	LOADLIB('internal_system.dll')
+            	_r = LOADLIB('internal_crypto')
+            	_r = LOADLIB('internal_system.dll')
             	_h = saoriresult(REQUESTLIB('internal_crypto', _head + 'Argument0: Digest' + _crlf + 'Argument1: sha256' + _crlf + 'Argument2: abc' + _crlf + _crlf))
             	_l = saoriresult(REQUESTLIB('internal_system.dll', _head + 'Argument0: ListFunctions' + _crlf + 'Argument1: internal_jwt' + _crlf + _crlf))
             	'SHIORI/3.0 200 OK' + _crlf + 'Charset: UTF-8' + _crlf + 'Value: ' + _h + '|' + _l + _crlf + _crlf

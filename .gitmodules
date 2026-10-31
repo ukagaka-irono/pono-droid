@@ -17,3 +17,18 @@
 [submodule "shiori-yaya/src/main/cpp/sol2"]
 	path = shiori-yaya/src/main/cpp/sol2
 	url = https://github.com/ThePhD/sol2.git
+[submodule "shiori-yaya/src/main/cpp/saori/mahjong_nodoka"]
+	path = shiori-yaya/src/main/cpp/saori/mahjong_nodoka
+	url = https://github.com/Tatakinov/mahjong_nodoka.git
+[submodule "shiori-yaya/src/main/cpp/saori/TexasHoldemUtil"]
+	path = shiori-yaya/src/main/cpp/saori/TexasHoldemUtil
+	url = https://github.com/Tatakinov/TexasHoldemUtil.git
+[submodule "shiori-yaya/src/main/cpp/saori/saori_budoux"]
+	path = shiori-yaya/src/main/cpp/saori/saori_budoux
+	url = https://github.com/Tatakinov/saori_budoux.git
+[submodule "shiori-yaya/src/main/cpp/saori/ninix-saori"]
+	path = shiori-yaya/src/main/cpp/saori/ninix-saori
+	url = https://github.com/Tatakinov/ninix-saori.git
+[submodule "shiori-yaya/src/main/cpp/saori/MahjongUtil"]
+	path = shiori-yaya/src/main/cpp/saori/MahjongUtil
+	url = https://github.com/nikolat/MahjongUtil.git

@@ -153,3 +153,51 @@ target_compile_options(kagari PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>)
 # バイトコードを読ませず、debug ライブラリを絞る（shim/pono_lua.c）
 target_link_options(kagari PRIVATE -Wl,--wrap=lua_load -Wl,--wrap=luaopen_debug)
 pono_shiori_library(kagari)
+
+# ---- ソースから作る SAORI ----
+# ゴーストに同梱の Windows の DLL（nodoka.dll など）の代わりに、元のソースから libsaori_<名前>.so を作る。
+# SHIORI の dlopen（shim/pono_sandbox.cpp）が DLL の名前で見分けて開き、サンドボックスの決まりを渡してから使う。
+# どれも shim/pono_saori_guest.cpp（入口）と、SHIORI と同じ shim/pono_sandbox.cpp（--wrap）を入れる
+set(SAORI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/saori)
+
+function(pono_saori_library target)
+    target_sources(${target} PRIVATE shim/pono_saori_guest.cpp $<TARGET_OBJECTS:pono_iconv>)
+    target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/shim)
+    # 元のソースの警告は直さない（サブモジュールは書き換えない）
+    target_compile_options(${target} PRIVATE -w $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>)
+    pono_shiori_library(${target})
+endfunction()
+
+# Tatakinov さんの SAORI。Windows だけの util.h（conv）は shim/compat/saori_util.h を先に読ませて差し替える
+set(PONO_SAORI_UTIL -include ${CMAKE_CURRENT_SOURCE_DIR}/shim/compat/saori_util.h)
+
+add_library(saori_nodoka SHARED
+    ${SAORI_DIR}/mahjong_nodoka/nodoka.cc
+    ${SAORI_DIR}/mahjong_nodoka/lib.cc
+    ${SAORI_DIR}/mahjong_nodoka/base/header.cc
+    shim/pono_saori_tatakinov.cpp)
+target_include_directories(saori_nodoka PRIVATE ${SAORI_DIR}/mahjong_nodoka)
+target_compile_options(saori_nodoka PRIVATE ${PONO_SAORI_UTIL})
+pono_saori_library(saori_nodoka)
+
+add_library(saori_texasholdem SHARED
+    ${SAORI_DIR}/TexasHoldemUtil/saori.cc
+    ${SAORI_DIR}/TexasHoldemUtil/header.cc
+    ${SAORI_DIR}/TexasHoldemUtil/request.cc
+    ${SAORI_DIR}/TexasHoldemUtil/response.cc
+    ${SAORI_DIR}/TexasHoldemUtil/estimate.cc
+    shim/pono_saori_tatakinov.cpp)
+target_include_directories(saori_texasholdem PRIVATE ${SAORI_DIR}/TexasHoldemUtil)
+pono_saori_library(saori_texasholdem)
+
+# budoux はゴーストの SAORI のフォルダの model.json（Google の budoux の ja.json）を読む。JSON は nlohmann/json
+add_library(saori_budoux SHARED
+    ${SAORI_DIR}/saori_budoux/saori.cc
+    ${SAORI_DIR}/saori_budoux/budoux.cc
+    ${SAORI_DIR}/saori_budoux/sstp/header.cc
+    ${SAORI_DIR}/saori_budoux/sstp/request.cc
+    ${SAORI_DIR}/saori_budoux/sstp/response.cc
+    shim/pono_saori_tatakinov.cpp)
+target_include_directories(saori_budoux PRIVATE ${SAORI_DIR}/saori_budoux ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
+target_compile_options(saori_budoux PRIVATE ${PONO_SAORI_UTIL})
+pono_saori_library(saori_budoux)

@@ -76,6 +76,35 @@ abstract class GenerateLicenseAssets : DefaultTask() {
             Entry("里々（SATORI）", "BSD 2-Clause", "https://github.com/ukatech/satoriya-shiori", read("satori/LICENSE").trim()),
             Entry("華和梨（KAWARI）", "BSD", "https://github.com/kawari/kawari", read("kawari/LICENSE").trim()),
             Entry("Kagari", "MIT", "https://github.com/Tatakinov/kagari_shiori", read("kagari/LICENSE").trim()),
+            // ゴーストに同梱の SAORI の代わりに、ソースから作るもの（saori/）
+            Entry("mahjong_nodoka", "MIT", "https://github.com/Tatakinov/mahjong_nodoka", read("saori/mahjong_nodoka/LICENSE").trim()),
+            Entry("TexasHoldemUtil", "MIT", "https://github.com/Tatakinov/TexasHoldemUtil", read("saori/TexasHoldemUtil/LICENSE").trim()),
+            Entry("saori_budoux", "MIT", "https://github.com/Tatakinov/saori_budoux", read("saori/saori_budoux/LICENSE").trim()),
+            // json.hpp の先頭には SPDX の印しか無いので、文面は MIT の LICENSE.MIT と同じものを書く
+            Entry(
+                "JSON for Modern C++", "MIT", "https://github.com/nlohmann/json",
+                """
+                Copyright (c) 2013-2025 Niels Lohmann
+
+                Permission is hereby granted, free of charge, to any person obtaining a copy
+                of this software and associated documentation files (the "Software"), to deal
+                in the Software without restriction, including without limitation the rights
+                to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+                copies of the Software, and to permit persons to whom the Software is
+                furnished to do so, subject to the following conditions:
+
+                The above copyright notice and this permission notice shall be included in all
+                copies or substantial portions of the Software.
+
+                THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+                IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+                FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+                AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+                LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+                OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+                SOFTWARE.
+                """.trimIndent(),
+            ),
             Entry("Lua", "MIT", "https://www.lua.org/", cut("lua/lua.h", "Lua.org, PUC-Rio.", "SOFTWARE.")),
             Entry("sol2", "MIT", "https://github.com/ThePhD/sol2", read("sol2/LICENSE.txt").trim()),
             Entry(

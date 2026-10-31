@@ -11,7 +11,9 @@
 #include "pono_saori.h"
 
 #include <android/log.h>
+#include <ctype.h>
 #include <dirent.h>
+#include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -47,6 +49,8 @@ int __real_mkdir(const char *path, mode_t mode);
 int __real_rmdir(const char *path);
 ssize_t __real_readlink(const char *path, char *buf, size_t size);
 int __real_utimes(const char *path, const struct timeval times[2]);
+void *__real_dlopen(const char *name, int flags);
+void *__real_dlsym(void *handle, const char *symbol);
 }
 
 namespace {
@@ -237,6 +241,127 @@ void *const kLoad[kSaoriSlots] = {PONO_SAORI_SLOTS(PONO_LOAD)};
 void *const kUnload[kSaoriSlots] = {PONO_SAORI_SLOTS(PONO_UNLOAD)};
 void *const kRequest[kSaoriSlots] = {PONO_SAORI_SLOTS(PONO_REQUEST)};
 
+// ---- ソースから作った SAORI（libsaori_<名前>.so。pono_saori_guest.cpp を入れたもの） ----
+// ゴーストに同梱の DLL の名前（拡張子を除き小文字）で見分け、その .so を開く。開いた .so には、このプロセスの
+// サンドボックスの決まり（触ってよいディレクトリ）を渡す。.so の中も同じ pono_sandbox.cpp で絞られている
+
+struct NativeSaoriLib {
+    const char *dll;
+    const char *lib;
+};
+
+const NativeSaoriLib kNativeSaoris[] = {
+    {"nodoka", "libsaori_nodoka.so"},
+    {"texasholdemutil", "libsaori_texasholdem.so"},
+    {"budoux", "libsaori_budoux.so"},
+};
+
+const int kNativeSlots = 8;
+
+struct NativeSlot {
+    const NativeSaoriLib *def;
+    int refs;
+    long id;
+    long (*load)(char *, long);
+    char *(*request)(long, char *, long *);
+    int (*unload)(long);
+};
+
+NativeSlot g_native[kNativeSlots];
+
+// [path] の DLL がソースから作った SAORI なら、その定め。違えば nullptr
+const NativeSaoriLib *NativeFor(const char *path) {
+    const char *base = path;
+    for (const char *p = path; *p != '\0'; ++p) {
+        if (*p == '/' || *p == '\\') base = p + 1;
+    }
+    std::string name(base);
+    for (char &c : name) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    if (name.size() > 4 && name.compare(name.size() - 4, 4, ".dll") == 0) name.erase(name.size() - 4);
+    for (const NativeSaoriLib &n : kNativeSaoris) {
+        if (name == n.dll) return &n;
+    }
+    return nullptr;
+}
+
+std::string JoinLines(const std::vector<std::string> &dirs) {
+    std::string out;
+    for (const std::string &d : dirs) {
+        if (!out.empty()) out += '\n';
+        out += d;
+    }
+    return out;
+}
+
+// .so を開き、決まりを渡して、使う関数を取り出す。同じものはもう開いている枠を使う
+NativeSlot *NativeOpen(const NativeSaoriLib *def) {
+    std::lock_guard<std::mutex> guard(g_saori_lock);
+    for (NativeSlot &s : g_native) {
+        if (s.refs > 0 && s.def == def) {
+            s.refs++;
+            return &s;
+        }
+    }
+    NativeSlot *slot = nullptr;
+    for (NativeSlot &s : g_native) {
+        if (s.refs == 0) {
+            slot = &s;
+            break;
+        }
+    }
+    if (slot == nullptr) return nullptr;
+    void *lib = __real_dlopen(def->lib, RTLD_NOW | RTLD_LOCAL);
+    if (lib == nullptr) {
+        __android_log_print(ANDROID_LOG_WARN, "pono", "saori: cannot open %s", def->lib);
+        return nullptr;
+    }
+    auto policy = reinterpret_cast<void (*)(const char *, const char *, const char *)>(__real_dlsym(lib, "pono_guest_policy"));
+    auto load = reinterpret_cast<long (*)(char *, long)>(__real_dlsym(lib, "pono_guest_load"));
+    auto request = reinterpret_cast<char *(*)(long, char *, long *)>(__real_dlsym(lib, "pono_guest_request"));
+    auto unload = reinterpret_cast<int (*)(long)>(__real_dlsym(lib, "pono_guest_unload"));
+    if (policy == nullptr || load == nullptr || request == nullptr || unload == nullptr) return nullptr;
+    std::string allowed, guarded, readable;
+    {
+        std::lock_guard<std::mutex> g(g_lock);
+        allowed = JoinLines(g_allowed);
+        guarded = JoinLines(g_protected);
+        readable = JoinLines(g_readable);
+    }
+    policy(allowed.c_str(), guarded.c_str(), readable.c_str());
+    *slot = NativeSlot{def, 1, 0, load, request, unload};
+    return slot;
+}
+
+int NativeIndex(void *handle) {
+    NativeSlot *p = static_cast<NativeSlot *>(handle);
+    return p >= g_native && p < g_native + kNativeSlots ? static_cast<int>(p - g_native) : -1;
+}
+
+// 華和梨などの load / unload / request と、YAYA（POSIX）の <名前>_saori_load など（ID 付き）
+template <int N> int NativeLoad(char *h, long len) {
+    g_native[N].id = g_native[N].load(h, len);
+    return g_native[N].id > 0 ? 1 : 0;
+}
+template <int N> long NativeLoadWithId(char *h, long len) { return NativeLoad<N>(h, len) ? N + 1 : 0; }
+template <int N> int NativeUnload() { return g_native[N].unload(g_native[N].id); }
+template <int N> int NativeUnloadWithId(long) { return NativeUnload<N>(); }
+template <int N> char *NativeRequest(char *h, long *len) { return g_native[N].request(g_native[N].id, h, len); }
+template <int N> char *NativeRequestWithId(long, char *h, long *len) { return NativeRequest<N>(h, len); }
+
+#define PONO_NATIVE_SLOTS(F) F(0), F(1), F(2), F(3), F(4), F(5), F(6), F(7)
+#define PONO_N_LOAD(n) reinterpret_cast<void *>(&NativeLoad<n>)
+#define PONO_N_LOAD_ID(n) reinterpret_cast<void *>(&NativeLoadWithId<n>)
+#define PONO_N_UNLOAD(n) reinterpret_cast<void *>(&NativeUnload<n>)
+#define PONO_N_UNLOAD_ID(n) reinterpret_cast<void *>(&NativeUnloadWithId<n>)
+#define PONO_N_REQUEST(n) reinterpret_cast<void *>(&NativeRequest<n>)
+#define PONO_N_REQUEST_ID(n) reinterpret_cast<void *>(&NativeRequestWithId<n>)
+void *const kNativeLoad[kNativeSlots] = {PONO_NATIVE_SLOTS(PONO_N_LOAD)};
+void *const kNativeLoadWithId[kNativeSlots] = {PONO_NATIVE_SLOTS(PONO_N_LOAD_ID)};
+void *const kNativeUnload[kNativeSlots] = {PONO_NATIVE_SLOTS(PONO_N_UNLOAD)};
+void *const kNativeUnloadWithId[kNativeSlots] = {PONO_NATIVE_SLOTS(PONO_N_UNLOAD_ID)};
+void *const kNativeRequest[kNativeSlots] = {PONO_NATIVE_SLOTS(PONO_N_REQUEST)};
+void *const kNativeRequestWithId[kNativeSlots] = {PONO_NATIVE_SLOTS(PONO_N_REQUEST_ID)};
+
 bool EndsWith(const char *s, const char *tail) {
     size_t a = strlen(s), b = strlen(tail);
     return a >= b && strcmp(s + a - b, tail) == 0;
@@ -284,6 +409,12 @@ void pono_sandbox_protect(const char *dir) {
 // ---- ネイティブコードとプロセス ----
 
 void *__wrap_dlopen(const char *name, int) {
+    // ソースから作った SAORI（nodoka.dll など）は、その .so を開く
+    if (name != nullptr) {
+        if (const NativeSaoriLib *def = NativeFor(name)) {
+            if (NativeSlot *slot = NativeOpen(def)) return slot;
+        }
+    }
     char module[64];
     if (name != nullptr && pono_saori_module_name(name, module, sizeof(module))) {
         SaoriSlot *slot = SaoriSlotFor(module);
@@ -294,6 +425,16 @@ void *__wrap_dlopen(const char *name, int) {
 }
 
 void *__wrap_dlsym(void *handle, const char *symbol) {
+    int k = NativeIndex(handle);
+    if (k >= 0 && symbol != nullptr) {
+        if (strcmp(symbol, "load") == 0) return kNativeLoad[k];
+        if (strcmp(symbol, "unload") == 0) return kNativeUnload[k];
+        if (strcmp(symbol, "request") == 0) return kNativeRequest[k];
+        if (EndsWith(symbol, "_saori_load")) return kNativeLoadWithId[k];
+        if (EndsWith(symbol, "_saori_unload")) return kNativeUnloadWithId[k];
+        if (EndsWith(symbol, "_saori_request")) return kNativeRequestWithId[k];
+        return nullptr;
+    }
     int n = SaoriSlotIndex(handle);
     if (n < 0 || symbol == nullptr) return nullptr;
     if (strcmp(symbol, "load") == 0) return kLoad[n];
@@ -307,6 +448,13 @@ void *__wrap_dlsym(void *handle, const char *symbol) {
 
 // 開けるのは内蔵モジュールだけ。閉じたら枠の使っている数を減らす
 int __wrap_dlclose(void *handle) {
+    // ソースから作った SAORI の .so は閉じずに残す（同じプロセスでまた使うことがある）。枠の使っている数だけ減らす
+    int k = NativeIndex(handle);
+    if (k >= 0) {
+        std::lock_guard<std::mutex> guard(g_saori_lock);
+        if (g_native[k].refs > 0) g_native[k].refs--;
+        return 0;
+    }
     int n = SaoriSlotIndex(handle);
     if (n < 0) return -1;
     SaoriSlotRelease(&g_saori_slots[n]);
