@@ -509,6 +509,11 @@ android {
     defaultConfig {
         minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // 手元では ~/.gradle/gradle.properties の ponoAbis（arm64-v8a,x86_64 のようにカンマで並べる）の ABI だけを作る。
+        // 無いとき（CI とリリース）と -PponoAbis= で空にしたときは 4 つとも作る
+        providers.gradleProperty("ponoAbis").orNull?.takeIf { it.isNotBlank() }?.let { abis ->
+            ndk { abiFilters += abis.split(",").map { it.trim() } }
+        }
         externalNativeBuild {
             cmake {
                 arguments += listOf(

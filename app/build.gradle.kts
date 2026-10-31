@@ -371,6 +371,10 @@ android {
         // リリースのワークフローがタグから渡す（-PponoVersionName=0.2.0 -PponoVersionCode=12）
         versionCode = providers.gradleProperty("ponoVersionCode").orNull?.toInt() ?: 1
         versionName = providers.gradleProperty("ponoVersionName").orNull ?: "0.1.0"
+        // shiori-yaya と同じく、ponoAbis があればその ABI の .so だけを APK に入れる
+        providers.gradleProperty("ponoAbis").orNull?.takeIf { it.isNotBlank() }?.let { abis ->
+            ndk { abiFilters += abis.split(",").map { it.trim() } }
+        }
     }
 
     signingConfigs {
