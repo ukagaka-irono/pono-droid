@@ -165,7 +165,11 @@ private fun SkinInputBox(
         (area.height * scale / density.density * 0.6f).coerceIn(12f, 18f)
     }
     Box(Modifier.size(px(image.bitmap.width), px(image.bitmap.height))) {
-        Image(image.bitmap, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+        // use_input_alpha が 1 なら、箱の画像もバルーンと同じ不透明度で描く（入力欄の文字は透かさない）
+        Image(
+            image.bitmap, contentDescription = null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize(),
+            alpha = if (balloon.useInputAlpha) LocalBalloonOpacity.current else 1f,
+        )
         BasicTextField(
             value = value,
             onValueChange = onValueChange,

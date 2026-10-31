@@ -237,6 +237,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
             if (installing) LinearProgressIndicator(Modifier.fillMaxWidth())
             CharacterScaleSlider()
             BalloonScaleSlider()
+            BalloonOpacitySlider()
             if (!listed) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -431,14 +432,30 @@ private fun BalloonScaleSlider() = ScaleSlider(
     range = OverlaySettings.MIN_BALLOON_SCALE..OverlaySettings.MAX_BALLOON_SCALE,
 )
 
-/** 倍率の設定。0.1 刻みで、指を離したときに保存する */
+/** バルーンの不透明度。起動中のゴーストにもすぐ反映される（入力の箱はバルーンの use_input_alpha が 1 のときだけ） */
 @Composable
-private fun ScaleSlider(label: String, key: String, read: (SharedPreferences) -> Float, range: ClosedFloatingPointRange<Float>) {
+private fun BalloonOpacitySlider() = ScaleSlider(
+    label = "バルーンの不透明度",
+    key = OverlaySettings.KEY_BALLOON_OPACITY,
+    read = OverlaySettings::balloonOpacity,
+    range = OverlaySettings.MIN_BALLOON_OPACITY..OverlaySettings.MAX_BALLOON_OPACITY,
+    format = { "${(it * 100).roundToInt()}%" },
+)
+
+/** 倍率の設定。0.1 刻みで、指を離したときに保存する。[format] は値の見せ方 */
+@Composable
+private fun ScaleSlider(
+    label: String,
+    key: String,
+    read: (SharedPreferences) -> Float,
+    range: ClosedFloatingPointRange<Float>,
+    format: (Float) -> String = { "${"%.1f".format(it)}×" },
+) {
     val context = LocalContext.current
     val prefs = remember { OverlaySettings.prefs(context) }
     var scale by remember { mutableFloatStateOf(read(prefs)) }
     Column {
-        Text("$label: ${"%.1f".format(scale)}×", style = MaterialTheme.typography.bodyMedium)
+        Text("$label: ${format(scale)}", style = MaterialTheme.typography.bodyMedium)
         Slider(
             value = scale,
             onValueChange = { scale = (it * 10).roundToInt() / 10f },

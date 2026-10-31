@@ -144,7 +144,7 @@ descript/balloon/descript-txt/onlinemarker.x.md	DONE	onlinemarker.x,座標	Ballo
 descript/balloon/descript-txt/onlinemarker.y.md	DONE	onlinemarker.y,座標	Balloon.onlinePosition
 descript/balloon/descript-txt/origin.x.md	DONE	origin.x,座標	負の値は右端から、--数値 は本当の負の数。縦書きでは1列目の右端
 descript/balloon/descript-txt/origin.y.md	DONE	origin.y,座標	負の値は下端から、--数値 は本当の負の数
-descript/balloon/descript-txt/overlay_outside_balloon.md	PARTIAL	overlay_outside_balloon,数値	0 ならオンライン・SSTP の印をバルーンの画像の中に収め、1 なら収めない。ウィンドウを印の分だけ広げてはいない
+descript/balloon/descript-txt/overlay_outside_balloon.md	DONE	overlay_outside_balloon,数値	0 ならオンライン・SSTP の印をバルーンの画像の中に収め、1 なら収めない。はみ出す分だけバルーンのウィンドウを広げる（バルーンの画像の位置はそのまま）
 descript/balloon/descript-txt/paint_transparent_region_black.md	DONE	paint_transparent_region_black,数値	.pna の画像は既定で、左上の色の所を黒にしてから透明度を掛ける（0 / 1 で決められる）
 descript/balloon/descript-txt/readme.charset.md	DONE	readme.charset,文字コード	バルーンの readme をこの文字コードで読む（無ければ charset 行か中身から決める）
 descript/balloon/descript-txt/readme.md	DONE	readme,ファイル名	インストールしたときに開き、バルーンの一覧の「説明を読む」からも開ける（バルーンのフォルダの中だけ）
@@ -158,15 +158,15 @@ descript/balloon/descript-txt/sstpmessage.font.name.md	DONE	sstpmessage.font.nam
 descript/balloon/descript-txt/sstpmessage.x.md	DONE	sstpmessage.x,座標	Balloon.markerPosition
 descript/balloon/descript-txt/sstpmessage.xr.md	DONE	sstpmessage.xr,座標	印の文字をこの位置で切る（負は右端から）
 descript/balloon/descript-txt/sstpmessage.y.md	DONE	sstpmessage.y,座標	Balloon.markerPosition
-descript/balloon/descript-txt/sstpmessage.yb.md	PARTIAL	sstpmessage.yb,座標	縦書きのときの印の文字の終わりとして読むが、印の文字は縦書きにしていない
+descript/balloon/descript-txt/sstpmessage.yb.md	DONE	sstpmessage.yb,座標	縦書きのときの印の文字の終わり。印の文字（と数）は縦書きにし、sstpmessage.x / y から下へ書いてここで切る
 descript/balloon/descript-txt/type.md	DONE	type,種別	インストールで type を見る
-descript/balloon/descript-txt/use_input_alpha.md	PARTIAL	use_input_alpha,数値	1 なら入力の箱の画像もバルーンと同じ透明度の扱いにする。バルーン全体を半透明にする設定は pono-droid に無い
+descript/balloon/descript-txt/use_input_alpha.md	DONE	use_input_alpha,数値	1 なら入力の箱の画像も、アプリの設定の「バルーンの不透明度」で透かす（入力欄の文字は透かさない）。0 なら箱は透かさない
 descript/balloon/descript-txt/use_self_alpha.md	DONE	use_self_alpha,値	0（既定。画像のアルファを使わない）・1 / true・full の3通り
 descript/balloon/descript-txt/validrect.bottom.md	DONE	validrect.bottom,座標	0 以下は下端から
 descript/balloon/descript-txt/validrect.left.md	DONE	validrect.left,座標	負の値は右端から、--数値 は本当の負の数
 descript/balloon/descript-txt/validrect.right.md	DONE	validrect.right,座標	0 以下は右端から
 descript/balloon/descript-txt/validrect.top.md	DONE	validrect.top,座標	負の値は下端から、--数値 は本当の負の数
-descript/balloon/descript-txt/vertical.md	PARTIAL	vertical,0/1	1 なら上から下へ字を送り、右から左へ列を送る（縦書き用の句読点・かっこ、長音と英数字は回す、小さい仮名は右上）。\f[align] は列の中の寄せ。選択肢の長押しのカーソル、\f[valign] の厚み方向の寄せ、印の文字と数の縦書きは無い
+descript/balloon/descript-txt/vertical.md	DONE	vertical,0/1	1 なら上から下へ字を送り、右から左へ列を送る（縦書き用の句読点・かっこ、長音と英数字は回す、小さい仮名は右上）。\f[align] は列の中の寄せ、\f[valign] は列の厚み方向の寄せ（top が右、bottom が左）。下線は列の右。選択肢は長押しでカーソルを乗せる。印の文字と数も縦書き
 descript/balloon/descript-txt/windowposition.limit.md	DONE	windowposition.limit,0/1	0 ならバルーンのウィンドウを画面からはみ出せるようにする
 descript/balloon/descript-txt/windowposition.x.md	DONE	windowposition.x,座標	descript.txt（と画像ごとの上書き）の数値は右へずらし、center / top はシェルの中央上、bottom は中央下
 descript/balloon/descript-txt/windowposition.y.md	DONE	windowposition.y,座標	下へずらす（center / bottom の基本位置からも）
@@ -829,7 +829,7 @@ list/sakura-script/balloon-text/_b-inline.md	DONE	\_b[ファイルパス,inline]
 list/sakura-script/balloon-text/_b-x-y-2.md	DONE	\_b\,オプション...\]	--option=opaque / use_self_alpha / fixed / foreground / background、--clipping=、--scaling=（px・%・0 で縦横比・負で反転・long / short と max / min）、data:…;base64 の画像
 list/sakura-script/balloon-text/_b-x-y-opaque.md	DONE	\_b[ファイルパス,x,y,opaque]	実装済み
 list/sakura-script/balloon-text/_b-x-y.md	DONE	\_b[ファイルパス,x,y]	実装済み
-list/sakura-script/balloon-text/_l-x-y.md	PARTIAL	\_l[x,y]	横書きのバルーンは座標どおり（px・em・lh・%・@ の相対・centerx / centery、\_l の後は左寄せ）。縦書きのバルーンは次の列にするだけ
+list/sakura-script/balloon-text/_l-x-y.md	DONE	\_l[x,y]	横書きのバルーンは座標どおり（px・em・lh・%・@ の相対・centerx / centery、\_l の後は左寄せ）。縦書きのバルーンは文字の範囲の右上が原点で、x は列の右の端、y は字の上の端
 list/sakura-script/balloon-text/_n.md	DONE	\_n	実装済み
 list/sakura-script/balloon-text/b-ID.md	DONE	\b[ID番号]	\b[ID,--fallback=ID2] の代わりの番号を読まない
 list/sakura-script/balloon-text/bID.md	DONE	\bID番号	1桁の \b0〜\b9 を読む
@@ -1146,12 +1146,12 @@ list/sakura-script/sound/bang-sound-load.md	DONE	\!\...\]	--spectrum 系を読�
 list/sakura-script/sound/bang-sound-loop.md	DONE	\![sound,loop,ファイル名]	実装済み
 list/sakura-script/sound/bang-sound-option.md	DONE	\!\...\]	--spectrum 系を読む。--sound-only は、pono-droid が動画もいつも音だけ鳴らすので、そのとおりになる
 list/sakura-script/sound/bang-sound-pause.md	DONE	\![sound,pause,ファイル名]	実装済み
-list/sakura-script/sound/bang-sound-play.md	PARTIAL	\!\...\]	--spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
+list/sakura-script/sound/bang-sound-play.md	DONE	\!\...\]	--spectrum / --spectrum-bands / --spectrum-hold と --sound-only も済み。--window=true ならシークバー・一時停止・閉じるのついた再生のウインドウを出す（書いていなければ動画だけ。動画は絵も出す。--sound-only なら音だけ）
 list/sakura-script/sound/bang-sound-resume.md	DONE	\![sound,resume,ファイル名]	実装済み
 list/sakura-script/sound/bang-sound-stop.md	DONE	\![sound,stop,ファイル名]	実装済み
 list/sakura-script/sound/bang-sound-wait.md	DONE	\![sound,wait]	実装済み
 list/sakura-script/sound/index.md	NA	サウンドコマンド	目次のページ
-list/sakura-script/sound/notes_sound.md	PARTIAL	sound play/load/option のオプション	--spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
+list/sakura-script/sound/notes_sound.md	DONE	sound play/load/option のオプション	--spectrum / --spectrum-bands / --spectrum-hold と --sound-only も済み。--window=true ならシークバー・一時停止・閉じるのついた再生のウインドウを出す（書いていなければ動画だけ。動画は絵も出す。--sound-only なら音だけ）
 list/sakura-script/sound/notes_sound_spectrum.md	DONE	sound の --spectrum= で通知される帯域とレベル \[2.9.18\]	鳴らしているファイルを MediaExtractor / MediaCodec で PCM に戻し、再生位置の約 85 ミリ秒の窓を FFT して、ISO の帯域・-60dB を 0 とするレベル・500 ミリ秒の落ち方・ピークホールドで送る
 list/sakura-script/surface/4.md	DONE	\4	実装済み
 list/sakura-script/surface/5.md	DONE	\5	実装済み

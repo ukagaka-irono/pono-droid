@@ -4,6 +4,7 @@ import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.Surface
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +30,8 @@ class SoundPlayer(
     private val onError: (File, Int, String) -> Unit = { _, _, _ -> },
     /** --spectrum= の音の、帯域の数・レベル・再生位置（ミリ秒）。メインスレッドで呼ぶ */
     private val onSpectrum: (File, Int, SoundSpectrum.Frame, Long) -> Unit = { _, _, _, _ -> },
+    /** 再生のウインドウ（--window）を出す音が変わった。出すものを全部渡す */
+    private val onWindows: (List<Windowed>) -> Unit = {},
 ) {
     /** --spectrum= の通知。[analyzer] は帯域の数とホールドの時間で作り直す */
     private class Spectrum(var intervalMs: Int, var analyzer: SoundSpectrum) {
@@ -38,8 +41,19 @@ class SoundPlayer(
         var lastPositionMs = 0L
     }
 
+    /**
+     * 再生のウインドウを出す音。[key] で操作する（[progress] / [seek] / [togglePause] / [close]）。
+     * [video] なら絵も出す（動画で --sound-only でないとき）。[videoWidth] / [videoHeight] は絵の大きさ
+     */
+    data class Windowed(val key: String, val file: File, val video: Boolean, val videoWidth: Int, val videoHeight: Int)
+
     private class Sound(val file: File, val player: MediaPlayer, val id: Int) {
         var spectrum: Spectrum? = null
+
+        /** 絵のある音（動画）か。読み終わってから分かる */
+        var hasVideo = false
+        var videoWidth = 0
+        var videoHeight = 0
         var loop = false
 
         /** play されたことがあるか（無ければ load で先に読んだだけ） */
@@ -83,6 +97,7 @@ class SoundPlayer(
             if (options.seekMs != null) sound.pendingSeek = options
         }
         if (!loop) waitFor()
+        refreshWindows()
     }
 
     /** load: 先に読んでおき、次の play ですぐ鳴らす */
@@ -116,6 +131,40 @@ class SoundPlayer(
         val sound = sounds[file.path] ?: return
         sound.options = merge(sound.options, options)
         if (sound.prepared) apply(sound, options)
+        refreshWindows()
+    }
+
+    /** 再生のウインドウの [key] の音の、今の位置と長さ（ミリ秒）。読み終わっていなければ null */
+    fun progress(key: String): Pair<Long, Long>? {
+        val s = sounds[key]?.takeIf { it.prepared } ?: return null
+        val position = runCatching { s.player.currentPosition.toLong() }.getOrDefault(0)
+        val duration = runCatching { s.player.duration.toLong() }.getOrDefault(-1)
+        return position to duration
+    }
+
+    fun isPaused(key: String): Boolean = sounds[key]?.paused ?: true
+
+    /** 再生のウインドウの一時停止・再生のボタン */
+    fun togglePause(key: String) {
+        val s = sounds[key] ?: return
+        if (s.paused) resume(s.file) else pause(s.file)
+    }
+
+    /** 再生のウインドウのシークバー */
+    fun seek(key: String, ms: Long) {
+        val s = sounds[key]?.takeIf { it.prepared } ?: return
+        runCatching { s.player.seekTo(ms.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()) }
+    }
+
+    /** 再生のウインドウを閉じた。音も止める（鳴り終わったときと同じく OnSoundStop を送る） */
+    fun close(key: String) {
+        sounds[key]?.let { release(it, notify = true) }
+    }
+
+    /** 動画の絵を描く先。null で外す */
+    fun setSurface(key: String, surface: Surface?) {
+        val s = sounds[key] ?: return
+        runCatching { s.player.setSurface(surface) }
     }
 
     fun stop(file: File? = null) {
@@ -153,8 +202,21 @@ class SoundPlayer(
                 onError(file, what, "error $what/$extra")
                 true
             }
+            player.setOnVideoSizeChangedListener { _, width, height ->
+                if (width == sound.videoWidth && height == sound.videoHeight) return@setOnVideoSizeChangedListener
+                sound.videoWidth = width
+                sound.videoHeight = height
+                sound.hasVideo = width > 0 && height > 0
+                refreshWindows()
+            }
             player.setOnPreparedListener {
                 sound.prepared = true
+                if (it.videoWidth > 0 && it.videoHeight > 0) {
+                    sound.hasVideo = true
+                    sound.videoWidth = it.videoWidth
+                    sound.videoHeight = it.videoHeight
+                }
+                refreshWindows()
                 apply(sound, sound.options)
                 sound.pendingSeek?.let { seek -> apply(sound, SoundOptions(seekMs = seek.seekMs, seekRelative = seek.seekRelative)) }
                 sound.pendingSeek = null
@@ -214,7 +276,21 @@ class SoundPlayer(
         spectrumMs = new.spectrumMs ?: old.spectrumMs,
         spectrumBands = new.spectrumBands ?: old.spectrumBands,
         spectrumHoldMs = new.spectrumHoldMs ?: old.spectrumHoldMs,
+        window = new.window ?: old.window,
+        soundOnly = new.soundOnly ?: old.soundOnly,
     )
+
+    /**
+     * 再生のウインドウを出す音を知らせ直す。--window=true なら音だけでも、書いていなければ動画（--sound-only でないもの）だけ、
+     * false なら出さない。鳴らし始めてから（load で読んだだけなら出さない）
+     */
+    private fun refreshWindows() {
+        onWindows(
+            sounds.values.filter { s -> s.started && (s.options.window ?: (s.hasVideo && s.options.soundOnly != true)) }.map { s ->
+                Windowed(s.file.path, s.file, s.hasVideo && s.options.soundOnly != true, s.videoWidth, s.videoHeight)
+            },
+        )
+    }
 
     /**
      * --spectrum= / --spectrum-bands= / --spectrum-hold= を反映する。間隔ごとに再生位置の波形を解析して [onSpectrum] に渡す。
@@ -284,6 +360,7 @@ class SoundPlayer(
         // スペクトラムは、止めたことを全部 0 の通知で知らせてから（そのあとに OnSoundStop）
         sound.spectrum?.let { stopSpectrum(sound, it) }
         runCatching { sound.player.release() }
+        refreshWindows()
         // 鳴り終わりのイベントは、ほかの音の後始末が済んでから
         if (notify) main.post { onStop(sound.file) }
         // load で読んだだけの音（まだ鳴らしていない）は待たない

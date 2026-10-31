@@ -5,8 +5,8 @@ package net.pono.baseware.sakura
  * [volume] は 0〜100、[balance] は -100（左）〜100（右）、[rate] は 100 が普通の速さ、[seekMs] は再生を始める位置（ミリ秒）で、
  * [seekRelative] なら今の位置からの相対（負でもよい）。
  * [spectrumMs] は OnSoundSpectrum を送る間隔（20〜1000。0 で止める）、[spectrumBands] は帯域の数（0・5・10・15・31）、
- * [spectrumHoldMs] はピークホールドの時間（0〜10000）。[window] は --window（pono-droid には再生のウインドウが無いので読むだけ）、
- * [soundOnly] は --sound-only（pono-droid は動画もいつも音だけ鳴らす）
+ * [spectrumHoldMs] はピークホールドの時間（0〜10000）。[window] は --window（シークバーのついた再生のウインドウを出すか。
+ * 書いていなければ動画だけ出す）、[soundOnly] は --sound-only（動画の音だけ鳴らし、絵は出さない）
  */
 data class SoundOptions(
     val volume: Int? = null,

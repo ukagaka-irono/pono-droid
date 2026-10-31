@@ -323,8 +323,23 @@ class GhostOverlayService : LifecycleService() {
             onLoop = { controller?.onSoundLooped(it) },
             onError = { file, code, message -> controller?.onSoundError(file, code, message) },
             onSpectrum = { file, bands, frame, position -> controller?.onSoundSpectrum(file, bands, frame, position) },
+            onWindows = { showSoundWindows(it) },
         )
         private val windows = mutableListOf<CharacterWindow>()
+
+        /** 再生のウインドウ（\![sound,play,…,--window=true] と動画）。音のファイルごと */
+        private val soundWindows = LinkedHashMap<String, SoundWindow>()
+
+        private fun showSoundWindows(list: List<SoundPlayer.Windowed>) {
+            val keys = list.map { it.key }.toSet()
+            soundWindows.keys.filter { it !in keys }.forEach { soundWindows.remove(it)?.dismiss() }
+            for (w in list) {
+                soundWindows[w.key]?.update(w) ?: SoundWindow(this@GhostOverlayService, sound, w, soundWindows.size).also {
+                    soundWindows[w.key] = it
+                    it.show()
+                }
+            }
+        }
 
         /**
          * @param previous 切り替える前のゴースト（OnGhostChanged で渡す）。ふつうの起動なら null

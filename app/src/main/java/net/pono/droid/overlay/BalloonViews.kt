@@ -6,6 +6,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.Layout
@@ -21,8 +22,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.absolutePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -254,6 +259,9 @@ internal fun balloonMaxWidth(): Dp {
 /** アプリの画面で変えたバルーンの大きさ（倍率） */
 val LocalBalloonScale = staticCompositionLocalOf { 1f }
 
+/** アプリの画面で変えたバルーンの不透明度（1 で透けない） */
+val LocalBalloonOpacity = staticCompositionLocalOf { 1f }
+
 /** 描かない印（\![execute,dumpballoon] の --hide= の balloonmarker・balloonnum） */
 val LocalHiddenBalloonLabels = staticCompositionLocalOf { emptySet<String>() }
 
@@ -412,10 +420,22 @@ fun SimpleBalloon(
 
 /** バルーン画像の上の小さな文字（印の文字・数）。[height] はバルーン画像のピクセル、無ければ本文より小さく */
 @Composable
-private fun BalloonLabel(text: String, height: Int?, color: BalloonColor?, style: BalloonTextStyle, modifier: Modifier, fontNames: List<String> = emptyList()) {
+private fun BalloonLabel(
+    text: String,
+    height: Int?,
+    color: BalloonColor?,
+    style: BalloonTextStyle,
+    modifier: Modifier,
+    fontNames: List<String> = emptyList(),
+    vertical: Boolean = false,
+) {
     val size = height?.let { maxOf(it * style.spPerPx, 9f) } ?: (style.fontSize.value * 0.8f)
     // sstpmessage.font.name / number.font.name（無ければ本文の書体）
     val family = BalloonFonts.family(fontNames) ?: style.fontFamily
+    if (vertical) {
+        VerticalLabel(text, size.sp, color?.toColor() ?: style.textColor, family, modifier)
+        return
+    }
     Text(
         text, fontSize = size.sp, color = color?.toColor() ?: style.textColor, maxLines = 1, softWrap = false, fontFamily = family,
         overflow = TextOverflow.Clip, modifier = modifier,
@@ -496,7 +516,7 @@ fun SkinBalloon(
             val style = styles[i]
             if (candidates[i].look.vertical) {
                 // 縦書きは列の長さを決めて組み、幅が収まるか見る
-                val measured = subcompose("measure$i") { VerticalBalloonBody(items, choices, style, (area.height * scale).toInt()) }
+                val measured = subcompose("measure$i") { VerticalBalloonBody(items, choices, style, (area.height * scale).toInt(), (area.width * scale).toInt()) }
                     .first().measure(Constraints())
                 measured.width <= area.width * scale
             } else {
@@ -509,12 +529,26 @@ fun SkinBalloon(
         val style = styles[chosen]
         val placeable = subcompose("balloon") {
             SkinFrame(image, skin, scopeId, scale, scroll, onlineFrames, labels, style, clickWait, sstp, onDrag, fixed = { FixedBalloonImages(items, style) }) {
-                if (image.look.vertical) VerticalBalloonBody(items, choices, style, (image.area.height * scale).toInt()) else BalloonBody(items, choices, style)
+                if (image.look.vertical) {
+                    VerticalBalloonBody(items, choices, style, (image.area.height * scale).toInt(), (image.area.width * scale).toInt())
+                } else {
+                    BalloonBody(items, choices, style)
+                }
             }
         }.first().measure(Constraints())
         layout(placeable.width, placeable.height) { placeable.place(0, 0) }
     }
 }
+
+/** overlay_outside_balloon,1 で、画像パーツ（オンラインの印・SSTP の印）がバルーンの画像からはみ出す分（px） */
+data class BalloonOutset(val left: Int = 0, val top: Int = 0, val right: Int = 0, val bottom: Int = 0) {
+    companion object {
+        val ZERO = BalloonOutset()
+    }
+}
+
+/** バルーンのウィンドウに、はみ出す分を知らせる。ウィンドウはその分広げ、バルーンの画像は動かさない */
+val LocalBalloonOutset = staticCompositionLocalOf<((BalloonOutset) -> Unit)?> { null }
 
 /**
  * バルーン画像を敷き、文字の範囲に中身を置く。続きや前があれば矢印を出し、押すと1画面分スクロールする。
@@ -547,9 +581,29 @@ private fun SkinFrame(
     /** 印などの画像パーツの位置。overlay_outside_balloon が 1 でなければ、バルーンの画像からはみ出さないようにする */
     fun inside(x: Int, y: Int, pw: Int, ph: Int): Pair<Int, Int> =
         if (look.overlayOutside) x to y else x.coerceIn(0, maxOf(0, w - pw)) to y.coerceIn(0, maxOf(0, h - ph))
+    // はみ出してよいときは、はみ出す分だけ周りを空ける（バルーンの画像の位置はそのまま）
+    val outset = if (!look.overlayOutside) BalloonOutset.ZERO else {
+        val parts = buildList {
+            onlineFrames.firstOrNull()?.let { f -> look.onlinePosition(w, h).let { (x, y) -> add(intArrayOf(x, y, x + f.width, y + f.height)) } }
+            if (sstp) skin.sstpMarker(scopeId)?.let { m -> look.sstpMarkerPosition(w, h).let { (x, y) -> add(intArrayOf(x, y, x + m.width, y + m.height)) } }
+        }
+        BalloonOutset(
+            maxOf(0, -(parts.minOfOrNull { it[0] } ?: 0)),
+            maxOf(0, -(parts.minOfOrNull { it[1] } ?: 0)),
+            maxOf(0, (parts.maxOfOrNull { it[2] } ?: w) - w),
+            maxOf(0, (parts.maxOfOrNull { it[3] } ?: h) - h),
+        )
+    }
+    val reportOutset = LocalBalloonOutset.current
+    val outsetPx = BalloonOutset(
+        (outset.left * scale).roundToInt(), (outset.top * scale).roundToInt(), (outset.right * scale).roundToInt(), (outset.bottom * scale).roundToInt(),
+    )
+    SideEffect { reportOutset?.invoke(outsetPx) }
+    DisposableEffect(reportOutset) { onDispose { reportOutset?.invoke(BalloonOutset.ZERO) } }
     // 読み返せるほど長いときは、文字の範囲（バルーン画像のピクセルを縮めた分）の外が縁
     val area = image.area
     val hits = remember { ChoiceRouter() }
+    Box(Modifier.absolutePadding(px(outset.left), px(outset.top), px(outset.right), px(outset.bottom))) {
     Box(
         Modifier
             .size(px(w), px(h))
@@ -581,7 +635,19 @@ private fun SkinFrame(
             val (x, y) = b.sstpMarkerPosition(w, h).let { (sx, sy) -> inside(sx, sy, mark.width, mark.height) }
             Image(mark, contentDescription = "SSTP", contentScale = ContentScale.FillBounds, modifier = Modifier.offset(px(x), px(y)).size(px(mark.width), px(mark.height)))
         }
-        labels.marker?.let { marker ->
+        if (b.vertical) labels.marker?.let { marker ->
+            // 縦書きは sstpmessage.x / y を列の左上にして上から下へ書き、sstpmessage.yb で切る（無ければ文字の範囲の右）
+            val x0 = minOf(image.area.right + 2, maxOf(0, w - (b.markerFontHeight ?: b.fontHeight)))
+            val (x, y) = b.markerPosition(w, h) ?: (x0 to image.area.top)
+            val end = b.markerEndY(h)?.takeIf { it > y }
+            BalloonLabel(
+                marker, b.markerFontHeight, b.markerColor, style,
+                Modifier.offset(px(x), px(y)).let { m ->
+                    if (end != null) m.height(px(end - y)).clipToBounds().wrapContentHeight(Alignment.Top, unbounded = true) else m
+                },
+                b.markerFontNames, vertical = true,
+            )
+        } else labels.marker?.let { marker ->
             val (x, y) = b.markerPosition(w, h) ?: (image.area.left to maxOf(0, image.area.top - b.fontHeight - 2))
             // sstpmessage.xr があれば、そこで切る
             val end = b.markerEnd(w)?.takeIf { it > x }
@@ -590,7 +656,21 @@ private fun SkinFrame(
                 Modifier.offset(px(x), px(y)).let { m -> if (end != null) m.width(px(end - x)) else m }, b.markerFontNames,
             )
         }
-        labels.number?.let { number ->
+        if (b.vertical) labels.number?.let { number ->
+            // 縦書きは number.x を列の左、number.y を下の端にして、上へ伸ばす（無ければ文字の範囲の左下）
+            val x0 = maxOf(0, image.area.left - (b.numberFontHeight ?: b.fontHeight) - 2)
+            val (x, y) = b.numberPosition(w, h) ?: (x0 to image.area.bottom)
+            val left = with(density) { (x * scale).toInt() }
+            val bottom = with(density) { (y * scale).toInt() }
+            BalloonLabel(
+                number, b.numberFontHeight, b.numberColor, style,
+                Modifier.layout { measurable, constraints ->
+                    val p = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+                    layout(p.width, p.height) { p.place(left, bottom - p.height) }
+                },
+                b.numberFontNames, vertical = true,
+            )
+        } else labels.number?.let { number ->
             val (x, y) = b.numberPosition(w, h) ?: (image.area.right to maxOf(0, image.area.bottom - b.fontHeight))
             val right = with(density) { (x * scale).toInt() }
             BalloonLabel(
@@ -651,6 +731,7 @@ private fun SkinFrame(
             }
         }
     }
+    } // absolutePadding
 }
 
 /** バルーンの中身。行ごとに文を並べ、\_l で分けた列は横に等分して並べる */
@@ -948,7 +1029,7 @@ private fun BalloonLine(
 }
 
 /** ふつうの行の高さ（文字の大きさに対する倍率） */
-private const val LINE_HEIGHT = 1.4f
+internal const val LINE_HEIGHT = 1.4f
 
 /**
  * 1列分の文。選択肢とリンクは文の中で押せるようにする（\![*] があれば印を付ける）。\f の飾りも付ける。

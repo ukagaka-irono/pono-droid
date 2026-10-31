@@ -4,17 +4,11 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1520・一部だけ 7・作る 0・作れない 185・ベースウェアのことではない 338
+全 2050 項目: 済み 1527・一部だけ 0・作る 0・作れない 185・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
-済み 167 項目。
-
-### 🔧 一部だけ（4）
-- overlay_outside_balloon,数値 — 0 ならオンライン・SSTP の印をバルーンの画像の中に収め、1 なら収めない。ウィンドウを印の分だけ広げてはいない
-- sstpmessage.yb,座標 — 縦書きのときの印の文字の終わりとして読むが、印の文字は縦書きにしていない
-- use_input_alpha,数値 — 1 なら入力の箱の画像もバルーンと同じ透明度の扱いにする。バルーン全体を半透明にする設定は pono-droid に無い
-- vertical,0/1 — 1 なら上から下へ字を送り、右から左へ列を送る（縦書き用の句読点・かっこ、長音と英数字は回す、小さい仮名は右上）。\f[align] は列の中の寄せ。選択肢の長押しのカーソル、\f[valign] の厚み方向の寄せ、印の文字と数の縦書きは無い
+済み 171 項目。
 
 ### ― ベースウェアのことではない（4）
 - balloons\*s.txt/balloonk\*s.txt/balloonc\*s.txt(個別指定) — 一覧のページ
@@ -135,12 +129,7 @@
 
 ## さくらスクリプト
 
-済み 350 項目。
-
-### 🔧 一部だけ（3）
-- \_l[x,y] — 横書きのバルーンは座標どおり（px・em・lh・%・@ の相対・centerx / centery、\_l の後は左寄せ）。縦書きのバルーンは次の列にするだけ
-- \!\...\] — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
-- sound play/load/option のオプション — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
+済み 353 項目。
 
 ### ⛔ 作れない（21）
 - \6 — アプリは端末の時計を合わせられない（ずれを測るだけ）

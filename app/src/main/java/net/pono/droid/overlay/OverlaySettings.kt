@@ -27,6 +27,16 @@ object OverlaySettings {
     fun balloonScale(prefs: SharedPreferences) =
         prefs.getFloat(KEY_BALLOON_SCALE, DEFAULT_BALLOON_SCALE).coerceIn(MIN_BALLOON_SCALE, MAX_BALLOON_SCALE)
 
+    const val KEY_BALLOON_OPACITY = "balloonOpacity"
+
+    /** バルーンの不透明度（1 で透けない）。入力の箱は、バルーンの use_input_alpha が 1 のときだけ */
+    const val DEFAULT_BALLOON_OPACITY = 1.0f
+    const val MIN_BALLOON_OPACITY = 0.2f
+    const val MAX_BALLOON_OPACITY = 1.0f
+
+    fun balloonOpacity(prefs: SharedPreferences) =
+        prefs.getFloat(KEY_BALLOON_OPACITY, DEFAULT_BALLOON_OPACITY).coerceIn(MIN_BALLOON_OPACITY, MAX_BALLOON_OPACITY)
+
     /**
      * キャラクター自由移動（SSP と同じ3つ。全部のゴーストに共通）。ghost はゴーストの指定（descript.txt・スクリプト）に従い、
      * free は画面の端に付けずいつも自由に動かし、limit はゴーストの指定に従って何も無ければ下の端に付ける。最初は free

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -426,10 +427,13 @@ fun CharacterBalloon(scopeId: Int, controller: GhostController, skin: BalloonSki
     // マウスやペンのカーソル（バルーンと、無ければゴーストの descript.txt の mousecursor.*）
     CompositionLocalProvider(LocalBalloonCursors provides rememberBalloonCursors(controller, skin, state.loading != null)) {
     Column(horizontalAlignment = if (scopeId == 1) Alignment.Start else Alignment.End) {
-        TalkBalloon(
-            scopeId, character, state.loading, state.online && scopeId == 0, state.visitedAnchors, controller, skin,
-            state.waitingClick, state.lastTextScope, state.sstpScript,
-        )
+        // アプリの画面で変えた不透明度で描く
+        Box(Modifier.alpha(LocalBalloonOpacity.current)) {
+            TalkBalloon(
+                scopeId, character, state.loading, state.online && scopeId == 0, state.visitedAnchors, controller, skin,
+                state.waitingClick, state.lastTextScope, state.sstpScript,
+            )
+        }
         if (input != null) InputBalloon(input, skin, controller::onInputSubmit, controller::onInputCancel)
     }
     } // CompositionLocalProvider

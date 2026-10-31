@@ -108,10 +108,12 @@ class CharacterWindow(
     // アプリの画面で大きさを変えたら、起動中のゴーストにもすぐ反映する
     private val scale = mutableFloatStateOf(OverlaySettings.characterScale(prefs))
     private val balloonScale = mutableFloatStateOf(OverlaySettings.balloonScale(prefs))
+    private val balloonOpacity = mutableFloatStateOf(OverlaySettings.balloonOpacity(prefs))
     private val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
         when (key) {
             OverlaySettings.KEY_CHARACTER_SCALE -> scale.floatValue = OverlaySettings.characterScale(p)
             OverlaySettings.KEY_BALLOON_SCALE -> balloonScale.floatValue = OverlaySettings.balloonScale(p)
+            OverlaySettings.KEY_BALLOON_OPACITY -> balloonOpacity.floatValue = OverlaySettings.balloonOpacity(p)
         }
     }
 
@@ -133,6 +135,15 @@ class CharacterWindow(
 
     /** バルーンに描かないもの（\![execute,dumpballoon] の --hide=）。書き出す間だけ */
     private val hiddenLabels = mutableStateOf(emptySet<String>())
+
+    /** バルーンの画像パーツがはみ出す分（overlay_outside_balloon,1）。ウィンドウはその分広いので、置くときに差し引く */
+    private var balloonOutset = BalloonOutset.ZERO
+    private val onBalloonOutset: (BalloonOutset) -> Unit = { o ->
+        if (o != balloonOutset) {
+            balloonOutset = o
+            balloonView.post { placeBalloon() }
+        }
+    }
 
     /** [hide] の印を描かずに描き直してから写す（表示に戻すのは写した後） */
     suspend fun balloonBitmap(hide: Set<String>): Bitmap? {
@@ -181,7 +192,12 @@ class CharacterWindow(
             FitWindow(corner, onSize = { w, h -> resize(balloonView, balloonParams, w, h) }) {
                 // descript.txt の balloon.syncscale が true なら、バルーンもキャラクターの大きさに合わせる
                 val bs = if (controller.balloonSyncScale(scopeId)) scale.floatValue else balloonScale.floatValue
-                CompositionLocalProvider(LocalBalloonScale provides bs, LocalHiddenBalloonLabels provides hiddenLabels.value) {
+                CompositionLocalProvider(
+                    LocalBalloonScale provides bs,
+                    LocalBalloonOpacity provides balloonOpacity.floatValue,
+                    LocalHiddenBalloonLabels provides hiddenLabels.value,
+                    LocalBalloonOutset provides onBalloonOutset,
+                ) {
                     CharacterBalloon(scopeId, controller, balloonSkin)
                 }
             }
@@ -206,7 +222,8 @@ class CharacterWindow(
             p.height = height
             if (view.isAttachedToWindow) windowManager.updateViewLayout(view, p)
             // 横や下に置くバルーンは、自分の大きさで位置が変わる
-            if (view === balloonView && controller.state.value.characters[scopeId]?.balloonAlign != null) placeBalloon()
+            // はみ出す分が変わったバルーンも置き直す
+            if (view === balloonView && (controller.state.value.characters[scopeId]?.balloonAlign != null || balloonOutset != BalloonOutset.ZERO)) placeBalloon()
             // サーフェスの大きさが決まったら（作り直したウィンドウでは最初は 0）、バルーンもその横・上に置き直す
             if (view === surfaceView) placeBalloon()
         }
@@ -282,8 +299,10 @@ class CharacterWindow(
         val c = controller.state.value.characters[scopeId]
         val pxPerImagePx = imageScale() * context.resources.displayMetrics.density
         val sw = if (params.width > 0) params.width else surfaceView.width
-        val bw = balloonParams.width.coerceAtLeast(0)
-        val bh = balloonParams.height.coerceAtLeast(0)
+        // 置き方はバルーンの画像の大きさで決める（はみ出す分を除く）
+        val out = balloonOutset
+        val bw = (balloonParams.width - out.left - out.right).coerceAtLeast(0)
+        val bh = (balloonParams.height - out.top - out.bottom).coerceAtLeast(0)
         val align = when (c?.balloonAlign) {
             "auto" -> {
                 val screenWidth = context.resources.displayMetrics.widthPixels
@@ -323,8 +342,9 @@ class CharacterWindow(
             else -> params.x to params.y + surfaceHeight
         }
         // 右と下へのずれ。右に寄せたウィンドウでは、右へずらすと端からの距離が減る
-        balloonParams.x = x + if (alignEnd) -ox else ox
-        balloonParams.y = y - oy
+        // はみ出す分は、ウィンドウを寄せた側と下の端の分だけ外へ出す
+        balloonParams.x = x + (if (alignEnd) -ox else ox) - (if (alignEnd) out.right else out.left)
+        balloonParams.y = y - oy - out.bottom
         if (add) {
             windowManager.addView(balloonView, balloonParams)
         } else if (balloonView.isAttachedToWindow) {
@@ -1018,7 +1038,7 @@ interface SurfaceTouchCallbacks {
 }
 
 /** Service の中で Compose を動かすための LifecycleOwner / SavedStateRegistryOwner。 */
-private class OverlayOwner : SavedStateRegistryOwner {
+internal class OverlayOwner : SavedStateRegistryOwner {
     private val registry = LifecycleRegistry(this)
     private val savedState = SavedStateRegistryController.create(this)
 
