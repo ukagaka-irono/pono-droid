@@ -327,6 +327,8 @@ if (!releaseSigningReady) {
 android {
     namespace = "net.pono.droid"
     compileSdk = 37
+    // shiori-yaya と同じ NDK。これが無いと、リリースで .so のデバッグ情報を落とせず（stripReleaseDebugSymbols）、APK がとても大きくなる
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
         applicationId = "net.pono.droid"
