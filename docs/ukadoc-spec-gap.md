@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1513・一部だけ 14・作る 0・作れない 185・ベースウェアのことではない 338
+全 2050 項目: 済み 1520・一部だけ 7・作る 0・作れない 185・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -70,11 +70,7 @@
 
 ## surfaces.txt
 
-済み 147 項目。
-
-### 🔧 一部だけ（2）
-- element\*,描画メソッド,ファイル名,X座標,Y座標(,オプション...) — --clipping / --alpha / --scaling と、動く surface*.png・element はある。--source（PSD のレイヤー・TIFF のページ・アイコン）は読まない。動く画像は SERIKO のコマより上に出る
-- auto — overlay として重ねる。--source の PSD などのレイヤーから描画方法を読む部分が無い
+済み 149 項目。
 
 ### ⛔ 作れない（6）
 - balloon.offsetx,座標 — サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
@@ -135,18 +131,14 @@
 
 ## プラグイン
 
-済み 15 項目。
-
-### 🔧 一部だけ（1）
-- homeurl,URL — pluginlist(…).homeurl で読める。プラグインのネットワーク更新はまだ無い
+済み 16 項目。
 
 ## さくらスクリプト
 
-済み 349 項目。
+済み 350 項目。
 
-### 🔧 一部だけ（4）
+### 🔧 一部だけ（3）
 - \_l[x,y] — 横書きのバルーンは座標どおり（px・em・lh・%・@ の相対・centerx / centery、\_l の後は左寄せ）。縦書きのバルーンは次の列にするだけ
-- 補足 — オプションと data:…;base64 は済み。残りは Windows の exe / dll のリソースと --source=（TIFF のページ・PSD のレイヤー・アイコン）で、Android では読めない
 - \!\...\] — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
 - sound play/load/option のオプション — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
 
@@ -192,11 +184,7 @@
 
 ## プロパティシステム
 
-済み 188 項目。
-
-### 🔧 一部だけ（2）
-- activeghostlist(ゴースト名/本体側名/パス).ext.拡張プロパティ名 — 読むと相手に property.get、書くと property.set を送る（\![get,property] など待てるところだけ。%property[…] はその場で答えが要るので空）
-- activeghostlist.index(ID).ext.拡張プロパティ名 — activeghostlist(…).ext と同じ（index(ID) で選んだゴーストに property.get / set。%property[…] では空）
+済み 190 項目。
 
 ### ⛔ 作れない（6）
 - headlinelist.count — ヘッドラインセンサーは作らない（決めたこと）
@@ -392,10 +380,7 @@
 
 ## そのほか（説明のページ）
 
-済み 5 項目。
-
-### 🔧 一部だけ（1）
-- シェル — surface*.png や element の APNG / GIF / WebP は動く（Android 9 から）。SERIKO のコマより上に出る
+済み 6 項目。
 
 ### ⛔ 作れない（1）
 - トランスレータ — MAKOTO（makoto.dll）は Windows の DLL

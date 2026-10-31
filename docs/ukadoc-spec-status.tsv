@@ -301,7 +301,7 @@ descript/plugin/descript-txt/craftman.md	DONE	craftman,作者名	descript.txt（
 descript/plugin/descript-txt/craftmanurl.md	DONE	craftmanurl,URL	アプリのプラグインの一覧の「作者のページ」と pluginlist(…).craftmanurl（http か https のときだけ）
 descript/plugin/descript-txt/craftmanw.md	DONE	craftmanw,作者名	descript.txt（name・id・filename は必須。\ や % で始まるタグは捨てる）を読む
 descript/plugin/descript-txt/filename.md	DONE	filename,dll	実体の DLL の名前で、動かすエンジンを選ぶ（yaya.dll・aya5.dll は YAYA、kagari.dll は Kagari、kawari.dll は華和梨、satori.dll は里々）。プラグインのフォルダの外は指せない
-descript/plugin/descript-txt/homeurl.md	PARTIAL	homeurl,URL	pluginlist(…).homeurl で読める。プラグインのネットワーク更新はまだ無い
+descript/plugin/descript-txt/homeurl.md	DONE	homeurl,URL	pluginlist(…).homeurl で読める。\![updateother,--plugin=名前] はこの URL からプラグインを更新し、更新したら読み込み直す
 descript/plugin/descript-txt/id.md	DONE	id,ID	descript.txt（name・id・filename は必須。\ や % で始まるタグは捨てる）を読む
 descript/plugin/descript-txt/index.md	DONE	descript.txt	descript.txt（name・id・filename は必須。\ や % で始まるタグは捨てる）を読む
 descript/plugin/descript-txt/introduction_descript.txt.md	DONE	descript.txt（Pluginの）	descript.txt（name・id・filename は必須。\ や % で始まるタグは捨てる）を読む
@@ -362,7 +362,7 @@ descript/shell-surfaces/surface-brace/caption_surfacebraceid.md	DONE	surface\*�
 descript/shell-surfaces/surface-brace/caption_z-axis.md	DONE	各要素の上下構造	着せ替えはもとのアニメーション番号の位置に重ね、background のアニメーションの当たり判定は土台の後に見る
 descript/shell-surfaces/surface-brace/collision-star.md	DONE	collision\*,始点X,始点Y,終点X,終点Y,ID	矩形の当たり判定
 descript/shell-surfaces/surface-brace/collisionex-star.md	DONE	collisionex\*,ID,タイプ,座標1,座標2...	rect / ellipse / circle / polygon / region（画像の指定色の領域。領域反転も）
-descript/shell-surfaces/surface-brace/element-star.md	PARTIAL	element\*,描画メソッド,ファイル名,X座標,Y座標(,オプション...)	--clipping / --alpha / --scaling と、動く surface*.png・element はある。--source（PSD のレイヤー・TIFF のページ・アイコン）は読まない。動く画像は SERIKO のコマより上に出る
+descript/shell-surfaces/surface-brace/element-star.md	DONE	element\*,描画メソッド,ファイル名,X座標,Y座標(,オプション...)	--clipping / --alpha / --scaling と --source（PSD のレイヤーとグループ・TIFF のページ・ICO と exe / dll のアイコン）。動く surface*.png・element（APNG / GIF / WebP、Android 9 から）も、書いた順のとおり SERIKO のコマと重ねる
 descript/shell-surfaces/surface-brace/h-animationinterval/always.md	DONE	always	実装済み
 descript/shell-surfaces/surface-brace/h-animationinterval/bind.md	DONE	bind	実装済み
 descript/shell-surfaces/surface-brace/h-animationinterval/endtalk.md	DONE	endtalk	実装済み
@@ -381,7 +381,7 @@ descript/shell-surfaces/surface-brace/h-drowmethod/add.md	DONE	add	実装済み
 descript/shell-surfaces/surface-brace/h-drowmethod/alternativestart.md	DONE	alternativestart,(ID1,ID2...)	実装済み
 descript/shell-surfaces/surface-brace/h-drowmethod/alternativestop.md	DONE	alternativestop,(ID1,ID2...)	書いた番号を全部止める
 descript/shell-surfaces/surface-brace/h-drowmethod/asis.md	DONE	asis	実装済み
-descript/shell-surfaces/surface-brace/h-drowmethod/auto.md	PARTIAL	auto	overlay として重ねる。--source の PSD などのレイヤーから描画方法を読む部分が無い
+descript/shell-surfaces/surface-brace/h-drowmethod/auto.md	DONE	auto	overlay として重ねる。--source で PSD のレイヤーを選んだときは、そのレイヤーの描画モード（乗算・スクリーン・オーバーレイなど）で重ねる
 descript/shell-surfaces/surface-brace/h-drowmethod/base.md	DONE	base	土台を替え、当たり判定もそのサーフェスのものを使う
 descript/shell-surfaces/surface-brace/h-drowmethod/bind.md	DONE	bind	実装済み
 descript/shell-surfaces/surface-brace/h-drowmethod/blend-add-fast.md	DONE	blend-add-fast	Blend.apply（W3C の式。-fast は下の絵の透明度を変えない）
@@ -619,9 +619,9 @@ list/plugin-event/plugin-event/property.get.md	DONE	property.get	pluginlist(…)
 list/plugin-event/plugin-event/property.set.md	DONE	property.set	pluginlist(…).ext.名前 に書くときに送る（204 か 200 なら成功）
 list/plugin-event/plugin-event/version.md	DONE	version	読み込みの直後に GET で送る。答えの Charset を以後の要求の文字コードにする（無ければ Shift_JIS）
 list/propertysystem/index.md	NA	プロパティシステム	目次のページ
-list/propertysystem/property-system/activeghostlist-.ext.md	PARTIAL	activeghostlist(ゴースト名/本体側名/パス).ext.拡張プロパティ名	読むと相手に property.get、書くと property.set を送る（\![get,property] など待てるところだけ。%property[…] はその場で答えが要るので空）
+list/propertysystem/property-system/activeghostlist-.ext.md	DONE	activeghostlist(ゴースト名/本体側名/パス).ext.拡張プロパティ名	読むと相手に property.get、書くと property.set を送る。\![get,property] も %property[…] も答えを待つ（%property[…] は 5 秒まで）
 list/propertysystem/property-system/activeghostlist.current.md	DONE	activeghostlist.current.汎用プロパティ名	自分を返す
-list/propertysystem/property-system/activeghostlist.index-ID-.ext.md	PARTIAL	activeghostlist.index(ID).ext.拡張プロパティ名	activeghostlist(…).ext と同じ（index(ID) で選んだゴーストに property.get / set。%property[…] では空）
+list/propertysystem/property-system/activeghostlist.index-ID-.ext.md	DONE	activeghostlist.index(ID).ext.拡張プロパティ名	activeghostlist(…).ext と同じ（index(ID) で選んだゴーストに property.get / set。%property[…] も 5 秒まで答えを待つ）
 list/propertysystem/property-system/activeghostlist.index-ID.md	DONE	activeghostlist.index(ID).汎用プロパティ名	動いているゴーストの並びから選ぶ
 list/propertysystem/property-system/activeghostlist.md	DONE	activeghostlist(ゴースト名/本体側名/パス).汎用プロパティ名	listProperty で (名前/本体側名/パス) を選ぶ
 list/propertysystem/property-system/balloonlist.count.md	DONE	balloonlist.count	実装済み
@@ -861,7 +861,7 @@ list/sakura-script/balloon-text/index.md	NA	バルーン、テキストコマン
 list/sakura-script/balloon-text/n-2.md	DONE	\n[パーセント]	実装済み
 list/sakura-script/balloon-text/n-half.md	DONE	\n[half]	実装済み
 list/sakura-script/balloon-text/n.md	DONE	\n	実装済み
-list/sakura-script/balloon-text/note-1.md	PARTIAL	補足	オプションと data:…;base64 は済み。残りは Windows の exe / dll のリソースと --source=（TIFF のページ・PSD のレイヤー・アイコン）で、Android では読めない
+list/sakura-script/balloon-text/note-1.md	DONE	補足	オプションと data:…;base64、exe / dll のアイコンのリソース（\_b のファイル名の後の数）と --source=（TIFF のページ・PSD のレイヤー・アイコン）も読む
 list/sakura-script/choice-marker/f-anchorcolor-f-anchorbrushcolor.md	DONE	\f[anchorcolor,色指定]もしくは\f[anchorbrushcolor,色指定]	実装済み
 list/sakura-script/choice-marker/f-anchorfontcolor.md	DONE	\f[anchorfontcolor,色指定]	実装済み
 list/sakura-script/choice-marker/f-anchormethod.md	DONE	\f[anchormethod,描画方法]	バルーンの blendmethod と同じく、SetROP2 のモード名を近い重ね方（反転・明るく・暗く）にして塗る。default で既定に戻す
@@ -1954,7 +1954,7 @@ manual/directory.md	NA	全体の構成	フォルダの構成の説明
 manual/ghost.md	DONE	ゴースト	thumbnail.png（ghost/master。アプリのゴーストの一覧に出す）・*.ico（descript.txt の icon。常駐の通知）・ai0.png など（AI グラフの背景）を使う。ai0_dark.png は、アプリがいつも明るい画面なので使わない（shiori.logo.file と同じ）
 manual/install.md	DONE	インストール	.nar（zip）のインストール。lzh・cab・自己解凍 exe は対象外
 manual/owner-draw-menu.md	DONE	オーナードローメニュー	メニューはバルーンに出す。絵の指定は決めたとおり作らない
-manual/shell.md	PARTIAL	シェル	surface*.png や element の APNG / GIF / WebP は動く（Android 9 から）。SERIKO のコマより上に出る
+manual/shell.md	DONE	シェル	surface*.png や element の APNG / GIF / WebP は動く（Android 9 から）。SERIKO のコマと書いた順のとおりに重なる
 manual/translator.md	IMPOSSIBLE	トランスレータ	MAKOTO（makoto.dll）は Windows の DLL
 manual/update.md	DONE	ネットワーク更新	delete.txt と delete1.txt などの delete[数字].txt を順に読む（更新とインストールの後）
 memo/memo.md	NA	メモ	ベースウェアの比較などのメモ
