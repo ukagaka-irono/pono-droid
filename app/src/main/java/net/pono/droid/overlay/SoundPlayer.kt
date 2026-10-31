@@ -226,6 +226,8 @@ class SoundPlayer(
                 }
             }
             player.setOnCompletionListener {
+                // 読めずにエラーで片付けた音（エラーの後にも終わりの知らせが来る）は、ループも OnSoundStop もしない
+                if (sounds[file.path] !== sound) return@setOnCompletionListener
                 if (sound.loop) {
                     // MediaPlayer の isLooping では頭に戻ったことが分からないので、自分で頭に戻す
                     onLoop(file)
