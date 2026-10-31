@@ -50,3 +50,9 @@
 [submodule "shiori-yaya/src/main/cpp/saori/saori-pie-chart"]
 	path = shiori-yaya/src/main/cpp/saori/saori-pie-chart
 	url = https://github.com/tukinami/saori-pie-chart.git
+[submodule "shiori-yaya/src/main/cpp/minato"]
+	path = shiori-yaya/src/main/cpp/minato
+	url = https://github.com/mizuki-yura/minato.git
+[submodule "shiori-yaya/src/main/cpp/pasta"]
+	path = shiori-yaya/src/main/cpp/pasta
+	url = https://github.com/ekicyou/pasta.git

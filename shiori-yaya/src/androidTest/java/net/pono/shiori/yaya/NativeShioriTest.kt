@@ -389,6 +389,38 @@ class NativeShioriTest {
         assertFalse(evil.exists())
     }
 
+    /** 湊（minato）。config.toml と talks/main.mnt を読み、OnBoot のトークが返る */
+    @Test
+    fun minatoDictionary() {
+        val dir = File(root, "minato").apply { deleteRecursively(); mkdirs() }
+        File(dir, "config.toml").writeText("[characters]\n\"湊\" = \"\\\\0\"\n", Charsets.UTF_8)
+        File(dir, "talks").mkdirs()
+        File(dir, "talks/main.mnt").writeText("OnBoot => {\n    湊: こんにちは、湊です。\n}\n", Charsets.UTF_8)
+        assertEquals(ShioriEngine.MINATO, ShioriEngine.forGhost("shiori.dll", dir))
+        val value = request(ShioriEngine.MINATO, dir, Charsets.UTF_8).orEmpty()
+        assertTrue(value, value.contains("こんにちは、湊です。"))
+    }
+
+    /** pasta。pasta.toml と dic の .pasta を読み（Lua は PUC Lua 5.4）、OnBoot のシーンが返る */
+    @Test
+    fun pastaDictionary() {
+        val dir = File(root, "pasta").apply { deleteRecursively(); mkdirs() }
+        File(dir, "pasta.toml").writeText(
+            "[loader]\npasta_patterns = [\"dic/*.pasta\"]\n\n[logging]\nfile_path = \"profile/pasta/logs/pasta.log\"\nlevel = \"debug\"\n\n" +
+                "[actor.\"女の子\"]\nspot = 0\n",
+            Charsets.UTF_8,
+        )
+        File(dir, "dic").mkdirs()
+        File(dir, "dic/boot.pasta").writeText("＊OnBoot\n　女の子：やっほー、今日もよろしくね。\n", Charsets.UTF_8)
+        assertEquals(ShioriEngine.PASTA, ShioriEngine.forGhost("shiori.dll", dir))
+        val value = request(ShioriEngine.PASTA, dir, Charsets.UTF_8).orEmpty()
+        // 失敗したら pasta のログも見せる
+        val log = File(dir, "profile/pasta/logs").listFiles()?.joinToString("\n") { f ->
+            f.readLines().filter { it.startsWith("20") }.joinToString("\n") { it.take(400) }
+        }
+        assertTrue("$value\n$log", value.contains("やっほー"))
+    }
+
     /** 内蔵 SAORI（SAORI over DirectSSTP）。辞書が internal_* を呼ぶと、setSaoriHandler の先に要求が届いて答えが戻る */
     @Test
     fun internalSaoriFromDictionaries() {

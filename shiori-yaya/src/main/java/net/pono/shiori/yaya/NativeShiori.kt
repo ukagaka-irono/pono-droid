@@ -67,12 +67,38 @@ internal object KagariNative : NativeBinding {
     external override fun unload(id: Long): Boolean
 }
 
+internal object MinatoNative : NativeBinding {
+    init {
+        System.loadLibrary("minato")
+    }
+
+    external override fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray, readableDirs: ByteArray): Long
+
+    external override fun request(id: Long, request: ByteArray): ByteArray?
+
+    external override fun unload(id: Long): Boolean
+}
+
+internal object PastaNative : NativeBinding {
+    init {
+        System.loadLibrary("pasta")
+    }
+
+    external override fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray, readableDirs: ByteArray): Long
+
+    external override fun request(id: Long, request: ByteArray): ByteArray?
+
+    external override fun unload(id: Long): Boolean
+}
+
 /** pono-droid で動かせる SHIORI */
 enum class ShioriEngine(internal val binding: () -> NativeBinding) {
     YAYA({ YayaNative }),
     SATORI({ SatoriNative }),
     KAWARI({ KawariNative }),
     KAGARI({ KagariNative }),
+    MINATO({ MinatoNative }),
+    PASTA({ PastaNative }),
     ;
 
     companion object {
@@ -82,6 +108,8 @@ enum class ShioriEngine(internal val binding: () -> NativeBinding) {
             "satori.dll" to SATORI,
             "kawari.dll" to KAWARI, "kawari8.dll" to KAWARI,
             "kagari.dll" to KAGARI,
+            "minato.dll" to MINATO,
+            "pasta.dll" to PASTA,
         )
 
         /**
@@ -96,6 +124,8 @@ enum class ShioriEngine(internal val binding: () -> NativeBinding) {
                 has("satori_conf.txt") || masterDir.list()?.any { it.startsWith("dic") && it.endsWith(".txt") && has("satori_savedata.txt") } == true -> SATORI
                 has("kawarirc.kis") || has("kawari.ini") -> KAWARI
                 has("index.lua") -> KAGARI
+                has("config.toml") && has("talks/main.mnt") -> MINATO
+                has("pasta.toml") -> PASTA
                 else -> null
             }
         }

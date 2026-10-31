@@ -16,13 +16,13 @@ ukagaka-saori	tukinami/saori-japanese-gengou	Rust	MIT	DONE	ソースから libsa
 ukagaka-shiori	YAYA-shiori/yaya-shiori	C++	BSD-3-Clause	DONE	SHIORI として動く（shiori-yaya）
 ukagaka-shiori	ukatech/satoriya-shiori	C++	BSD-2-Clause	DONE	SHIORI として動く（shiori-yaya）
 ukagaka-shiori	YAYA-shiori/yaya-dic	None	Unlicense	DONE	YAYA の辞書（データ）。YAYA で動く
-ukagaka-shiori	ekicyou/pasta	Rust	MIT	BUILD	Rust＋Lua の SHIORI。元のソースから Android 用に作る
+ukagaka-shiori	ekicyou/pasta	Rust	MIT	DONE	SHIORI として動く（shiori-yaya の libpasta.so。shiori4 の版 3 の口）。Lua は LuaJIT の代わりに PUC Lua 5.4（LUA_UCID）で、LuaJIT の FFI・jit・bit は使えない（決めたこと）。descript の pasta.dll か pasta.toml で選ぶ。実機で確かめた
 ukagaka-shiori	Tatakinov/kagari_shiori	C++	MIT	DONE	SHIORI として動く（shiori-yaya）
 ukagaka-shiori	nikolat/dnproxy	C#	CC0-1.0	IMPOSSIBLE	.NET Framework の SHIORI。Android では動かない（決めたこと）
 ukagaka-shiori	steve02081504/powershiori	PowerShell	None	IMPOSSIBLE	PowerShell の SHIORI。Android では動かない（決めたこと）
 ukagaka-shiori	cronfox/quickshiori	C++	NOASSERTION	BUILD	C++ と QuickJS の SHIORI。WinRT の部分を除いて作れるか調べる（ライセンスを確かめる）
 ukagaka-shiori	yanashi-interface/nashi-shiori-studio	C++	NOASSERTION	IMPOSSIBLE	WebView2（Windows）を使う開発環境。アーカイブ済み（決めたこと）
-ukagaka-shiori	mizuki-yura/minato	Rust	MIT	BUILD	Rust の SHIORI。元のソースから Android 用に作る
+ukagaka-shiori	mizuki-yura/minato	Rust	MIT	DONE	SHIORI として動く（shiori-yaya の libminato.so。Rust、Windows の winapi は src/main/rust/pono-winapi に替える）。descript の minato.dll か config.toml と talks/main.mnt で選ぶ。実機で確かめた
 ukagaka-shiori	ponapalt/aya5-shiori	C++	None	IMPOSSIBLE	ライセンスの書かれていないコードで、APK に入れられない（AYA5 の辞書は YAYA でおおむね動く）
 ukagaka-shiori	Tatakinov/kotori	Lua	NOASSERTION	BUILD	Lua の SHIORI。Lua の部品（conv・fh・lua-utf8・luachild など）を Android 用に用意する（ライセンスを確かめる）
 ukagaka-plugin	apxxxxxxe/Bouyomi	Go	None	IMPOSSIBLE	棒読みちゃん（Windows）と Windows の exe を使う（決めたこと）

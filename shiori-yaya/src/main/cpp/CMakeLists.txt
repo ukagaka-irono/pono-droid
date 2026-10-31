@@ -18,7 +18,9 @@ project(shiori LANGUAGES C CXX)
 set(PONO_WRAPPED_SYMBOLS
     dlopen dlsym dlclose fork vfork chdir system popen execv execve execvp execl execlp execle posix_spawn posix_spawnp
     open __open_2 openat __openat_2 fopen freopen opendir stat lstat access readlink
-    unlink remove rename mkdir rmdir utimes truncate mkstemp tmpfile)
+    unlink remove rename mkdir rmdir utimes truncate mkstemp tmpfile
+    # Rust の std（pasta など）が使うもの
+    unlinkat fstatat symlink)
 list(TRANSFORM PONO_WRAPPED_SYMBOLS PREPEND "-Wl,--wrap=")
 
 # 自前のコード（サンドボックスと JNI）。NDK 既定の警告（-Werror=format-security など）のまま
@@ -246,23 +248,39 @@ else()
     message(FATAL_ERROR "Rust SAORI: unknown ABI ${ANDROID_ABI}")
 endif()
 
-# [crate] は Cargo.toml の package の名前、[lib] は lib の名前（lib<名前>.a になる）
-function(pono_rust_saori target crate lib)
-    set(dir ${RUST_SAORI_DIR}/${crate})
+# cargo に NDK の clang を渡す（C のソースを持つ crate の cc と、cdylib を持つ crate のリンク）
+string(REPLACE "-" "_" RUST_TARGET_ENV ${RUST_TARGET})
+string(TOUPPER ${RUST_TARGET_ENV} RUST_TARGET_ENV_UPPER)
+set(PONO_CARGO_ENV
+    CARGO_TARGET_DIR=${RUST_TARGET_DIR}
+    CC_${RUST_TARGET_ENV}=${CMAKE_C_COMPILER}
+    # LUA_UCID: pasta の Lua（mlua の vendored）で、名前に UTF-8 を許す（pasta は辞書を日本語の名前の Lua に変える）
+    "CFLAGS_${RUST_TARGET_ENV}=--target=${CMAKE_C_COMPILER_TARGET} -DLUA_UCID"
+    AR_${RUST_TARGET_ENV}=${CMAKE_AR}
+    CARGO_TARGET_${RUST_TARGET_ENV_UPPER}_LINKER=${CMAKE_C_COMPILER}
+    CARGO_TARGET_${RUST_TARGET_ENV_UPPER}_RUSTFLAGS=-Clink-arg=--target=${CMAKE_C_COMPILER_TARGET})
+
+# [dir] の Cargo.toml を cargo で作り、lib<[lib]>.a を [target]_cargo の出力にする。[ARGN] は cargo build に足す引数（-p など）
+function(pono_cargo_archive target dir lib)
     set(archive ${RUST_TARGET_DIR}/${RUST_TARGET}/release/lib${lib}.a)
-    file(GLOB_RECURSE sources CONFIGURE_DEPENDS ${dir}/src/*.rs)
+    file(GLOB_RECURSE sources CONFIGURE_DEPENDS ${dir}/*)
     add_custom_command(
         OUTPUT ${archive}
-        COMMAND ${CMAKE_COMMAND} -E env CARGO_TARGET_DIR=${RUST_TARGET_DIR}
-            ${CARGO} build --release --locked --quiet --target ${RUST_TARGET} --manifest-path ${dir}/Cargo.toml
-        DEPENDS ${sources} ${dir}/Cargo.toml ${dir}/Cargo.lock
-        COMMENT "cargo build ${crate} (${RUST_TARGET})"
+        COMMAND ${CMAKE_COMMAND} -E env ${PONO_CARGO_ENV}
+            ${CARGO} build --release --locked --quiet --target ${RUST_TARGET} --manifest-path ${dir}/Cargo.toml ${ARGN}
+        DEPENDS ${sources}
+        COMMENT "cargo build ${dir} (${RUST_TARGET})"
         VERBATIM)
     add_custom_target(${target}_cargo DEPENDS ${archive})
-    add_library(${target} SHARED shim/pono_saori_rust.cpp)
     add_dependencies(${target} ${target}_cargo)
     # Rust の std が使うもの（cargo rustc -- --print native-static-libs の -ldl -llog -lunwind -lm -lc）
     target_link_libraries(${target} PRIVATE ${archive} dl unwind m)
+endfunction()
+
+# [crate] は Cargo.toml の package の名前、[lib] は lib の名前（lib<名前>.a になる）
+function(pono_rust_saori target crate lib)
+    add_library(${target} SHARED shim/pono_saori_rust.cpp)
+    pono_cargo_archive(${target} ${RUST_SAORI_DIR}/${crate} ${lib})
     pono_saori_library(${target})
 endfunction()
 
@@ -272,3 +290,16 @@ pono_rust_saori(saori_resizedpngmini saori-resized-png-mini resizedpngmini)
 pono_rust_saori(saori_qrcode saori-qrcode saori_qrcode)
 pono_rust_saori(saori_resizedpng saori-resized-png resizedpng)
 pono_rust_saori(saori_piechart saori-pie-chart piechart)
+
+# ---- Rust の SHIORI ----
+# Gradle（prepareRustShioriSources）が RUST_SHIORI_DIR に写したものを、cargo で staticlib にしてから lib<名前>.so に入れる。
+# 入口は jni_<名前>.cpp
+#   libminato.so 湊（minato。winapi は src/main/rust/pono-winapi に替える）
+#   libpasta.so  pasta（Lua は PUC Lua 5.4。shiori4 の版 3 の口を使う）
+add_library(minato SHARED jni_minato.cpp)
+pono_cargo_archive(minato ${RUST_SHIORI_DIR}/minato minato)
+pono_shiori_library(minato)
+
+add_library(pasta SHARED jni_pasta.cpp)
+pono_cargo_archive(pasta ${RUST_SHIORI_DIR}/pasta pasta -p pasta_shiori)
+pono_shiori_library(pasta)

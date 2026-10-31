@@ -23,6 +23,23 @@ fun patchSource(text: String, name: String, needle: String, replacement: String,
     return text.replace(n, r)
 }
 
+/**
+ * [out] の中を [files]（相対パス → 中身）と同じにする。中身の変わらないファイルは書き直さず（cargo が全部作り直さないように）、
+ * [files] に無いファイルは消す
+ */
+fun syncFiles(out: File, files: Map<String, ByteArray>) {
+    files.forEach { (rel, bytes) ->
+        val f = out.resolve(rel)
+        if (!f.isFile || !f.readBytes().contentEquals(bytes)) f.apply { parentFile.mkdirs() }.writeBytes(bytes)
+    }
+    if (!out.isDirectory) return
+    out.walkBottomUp().forEach { f ->
+        val rel = f.relativeTo(out).invariantSeparatorsPath
+        if (f.isFile && rel !in files) f.delete()
+        if (f.isDirectory && f != out && f.listFiles().isNullOrEmpty()) f.delete()
+    }
+}
+
 /** [needle] の [indices] 番目（0 から）の出現だけを [replacement] にする。全部で [total] 回あるはず */
 fun patchOccurrences(text: String, name: String, needle: String, replacement: String, total: Int, indices: Set<Int>): String {
     val parts = text.split(needle)
@@ -261,16 +278,45 @@ val prepareRustSaoriSources = tasks.register("prepareRustSaoriSources") {
             files["$dest/pono_entry.rs"] = rustDir.file("pono_entry.rs").asFile.readBytes()
             rustDir.dir(name).asFile.listFiles()!!.forEach { files["$name/${it.name}"] = it.readBytes() }
         }
-        files.forEach { (rel, bytes) ->
-            val f = out.resolve(rel)
-            if (!f.isFile || !f.readBytes().contentEquals(bytes)) f.apply { parentFile.mkdirs() }.writeBytes(bytes)
+        syncFiles(out, files)
+    }
+}
+
+// ---- Rust の SHIORI ----
+// 湊（minato）: Windows の winapi（GlobalAlloc と LoadLibraryW）だけを使うので、src/main/rust/pono-winapi（同じ名前の関数を
+// libc で作ったもの）に替える。ソースはそのまま（構文チェッカーの src/bin は写さない）。
+// pasta: SHIORI に要る 4 つの crate を写し、ワークスペースの Cargo.toml を src/main/rust/pasta のもの（Lua を LuaJIT から
+// PUC Lua 5.4 にしたもの）に替える。LuaJIT にしか無いライブラリ（jit・ffi・bit）の指定は、何も開かないことにする
+val minatoDir = layout.projectDirectory.dir("src/main/cpp/minato")
+val pastaDir = layout.projectDirectory.dir("src/main/cpp/pasta")
+val pastaCrates = listOf("pasta_core", "pasta_dsl", "pasta_lua", "pasta_shiori")
+val rustShioriGeneratedDir = layout.buildDirectory.dir("generated/rust-shiori")
+val prepareRustShioriSources = tasks.register("prepareRustShioriSources") {
+    val minatoSources = minatoDir.asFileTree.matching { include("src/**"); exclude("src/bin/**") }
+    val pastaSources = pastaDir.asFileTree.matching { pastaCrates.forEach { include("crates/$it/**"); exclude("crates/$it/tests/**") } }
+    inputs.files(minatoSources, pastaSources)
+    inputs.files(rustDir.asFileTree.matching { include("minato/**", "pono-winapi/**", "pasta/**") })
+    outputs.dir(rustShioriGeneratedDir)
+    doLast {
+        val files = sortedMapOf<String, ByteArray>()
+        fun add(prefix: String, base: File, tree: FileTree) = tree.forEach { files["$prefix/${it.relativeTo(base).invariantSeparatorsPath}"] = it.readBytes() }
+        add("minato", minatoDir.asFile, minatoSources)
+        add("minato", rustDir.dir("minato").asFile, rustDir.dir("minato").asFileTree)
+        add("pono-winapi", rustDir.dir("pono-winapi").asFile, rustDir.dir("pono-winapi").asFileTree)
+        add("pasta", pastaDir.asFile, pastaSources)
+        add("pasta", rustDir.dir("pasta").asFile, rustDir.dir("pasta").asFileTree)
+        fun patch(rel: String, needle: String, replacement: String) {
+            val text = String(files.getValue(rel), Charsets.UTF_8)
+            files[rel] = patchSource(text, rel, needle, replacement).toByteArray(Charsets.UTF_8)
         }
-        // 元から無くなったファイルは消す（cargo の target は別の所）
-        out.walkBottomUp().forEach { f ->
-            val rel = f.relativeTo(out).invariantSeparatorsPath
-            if (f.isFile && rel !in files) f.delete()
-            if (f.isDirectory && f != out && f.listFiles().isNullOrEmpty()) f.delete()
-        }
+        // SHIORI の .so に入れるので staticlib にする
+        patch("pasta/crates/pasta_shiori/Cargo.toml", "crate-type = [\"cdylib\", \"rlib\"]", "crate-type = [\"staticlib\"]")
+        patch("pasta/crates/pasta_lua/src/runtime/runtime_config.rs", "\"std_jit\" => Ok(StdLib::JIT),", "\"std_jit\" => Ok(StdLib::NONE),")
+        patch("pasta/crates/pasta_lua/src/runtime/runtime_config.rs", "\"std_ffi\" => Ok(StdLib::FFI),", "\"std_ffi\" => Ok(StdLib::NONE),")
+        patch("pasta/crates/pasta_lua/src/runtime/runtime_config.rs", "\"std_bit\" => Ok(StdLib::BIT),", "\"std_bit\" => Ok(StdLib::NONE),")
+        // LuaJIT の package.loaders は、Lua 5.4 では package.searchers（中身の並びは同じ）
+        patch("pasta/crates/pasta_lua/src/runtime/searcher.rs", "let loaders: Table = package.get(\"loaders\")?;", "let loaders: Table = package.get(\"searchers\")?;")
+        syncFiles(rustShioriGeneratedDir.get().asFile, files)
     }
 }
 
@@ -280,12 +326,12 @@ val cargoPath: String = System.getenv("CARGO")
         .takeIf { it.isFile }?.absolutePath
     ?: "cargo"
 
-// Rust の SAORI が Android に入れる crate（proc-macro と build 用を除く）のライセンスの文面を src/main/rust/licenses.txt にまとめる。
+// Rust の SAORI と SHIORI が Android に入れる crate（proc-macro と build 用を除く）のライセンスの文面を src/main/rust/licenses.txt にまとめる。
 // アプリのライセンス表記（:app:generateLicenseAssets）が読む。Cargo.lock を変えたら、一度ビルドして crate を落としてから手で回す。
 // 複数のライセンスから選べる crate は MIT（無ければ BSD・Zlib・CC0 の順）の文面を使う。文面のファイルが無い MIT の crate は、
 // Cargo.toml の authors で MIT の定型文を書く
 tasks.register("collectRustSaoriLicenses") {
-    dependsOn(prepareRustSaoriSources)
+    dependsOn(prepareRustSaoriSources, prepareRustShioriSources)
     doLast {
         fun cargo(vararg args: String, dir: File): String {
             val p = ProcessBuilder(listOf(cargoPath) + args).directory(dir).redirectError(ProcessBuilder.Redirect.INHERIT).start()
@@ -293,19 +339,25 @@ tasks.register("collectRustSaoriLicenses") {
             if (p.waitFor() != 0) throw GradleException("cargo ${args.first()} failed in $dir")
             return out
         }
-        val preference = listOf("MIT", "BSD-3-Clause", "BSD-2-Clause", "Zlib", "CC0-1.0", "Unlicense", "Apache-2.0")
+        val preference = listOf("MIT", "BSD-3-Clause", "BSD-2-Clause", "Zlib", "CC0-1.0", "Unlicense", "Unicode-3.0", "Apache-2.0")
         val keywords = mapOf(
             "MIT" to "MIT", "BSD-3-Clause" to "BSD", "BSD-2-Clause" to "BSD", "Zlib" to "ZLIB", "CC0-1.0" to "CC0",
-            "Unlicense" to "UNLICENSE", "Apache-2.0" to "APACHE",
+            "Unlicense" to "UNLICENSE", "Unicode-3.0" to "UNICODE", "Apache-2.0" to "APACHE",
         )
         // 名前 版 → ライセンス・URL・文面
         val result = sortedMapOf<String, String>()
-        for (name in rustSaoris) {
-            val dir = rustSaoriGeneratedDir.get().asFile.resolve(name)
+        // ワークスペース → cargo tree に足す引数
+        val workspaces = rustSaoris.map { rustSaoriGeneratedDir.get().asFile.resolve(it) to emptyList<String>() } + listOf(
+            rustShioriGeneratedDir.get().asFile.resolve("minato") to emptyList(),
+            rustShioriGeneratedDir.get().asFile.resolve("pasta") to listOf("-p", "pasta_shiori"),
+        )
+        for ((dir, extra) in workspaces) {
+            // 自分たちのもの（ワークスペースの中と path の依存。pono-winapi など）は除く。git の依存は残す
             val used = cargo(
-                "tree", "--target", "aarch64-linux-android", "-e", "normal,no-proc-macro", "--prefix", "none",
-                "--locked", "--offline", "--format", "{p}", dir = dir,
-            ).lines().map { it.removeSuffix(" (*)").split(" ") }.filter { it.size >= 2 && it[0] != name }
+                *(listOf("tree", "--target", "aarch64-linux-android", "-e", "normal,no-proc-macro", "--prefix", "none",
+                    "--locked", "--offline", "--format", "{p}") + extra).toTypedArray(), dir = dir,
+            ).lines().map { it.removeSuffix(" (*)").split(" ") }
+                .filter { it.size == 2 || (it.size >= 3 && it[2].startsWith("(https://")) }
                 .map { it[0] to it[1].removePrefix("v") }.toSet()
             @Suppress("UNCHECKED_CAST")
             val packages = (groovy.json.JsonSlurper().parseText(
@@ -314,14 +366,28 @@ tasks.register("collectRustSaoriLicenses") {
             for (pkg in packages) {
                 val key = pkg["name"] as String to pkg["version"] as String
                 if (key !in used) continue
+                // license が無く license-file だけの crate（seahorse）は、その文面をそのまま載せる
+                val licenseFile = (pkg["license_file"] as String?)?.let { File(File(pkg["manifest_path"] as String).parentFile, it) }
+                if (pkg["license"] == null && licenseFile != null && licenseFile.isFile) {
+                    val text = licenseFile.readText().replace("\r\n", "\n").trim()
+                    val label = if ("Permission is hereby granted, free of charge" in text) "MIT" else "See the license text"
+                    val url = (pkg["repository"] as String?) ?: "https://crates.io/crates/${key.first}"
+                    result["${key.first} ${key.second}"] = "License: $label\nURL: $url\n\n$text"
+                    continue
+                }
                 val expr = pkg["license"] as String? ?: throw GradleException("${key.first}: no license in Cargo.toml")
-                val options = expr.split(" OR ", "/").map { it.trim() }
-                val chosen = preference.firstOrNull { it in options } ?: throw GradleException("${key.first}: unknown license $expr")
+                // 「(A OR B) AND C」のように AND で並ぶものは、それぞれから 1 つ選んで全部の文面を載せる（encoding_rs など）
+                val chosenList = expr.split(" AND ").map { part ->
+                    val options = part.trim().removePrefix("(").removeSuffix(")").split(" OR ", "/").map { it.trim() }
+                    preference.firstOrNull { it in options } ?: throw GradleException("${key.first}: unknown license $expr")
+                }
+                val chosen = chosenList.joinToString(" AND ")
                 val crateDir = File(pkg["manifest_path"] as String).parentFile
                 val files = crateDir.listFiles()!!.filter { it.isFile && Regex("(?i)^(licen[cs]e|copying|unlicense)").containsMatchIn(it.name) }
-                val specific = files.filter { f -> keywords.getValue(chosen) in f.name.uppercase().replace("0BSD", "") }
                 val generic = files.filter { f -> keywords.values.none { it in f.name.uppercase() } }
-                val texts = (specific.ifEmpty { generic }).sortedBy { it.name }.map { it.readText().replace("\r\n", "\n").trim() }
+                val texts = chosenList.flatMap { one ->
+                    files.filter { f -> keywords.getValue(one) in f.name.uppercase().replace("0BSD", "") }.ifEmpty { generic }
+                }.distinct().sortedBy { it.name }.map { it.readText().replace("\r\n", "\n").trim() }
                 val notices = crateDir.listFiles()!!.filter { it.isFile && it.name.uppercase().startsWith("COPYRIGHT") }
                     .map { it.readText().replace("\r\n", "\n").trim() }
                 val text = when {
@@ -451,6 +517,7 @@ android {
                     "-DSATORI_GENERATED_DIR=${satoriGeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
                     "-DKAWARI_GENERATED_DIR=${kawariGeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
                     "-DRUST_SAORI_DIR=${rustSaoriGeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
+                    "-DRUST_SHIORI_DIR=${rustShioriGeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
                     // cargo の出力は ABI と debug / release で分けず 1 つにする（どれも --release で、target ごとに分かれる）
                     "-DRUST_TARGET_DIR=${layout.buildDirectory.dir("rust-target").get().asFile.absolutePath.replace('\\', '/')}",
                     "-DCARGO=${cargoPath.replace('\\', '/')}",
@@ -479,7 +546,7 @@ android {
 }
 
 tasks.matching { it.name.startsWith("configureCMake") || it.name.startsWith("buildCMake") }.configureEach {
-    dependsOn(convertYayaSources, convertSatoriSources, prepareKawariSources, generateCp932Table, prepareRustSaoriSources)
+    dependsOn(convertYayaSources, convertSatoriSources, prepareKawariSources, generateCp932Table, prepareRustSaoriSources, prepareRustShioriSources)
 }
 
 dependencies {

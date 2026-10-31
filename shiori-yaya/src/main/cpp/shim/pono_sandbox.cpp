@@ -43,6 +43,9 @@ int __real_stat(const char *path, struct stat *st);
 int __real_lstat(const char *path, struct stat *st);
 int __real_access(const char *path, int mode);
 int __real_unlink(const char *path);
+int __real_unlinkat(int dirfd, const char *path, int flags);
+int __real_fstatat(int dirfd, const char *path, struct stat *st, int flags);
+int __real_symlink(const char *target, const char *linkpath);
 int __real_remove(const char *path);
 int __real_rename(const char *from, const char *to);
 int __real_mkdir(const char *path, mode_t mode);
@@ -134,6 +137,19 @@ bool Allowed(const char *path, bool write, const char *what) {
         }
     }
     return true;
+}
+
+// [path] が、読み書きしてよいディレクトリへ行く途中のディレクトリ（その祖先）か。stat などで中身ではなく
+// あることだけを見るのは許す（pasta の glob はパターンの / から 1 段ずつ確かめるので、アプリの領域の
+// ディレクトリ自体も見る）
+bool OnPathToAllowed(const char *path) {
+    if (path == nullptr) return false;
+    std::string canon = Canonical(path);
+    std::lock_guard<std::mutex> guard(g_lock);
+    for (const std::string &a : g_allowed) {
+        if (Under(a, canon)) return true;
+    }
+    return false;
 }
 
 bool WritesWith(int flags) {
@@ -649,7 +665,7 @@ DIR *__wrap_opendir(const char *path) {
 }
 
 int __wrap_stat(const char *path, struct stat *st) {
-    if (!Allowed(path, false, "stat")) {
+    if (!OnPathToAllowed(path) && !Allowed(path, false, "stat")) {
         errno = EACCES;
         return -1;
     }
@@ -657,7 +673,7 @@ int __wrap_stat(const char *path, struct stat *st) {
 }
 
 int __wrap_lstat(const char *path, struct stat *st) {
-    if (!Allowed(path, false, "lstat")) {
+    if (!OnPathToAllowed(path) && !Allowed(path, false, "lstat")) {
         errno = EACCES;
         return -1;
     }
@@ -686,6 +702,34 @@ int __wrap_unlink(const char *path) {
         return -1;
     }
     return __real_unlink(path);
+}
+
+// Rust の std（pasta）が使う。openat と同じく、ディレクトリの fd からの相対パスは確かめられないので通さない
+int __wrap_unlinkat(int dirfd, const char *path, int flags) {
+    if (path == nullptr || (path[0] != '/' && dirfd != AT_FDCWD) || !Allowed(path, true, "unlinkat")) {
+        if (path != nullptr && path[0] != '/' && dirfd != AT_FDCWD) Denied("unlinkat (relative to fd)", path);
+        errno = EACCES;
+        return -1;
+    }
+    return __real_unlinkat(dirfd, path, flags);
+}
+
+int __wrap_fstatat(int dirfd, const char *path, struct stat *st, int flags) {
+    if (path == nullptr || (path[0] != '/' && dirfd != AT_FDCWD) || (!OnPathToAllowed(path) && !Allowed(path, false, "fstatat"))) {
+        if (path != nullptr && path[0] != '/' && dirfd != AT_FDCWD) Denied("fstatat (relative to fd)", path);
+        errno = EACCES;
+        return -1;
+    }
+    return __real_fstatat(dirfd, path, st, flags);
+}
+
+// リンクを作る場所だけを確かめる。リンクの先は、開くときに（Canonical で先をたどって）確かめる
+int __wrap_symlink(const char *target, const char *linkpath) {
+    if (!Allowed(linkpath, true, "symlink")) {
+        errno = EACCES;
+        return -1;
+    }
+    return __real_symlink(target, linkpath);
 }
 
 int __wrap_remove(const char *path) {

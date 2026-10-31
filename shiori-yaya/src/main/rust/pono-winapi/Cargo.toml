@@ -1,0 +1,10 @@
+# Windows の API の crate（winapi）の代わりに、Rust の SHIORI（minato）が使う分だけを Android の libc で用意する。
+# minato の Cargo.toml（src/main/rust/minato）が winapi = { path = "../pono-winapi" } として使う
+[package]
+name = "winapi"
+version = "0.3.9"
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"

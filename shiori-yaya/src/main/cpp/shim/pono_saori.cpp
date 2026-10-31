@@ -19,11 +19,25 @@ JavaVM *g_vm = nullptr;
 jclass g_bridge = nullptr;
 jmethodID g_request = nullptr;
 
+// SHIORI が自分で作ったスレッド（湊の SAORI の呼び出し）を JVM につないだもの。スレッドが終わるときに外す
+struct AttachedThread {
+    bool attached = false;
+    ~AttachedThread() {
+        if (attached && g_vm != nullptr) g_vm->DetachCurrentThread();
+    }
+};
+thread_local AttachedThread t_attached;
+
 JNIEnv *CurrentEnv() {
     if (g_vm == nullptr) return nullptr;
     JNIEnv *env = nullptr;
-    if (g_vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) return nullptr;
-    return env;
+    jint r = g_vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6);
+    if (r == JNI_EDETACHED) {
+        if (g_vm->AttachCurrentThread(&env, nullptr) != JNI_OK) return nullptr;
+        t_attached.attached = true;
+        return env;
+    }
+    return r == JNI_OK ? env : nullptr;
 }
 
 }  // namespace
