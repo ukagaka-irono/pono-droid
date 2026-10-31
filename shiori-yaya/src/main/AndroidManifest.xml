@@ -16,5 +16,10 @@
             android:name=".ShioriService3"
             android:exported="false"
             android:process=":shiori3" />
+        <!-- プラグイン（YAYA・Kagari などで書かれた PLUGIN/2.0）は、ゴーストとは別のプロセスにまとめて動かす -->
+        <service
+            android:name=".PluginService"
+            android:exported="false"
+            android:process=":plugin" />
     </application>
 </manifest>

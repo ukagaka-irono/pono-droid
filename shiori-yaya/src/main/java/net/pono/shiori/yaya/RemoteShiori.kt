@@ -1,5 +1,6 @@
 package net.pono.shiori.yaya
 
+import net.pono.baseware.plugin.PluginEngineFactory
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -114,6 +115,11 @@ class RemoteShiori(context: Context, private val engine: ShioriEngine, private v
          */
         fun factory(context: Context, slot: Int = 0) = ShioriFactory { shioriName, masterDir ->
             ShioriEngine.forGhost(shioriName, masterDir)?.let { RemoteShiori(context, it, slot) }
+        }
+
+        /** プラグインの実体（descript.txt の filename。yaya.dll・kagari.dll など）を :plugin のプロセスで動かす。未対応なら null */
+        fun pluginFactory(context: Context) = PluginEngineFactory { filename, dir ->
+            ShioriEngine.forGhost(filename, dir)?.let { RemoteShiori(context, it, ShioriService.PLUGIN_SLOT) }
         }
     }
 }

@@ -56,8 +56,12 @@ open class ShioriService : Service() {
         /** 同時に動かせるゴーストの数（SHIORI のプロセスの数） */
         const val SLOTS = 3
 
-        /** [slot] 番目（0 から）のプロセスのサービス */
+        /** プラグインを動かすプロセス（:plugin）の番号 */
+        const val PLUGIN_SLOT = -1
+
+        /** [slot] 番目（0 から）のプロセスのサービス。[PLUGIN_SLOT] ならプラグインのもの */
         fun forSlot(slot: Int): Class<out ShioriService> = when (slot) {
+            PLUGIN_SLOT -> PluginService::class.java
             1 -> ShioriService2::class.java
             2 -> ShioriService3::class.java
             else -> ShioriService::class.java
@@ -70,3 +74,6 @@ class ShioriService2 : ShioriService()
 
 /** 3体目のゴーストの SHIORI（:shiori3） */
 class ShioriService3 : ShioriService()
+
+/** プラグイン（:plugin）。プラグインごとに、そのフォルダの中だけを触れるようにして読み込む */
+class PluginService : ShioriService()

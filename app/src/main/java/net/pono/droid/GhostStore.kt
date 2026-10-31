@@ -1,5 +1,7 @@
 package net.pono.droid
 
+import net.pono.baseware.plugin.PluginRepository
+import net.pono.baseware.plugin.Plugin
 import android.provider.Settings
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
@@ -18,6 +20,9 @@ import java.io.File
 /** アプリ内のゴースト置き場（filesDir/ghost）とバルーン置き場（filesDir/balloon）。 */
 object GhostStore {
     fun repository(context: Context) = GhostRepository(File(context.filesDir, "ghost"))
+
+    /** プラグインの置き場（ゴーストの置き場の隣の plugin/。NarInstaller も同じところに入れる） */
+    fun plugins(context: Context) = PluginRepository(File(context.filesDir, "plugin"))
 
     /**
      * SAF で選んだ .nar を一時ファイルに写してから展開する。ゴーストかバルーンかは .nar の install.txt で決まる。
@@ -87,6 +92,7 @@ object GhostStore {
             NarInstaller.Type.GHOST -> Ghost(item.dir).let { g -> g.readmeText()?.let { g.name to it } }
             NarInstaller.Type.BALLOON -> Balloon(item.dir).let { b -> b.readmeText()?.let { b.name to it } }
             NarInstaller.Type.SHELL -> Shell.readmeOf(item.dir)?.let { Shell.nameOf(item.dir) to it }
+            NarInstaller.Type.PLUGIN -> Plugin(item.dir).let { p -> p.readmeText()?.let { p.name to it } }
             else -> null
         }
     }
@@ -97,6 +103,8 @@ object GhostStore {
      */
     suspend fun afterInstall(context: Context, result: NarInstaller.Result) {
         withContext(Dispatchers.IO) { readme(result) }?.let { (title, text) -> TextViewerActivity.start(context, title, text) }
+        // 動いているプラグインに知らせる（プラグインが入ったなら読み込み直す）
+        GhostOverlayService.pluginInstalled(result)
         val boot = result.bootGhost ?: return
         if (GhostOverlayService.runningGhosts.value.isEmpty() && Settings.canDrawOverlays(context)) GhostOverlayService.start(context, boot)
     }
@@ -107,6 +115,7 @@ object GhostStore {
             NarInstaller.Type.BALLOON -> "バルーン: ${Balloon(item.dir).name}"
             NarInstaller.Type.SHELL -> "シェル: ${item.name}"
             NarInstaller.Type.SUPPLEMENT -> "追加ファイル: ${item.name}"
+            NarInstaller.Type.PLUGIN -> "プラグイン: ${Plugin(item.dir).name}"
         }
     } + " をインストールしました"
 }

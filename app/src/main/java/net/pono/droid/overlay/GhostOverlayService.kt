@@ -1,5 +1,7 @@
 package net.pono.droid.overlay
 
+import net.pono.baseware.ghost.NarInstaller
+import net.pono.baseware.plugin.PluginHost
 import android.app.ActivityManager
 import android.app.KeyguardManager
 import android.app.Notification
@@ -104,6 +106,14 @@ class GhostOverlayService : LifecycleService() {
 
     /** ゴーストどうしをつなぐ（\![raiseother] や OnOtherGhost*） */
     private val hub = GhostHub()
+
+    /** インストール済みのプラグイン（:plugin のプロセスで動かす）。どのゴーストにも同じものを渡す */
+    private val pluginHost by lazy {
+        PluginHost(
+            GhostStore.plugins(this), hub, RemoteShiori.pluginFactory(this), lifecycleScope, GhostStore.repository(this),
+            log = { Log.i(TAG, it) },
+        )
+    }
 
     /** 動いているゴーストすべて */
     private val controllers: List<GhostController> get() = sessions.mapNotNull { it.controller }
@@ -350,6 +360,7 @@ class GhostOverlayService : LifecycleService() {
                 previous = previous,
                 hub = hub,
                 calledBy = calledBy,
+                plugins = pluginHost,
                 // 同時に動かすゴーストは、1体ずつ別の SHIORI のプロセスで
                 shioriFactory = RemoteShiori.factory(this@GhostOverlayService, slot),
                 scope = lifecycleScope,
@@ -1319,6 +1330,7 @@ class GhostOverlayService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        pluginHost.start()
         OverlaySettings.prefs(this).let {
             characterScale = OverlaySettings.characterScale(it)
             balloonScale = OverlaySettings.balloonScale(it)
@@ -1461,6 +1473,7 @@ class GhostOverlayService : LifecycleService() {
             runCatching { android.app.WallpaperManager.getInstance(this).removeOnColorsChangedListener(wallpaperListener) }
         }
         teardown()
+        pluginHost.stop()
         speech.shutdown()
         super.onDestroy()
     }
@@ -1641,6 +1654,12 @@ class GhostOverlayService : LifecycleService() {
 
         /** 動いているサービス（\![open,dialog,save] の保存先を見張るため） */
         private var instance: GhostOverlayService? = null
+
+        /** アプリの画面や共有から入れたものを、動いているプラグインに知らせる（プラグインなら読み込み直す） */
+        fun pluginInstalled(result: NarInstaller.Result) {
+            val items = result.installed
+            instance?.pluginHost?.installComplete(items.map { it.type.id }, items.map { it.name }, items.map { it.dir.absolutePath + "/" })
+        }
 
         /** 通知へのアクセスを許された・取り消された（[MediaListenerService] から） */
         fun onMediaAccessChanged() {
