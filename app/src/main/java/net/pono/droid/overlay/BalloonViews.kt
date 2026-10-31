@@ -1170,11 +1170,18 @@ private fun BalloonText(
 /** \_b の画像。[dpPerPx] は画像の 1px を何 dp で描くか。読めない・大きすぎる画像は出さない */
 @Composable
 internal fun BalloonPicture(path: String, opaque: Boolean, dpPerPx: Float, modifier: Modifier, options: BalloonImageOptions = BalloonImageOptions()) {
-    val bitmap by produceState<ImageBitmap?>(null, path, opaque, options.selfAlpha, options.clip) {
-        // 左上の色を透過色にする（opaque と --option=use_self_alpha なら抜かない）。PNG にアルファがあればそれを使う
+    val bitmap by produceState<ImageBitmap?>(null, path, opaque, options.selfAlpha, options.clip, options.source) {
+        // 左上の色を透過色にする（opaque と --option=use_self_alpha なら抜かない）。PNG にアルファがあればそれを使う。
+        // PSD・TIFF・ICO・EXE / DLL は --source= の 1 枚を、その画像のアルファで
         value = withContext(Dispatchers.IO) {
+            val file = java.io.File(path)
             val keep = opaque || options.selfAlpha
-            ImageTransparency.load(java.io.File(path), null, selfAlpha = if (keep) true else null, colorKey = !keep)?.let { clipped(it, options.clip) }?.asImageBitmap()
+            val bmp = if (options.source != null || net.pono.baseware.shell.SourceImages.isMultiSource(file)) {
+                ImageTransparency.loadSource(file, options.source)?.first
+            } else {
+                ImageTransparency.load(file, null, selfAlpha = if (keep) true else null, colorKey = !keep)
+            }
+            bmp?.let { clipped(it, options.clip) }?.asImageBitmap()
         }
     }
     val bmp = bitmap ?: return
@@ -1352,6 +1359,27 @@ object ImageTransparency {
             colorKey -> applyColorKey(bmp)
         }
         return bmp
+    }
+
+    /**
+     * 複数の絵を持つ画像（PSD のレイヤー・マルチページの TIFF・ICO・EXE / DLL のアイコン）から [source] の 1 枚を読む
+     * （SourceImages。無ければ既定の 1 枚）。透明度は画像のアルファのまま。位置や不透明度などは 2 つ目に返す
+     */
+    fun loadSource(file: java.io.File, source: String?): Pair<Bitmap, net.pono.baseware.shell.SourceImages.Picture>? {
+        val p = net.pono.baseware.shell.SourceImages.extract(file, source) ?: return null
+        val bmp = when (p) {
+            is net.pono.baseware.shell.SourceImages.Picture.Pixels ->
+                Bitmap.createBitmap(p.argb, p.width, p.height, Bitmap.Config.ARGB_8888)
+            is net.pono.baseware.shell.SourceImages.Picture.Encoded -> {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(p.bytes, 0, p.bytes.size, bounds)
+                val w = bounds.outWidth
+                val h = bounds.outHeight
+                if (w !in 1..MAX_SIDE || h !in 1..MAX_SIDE || w.toLong() * h > MAX_PIXELS) return null
+                BitmapFactory.decodeByteArray(p.bytes, 0, p.bytes.size, BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 })
+            }
+        } ?: return null
+        return bmp to p
     }
 
     /**

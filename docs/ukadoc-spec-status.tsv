@@ -233,7 +233,7 @@ descript/ghost/descript-txt/sakura.name.md	DONE	sakura.name,名前	sakuraName
 descript/ghost/descript-txt/sakura.name2.md	DONE	sakura.name2,名前	%selfname2
 descript/ghost/descript-txt/sakura.seriko.alignmenttodesktop.md	DONE	sakura.seriko.alignmenttodesktop,位置情報	ゴースト全体＜これ＜シェル全体＜シェルのスコープの順で起動時の吸着にする
 descript/ghost/descript-txt/sakura.seriko.defaultsurface.md	DONE	sakura.seriko.defaultsurface,数値	defaultSurface（シェルが先、次にゴースト）
-descript/ghost/descript-txt/seriko.alignmenttodesktop.md	PARTIAL	seriko.alignmenttodesktop,位置情報	書いてあればその吸着にする。どこにも書いていないときは、アプリの設定のキャラクター自由移動が常に制限なら仕様どおり bottom、ゴースト設定なら自由（決めたこと）。最初の設定の常に自由移動では吸着しない
+descript/ghost/descript-txt/seriko.alignmenttodesktop.md	DONE	seriko.alignmenttodesktop,位置情報	書いてあればその吸着にする。書いていないときは、アプリの設定のキャラクター自由移動が「常に制限」なら仕様どおり bottom、「ゴースト設定」なら自由。最初の設定は「常に自由移動」で吸着しない（決めたこと。仕様どおりにしたいときは設定を変える）
 descript/ghost/descript-txt/seriko.defaultsurfacedirectoryname.md	DONE	seriko.defaultsurfacedirectoryname,ディレクトリ名	このディレクトリのシェルを既定にする（無ければ master、次に最初のもの）
 descript/ghost/descript-txt/shiori.cache.md	NA	shiori.cache,数値	ゴーストキャッシュが無い。切り替えるといつも unload する（0 と同じ）
 descript/ghost/descript-txt/shiori.encoding.md	DONE	shiori.encoding,文字コード	SHIORI とのやりとりの最初の文字コード（Charset ヘッダが来たらそちら）
@@ -1067,7 +1067,7 @@ list/sakura-script/misc/bang-unload-makoto.md	IMPOSSIBLE	\![unload,makoto]	同�
 list/sakura-script/misc/bang-unload-shiori.md	DONE	\![unload,shiori]	実装済み
 list/sakura-script/misc/index.md	NA	未分類コマンド	目次のページ
 list/sakura-script/misc/m-umsg-wparam-lparam.md	IMPOSSIBLE	\m[umsg,wparam,lparam]	Windows のメッセージ
-list/sakura-script/misc/notes_executehttp.md	PARTIAL	http/rss/ical/websocket オプション	--log=（送ったものと返ってきたものを ghost/master/var/ のファイルに足す）は済み。--insecure だけは安全のため使わない（証明書をいつも確かめる）
+list/sakura-script/misc/notes_executehttp.md	DONE	http/rss/ical/websocket オプション	--log=（送ったものと返ってきたものを ghost/master/var/ のファイルに足す）など全部。--insecure だけは安全のため使わない（証明書をいつも確かめる。決めたこと）
 list/sakura-script/misc/notes_executeical.md	DONE	iCal絞り込みオプション \[2.8.90\]	ICal で期間・展開・件数を決める
 list/sakura-script/misc/notes_executerss.md	DONE	RSS絞り込みオプション \[2.8.92\]	--from / --to / --limit を Feed.filter で絞る
 list/sakura-script/misc/notes_inductionmode.md	DONE	InductionMode	パッシブモードから、時間切れ・最小化・終了を許したもの（メニューにも隠す・終了を出す）

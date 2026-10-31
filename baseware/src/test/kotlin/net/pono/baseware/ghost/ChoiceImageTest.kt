@@ -40,4 +40,30 @@ class ChoiceImageTest {
             scope.cancel()
         }
     }
+
+    /** exe / dll のアイコン（\_b[ファイル,番号,…]。負ならリソース ID）は --source として渡す。x,y はその後ろ */
+    @Test
+    fun exeResourceIndexBecomesSource() = runBlocking<Unit> {
+        val shiori = ScriptedShiori(mapOf("OnTest" to """\0\_b[icons.exe,-10,5,6]\_b[icons.dll,2,inline]\_b[pic.png,7,8]\e"""))
+        val scope = testScope()
+        try {
+            val ghost = tmp.newTestGhost()
+            for (n in listOf("icons.exe", "icons.dll", "pic.png")) File(ghost.masterDir, n).writeBytes(ByteArray(8))
+            val c = testController(ghost, shiori, scope)
+            c.start()
+            shiori.awaitEvent("OnFirstBoot")
+            c.raise("OnTest", emptyList())
+            val s = withTimeout(5000) { c.state.first { st -> st.characters[0]?.balloon.orEmpty().count { it is BalloonItem.Image } == 3 && !st.talking } }
+            val (exe, dll, png) = s.characters[0]!!.balloon!!.filterIsInstance<BalloonItem.Image>()
+            assertEquals("-10", exe.options.source)
+            assertEquals(5, exe.x)
+            assertEquals(6, exe.y)
+            assertEquals("2", dll.options.source)
+            assertEquals(null, dll.x)
+            assertEquals(null, png.options.source)
+            assertEquals(7, png.x)
+        } finally {
+            scope.cancel()
+        }
+    }
 }

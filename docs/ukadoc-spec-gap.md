@@ -4,7 +4,7 @@
 項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1511・一部だけ 16・作る 0・作れない 185・ベースウェアのことではない 338
+全 2050 項目: 済み 1513・一部だけ 14・作る 0・作れない 185・ベースウェアのことではない 338
 
 ## バルーンの descript.txt など
 
@@ -24,10 +24,7 @@
 
 ## ゴーストの descript.txt
 
-済み 69 項目。
-
-### 🔧 一部だけ（1）
-- seriko.alignmenttodesktop,位置情報 — 書いてあればその吸着にする。どこにも書いていないときは、アプリの設定のキャラクター自由移動が常に制限なら仕様どおり bottom、ゴースト設定なら自由（決めたこと）。最初の設定の常に自由移動では吸着しない
+済み 70 項目。
 
 ### ⛔ 作れない（1）
 - makoto,ファイル名 — MAKOTO は Windows の DLL（⛔）
@@ -145,12 +142,11 @@
 
 ## さくらスクリプト
 
-済み 348 項目。
+済み 349 項目。
 
-### 🔧 一部だけ（5）
+### 🔧 一部だけ（4）
 - \_l[x,y] — 横書きのバルーンは座標どおり（px・em・lh・%・@ の相対・centerx / centery、\_l の後は左寄せ）。縦書きのバルーンは次の列にするだけ
 - 補足 — オプションと data:…;base64 は済み。残りは Windows の exe / dll のリソースと --source=（TIFF のページ・PSD のレイヤー・アイコン）で、Android では読めない
-- http/rss/ical/websocket オプション — --log=（送ったものと返ってきたものを ghost/master/var/ のファイルに足す）は済み。--insecure だけは安全のため使わない（証明書をいつも確かめる）
 - \!\...\] — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
 - sound play/load/option のオプション — --spectrum / --spectrum-bands / --spectrum-hold と --sound-only は済み。--window（シークバーのついた再生のウインドウ）は pono-droid に無く、読むだけ
 

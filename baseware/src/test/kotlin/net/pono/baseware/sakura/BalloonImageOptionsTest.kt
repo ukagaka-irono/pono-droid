@@ -19,6 +19,7 @@ class BalloonImageOptionsTest {
         assertFalse(opaque)
         assertTrue(o.selfAlpha && o.fixed && o.foreground)
         assertEquals(BalloonImageOptions.Clip(100, 30, 150, 90), o.clip)
+        assertEquals("0", o.source)
         // 古い書き方の opaque、background は既定（foreground より優先）
         val (old, oldOpaque) = BalloonImageOptions.parse(listOf("opaque", "--option=foreground,background"))
         assertTrue(oldOpaque)

@@ -6,7 +6,8 @@ import kotlin.random.Random
 
 /**
  * element*。[clip] は --clipping（その矩形だけ使う）、[alpha] は --alpha（0〜255）、[scaling] は --scaling、
- * [source] は --source（PSD のレイヤー名など、画像の中のどれを使うか）
+ * [source] は --source（PSD のレイヤー名など、画像の中のどれを使うか。SourceImages）。[alphaGiven] は --alpha を書いたか
+ * （書いていなければ PSD のレイヤーの不透明度を使う）
  */
 data class SurfaceElement(
     val id: Int,
@@ -18,6 +19,7 @@ data class SurfaceElement(
     val alpha: Int = 255,
     val scaling: ElementScaling? = null,
     val source: String? = null,
+    val alphaGiven: Boolean = false,
 )
 
 /**
@@ -826,6 +828,7 @@ class SurfaceTable(
                 alpha = alphaOption(options),
                 scaling = after("--scaling", 2)?.let { ElementScaling.parse(it[0], it[1]) },
                 source = after("--source", 1)?.single()?.takeIf { it.isNotEmpty() },
+                alphaGiven = options.any { it.lowercase() == "--alpha" },
             )
         }
 

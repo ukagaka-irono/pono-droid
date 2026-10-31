@@ -6,7 +6,8 @@ import kotlin.math.roundToInt
 /**
  * \_b[ファイル,x,y,オプション...] / \_b[ファイル,inline,オプション...] の見せ方。
  * --option=use_self_alpha（PNG のアルファで抜く）・fixed（スクロールしても動かさない。x,y のときだけ）・
- * foreground（文字の上に重ねる。x,y のとき）・background（既定。文字の下）、--clipping=左 上 右 下、--scaling=…
+ * foreground（文字の上に重ねる。x,y のとき）・background（既定。文字の下）、--clipping=左 上 右 下、--scaling=…、
+ * --source=（マルチページの TIFF のページ・PSD のレイヤー・DLL / EXE のアイコンの番号。shell.SourceImages）
  */
 data class BalloonImageOptions(
     val selfAlpha: Boolean = false,
@@ -14,6 +15,7 @@ data class BalloonImageOptions(
     val scaling: Scaling? = null,
     val fixed: Boolean = false,
     val foreground: Boolean = false,
+    val source: String? = null,
 ) {
     /** 切り抜く範囲（画像の左上からのピクセル。右と下は含まない） */
     data class Clip(val left: Int, val top: Int, val right: Int, val bottom: Int)
@@ -67,13 +69,14 @@ data class BalloonImageOptions(
             val flags = mutableSetOf<String>()
             var clip: Clip? = null
             var scaling: Scaling? = null
+            var source: String? = null
             for (raw in args.map { it.trim() }) {
                 val lower = raw.lowercase()
                 when {
                     lower.startsWith("--option=") -> raw.substringAfter('=').split(',').forEach { flags += it.trim().lowercase() }
                     lower.startsWith("--clipping=") -> clip = parseClip(raw.substringAfter('=')) ?: clip
                     lower.startsWith("--scaling=") -> scaling = parseScaling(raw.substringAfter('=')) ?: scaling
-                    // --source=（マルチページの TIFF・PSD のレイヤー・DLL のアイコン）は Android で読めないので見ない
+                    lower.startsWith("--source=") -> source = raw.substringAfter('=').trim().takeIf { it.isNotEmpty() } ?: source
                     lower.startsWith("--") -> {}
                     else -> flags += lower
                 }
@@ -84,6 +87,7 @@ data class BalloonImageOptions(
                 scaling = scaling,
                 fixed = "fixed" in flags,
                 foreground = "foreground" in flags && "background" !in flags,
+                source = source,
             ) to ("opaque" in flags)
         }
 

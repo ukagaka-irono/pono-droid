@@ -36,9 +36,11 @@ class SurfaceRenderer(private val shell: Shell) {
     /**
      * @param layers アニメーション ID ごとの、いま表示しているコマ
      * @param binds 身に着けている着せ替え（コマに使ったサーフェスの着せ替えも重ねる。多重着せ替え）
+     * @param live 動く画像（GIF / APNG / WebP）のいまのコマ（rememberLiveFrames）。surface*.png・element・import のコマの
+     *   その位置に重ねる。無い画像は最初のコマを重ねる
      */
     @Synchronized
-    fun render(surfaceId: Int, layers: Map<Int, PatternFrame>, binds: Set<Int> = emptySet()): Bitmap? {
+    fun render(surfaceId: Int, layers: Map<Int, PatternFrame>, binds: Set<Int> = emptySet(), live: Map<File, Bitmap> = emptyMap()): Bitmap? {
         if (surfaceId < 0) return null
         val def = shell.surfaces[surfaceId]
         // アニメーション番号の順に重ねる（animation-sort が descend なら大きい番号が手前、ascend なら小さい番号が手前）。
@@ -53,7 +55,10 @@ class SurfaceRenderer(private val shell: Shell) {
         ).associate { it.key to it.value }
         // "base" のコマは土台のサーフェスを差し替える
         val baseOverride = sorted.values.lastOrNull { it.method == "base" && it.surface >= 0 }
-        val base = baseImage(baseOverride?.surface ?: surfaceId) ?: return null
+        val baseId = baseOverride?.surface ?: surfaceId
+        // 動く画像のコマがあれば、その都度重ね直す（覚えておくのは止まっている絵だけ）
+        val base = (if (live.isNotEmpty() && animatedParts(baseId).any { it.file in live }) composeBase(baseId, live) else baseImage(baseId))
+            ?: return null
         val animations = def?.animations.orEmpty()
         // option,background のアニメーションは土台の裏に重ねる
         val (back, front) = sorted.entries.partition { (id, f) -> animations[f.layerOf ?: id]?.background == true }
@@ -64,11 +69,11 @@ class SurfaceRenderer(private val shell: Shell) {
         val out = Bitmap.createBitmap(base.width, base.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
         canvas.translate(dx, dy)
-        for ((_, frame) in back) draw(canvas, out, frame, dx, dy, binds)
+        for ((_, frame) in back) draw(canvas, out, frame, dx, dy, binds, live = live)
         canvas.drawBitmap(base, 0f, 0f, paint)
         for ((_, frame) in front) {
             if (frame === baseOverride) continue
-            draw(canvas, out, frame, dx, dy, binds)
+            draw(canvas, out, frame, dx, dy, binds, live = live)
         }
         return out
     }
@@ -92,7 +97,16 @@ class SurfaceRenderer(private val shell: Shell) {
     private val parts = HashMap<Pair<Int, Set<Int>>, Bitmap>()
 
     /** 1コマを重ねる。[dx] / [dy] は move でずらしている分（1画素ずつ計算するときに使う） */
-    private fun draw(canvas: Canvas, out: Bitmap, frame: PatternFrame, dx: Float, dy: Float, binds: Set<Int>, visiting: Set<Int> = emptySet()) {
+    private fun draw(
+        canvas: Canvas, out: Bitmap, frame: PatternFrame, dx: Float, dy: Float, binds: Set<Int>, visiting: Set<Int> = emptySet(),
+        live: Map<File, Bitmap> = emptyMap(),
+    ) {
+        // import のコマは動く画像（いまのコマ、まだ無ければ最初のコマ）を、ほかのコマと同じ重なりの位置に
+        if (frame.method == "import") {
+            val file = frame.file?.let(shell::file) ?: return
+            (live[file] ?: importImage(file))?.let { canvas.drawBitmap(it, frame.x.toFloat(), frame.y.toFloat(), paint) }
+            return
+        }
         if (frame.surface < 0 || frame.method in NOT_DRAWN) return
         val method = frame.method
         val x = frame.x.toFloat()
@@ -132,48 +146,88 @@ class SurfaceRenderer(private val shell: Shell) {
     /** element を重ねた、アニメーションなしのサーフェス。 */
     private val bases = BitmapCache<Int>(MAX_BASE_BYTES)
 
-    private fun baseImage(id: Int): Bitmap? = bases.getOrPut(id) {
+    private fun baseImage(id: Int): Bitmap? = bases.getOrPut(id) { composeBase(id, emptyMap()) }
+
+    /** surfaceN.png と element を重ねた土台。動く画像は [live] のいまのコマ（無ければ最初のコマ） */
+    private fun composeBase(id: Int, live: Map<File, Bitmap>): Bitmap? {
         val elements = shell.surfaces[id]?.elements.orEmpty()
         // element0 があれば surfaceN.png は使わない（SSP と同じ。element0 で置き換える）
-        val png = if (0 in elements) null else shell.surfaceImage(id)?.let(::load)
-        if (elements.isEmpty()) return@getOrPut png
-        val parts = elements.values.mapNotNull { e -> shell.file(e.file)?.let(::load)?.let { e to elementImage(e, it) } }
-        val width = maxOf(png?.width?.toLong() ?: 0L, parts.maxOfOrNull { (e, b) -> e.x.toLong() + b.width } ?: 0L)
-        val height = maxOf(png?.height?.toLong() ?: 0L, parts.maxOfOrNull { (e, b) -> e.y.toLong() + b.height } ?: 0L)
-        if (width <= 0 || height <= 0) return@getOrPut png
+        val png = if (0 in elements) null else shell.surfaceImage(id)?.let { live[it] ?: load(it) }
+        if (elements.isEmpty()) return png
+        val parts = elements.values.mapNotNull { e -> shell.file(e.file)?.let { elementPart(e, it, live) } }
+        val width = maxOf(png?.width?.toLong() ?: 0L, parts.maxOfOrNull { it.x.toLong() + it.image.width } ?: 0L)
+        val height = maxOf(png?.height?.toLong() ?: 0L, parts.maxOfOrNull { it.y.toLong() + it.image.height } ?: 0L)
+        if (width <= 0 || height <= 0) return png
         // surfaces.txt の座標は信用しない（巨大な値で画像を作らせない）。読む画像と同じく、1辺と画素数の両方に上限
         if (width > ImageTransparency.MAX_SIDE || height > ImageTransparency.MAX_SIDE || width * height > ImageTransparency.MAX_PIXELS) {
             Log.w("pono", "surface $id is too large to compose: ${width}x$height")
-            return@getOrPut png
+            return png
         }
         val out = Bitmap.createBitmap(width.toInt(), height.toInt(), Bitmap.Config.ARGB_8888)
         val canvas = Canvas(out)
         png?.let { canvas.drawBitmap(it, 0f, 0f, paint) }
-        for ((i, pair) in parts.withIndex()) {
-            val (e, b) = pair
-            val x = e.x.toFloat()
-            val y = e.y.toFloat()
+        for ((i, part) in parts.withIndex()) {
+            val b = part.image
+            val x = part.x.toFloat()
+            val y = part.y.toFloat()
             // base は element0 にしか使えない（それ以外は overlay）
-            val method = if (e.method == "base" && i > 0) "overlay" else e.method
+            val method = if (part.method == "base" && i > 0) "overlay" else part.method
             when {
                 method == "replace" -> canvas.drawBitmap(b, x, y, replacePaint)
                 method == "overlay-fast" || method == "overlayfast" -> canvas.drawBitmap(b, x, y, atopPaint)
                 method == "interpolate" -> canvas.drawBitmap(b, x, y, behindPaint)
                 method == "reduce" -> canvas.drawBitmap(b, x, y, reducePaint)
                 method == "asis" -> canvas.drawBitmap(opaque(b), x, y, paint)
-                method == "overlaymultiply" -> Blend.apply(out, b, e.x, e.y, "multiply", fast = true)
-                method == "overlayscreen" -> Blend.apply(out, b, e.x, e.y, "screen", fast = true)
+                method == "overlaymultiply" -> Blend.apply(out, b, part.x, part.y, "multiply", fast = true)
+                method == "overlayscreen" -> Blend.apply(out, b, part.x, part.y, "screen", fast = true)
                 method.startsWith("blend-") -> method.removePrefix("blend-").removeSuffix("-fast").let { name ->
-                    Blend.apply(out, b, e.x, e.y, name.removeSuffix("-glow"), method.endsWith("-fast"), glow = name.endsWith("-glow"))
+                    Blend.apply(out, b, part.x, part.y, name.removeSuffix("-glow"), method.endsWith("-fast"), glow = name.endsWith("-glow"))
                 }
                 else -> canvas.drawBitmap(b, x, y, paint)
             }
         }
-        out
+        return out
     }
 
-    /** element の --clipping（切り抜き）・--scaling（拡大縮小と裏返し）・--alpha（不透明度）を、この順に当てた絵 */
-    private fun elementImage(e: SurfaceElement, src: Bitmap): Bitmap {
+    // import の動く画像の最初のコマ（Android 9 より前と、まだコマが来ていないとき）。画像のアルファを使う
+    private val importImages = BitmapCache<File>(MAX_IMAGE_BYTES)
+
+    private fun importImage(file: File): Bitmap? =
+        importImages.getOrPut(file) { ImageTransparency.load(file, null, selfAlpha = true, colorKey = false) }
+
+    /** element の絵と、重ねる位置・描画メソッド */
+    private class ElementPart(val image: Bitmap, val x: Int, val y: Int, val method: String)
+
+    /**
+     * element の絵。PSD・TIFF・ICO・EXE / DLL は --source の 1 枚（PSD のレイヤーはその位置にずらし、--alpha が無ければ
+     * レイヤーの不透明度、auto ならレイヤーの描画モード）。ほかは [live] のいまのコマか、読んだ絵。--clipping / --scaling を
+     * 付けた動く画像は動かさない（animatedParts と同じ）
+     */
+    private fun elementPart(e: SurfaceElement, file: File, live: Map<File, Bitmap>): ElementPart? {
+        if (e.source != null || isMultiSource(file)) {
+            val (bmp, picture) = sourceImage(file, e.source) ?: return null
+            val px = picture as? net.pono.baseware.shell.SourceImages.Picture.Pixels
+            val alpha = if (e.alphaGiven) e.alpha else px?.opacity ?: 255
+            val method = if (e.method == "auto") px?.method ?: "overlay" else e.method
+            return ElementPart(elementImage(e, bmp, alpha), e.x + (px?.left ?: 0), e.y + (px?.top ?: 0), method)
+        }
+        val src = (if (e.clip == null && e.scaling == null) live[file] else null) ?: load(file) ?: return null
+        return ElementPart(elementImage(e, src, e.alpha), e.x, e.y, e.method)
+    }
+
+    private val multiSource = HashMap<File, Boolean>()
+
+    private fun isMultiSource(file: File): Boolean = multiSource.getOrPut(file) { net.pono.baseware.shell.SourceImages.isMultiSource(file) }
+
+    private val sources = HashMap<Pair<File, String?>, Pair<Bitmap, net.pono.baseware.shell.SourceImages.Picture>?>()
+
+    private fun sourceImage(file: File, source: String?) = sources.getOrPut(file to source) {
+        if (sources.size >= MAX_PARTS) sources.clear()
+        ImageTransparency.loadSource(file, source)
+    }
+
+    /** element の --clipping（切り抜き）・--scaling（拡大縮小と裏返し）・[alpha]（不透明度）を、この順に当てた絵 */
+    private fun elementImage(e: SurfaceElement, src: Bitmap, alpha: Int): Bitmap {
         var b = src
         e.clip?.let { c ->
             val l = c.left.coerceIn(0, b.width)
@@ -189,7 +243,7 @@ class SurfaceRenderer(private val shell: Shell) {
                 b = Bitmap.createBitmap(b, 0, 0, b.width, b.height, m, true)
             }
         }
-        if (e.alpha < 255) b = withAlpha(b, e.alpha)
+        if (alpha < 255) b = withAlpha(b, alpha)
         return b
     }
 
@@ -205,7 +259,7 @@ class SurfaceRenderer(private val shell: Shell) {
         buildList {
             if (0 !in elements) shell.surfaceImage(id)?.takeIf(AnimatedImages::isAnimated)?.let { add(AnimatedPart(it, 0, 0)) }
             for (e in elements.values) {
-                if (e.clip != null || e.scaling != null) continue
+                if (e.clip != null || e.scaling != null || e.source != null) continue
                 shell.file(e.file)?.takeIf(AnimatedImages::isAnimated)?.let { add(AnimatedPart(it, e.x, e.y)) }
             }
         }
@@ -264,7 +318,7 @@ class SurfaceRenderer(private val shell: Shell) {
         const val MAX_OPAQUE_BYTES = 32L * 1024 * 1024
         const val MAX_BASE_BYTES = 64L * 1024 * 1024
 
-        /** 絵は重ねないメソッド（move はずらすだけ、scaling はウィンドウの大きさを変えるだけ、import は別に流す） */
+        /** 絵は重ねないメソッド（move はずらすだけ、scaling はウィンドウの大きさを変えるだけ。import は draw が動く画像を重ねる） */
         val NOT_DRAWN = setOf("move", "scaling", "base", "import", "start", "stop", "alternativestart", "alternativestop", "parallelstart", "parallelstop", "insert")
     }
 }

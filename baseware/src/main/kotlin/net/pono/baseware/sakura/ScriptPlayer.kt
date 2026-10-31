@@ -536,11 +536,15 @@ class ScriptPlayer(
                 } else {
                     a.mapNotNull { it.trim().toIntOrNull()?.takeIf { n -> n in 0..MAX_SCOPE } }.ifEmpty { listOf(0, 1) }
                 }
-                // \_b[ファイル,x,y,オプション...] / \_b[ファイル,inline,オプション...]。ファイルは "data:image/png;base64,…" でもよい
+                // \_b[ファイル,x,y,オプション...] / \_b[ファイル,inline,オプション...]。ファイルは "data:image/png;base64,…" でもよい。
+                // exe / dll ならファイルの後ろの数がアイコンの番号（0 から。負ならリソース ID）
                 "_b" -> a.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }?.let { file ->
-                    val rest = a.drop(1).map { it.trim() }
+                    var rest = a.drop(1).map { it.trim() }
+                    val resource = rest.firstOrNull()?.takeIf { file.lowercase().let { f -> f.endsWith(".exe") || f.endsWith(".dll") } && it.toIntOrNull() != null }
+                    if (resource != null) rest = rest.drop(1)
                     val inline = rest.firstOrNull()?.lowercase() == "inline"
-                    val (options, opaque) = BalloonImageOptions.parse(if (inline) rest.drop(1) else rest.drop(2))
+                    val (parsed, opaque) = BalloonImageOptions.parse(if (inline) rest.drop(1) else rest.drop(2))
+                    val options = if (resource != null && parsed.source == null) parsed.copy(source = resource) else parsed
                     // \__q の中の inline の画像は、その選択肢の一部にする（画像だけのボタン）
                     if (inline && anchor != null) {
                         anchorImage = host.choiceImage(file, opaque, options) ?: anchorImage

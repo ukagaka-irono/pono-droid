@@ -16,12 +16,10 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import android.graphics.Bitmap
-import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.draw.drawWithContent
@@ -32,7 +30,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import net.pono.baseware.ghost.SelectRect
 import net.pono.baseware.shell.Collision
@@ -159,8 +156,19 @@ fun CharacterSurface(
     } else {
         SerikoAnimator.bindLayers(controller.shell.surfaces[character.surface], character.binds)
     }
-    val bitmap by produceState<Bitmap?>(null, character.surface, shownLayers, character.binds) {
-        value = withContext(Dispatchers.Default) { renderer.render(character.surface, shownLayers, character.binds) }
+    // base のコマで土台を替えていれば、そのサーフェスの当たり判定を使う。コマを出しているアニメーションの当たり判定も見る
+    val baseSurface = shownLayers.values.lastOrNull { it.method == "base" && it.surface >= 0 }?.surface ?: character.surface
+    // surface*.png と element に書いた動く画像（GIF / APNG / WebP）は、SERIKO を書かなくても動かす。surfaces.txt の import のコマも。
+    // いまのコマをサーフェスの重なりの中のその位置に重ねる（SERIKO のコマの下になるものは下に）
+    val animatedParts by produceState(emptyList<SurfaceRenderer.AnimatedPart>(), baseSurface) {
+        value = withContext(Dispatchers.IO) { renderer.animatedParts(baseSurface) }
+    }
+    val liveSources = animatedParts.map { LiveSource(it.file) } + shownLayers.values.filter { it.method == "import" }.mapNotNull { f ->
+        f.file?.let(controller.shell::file)?.let { LiveSource(it, f.waitMinMs) }
+    }
+    val liveFrames = rememberLiveFrames(liveSources).toMap()
+    val bitmap by produceState<Bitmap?>(null, character.surface, shownLayers, character.binds, liveFrames) {
+        value = withContext(Dispatchers.Default) { renderer.render(character.surface, shownLayers, character.binds, liveFrames) }
     }
 
     val bmp = bitmap ?: return
@@ -185,17 +193,11 @@ fun CharacterSurface(
      * 反転（scaleX / scaleY が -1）していれば、この部品の中の位置は符号を変えたものになる
      */
     fun imagePoint(x: Float, y: Float): Pair<Int, Int> = localImagePoint(if (sx < 0) -x else x, if (sy < 0) -y else y)
-    // base のコマで土台を替えていれば、そのサーフェスの当たり判定を使う。コマを出しているアニメーションの当たり判定も見る
-    val baseSurface = shownLayers.values.lastOrNull { it.method == "base" && it.surface >= 0 }?.surface ?: character.surface
     val activeAnimations = shownLayers.keys.filter { it >= 0 } + character.binds
     // アニメーションの当たり判定（animation*.collision）は今のサーフェスの定義から、土台の当たり判定は差し替えた土台から
     fun hit(p: Pair<Int, Int>) = controller.shell.surfaces[character.surface]?.hitTest(
         p.first, p.second, activeAnimations, renderer::regionMask, base = controller.shell.surfaces[baseSurface],
     ) ?: controller.shell.surfaces[baseSurface]?.hitTest(p.first, p.second, emptyList(), renderer::regionMask)
-    // surface*.png と element に書いた動く画像（GIF / APNG / WebP）は、SERIKO を書かなくても動かす
-    val animatedParts by produceState(emptyList<SurfaceRenderer.AnimatedPart>(), baseSurface) {
-        value = withContext(Dispatchers.IO) { renderer.animatedParts(baseSurface) }
-    }
     // sakura.tooltips などで決めた、当たり判定に触れている間に出す文字
     var tooltip by remember { mutableStateOf<String?>(null) }
     fun showTooltip(collision: String?) {
@@ -380,7 +382,7 @@ fun CharacterSurface(
                     })
                 },
         )
-        // \![anim,add,text] の文字と、surfaces.txt の import のアニメーション画像を、シェル画像の座標に重ねる
+        // \![anim,add,text] の文字を、シェル画像の座標に重ねる
     for (t in texts) {
         key(t) {
             SurfaceText(t, pxPerImagePxX, pxPerImagePxY)
@@ -389,14 +391,6 @@ fun CharacterSurface(
                 texts.remove(t)
             }
         }
-    }
-    for (part in animatedParts) {
-        key(part) { ImportedAnimation(part.file, part.x, part.y, 0, pxPerImagePxX, pxPerImagePxY) }
-    }
-    for ((layer, frame) in layers) {
-        if (frame.method != "import") continue
-        val file = frame.file?.let(controller.shell::file) ?: continue
-        key(layer, frame) { ImportedAnimation(file, frame.x, frame.y, frame.waitMinMs, pxPerImagePxX, pxPerImagePxY) }
     }
     // 当たり判定に触れている間はそのツールチップ。無ければ、このキャラクターのバルーンで長押ししている選択肢のツールチップ
     (tooltip ?: state.choiceTooltip?.takeIf { it.first == scopeId }?.second)?.let { SurfaceTooltip(it) }
@@ -502,52 +496,6 @@ private fun BoxScope.SurfaceText(t: AnimationCommand.AddText, pxPerX: Float, pxP
         fontSize = size,
         fontFamily = t.font?.let { BalloonFonts.family(listOf(it)) },
         modifier = modifier,
-    )
-}
-
-/**
- * surfaces.txt の import,ファイル名,待ち時間,x,y と、動く surface*.png / element。APNG / GIF / WebP のアニメーション画像を、
- * [waitMs] 待ってから流し続ける（元の画像の繰り返し回数は見ない。SSP と同じ）。Android 9 より前では最初のコマだけ出す
- */
-@Composable
-private fun BoxScope.ImportedAnimation(file: java.io.File, x: Int, y: Int, waitMs: Int, pxPerX: Float, pxPerY: Float) {
-    val drawable by produceState<android.graphics.drawable.Drawable?>(null, file) {
-        value = withContext(Dispatchers.IO) {
-            runCatching {
-                if (Build.VERSION.SDK_INT >= 28) {
-                    android.graphics.ImageDecoder.decodeDrawable(android.graphics.ImageDecoder.createSource(file)) { decoder, info, _ ->
-                        // 細工された巨大な画像でメモリを使い切らせない
-                        val w = info.size.width
-                        val h = info.size.height
-                        if (w > ImageTransparency.MAX_SIDE || h > ImageTransparency.MAX_SIDE) {
-                            decoder.setTargetSize(minOf(w, ImageTransparency.MAX_SIDE), minOf(h, ImageTransparency.MAX_SIDE))
-                        }
-                    }
-                } else {
-                    ImageTransparency.load(file, null, selfAlpha = true, colorKey = false)?.let { android.graphics.drawable.BitmapDrawable(null, it) }
-                }
-            }.getOrNull()
-        }
-    }
-    val d = drawable ?: return
-    LaunchedEffect(d) {
-        delay(waitMs.toLong())
-        if (Build.VERSION.SDK_INT >= 28 && d is android.graphics.drawable.AnimatedImageDrawable) {
-            d.repeatCount = android.graphics.drawable.AnimatedImageDrawable.REPEAT_INFINITE
-            d.start()
-        }
-    }
-    DisposableEffect(d) {
-        onDispose { if (Build.VERSION.SDK_INT >= 28 && d is android.graphics.drawable.AnimatedImageDrawable) d.stop() }
-    }
-    val density = LocalDensity.current
-    AndroidView(
-        factory = { context -> android.widget.ImageView(context).apply { scaleType = android.widget.ImageView.ScaleType.FIT_XY } },
-        update = { it.setImageDrawable(d) },
-        modifier = Modifier
-            .align(Alignment.TopStart)
-            .offset { IntOffset((x * pxPerX).roundToInt(), (y * pxPerY).roundToInt()) }
-            .size(with(density) { (d.intrinsicWidth * pxPerX).toDp() }, with(density) { (d.intrinsicHeight * pxPerY).toDp() }),
     )
 }
 
