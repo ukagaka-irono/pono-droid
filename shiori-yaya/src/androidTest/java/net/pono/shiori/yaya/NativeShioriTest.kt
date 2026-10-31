@@ -441,6 +441,42 @@ class NativeShioriTest {
         assertEquals("saori:こんにちは", value)
     }
 
+    /**
+     * quickshiori（JavaScript の SHIORI。QuickJS-ng）。index.js の __shiori_request が答える。
+     * import する ukadll.dll（SAORI を呼ぶ）と quickjs_sqlite3.dll は libquickshiori.so に入れたもの
+     */
+    @Test
+    fun quickshioriDictionary() {
+        val dir = File(root, "quickshiori").apply { deleteRecursively(); mkdirs() }
+        File(dir, "saori").mkdirs()
+        File(dir, "saori/calcs.dll").writeBytes(ByteArray(4))
+        File(dir, "index.js").writeText(
+            """
+            import { UkaDll } from "ukadll.dll";
+            import { sqlite3_db } from "quickjs_sqlite3.dll";
+            globalThis.__shiori_load = function (dir) {};
+            globalThis.__shiori_unload = function () {};
+            globalThis.__shiori_request = function (raw) {
+              const m = raw.match(/Reference0: ([^\r\n]*)/);
+              const saori = new UkaDll(globalThis.__shiori_dir + "/saori/calcs.dll");
+              saori.load(globalThis.__shiori_dir + "/saori/");
+              const res = saori.request("EXECUTE SAORI/1.0\r\nCharset: UTF-8\r\nSender: test\r\nArgument0: \r\nArgument1: 2*3\r\n\r\n");
+              saori.unload();
+              const calc = (res.match(/Result: ([^\r\n]*)/) || [])[1];
+              const db = new sqlite3_db(globalThis.__shiori_dir + "/test.db");
+              db.exec("create table if not exists t (a);");
+              db.exec("insert into t (a) values (1);");
+              const rowid = db.last_insert_rowid();
+              db.close();
+              return "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nValue: " + (m ? m[1] : "") + "さん、quickshiori です," + calc + "," + rowid + "\r\n\r\n";
+            };
+            """.trimIndent(),
+            Charsets.UTF_8,
+        )
+        assertEquals(ShioriEngine.QUICKSHIORI, ShioriEngine.forGhost("shiori.dll", dir))
+        assertEquals("ぽのさん、quickshiori です,6,1", request(ShioriEngine.QUICKSHIORI, dir, Charsets.UTF_8, "ぽの"))
+    }
+
     /** 湊（minato）。config.toml と talks/main.mnt を読み、OnBoot のトークが返る */
     @Test
     fun minatoDictionary() {

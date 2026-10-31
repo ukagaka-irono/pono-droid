@@ -78,3 +78,6 @@
 	path = shiori-yaya/src/main/cpp/luamod/boringssl
 	url = https://github.com/google/boringssl.git
 	shallow = true
+[submodule "shiori-yaya/src/main/cpp/quickshiori"]
+	path = shiori-yaya/src/main/cpp/quickshiori
+	url = https://github.com/cronfox/quickshiori.git

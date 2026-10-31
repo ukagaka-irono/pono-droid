@@ -362,3 +362,46 @@ pono_shiori_library(minato)
 add_library(pasta SHARED jni_pasta.cpp)
 pono_cargo_archive(pasta ${RUST_SHIORI_DIR}/pasta pasta -p pasta_shiori)
 pono_shiori_library(pasta)
+
+# ---- quickshiori（JavaScript の SHIORI。サブモジュール quickshiori と、その中の QuickJS-ng・qjs-ng-sqlite3）----
+# Windows の部分（<windows.h>）は shim/compat/quickshiori/windows.h に替える（実装は shim/pono_quickshiori.cpp）。
+# JS から import する ukadll.dll（SAORI を呼ぶ）と sqlite3.dll / .so は、Windows では別の DLL だが、ここでは
+# libquickshiori.so に入れて js_module_loader（-Wl,--wrap）から返す。sqlite は YAYA の sqlite3_yaya.c（同じ amalgamation）。
+# sqlite3-cmake（ビルドのときに sqlite を落としてくる）と WinRT・FMO の部品は使わない
+set(QS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/quickshiori)
+set(QJS_DIR ${QS_DIR}/3rd/quickjs)
+set(QS_QJS_SOURCES
+    ${QJS_DIR}/dtoa.c ${QJS_DIR}/libregexp.c ${QJS_DIR}/libunicode.c ${QJS_DIR}/quickjs.c ${QJS_DIR}/quickjs-libc.c)
+set(QS_MODULE_SOURCES ${QS_DIR}/module/ukadll/quickjs_ukadll.cpp ${QS_DIR}/3rd/qjs-ng-sqlite3/sqlite3.c ${YAYA_DIR}/sqlite3_yaya.c)
+set_source_files_properties(${QS_QJS_SOURCES} ${QS_MODULE_SOURCES} PROPERTIES COMPILE_OPTIONS -w COMPILE_DEFINITIONS _GNU_SOURCE)
+# ukadll の入口（Windows の DLL の js_init_module）の名前を変えて、同じ .so に入れる
+set_source_files_properties(${QS_DIR}/module/ukadll/quickjs_ukadll.cpp PROPERTIES
+    COMPILE_OPTIONS "-w;-std=c++20" COMPILE_DEFINITIONS js_init_module=pono_qs_init_ukadll)
+set_source_files_properties(${YAYA_DIR}/sqlite3_yaya.c PROPERTIES INCLUDE_DIRECTORIES ${YAYA_DIR})
+# 元の CMakeLists.txt と同じく version.h を作る（版は元の project() と同じ 0.0.3）
+set(PROJECT_VERSION_MAJOR 0)
+set(PROJECT_VERSION_MINOR 0)
+set(PROJECT_VERSION_PATCH 3)
+set(PROJECT_VERSION 0.0.3)
+configure_file(${QS_DIR}/src/version.h.in ${CMAKE_CURRENT_BINARY_DIR}/quickshiori/version.h)
+add_library(quickshiori SHARED
+    ${QS_QJS_SOURCES}
+    ${QS_MODULE_SOURCES}
+    ${QS_DIR}/src/quickshiori.cpp
+    ${QS_DIR}/src/quickshiori_module.cpp
+    $<TARGET_OBJECTS:pono_iconv>
+    shim/pono_quickshiori.cpp
+    jni_quickshiori.cpp)
+set_source_files_properties(${QS_DIR}/src/quickshiori.cpp ${QS_DIR}/src/quickshiori_module.cpp PROPERTIES
+    COMPILE_OPTIONS "-w;-std=c++20")
+# <windows.h> を差し替えの見出しにする。<sqlite3.h> は YAYA の sqlite
+target_include_directories(quickshiori PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/shim/compat/quickshiori
+    ${CMAKE_CURRENT_SOURCE_DIR}/shim
+    ${QJS_DIR}
+    ${YAYA_DIR}/sqlite
+    ${CMAKE_CURRENT_BINARY_DIR}/quickshiori)
+target_compile_options(quickshiori PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=c++20>)
+target_link_options(quickshiori PRIVATE -Wl,--wrap=js_module_loader)
+target_link_libraries(quickshiori PRIVATE m)
+pono_shiori_library(quickshiori)

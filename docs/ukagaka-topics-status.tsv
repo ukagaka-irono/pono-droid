@@ -20,7 +20,7 @@ ukagaka-shiori	ekicyou/pasta	Rust	MIT	DONE	SHIORI として動く（shiori-yaya 
 ukagaka-shiori	Tatakinov/kagari_shiori	C++	MIT	DONE	SHIORI として動く（shiori-yaya）
 ukagaka-shiori	nikolat/dnproxy	C#	CC0-1.0	IMPOSSIBLE	.NET Framework の SHIORI。Android では動かない（決めたこと）
 ukagaka-shiori	steve02081504/powershiori	PowerShell	None	IMPOSSIBLE	PowerShell の SHIORI。Android では動かない（決めたこと）
-ukagaka-shiori	cronfox/quickshiori	C++	NOASSERTION	BUILD	C++ と QuickJS の SHIORI。WinRT の部分を除いて作れるか調べる（ライセンスを確かめる）
+ukagaka-shiori	cronfox/quickshiori	C++	BSD-3-Clause	DONE	SHIORI として動く（shiori-yaya の libquickshiori.so。QuickJS-ng）。Windows の部分は shim/compat/quickshiori/windows.h に替えた。import する ukadll.dll（SAORI を呼ぶ）と quickjs_sqlite3.dll は .so の中に入れた。WinRT と FMO の部品は Windows 専用なので無い。descript の quickshiori.dll か index.js で選ぶ。実機で確かめた
 ukagaka-shiori	yanashi-interface/nashi-shiori-studio	C++	NOASSERTION	IMPOSSIBLE	WebView2（Windows）を使う開発環境。アーカイブ済み（決めたこと）
 ukagaka-shiori	mizuki-yura/minato	Rust	MIT	DONE	SHIORI として動く（shiori-yaya の libminato.so。Rust、Windows の winapi は src/main/rust/pono-winapi に替える）。descript の minato.dll か config.toml と talks/main.mnt で選ぶ。実機で確かめた
 ukagaka-shiori	ponapalt/aya5-shiori	C++	None	IMPOSSIBLE	ライセンスの書かれていないコードで、APK に入れられない（AYA5 の辞書は YAYA でおおむね動く）

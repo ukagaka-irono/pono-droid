@@ -90,6 +90,9 @@ abstract class GenerateLicenseAssets : DefaultTask() {
             Entry("里々（SATORI）", "BSD 2-Clause", "https://github.com/ukatech/satoriya-shiori", read("satori/LICENSE").trim()),
             Entry("華和梨（KAWARI）", "BSD", "https://github.com/kawari/kawari", read("kawari/LICENSE").trim()),
             Entry("Kagari", "MIT", "https://github.com/Tatakinov/kagari_shiori", read("kagari/LICENSE").trim()),
+            Entry("QuickShiori", "BSD-3-Clause", "https://github.com/cronfox/quickshiori", read("quickshiori/LICENSE").trim()),
+            Entry("QuickJS-ng", "MIT", "https://github.com/quickjs-ng/quickjs", read("quickshiori/3rd/quickjs/LICENSE").trim()),
+            Entry("qjs-ng-sqlite3", "MIT", "https://github.com/cronfox/qjs-ng-sqlite3", read("quickshiori/3rd/qjs-ng-sqlite3/LICENSE.txt").trim()),
             // Kagari に入れる Lua の C のモジュール（luamod/）
             Entry("luautf8", "MIT", "https://github.com/starwing/luautf8", read("luamod/luautf8/LICENSE").trim()),
             Entry("lua-iconv", "MIT", "https://github.com/ittner/lua-iconv", read("luamod/lua-iconv/COPYING").trim()),
