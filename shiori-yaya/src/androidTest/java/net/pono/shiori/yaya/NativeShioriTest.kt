@@ -477,6 +477,50 @@ class NativeShioriTest {
         assertEquals("ぽのさん、quickshiori です,6,1", request(ShioriEngine.QUICKSHIORI, dir, Charsets.UTF_8, "ぽの"))
     }
 
+    /**
+     * ninix-saori の saori_curl（saori_curl.dll の代わりの libsaori_curl.so。libcurl と BoringSSL）。
+     * https で取れること（証明書は Android のもの）と、取れないときに理由が返ることを YAYA から確かめる。example.com に繋ぐ
+     */
+    @Test
+    fun saoriCurlFetchesText() {
+        val dir = File(root, "saori-curl").apply { deleteRecursively(); mkdirs() }
+        File(dir, "yaya.txt").writeText("charset, UTF-8\r\ndic, test.dic\r\n", Charsets.US_ASCII)
+        File(dir, "saori").mkdirs()
+        File(dir, "saori/saori_curl.dll").writeBytes(ByteArray(4))
+        File(dir, "test.dic").writeText(
+            """
+            request
+            {
+            	_crlf = CHR(13) + CHR(10)
+            	_head = 'EXECUTE SAORI/1.0' + _crlf + 'Charset: UTF-8' + _crlf + 'Sender: test' + _crlf
+            	_r = LOADLIB('saori/saori_curl.dll')
+            	_ok = REQUESTLIB('saori/saori_curl.dll', _head + 'Argument0: https://example.com/' + _crlf + _crlf)
+            	_ng = REQUESTLIB('saori/saori_curl.dll', _head + 'Argument0: https://127.0.0.1:1/' + _crlf + _crlf)
+            	_r = UNLOADLIB('saori/saori_curl.dll')
+            	'SHIORI/3.0 200 OK' + _crlf + 'Charset: UTF-8' + _crlf + 'Value: ' + saoriline(_ok, 'Result') + '|' + TOSTR(STRSTR(_ok, 'Example Domain', 0) >= 0) + '|' + saoriline(_ng, 'Result') + _crlf + _crlf
+            }
+
+            saoriline
+            {
+            	_r = ''
+            	_key = _argv[1] + ': '
+            	_lines = SPLIT(_argv[0], CHR(13) + CHR(10))
+            	foreach _lines; _x {
+            		if SUBSTR(_x, 0, STRLEN(_key)) == _key {
+            			_r = ERASE(_x, 0, STRLEN(_key))
+            		}
+            	}
+            	_r
+            }
+            """.trimIndent().replace("\n", "\r\n"),
+            Charsets.UTF_8,
+        )
+        val v = request(ShioriEngine.YAYA, dir, Charsets.UTF_8).orEmpty().split('|')
+        assertEquals(v.toString(), "OK", v.getOrNull(0))
+        assertEquals(v.toString(), "1", v.getOrNull(1))
+        assertTrue(v.toString(), v.getOrNull(2).orEmpty().isNotEmpty() && v.getOrNull(2) != "OK")
+    }
+
     /** 湊（minato）。config.toml と talks/main.mnt を読み、OnBoot のトークが返る */
     @Test
     fun minatoDictionary() {

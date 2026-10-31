@@ -277,6 +277,7 @@ const NativeSaoriLib kNativeSaoris[] = {
     {"saori_qrcode", "libsaori_qrcode.so"},
     {"resizedpng", "libsaori_resizedpng.so"},
     {"piechart", "libsaori_piechart.so"},
+    {"saori_curl", "libsaori_curl.so"},
     // SHIORI を SAORI として（YAYA as SAORI・ninix-saori の saori_yaya などと同じ）。中身は SHIORI の .so（jni_common.h の
     // PONO_DEFINE_ENGINE_SAORI）
     {"yaya", "libyaya.so"},

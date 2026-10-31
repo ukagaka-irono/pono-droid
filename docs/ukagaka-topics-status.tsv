@@ -8,7 +8,7 @@ ukagaka-saori	tukinami/saori-pie-chart	Rust	MIT	DONE	ソースから libsaori_pi
 ukagaka-saori	nikolat/saori-qrcode	Rust	CC0-1.0	DONE	ソースから libsaori_qrcode.so を作る（saori_qrcode.dll の代わり。Rust）。ライセンスは LICENSE の CC0-1.0。実機で YAYA から呼んで確かめた
 ukagaka-saori	tukinami/saori-resized-png-mini	Rust	MIT	DONE	ソースから libsaori_resizedpngmini.so を作る（resizedpngmini.dll の代わり。Rust）。実機で YAYA から呼んで確かめた
 ukagaka-saori	Tatakinov/TexasHoldemUtil	C++	MIT	DONE	ソースから libsaori_texasholdem.so を作る（TexasHoldemUtil.dll の代わり）。実機で YAYA から呼んで確かめた
-ukagaka-saori	Tatakinov/ninix-saori	C++	MIT	PARTIAL	SHIORI を SAORI として使うもの（saori_yaya・saori_satori・saori_kawari）は、yaya.dll・satori.dll・kawari.dll を SAORI として読むと pono-droid の各エンジンが答える（済み）。saori_curl は libcurl が要る（OpenSSL を作った後に）。saori_call_translator は別のプロセスを起こすので作れない。saori_aosora は aosora（対応していない SHIORI）が要る。example は見本
+ukagaka-saori	Tatakinov/ninix-saori	C++	MIT	PARTIAL	SHIORI を SAORI として使うもの（saori_yaya・saori_satori・saori_kawari）は、yaya.dll・satori.dll・kawari.dll を SAORI として読むと pono-droid の各エンジンが答える。saori_curl はソースから libsaori_curl.so を作る（libcurl を HTTP / HTTPS だけで、TLS は BoringSSL、証明書は Android のもの）。どちらも実機で確かめた。saori_call_translator は別のプロセスを起こすので作れない。saori_aosora は aosora（対応していない SHIORI）が要る。example は見本
 ukagaka-saori	Tatakinov/mahjong_nodoka	C++	MIT	DONE	ソースから libsaori_nodoka.so を作る（ゴーストの nodoka.dll の代わりに、SHIORI のサンドボックスの中で動く）。実機で YAYA から呼んで確かめた
 ukagaka-saori	tukinami/saori-calcs	Rust	MIT	DONE	ソースから libsaori_calcs.so を作る（calcs.dll の代わり。Rust）。実機で YAYA から呼んで確かめた
 ukagaka-saori	Tatakinov/saori_budoux	C++	MIT	DONE	ソースから libsaori_budoux.so を作る（budoux.dll の代わり。ゴーストの model.json を読む。JSON は nlohmann/json v3.12.0）。実機で YAYA から呼んで確かめた

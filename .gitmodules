@@ -81,3 +81,7 @@
 [submodule "shiori-yaya/src/main/cpp/quickshiori"]
 	path = shiori-yaya/src/main/cpp/quickshiori
 	url = https://github.com/cronfox/quickshiori.git
+[submodule "shiori-yaya/src/main/cpp/saori/curl"]
+	path = shiori-yaya/src/main/cpp/saori/curl
+	url = https://github.com/curl/curl.git
+	shallow = true

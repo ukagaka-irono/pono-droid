@@ -107,6 +107,8 @@ abstract class GenerateLicenseAssets : DefaultTask() {
             Entry("saori_budoux", "MIT", "https://github.com/Tatakinov/saori_budoux", read("saori/saori_budoux/LICENSE").trim()),
             // 伺かゴースト用ライセンスと修正 BSD ライセンスの両方が書いてある（csaori.h も同じ配布物のもの）
             Entry("MahjongUtil", "BSD-3-Clause", "https://github.com/nikolat/MahjongUtil", read("saori/MahjongUtil/license.txt").trim()),
+            Entry("ninix-saori", "MIT", "https://github.com/Tatakinov/ninix-saori", read("saori/ninix-saori/LICENSE").trim()),
+            Entry("curl", "curl", "https://curl.se/", read("saori/curl/COPYING").trim()),
             // Rust の SAORI（中で使う crate と Rust の標準ライブラリは後ろにまとめて並ぶ）
             Entry("saori-calcs", "MIT", "https://github.com/tukinami/saori-calcs", read("saori/saori-calcs/LICENSE").trim()),
             Entry("saori-japanese-gengou", "MIT", "https://github.com/tukinami/saori-japanese-gengou", read("saori/saori-japanese-gengou/LICENSE").trim()),

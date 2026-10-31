@@ -291,6 +291,51 @@ target_compile_definitions(saori_mahjongutil PRIVATE CUSTOM_CREATE_INSTANCE)
 target_compile_options(saori_mahjongutil PRIVATE -fms-extensions)
 pono_saori_library(saori_mahjongutil)
 
+# ninix-saori の saori_curl（URL のテキストを取る。saori_curl.dll）。libcurl（サブモジュール saori/curl）を HTTP / HTTPS だけで作り、
+# TLS は luamod/boringssl（Kagari と同じ）。証明書は Android の /system/etc/security/cacerts を見る。
+# curl の CMake は find_package(OpenSSL) で探して試しにリンクするが、configure のときには BoringSSL はまだできていないので、
+# OpenSSL::SSL・OpenSSL::Crypto を BoringSSL の ssl・crypto として先に置き、調べた結果も先に入れておく
+add_library(OpenSSL::Crypto INTERFACE IMPORTED)
+set_target_properties(OpenSSL::Crypto PROPERTIES
+    INTERFACE_LINK_LIBRARIES crypto INTERFACE_INCLUDE_DIRECTORIES ${LUAMOD_DIR}/boringssl/include)
+add_library(OpenSSL::SSL INTERFACE IMPORTED)
+set_target_properties(OpenSSL::SSL PROPERTIES
+    INTERFACE_LINK_LIBRARIES "ssl;OpenSSL::Crypto" INTERFACE_INCLUDE_DIRECTORIES ${LUAMOD_DIR}/boringssl/include)
+set(OPENSSL_INCLUDE_DIR ${LUAMOD_DIR}/boringssl/include CACHE PATH "" FORCE)
+set(OPENSSL_SSL_LIBRARY ssl CACHE STRING "" FORCE)
+set(OPENSSL_CRYPTO_LIBRARY crypto CACHE STRING "" FORCE)
+set(HAVE_BORINGSSL 1 CACHE INTERNAL "")
+set(HAVE_AWSLC 0 CACHE INTERNAL "")
+set(HAVE_LIBRESSL 0 CACHE INTERNAL "")
+set(HAVE_DES_ECB_ENCRYPT 1 CACHE INTERNAL "")
+set(HAVE_SSL_SET0_WBIO 1 CACHE INTERNAL "")
+foreach(off BUILD_CURL_EXE BUILD_SHARED_LIBS BUILD_LIBCURL_DOCS BUILD_MISC_DOCS ENABLE_CURL_MANUAL BUILD_EXAMPLES
+        CURL_ZLIB CURL_BROTLI CURL_ZSTD USE_NGHTTP2 USE_LIBIDN2 CURL_USE_LIBPSL CURL_USE_LIBSSH2 CURL_USE_LIBSSH
+        USE_LIBRTMP CURL_USE_GSSAPI CURL_ENABLE_EXPORT_TARGET)
+    set(${off} OFF CACHE BOOL "" FORCE)
+endforeach()
+foreach(on CURL_USE_OPENSSL HTTP_ONLY CURL_DISABLE_LDAP CURL_DISABLE_INSTALL)
+    set(${on} ON CACHE BOOL "" FORCE)
+endforeach()
+set(CURL_CA_PATH /system/etc/security/cacerts CACHE STRING "" FORCE)
+set(CURL_CA_BUNDLE none CACHE STRING "" FORCE)
+add_subdirectory(${SAORI_DIR}/curl ${CMAKE_CURRENT_BINARY_DIR}/curl EXCLUDE_FROM_ALL)
+# curl の自前の ASN1_STRING_get_length が BoringSSL のものとぶつかるので、curl の側の名前を変える
+set_source_files_properties(${SAORI_DIR}/curl/lib/vtls/openssl.c DIRECTORY ${SAORI_DIR}/curl/lib PROPERTIES
+    COMPILE_OPTIONS "-include;${CMAKE_CURRENT_SOURCE_DIR}/shim/compat/pono_curl_boringssl.h")
+
+set(NINIX_SAORI_DIR ${SAORI_DIR}/ninix-saori)
+add_library(saori_curl SHARED
+    ${NINIX_SAORI_DIR}/implementation/saori_curl/lib.cc
+    ${NINIX_SAORI_DIR}/skeleton/base/header.cc
+    shim/pono_saori_ninix.cpp)
+target_include_directories(saori_curl PRIVATE ${NINIX_SAORI_DIR} ${NINIX_SAORI_DIR}/skeleton)
+target_compile_definitions(saori_curl PRIVATE PONO_NINIX_SAORI=saori_curl)
+target_link_libraries(saori_curl PRIVATE CURL::libcurl)
+pono_saori_library(saori_curl)
+# 元の Makefile と同じく C++20
+target_compile_options(saori_curl PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=c++20>)
+
 # ---- Rust の SAORI ----
 # tukinami さんたちの Rust の SAORI（サブモジュール saori/saori-*）。Gradle（prepareRustSaoriSources）が RUST_SAORI_DIR に
 # Android 用の lib.rs・chars.rs と並べて写したものを、cargo で staticlib にしてから libsaori_<名前>.so に入れる。

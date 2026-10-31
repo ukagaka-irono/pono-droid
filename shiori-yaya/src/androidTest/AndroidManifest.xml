@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- テスト用の APK だけ。saori_curl（libcurl）が https で取れることを確かめる（アプリ本体は INTERNET を持っている） -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+</manifest>
