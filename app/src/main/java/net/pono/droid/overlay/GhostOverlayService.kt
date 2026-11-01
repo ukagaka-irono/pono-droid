@@ -131,7 +131,7 @@ class GhostOverlayService : LifecycleService() {
             // 動いているゴーストをすべて終える（それぞれに OnCloseAll）
             ACTION_STOP -> if (controllers.isEmpty()) stopSelf() else controllers.forEach { it.close(force = true) }
             // アプリのゴースト一覧から始めたものは OnUpdateResultExplorer で結果を送る
-            ACTION_UPDATE -> mainController?.networkUpdate(explorer = intent.getBooleanExtra(EXTRA_EXPLORER, false)) ?: toast("ゴーストが起動していません")
+            ACTION_UPDATE -> mainController?.networkUpdate(explorer = intent.getBooleanExtra(EXTRA_EXPLORER, false)) ?: toast(getString(R.string.overlay_no_ghost_running))
             ACTION_SHOW -> controllers.forEach { it.restoreWindows("user") }
             ACTION_TRAY_CLICK, ACTION_TRAY_DISMISS -> {
                 val title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
@@ -230,7 +230,7 @@ class GhostOverlayService : LifecycleService() {
     private fun startBeside(ghost: Ghost, calledBy: PreviousGhost?): Boolean {
         if (sessions.any { it.dirName == ghost.dir.name } || ghost.dir.name in pendingRestarts) return false
         val slot = freeSlot() ?: run {
-            toast("同時に動かせるゴーストは ${ShioriService.SLOTS} 体までです")
+            toast(resources.getQuantityString(R.plurals.overlay_too_many_ghosts, ShioriService.SLOTS, ShioriService.SLOTS))
             return false
         }
         startSession(ghost, previous = null, calledBy = calledBy, slot = slot)
@@ -359,7 +359,7 @@ class GhostOverlayService : LifecycleService() {
                 }
                 if (loaded == null) {
                     _loading.value = null
-                    toast("${ghost.name}: シェルがありません")
+                    toast(getString(R.string.overlay_no_shell, ghost.name))
                     endSession(this@GhostSession)
                     return@launch
                 }
@@ -431,7 +431,7 @@ class GhostOverlayService : LifecycleService() {
                         try {
                             startActivity(Intent.createChooser(send, file.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
                         } catch (e: ActivityNotFoundException) {
-                            toast("渡せるアプリが見つかりません")
+                            toast(getString(R.string.overlay_no_app_to_send))
                         }
                     }
 
@@ -488,7 +488,7 @@ class GhostOverlayService : LifecycleService() {
                             startActivity(intent)
                             true
                         } catch (e: ActivityNotFoundException) {
-                            toast("開けるアプリが見つかりません")
+                            toast(getString(R.string.overlay_no_app_to_open))
                             false
                         }
                     }
@@ -623,7 +623,7 @@ class GhostOverlayService : LifecycleService() {
                                     true
                                 }.getOrDefault(false)
                             }
-                            if (!ok) toast("壁紙を変えられませんでした")
+                            if (!ok) toast(getString(R.string.overlay_wallpaper_failed))
                         }
                         return true
                     }
@@ -639,7 +639,7 @@ class GhostOverlayService : LifecycleService() {
                             startActivity(intent)
                             true
                         } catch (e: ActivityNotFoundException) {
-                            toast("書き換えられるアプリが見つかりません")
+                            toast(getString(R.string.overlay_no_app_to_edit))
                             false
                         }
                     }
@@ -724,7 +724,7 @@ class GhostOverlayService : LifecycleService() {
                             try {
                                 startActivity(Intent(Intent.ACTION_SENDTO, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                             } catch (e: ActivityNotFoundException) {
-                                toast("メールのアプリが見つかりません")
+                                toast(getString(R.string.overlay_no_mail_app))
                             }
                             return
                         }
@@ -735,7 +735,7 @@ class GhostOverlayService : LifecycleService() {
                         try {
                             startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                         } catch (e: ActivityNotFoundException) {
-                            toast("ブラウザが見つかりません")
+                            toast(getString(R.string.overlay_no_browser))
                         }
                     }
 
@@ -1123,7 +1123,7 @@ class GhostOverlayService : LifecycleService() {
                         val ok = withContext(Dispatchers.IO) {
                             runCatching { contentResolver.openOutputStream(uri, "wt")?.use { out -> file.inputStream().use { it.copyTo(out) } } != null }.getOrDefault(false)
                         }
-                        if (!ok) toast("保存できませんでした")
+                        if (!ok) toast(getString(R.string.overlay_save_failed))
                         return@launch
                     }
                     lastSize = size
@@ -1160,7 +1160,7 @@ class GhostOverlayService : LifecycleService() {
             log = { Log.w(TAG, it) },
         )
         val main = server(SstpServer.DEFAULT_PORT)
-        if (!main.start()) toast("SSTP のポート ${SstpServer.DEFAULT_PORT} がほかのアプリに使われています")
+        if (!main.start()) toast(getString(R.string.overlay_sstp_port_in_use, SstpServer.DEFAULT_PORT))
         // 9821 は使われていても知らせない（9801 だけで足りる）
         val extra = server(SstpServer.SSP_PORT).takeIf { it.start() }
         sstp = listOfNotNull(main.takeIf { it.localPort > 0 }, extra)
@@ -1512,7 +1512,7 @@ class GhostOverlayService : LifecycleService() {
      */
     private fun showGhostMessage(title: String, text: String, dirName: String) {
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(MESSAGE_CHANNEL, "ゴーストからのお知らせ", NotificationManager.IMPORTANCE_DEFAULT))
+        nm.createNotificationChannel(NotificationChannel(MESSAGE_CHANNEL, getString(R.string.overlay_channel_messages), NotificationManager.IMPORTANCE_DEFAULT))
         fun action(action: String, code: Int) = PendingIntent.getService(
             this, code,
             Intent(this, GhostOverlayService::class.java).setAction(action).putExtra(EXTRA_TITLE, title).putExtra(EXTRA_TEXT, text)
@@ -1539,7 +1539,7 @@ class GhostOverlayService : LifecycleService() {
         // 「標準」にして、音とバイブレーションだけ切る（チャンネルの重要度は後から変えられないので作り直す）
         nm.deleteNotificationChannel(OLD_CHANNEL)
         nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "常駐中のゴースト", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            NotificationChannel(CHANNEL, getString(R.string.overlay_channel_running), NotificationManager.IMPORTANCE_DEFAULT).apply {
                 setSound(null, null)
                 enableVibration(false)
                 setShowBadge(false)
@@ -1555,7 +1555,7 @@ class GhostOverlayService : LifecycleService() {
             this, 2, Intent(this, GhostOverlayService::class.java).setAction(ACTION_SHOW), PendingIntent.FLAG_IMMUTABLE,
         )
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        val title = if (minimized) "ゴーストを隠しています" else "ゴーストが起動しています"
+        val title = getString(if (minimized) R.string.overlay_notification_hidden else R.string.overlay_notification_running)
         // 通知は先頭のもの以外は折りたたまれ、標準のボタン（addAction）は隠れてしまう。
         // 折りたたまれた1行の中にもボタンを置いておく
         val icon = trayIconBitmap(minimized)
@@ -1580,10 +1580,10 @@ class GhostOverlayService : LifecycleService() {
             .setLargeIcon(icon)
             // 隠している間は、通知に触れたら出し直す
             .setContentIntent(if (minimized) show else open)
-        if (minimized) builder.addAction(0, "表示", show)
+        if (minimized) builder.addAction(0, getString(R.string.notification_show), show)
         val notification: Notification = builder
-            .addAction(0, "ネットワーク更新", update)
-            .addAction(0, "終了", stop)
+            .addAction(0, getString(R.string.overlay_action_network_update), update)
+            .addAction(0, getString(R.string.notification_stop), stop)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
@@ -1599,7 +1599,7 @@ class GhostOverlayService : LifecycleService() {
     private fun overlayRevoked() {
         if (sessions.isEmpty()) return
         // トーストは2行で切られうるので、一覧のカードの文より短く。ほかのトーストと同じく「。」は付けない
-        toast("ゴーストを出すには「他のアプリの上に重ねて表示」を許可してください")
+        toast(getString(R.string.overlay_permission_revoked))
         teardown()
         stopSelf()
     }

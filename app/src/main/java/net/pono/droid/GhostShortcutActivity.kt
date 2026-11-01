@@ -17,7 +17,7 @@ class GhostShortcutActivity : ComponentActivity() {
         val dirName = intent.getStringExtra(EXTRA_GHOST)?.takeIf { it.isNotBlank() && '/' !in it && it != ".." }
         val ghost = dirName?.let { GhostStore.repository(this).find(it) }
         when {
-            ghost == null -> Toast.makeText(this, "このゴーストはもう入っていません", Toast.LENGTH_LONG).show()
+            ghost == null -> Toast.makeText(this, getString(R.string.shortcut_ghost_missing), Toast.LENGTH_LONG).show()
             // 他のアプリの上に出す許可が無ければ、許可を出せるアプリの画面を開く
             !Settings.canDrawOverlays(this) -> startActivity(Intent(this, MainActivity::class.java))
             else -> GhostOverlayService.start(this, ghost.dir.name)

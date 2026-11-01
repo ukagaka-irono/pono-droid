@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="developer_back">Back</string>
+    <string name="developer_close">Close</string>
+    <!-- 開発用の画面の名前 -->
+    <string name="developer_page_backlog">Speech history</string>
+    <string name="developer_page_log">Log</string>
+    <string name="developer_page_shiori_request">SHIORI request</string>
+    <string name="developer_page_surface_test">Surface test</string>
+    <string name="developer_page_palette">Development interface</string>
+    <!-- 開発用パレットの「ほかの画面」の説明 -->
+    <string name="developer_page_backlog_desc">What the ghost said, newest first</string>
+    <string name="developer_page_log_desc">Records of scripts, errors, network and updates</string>
+    <string name="developer_page_shiori_request_desc">Send an event and see the script that comes back</string>
+    <string name="developer_page_surface_test_desc">Show the shell\'s surfaces one by one</string>
+    <string name="developer_no_ghost">No ghost is running</string>
+    <string name="developer_backlog_empty">Nothing has been said yet</string>
+    <!-- ログの種類 -->
+    <string name="developer_log_script">Script</string>
+    <string name="developer_log_error">Error</string>
+    <string name="developer_log_network">Network</string>
+    <string name="developer_log_update">Update</string>
+    <string name="developer_log_empty">No records</string>
+    <!-- SHIORI リクエスト -->
+    <string name="developer_event_id">Event ID</string>
+    <string name="developer_references">Reference (one per line)</string>
+    <string name="developer_send">Send</string>
+    <string name="developer_send_and_play">Send and play</string>
+    <string name="developer_sending">Sending…</string>
+    <!-- %1$s は例外のメッセージ -->
+    <string name="developer_send_failed">Couldn\'t send: %1$s</string>
+    <string name="developer_returned_script">Returned script</string>
+    <string name="developer_no_answer">(No response)</string>
+    <!-- サーフェステスト -->
+    <string name="developer_no_surfaces">No surfaces</string>
+    <!-- %1$d はサーフェスの番号 -->
+    <string name="developer_surface_number">Surface %1$d</string>
+    <string name="developer_show_surface">Show</string>
+    <!-- 開発用パレットのゴーストのようす。%1$s は名前 -->
+    <string name="developer_info_shiori">SHIORI: %1$s</string>
+    <string name="developer_info_shell">Shell: %1$s</string>
+    <string name="developer_info_balloon">Balloon: %1$s</string>
+    <string name="developer_info_status">Status: %1$s</string>
+    <!-- 読み直し -->
+    <string name="developer_reload">Reload</string>
+    <string name="developer_reload_shell">Shell</string>
+    <string name="developer_reload_ghost">Ghost</string>
+    <!-- SHIORI のログ -->
+    <string name="developer_shiori_log">SHIORI log</string>
+    <string name="developer_shiori_log_enable">Keep SHIORI\'s internal log</string>
+    <string name="developer_open_log">Open</string>
+    <string name="developer_log_not_found">Log not found (SHIORI did not return its location, or the file does not exist)</string>
+    <string name="developer_other_pages">Other screens</string>
+    <!-- AI グラフの画面 -->
+    <string name="aigraph_title">AI graph</string>
+    <string name="aigraph_close">Close</string>
+    <string name="aigraph_empty">No AI graph</string>
+    <!-- %1$d はグラフの番号（1 から） -->
+    <string name="aigraph_graph_number">Graph %1$d</string>
+    <!-- ライセンスの画面 -->
+    <string name="licenses_title">Licenses</string>
+    <string name="licenses_back">Back</string>
+    <!-- %1$s は product_name -->
+    <string name="licenses_intro">Licenses for %1$s and the software it uses. Tap a name to show the full text.</string>
+    <!-- 文を読む画面（readme など） -->
+    <string name="viewer_close">Close</string>
+</resources>

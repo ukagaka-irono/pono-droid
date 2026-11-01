@@ -1,5 +1,7 @@
 package net.pono.droid.overlay
 
+import net.pono.droid.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -286,7 +288,7 @@ private fun SimpleOnlineMarker(modifier: Modifier) {
         animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
         label = "online",
     )
-    Text("● オンライン", fontSize = 10.sp, color = Color(0xFF8D6E63), modifier = modifier.graphicsLayer { this.alpha = alpha })
+    Text(stringResource(R.string.overlay_online_marker), fontSize = 10.sp, color = Color(0xFF8D6E63), modifier = modifier.graphicsLayer { this.alpha = alpha })
 }
 
 /** バルーンに出す印の文字（\![set,balloonmarker]）と数（\![set,balloonnum]） */
@@ -624,7 +626,7 @@ private fun SkinFrame(
             val (x, y) = look.onlinePosition(w, h).let { (ox, oy) -> inside(ox, oy, bmp.width, bmp.height) }
             Image(
                 bmp,
-                contentDescription = "オンライン",
+                contentDescription = stringResource(R.string.overlay_online),
                 contentScale = ContentScale.FillBounds,
                 modifier = Modifier.offset(px(x), px(y)).size(px(bmp.width), px(bmp.height)),
             )
@@ -703,7 +705,7 @@ private fun SkinFrame(
         val more = scroll.value < scroll.maxValue
         if (clickWait && !more) skin.clickWait(scopeId)?.let { mark ->
             val (x, y) = b.clickWaitPosition(w, h, mark.width, mark.height)
-            Image(mark, contentDescription = "クリック待ち", contentScale = ContentScale.FillBounds, modifier = Modifier.offset(px(x), px(y)).size(px(mark.width), px(mark.height)))
+            Image(mark, contentDescription = stringResource(R.string.overlay_click_wait), contentScale = ContentScale.FillBounds, modifier = Modifier.offset(px(x), px(y)).size(px(mark.width), px(mark.height)))
         }
         for ((which, visible) in listOf(0 to (scroll.value > 0), 1 to more)) {
             val arrow = skin.arrow(which, scopeId) ?: continue
@@ -724,7 +726,7 @@ private fun SkinFrame(
             ) {
                 Image(
                     arrow,
-                    contentDescription = if (which == 0) "前へ" else "続き",
+                    contentDescription = stringResource(if (which == 0) R.string.overlay_scroll_back else R.string.overlay_scroll_more),
                     contentScale = ContentScale.FillBounds,
                     modifier = Modifier.size(arrowW, arrowH),
                 )

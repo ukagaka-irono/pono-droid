@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 通知の「ネットワーク更新」を押したが、ゴーストがいない -->
+    <string name="overlay_no_ghost_running">실행 중인 고스트가 없습니다</string>
+    <!-- %1$d は同時に動かせる数 -->
+    <plurals name="overlay_too_many_ghosts">
+        <item quantity="other">고스트는 동시에 %1$d개까지 실행할 수 있습니다</item>
+    </plurals>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="overlay_no_shell">%1$s: 쉘이 없습니다</string>
+    <string name="overlay_no_app_to_send">보낼 수 있는 앱을 찾을 수 없습니다</string>
+    <string name="overlay_no_app_to_open">열 수 있는 앱을 찾을 수 없습니다</string>
+    <string name="overlay_wallpaper_failed">배경화면을 바꾸지 못했습니다</string>
+    <string name="overlay_no_app_to_edit">편집할 수 있는 앱을 찾을 수 없습니다</string>
+    <string name="overlay_no_mail_app">메일 앱을 찾을 수 없습니다</string>
+    <string name="overlay_no_browser">브라우저를 찾을 수 없습니다</string>
+    <string name="overlay_save_failed">저장하지 못했습니다</string>
+    <!-- %1$d はポートの番号 -->
+    <string name="overlay_sstp_port_in_use">SSTP 포트(%1$d)를 다른 앱이 사용하고 있습니다</string>
+    <!-- 通知のチャンネルの名前（\![set,trayballoon]） -->
+    <string name="overlay_channel_messages">고스트의 알림</string>
+    <!-- 通知のチャンネルの名前（常駐の通知） -->
+    <string name="overlay_channel_running">실행 중인 고스트</string>
+    <!-- 常駐の通知の題 -->
+    <string name="overlay_notification_hidden">고스트를 숨기고 있습니다</string>
+    <!-- 常駐の通知の題 -->
+    <string name="overlay_notification_running">고스트가 실행 중입니다</string>
+    <!-- 常駐の通知のボタン -->
+    <string name="overlay_action_network_update">네트워크 업데이트</string>
+    <!-- トーストは 2 行で切られうるので短く -->
+    <string name="overlay_permission_revoked">고스트를 표시하려면 ‘다른 앱 위에 표시’를 허용해 주세요</string>
+    <!-- 簡易バルーンのオンラインの印 -->
+    <string name="overlay_online_marker">● 온라인</string>
+    <!-- オンラインの印の画像の説明（読み上げ） -->
+    <string name="overlay_online">온라인</string>
+    <!-- クリック待ちの印の画像の説明（読み上げ） -->
+    <string name="overlay_click_wait">클릭 대기</string>
+    <!-- バルーンの矢印の説明（読み上げ） -->
+    <string name="overlay_scroll_back">이전</string>
+    <!-- バルーンの矢印の説明（読み上げ） -->
+    <string name="overlay_scroll_more">다음</string>
+    <!-- 日付の箱の欄 -->
+    <string name="input_year">년</string>
+    <string name="input_month">월</string>
+    <string name="input_day">일</string>
+    <!-- 時刻の箱の欄 -->
+    <string name="input_hour">시</string>
+    <string name="input_minute">분</string>
+    <string name="input_second">초</string>
+    <string name="input_password_note">입력한 내용은 고스트의 스크립트에 전달됩니다. 다른 서비스의 비밀번호는 입력하지 마세요.</string>
+    <string name="input_cancel">취소</string>
+    <!-- 入力の箱の欄の名前 -->
+    <string name="input_kind_input">입력</string>
+    <string name="input_kind_password">비밀번호</string>
+    <string name="input_kind_communicate">말 걸기</string>
+    <string name="input_kind_teach">가르치기</string>
+    <string name="input_kind_date">날짜</string>
+    <string name="input_kind_time">시각</string>
+    <string name="input_kind_ip">IP 주소</string>
+    <string name="input_kind_slider">값</string>
+    <string name="input_kind_textarea">입력(여러 줄)</string>
+    <!-- 音のウィンドウのボタン -->
+    <string name="sound_play">재생</string>
+    <string name="sound_pause">일시 정지</string>
+    <string name="sound_close">닫기</string>
+    <!-- スライダーの今の値と、選べる幅 -->
+    <string name="input_slider_value">%1$d (%2$d~%3$d)</string>
+</resources>

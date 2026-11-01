@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- x-ukagaka-link: のリンクを開いたが、そのゴーストが動いていない -->
+    <string name="share_ghost_not_running">該人格未在執行</string>
+    <!-- 共有した文字やファイルを渡すゴーストがいない -->
+    <string name="share_no_ghost">沒有正在執行的人格</string>
+    <string name="share_pick_file">請選擇要分享的檔案</string>
+    <string name="share_files_too_large">檔案太大（合計最多 64MB）</string>
+    <string name="share_cannot_read">無法讀取檔案</string>
+    <string name="share_some_too_large">未傳遞過大的檔案（合計最多 64MB）</string>
+    <!-- リンクからのインストールの確認の題とボタン -->
+    <string name="share_install">安裝</string>
+    <!-- %1$s は URL -->
+    <string name="share_install_homeurl">要用與線上更新相同的方式，從「%1$s」下載檔案並安裝嗎？</string>
+    <!-- %1$s は URL -->
+    <string name="share_install_nar">要安裝「%1$s」的 .nar 嗎？</string>
+    <string name="share_fetch_failed">無法下載</string>
+    <!-- ゴーストが題を付けなかったときの、色を選ぶダイアログの題 -->
+    <string name="dialog_color_title">選擇顏色</string>
+    <!-- %1$d は 0〜255 -->
+    <string name="dialog_color_red">紅：%1$d</string>
+    <!-- %1$d は 0〜255 -->
+    <string name="dialog_color_green">綠：%1$d</string>
+    <!-- %1$d は 0〜255 -->
+    <string name="dialog_color_blue">藍：%1$d</string>
+    <string name="dialog_color_pick">選擇</string>
+    <string name="shortcut_ghost_missing">此人格已不存在</string>
+    <string name="store_too_large">檔案太大（最多 1GB）</string>
+    <string name="store_cannot_open">無法開啟檔案</string>
+    <!-- %1$s はわけ -->
+    <string name="store_install_failed">無法安裝：%1$s</string>
+    <!-- 入れたものの 1 つ。%1$s は名前 -->
+    <string name="store_item_ghost">人格：%1$s</string>
+    <!-- %1$s は名前 -->
+    <string name="store_item_balloon">對話方塊：%1$s</string>
+    <!-- %1$s は名前 -->
+    <string name="store_item_shell">外殼：%1$s</string>
+    <!-- %1$s は名前 -->
+    <string name="store_item_supplement">附加檔案：%1$s</string>
+    <!-- %1$s は名前 -->
+    <string name="store_item_plugin">外掛程式：%1$s</string>
+    <!-- %1$s は store_item_* を言語の並べ方（ListFormatter）でつないだもの -->
+    <string name="store_installed">已安裝 %1$s</string>
+</resources>

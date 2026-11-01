@@ -24,4 +24,6 @@
     <!-- 設定の「言語」の行（Android 13 以降）。%1$s は language_name -->
     <string name="settings_language">언어: %1$s</string>
     <string name="settings_language_change">변경</string>
+    <!-- 版の名前と番号（version_label の %2$s に入る） -->
+    <string name="version_name_code">%1$s (%2$d)</string>
 </resources>

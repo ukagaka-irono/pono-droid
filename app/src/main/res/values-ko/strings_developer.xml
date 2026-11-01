@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="developer_back">뒤로</string>
+    <string name="developer_close">닫기</string>
+    <!-- 開発用の画面の名前 -->
+    <string name="developer_page_backlog">대사 기록</string>
+    <string name="developer_page_log">로그</string>
+    <string name="developer_page_shiori_request">SHIORI 요청</string>
+    <string name="developer_page_surface_test">서페이스 테스트</string>
+    <string name="developer_page_palette">개발자 인터페이스</string>
+    <!-- 開発用パレットの「ほかの画面」の説明 -->
+    <string name="developer_page_backlog_desc">고스트가 한 말을 최신순으로</string>
+    <string name="developer_page_log_desc">스크립트·오류·통신·업데이트 기록</string>
+    <string name="developer_page_shiori_request_desc">이벤트를 보내고 돌아온 스크립트 보기</string>
+    <string name="developer_page_surface_test_desc">쉘의 서페이스를 하나씩 표시</string>
+    <string name="developer_no_ghost">실행 중인 고스트가 없습니다</string>
+    <string name="developer_backlog_empty">아직 대사가 없습니다</string>
+    <!-- ログの種類 -->
+    <string name="developer_log_script">스크립트</string>
+    <string name="developer_log_error">오류</string>
+    <string name="developer_log_network">통신</string>
+    <string name="developer_log_update">업데이트</string>
+    <string name="developer_log_empty">기록이 없습니다</string>
+    <!-- SHIORI リクエスト -->
+    <string name="developer_event_id">이벤트 ID</string>
+    <string name="developer_references">Reference (한 줄에 하나씩)</string>
+    <string name="developer_send">보내기</string>
+    <string name="developer_send_and_play">보내고 재생</string>
+    <string name="developer_sending">보내는 중…</string>
+    <!-- %1$s は例外のメッセージ -->
+    <string name="developer_send_failed">보내지 못했습니다: %1$s</string>
+    <string name="developer_returned_script">돌아온 스크립트</string>
+    <string name="developer_no_answer">(응답 없음)</string>
+    <!-- サーフェステスト -->
+    <string name="developer_no_surfaces">서페이스가 없습니다</string>
+    <!-- %1$d はサーフェスの番号 -->
+    <string name="developer_surface_number">서페이스 %1$d</string>
+    <string name="developer_show_surface">표시</string>
+    <!-- 開発用パレットのゴーストのようす。%1$s は名前 -->
+    <string name="developer_info_shiori">SHIORI: %1$s</string>
+    <string name="developer_info_shell">쉘: %1$s</string>
+    <string name="developer_info_balloon">말풍선: %1$s</string>
+    <string name="developer_info_status">상태: %1$s</string>
+    <!-- 読み直し -->
+    <string name="developer_reload">다시 불러오기</string>
+    <string name="developer_reload_shell">쉘</string>
+    <string name="developer_reload_ghost">고스트</string>
+    <!-- SHIORI のログ -->
+    <string name="developer_shiori_log">SHIORI 로그</string>
+    <string name="developer_shiori_log_enable">SHIORI 내부 로그 남기기</string>
+    <string name="developer_open_log">열기</string>
+    <string name="developer_log_not_found">로그를 찾을 수 없습니다 (SHIORI가 로그 위치를 알려 주지 않았거나 파일이 없습니다)</string>
+    <string name="developer_other_pages">다른 화면</string>
+    <!-- AI グラフの画面 -->
+    <string name="aigraph_title">AI 그래프</string>
+    <string name="aigraph_close">닫기</string>
+    <string name="aigraph_empty">AI 그래프가 없습니다</string>
+    <!-- %1$d はグラフの番号（1 から） -->
+    <string name="aigraph_graph_number">그래프 %1$d</string>
+    <!-- ライセンスの画面 -->
+    <string name="licenses_title">라이선스</string>
+    <string name="licenses_back">뒤로</string>
+    <!-- %1$s は product_name -->
+    <string name="licenses_intro">%1$s 및 사용 중인 소프트웨어의 라이선스입니다. 이름을 누르면 전문을 표시합니다.</string>
+    <!-- 文を読む画面（readme など） -->
+    <string name="viewer_close">닫기</string>
+</resources>

@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 一覧の画面（MainActivity）の文言 -->
+<resources>
+    <!-- 一覧の画面の上の帯 -->
+    <string name="main_licenses">Licenses</string>
+    <!-- 「他のアプリの上に重ねて表示」は端末の設定の名前 -->
+    <string name="main_overlay_permission">To show ghosts over other apps, allow \"Display over other apps\".</string>
+    <string name="main_allow">Allow</string>
+    <string name="main_installing">Installing…</string>
+    <string name="main_install_nar">Install .nar</string>
+    <!-- ゴーストのネットワーク更新 -->
+    <string name="main_update">Update</string>
+    <!-- 動いているゴーストをすべて終わらせる -->
+    <string name="main_quit">Quit</string>
+    <string name="main_loading_ghosts">Loading ghosts…</string>
+    <string name="main_no_ghosts">No ghosts. Install a .nar file.</string>
+    <!-- 一覧の見出し -->
+    <string name="main_balloons_header">Balloons</string>
+    <!-- 一覧の見出し -->
+    <string name="main_plugins_header">Plugins</string>
+    <string name="main_no_browser">No app can open this page</string>
+    <!-- %1$s は消したものの名前 -->
+    <string name="main_deleted">Deleted: %1$s</string>
+    <!-- %1$s は消せなかったものの名前 -->
+    <string name="main_delete_failed">Couldn\'t delete: %1$s</string>
+    <!-- 名前を括弧でくくる形（main_delete_left_balloons_message の名前の並び） -->
+    <string name="main_quoted_name">\"%1$s\"</string>
+    <!-- main_quoted_name を並べるときの区切り（日本語は「」が区切りを兼ねるので空） -->
+    <string name="main_quoted_list_separator">", "</string>
+    <string name="main_some_balloons_not_deleted">Some balloons couldn\'t be deleted</string>
+    <!-- ゴーストを消したあと、そのゴースト向けのバルーンを残すボタン -->
+    <string name="main_keep">Keep</string>
+    <string name="main_delete_balloon_title">Delete balloon</string>
+    <!-- %1$s はバルーンの名前 -->
+    <string name="main_delete_balloon_message">Delete \"%1$s\"? Ghosts that chose this balloon will go back to their own balloon or the simple balloon.</string>
+    <!-- %1$s はバルーンの名前 -->
+    <string name="main_balloon_in_use">%1$s (in use)</string>
+    <!-- %1$s はゴーストの名前（recommended.ghost） -->
+    <string name="main_balloon_for">For \"%1$s\"</string>
+    <string name="main_delete_plugin_title">Delete plugin</string>
+    <!-- %1$s はプラグインの名前 -->
+    <string name="main_delete_plugin_message">Delete \"%1$s\"? Data saved by the plugin will also be erased. This can\'t be undone.</string>
+    <!-- pono-droid の簡易バルーン -->
+    <string name="main_simple_balloon">Simple balloon</string>
+    <!-- %1$s はバルーンの名前、%2$s はそのバルーンが向けたゴーストの名前 -->
+    <string name="main_balloon_for_other_ghost">The balloon \"%1$s\" was made for the ghost \"%2$s\". It may not look right with other ghosts.</string>
+    <!-- %1$s はゴーストが推奨するバルーンの名前 -->
+    <string name="main_ghost_recommends_balloon">This ghost was made for the balloon \"%1$s\". It may not look right with other balloons.</string>
+    <!-- 「シェル: 名前」のような、項目の名前と今の値 -->
+    <string name="main_label_value">%1$s: %2$s</string>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="main_ghost_loading">%1$s (loading)</string>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="main_ghost_running">%1$s (running)</string>
+    <string name="main_start">Start</string>
+    <string name="main_restart">Restart</string>
+    <!-- 動いているほかのゴーストと一緒に起動する -->
+    <string name="main_start_beside">Start alongside</string>
+    <string name="main_shell">Shell</string>
+    <string name="main_balloon">Balloon</string>
+    <string name="main_switch_balloon_title">Change balloon</string>
+    <string name="main_switch_balloon_anyway">Change anyway</string>
+    <string name="main_delete_ghost_title">Delete ghost</string>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="main_delete_ghost_message">Delete \"%1$s\"? Data saved by the ghost will also be erased. This can\'t be undone.</string>
+    <string name="settings_character_scale">Character size</string>
+    <string name="settings_balloon_scale">Balloon size</string>
+    <string name="settings_balloon_opacity">Balloon opacity</string>
+    <!-- 一覧の見出し -->
+    <string name="settings_header">Settings</string>
+    <!-- 端末の「アプリの言語」の画面を開けなかった -->
+    <string name="settings_language_unavailable">Couldn\'t open the language settings</string>
+    <!-- キャラクターを画面の端に揃えるかどうか -->
+    <string name="settings_alignment">Free character movement</string>
+    <string name="settings_alignment_ghost">Ghost\'s setting</string>
+    <string name="settings_alignment_free">Always free</string>
+    <string name="settings_alignment_limit">Always limited</string>
+    <string name="settings_developer">Developer features</string>
+    <!-- ゴーストが話した文字を読み上げる（音声合成） -->
+    <string name="settings_speech">Read what the ghost says aloud</string>
+    <string name="settings_sstp">Accept SSTP from other apps (this device only)</string>
+    <string name="settings_wallpaper">Let ghosts change the wallpaper (the old wallpaper can\'t be restored)</string>
+    <string name="settings_calendar">Tell ghosts today\'s events (device calendar)</string>
+    <string name="settings_calendar_denied">No permission to read the calendar</string>
+    <string name="settings_voice">Listen when you call the ghost\'s name (microphone)</string>
+    <string name="settings_voice_denied">No microphone permission</string>
+    <string name="settings_usb">Tell ghosts when USB devices are connected or removed</string>
+    <string name="settings_media">Tell ghosts what music or video is playing (notification access)</string>
+    <string name="settings_media_denied">No notification access</string>
+    <!-- %1$s はアカウントの名前（無ければ common_none） -->
+    <string name="settings_mail_account">Mail account: %1$s</string>
+    <string name="settings_mail_edit">Edit</string>
+    <!-- メールを確かめる間隔 -->
+    <string name="settings_mail_interval">Check interval</string>
+    <!-- 確かめる間隔: 確かめない -->
+    <string name="settings_mail_interval_off">Off</string>
+    <string name="settings_mail_saved">Saved</string>
+    <!-- %1$s は失敗の理由 -->
+    <string name="settings_mail_save_failed">Couldn\'t save: %1$s</string>
+    <string name="settings_mail_delete_title">Delete mail account</string>
+    <!-- %1$s はアカウントの名前 -->
+    <string name="settings_mail_delete_message">Delete \"%1$s\"?</string>
+    <string name="settings_mail_dialog_title">Mail account</string>
+    <string name="settings_mail_name">Name</string>
+    <string name="settings_mail_server">Server</string>
+    <string name="settings_mail_port">Port</string>
+    <string name="settings_mail_user">User name</string>
+    <string name="settings_mail_password">Password</string>
+    <string name="settings_mail_password_note">The password is saved encrypted with a key on this device</string>
+    <!-- IMAP か POP3 -->
+    <string name="settings_mail_protocol">Type</string>
+    <!-- ゴーストを消したあと、そのゴースト向けのバルーンも消すか聞く。%1$s はゴーストの名前、%2$s は main_quoted_name で括ったバルーンの名前の並び。数はバルーンの数 -->
+    <plurals name="main_delete_left_balloons_message">
+        <item quantity="one">Also delete the balloon %2$s made for \"%1$s\"? This can\'t be undone.</item>
+        <item quantity="other">Also delete the balloons %2$s made for \"%1$s\"? This can\'t be undone.</item>
+    </plurals>
+    <!-- 確かめる間隔。%1$d は分 -->
+    <plurals name="settings_mail_interval_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
+</resources>

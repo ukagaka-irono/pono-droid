@@ -58,8 +58,8 @@ fun LicensesScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("ライセンス") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("戻る") } },
+                title = { Text(stringResource(R.string.licenses_title)) },
+                navigationIcon = { TextButton(onClick = onBack) { Text(stringResource(R.string.licenses_back)) } },
             )
         },
     ) { padding ->
@@ -69,14 +69,14 @@ fun LicensesScreen(onBack: () -> Unit) {
         ) {
             item {
                 Text(
-                    stringResource(R.string.product_name) + " バージョン ${AppVersion.of(context)}",
+                    stringResource(R.string.version_label, stringResource(R.string.product_name), AppVersion.of(context).label(context)),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(top = 8.dp),
                 )
             }
             item {
                 Text(
-                    stringResource(R.string.product_name) + " と、利用しているソフトウェアのライセンスです。名前をタップすると全文を表示します。",
+                    stringResource(R.string.licenses_intro, stringResource(R.string.product_name)),
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )

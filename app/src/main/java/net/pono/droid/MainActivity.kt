@@ -1,6 +1,7 @@
 package net.pono.droid
 
 import net.pono.baseware.plugin.Plugin
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import java.io.File
 import androidx.compose.ui.unit.Dp
@@ -22,6 +23,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.annotation.RequiresApi
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -133,10 +135,11 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
 
     suspend fun reload() {
         val repo = GhostStore.repository(context)
+        val simpleBalloon = context.getString(R.string.main_simple_balloon)
         // 壊れたゴーストやバルーンがあっても一覧は出す（出なければ消すこともできない）
         val loaded = withContext(Dispatchers.IO) {
             runCatching { repo.list() }.getOrDefault(emptyList()).map { ghost ->
-                runCatching { GhostItem(ghost, repo.balloons) }.getOrElse { GhostItem(ghost, emptyList(), null, emptyList(), null) }
+                runCatching { GhostItem(ghost, repo.balloons, simpleBalloon) }.getOrElse { GhostItem(ghost, emptyList(), null, emptyList(), null) }
             }
         }
         val loadedBalloons = withContext(Dispatchers.IO) { runCatching { repo.balloons.list() }.getOrDefault(emptyList()) }
@@ -180,9 +183,10 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
     leftBalloons?.let { (ghostName, left) ->
         AlertDialog(
             onDismissRequest = { leftBalloons = null },
-            title = { Text("バルーンを削除") },
+            title = { Text(stringResource(R.string.main_delete_balloon_title)) },
             text = {
-                Text("「$ghostName」向けのバルーン${left.joinToString("") { "「${it.name}」" }}も削除しますか？ 元に戻せません。")
+                val names = left.map { stringResource(R.string.main_quoted_name, it.name) }.joinToString(stringResource(R.string.main_quoted_list_separator))
+                Text(pluralStringResource(R.plurals.main_delete_left_balloons_message, left.size, ghostName, names))
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -191,11 +195,17 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                         val repo = GhostStore.repository(context)
                         val ok = withContext(Dispatchers.IO) { left.all { repo.balloons.uninstall(it) } }
                         reload()
-                        snackbar.showSnackbar(if (ok) "削除しました: ${left.joinToString("、") { it.name }}" else "削除できなかったバルーンがあります")
+                        snackbar.showSnackbar(
+                            if (ok) {
+                                context.getString(R.string.main_deleted, GhostStore.joinNames(context, left.map { it.name }))
+                            } else {
+                                context.getString(R.string.main_some_balloons_not_deleted)
+                            },
+                        )
                     }
-                }) { Text("削除") }
+                }) { Text(stringResource(R.string.common_delete)) }
             },
-            dismissButton = { TextButton(onClick = { leftBalloons = null }) { Text("残す") } },
+            dismissButton = { TextButton(onClick = { leftBalloons = null }) { Text(stringResource(R.string.main_keep)) } },
         )
     }
 
@@ -203,7 +213,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.product_name)) },
-                actions = { TextButton(onClick = onShowLicenses) { Text("ライセンス") } },
+                actions = { TextButton(onClick = onShowLicenses) { Text(stringResource(R.string.main_licenses)) } },
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -215,7 +225,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
             if (!canOverlay) {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("ゴーストを他のアプリの上に表示するには、「他のアプリの上に重ねて表示」を許可してください。")
+                        Text(stringResource(R.string.main_overlay_permission))
                         Button(onClick = {
                             // 設定の画面が無い端末（Android Go など）でも落ちないよう、開けなければ何もしない
                             runCatching {
@@ -223,16 +233,16 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                                     Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")),
                                 )
                             }
-                        }) { Text("許可する") }
+                        }) { Text(stringResource(R.string.main_allow)) }
                     }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { importNar.launch(arrayOf("*/*")) }, enabled = !installing) {
-                    Text(if (installing) "インストール中…" else ".nar をインストール")
+                    Text(if (installing) stringResource(R.string.main_installing) else stringResource(R.string.main_install_nar))
                 }
-                OutlinedButton(onClick = { GhostOverlayService.update(context, explorer = true) }) { Text("更新") }
-                OutlinedButton(onClick = { GhostOverlayService.stop(context) }) { Text("終了") }
+                OutlinedButton(onClick = { GhostOverlayService.update(context, explorer = true) }) { Text(stringResource(R.string.main_update)) }
+                OutlinedButton(onClick = { GhostOverlayService.stop(context) }) { Text(stringResource(R.string.main_quit)) }
             }
             if (installing) LinearProgressIndicator(Modifier.fillMaxWidth())
             CharacterScaleSlider()
@@ -241,10 +251,10 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
             if (!listed) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    Text("ゴーストを読み込み中…", style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.main_loading_ghosts), style = MaterialTheme.typography.bodyMedium)
                 }
             } else if (ghosts.isEmpty()) {
-                Text("ゴーストがありません。.nar ファイルをインストールしてください。", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.main_no_ghosts), style = MaterialTheme.typography.bodyMedium)
             }
             LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(ghosts, key = { it.ghost.dir.name }) { item ->
@@ -268,7 +278,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                                 if (isRunning) GhostOverlayService.start(context, dirName)
                             }
                         },
-                        balloonWarning = { dirName -> balloonWarning(item, balloons, dirName) },
+                        balloonWarning = { dirName -> balloonWarning(context, item, balloons, dirName) },
                         onSelectBalloon = { balloon ->
                             scope.launch {
                                 withContext(Dispatchers.IO) { item.ghost.selectBalloon(balloon) }
@@ -289,14 +299,14 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                                 }
                                 reload()
                                 if (left.isNotEmpty()) leftBalloons = item.ghost.name to left
-                                snackbar.showSnackbar(if (ok) "削除しました: ${item.ghost.name}" else "削除できませんでした: ${item.ghost.name}")
+                                snackbar.showSnackbar(if (ok) context.getString(R.string.main_deleted, item.ghost.name) else context.getString(R.string.main_delete_failed, item.ghost.name))
                             }
                         },
                     )
                 }
                 if (balloons.isNotEmpty()) {
                     item(key = "balloons-header") {
-                        Text("バルーン", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                        Text(stringResource(R.string.main_balloons_header), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                     }
                 }
                 // 起動中のゴーストが使っているバルーンは、画像を読んでいる途中かもしれないので消させない
@@ -312,21 +322,21 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                         },
                         onCraftmanUrl = { url ->
                             if (runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.isFailure) {
-                                scope.launch { snackbar.showSnackbar("ページを開けるアプリがありません") }
+                                scope.launch { snackbar.showSnackbar(context.getString(R.string.main_no_browser)) }
                             }
                         },
                         onUninstall = {
                             scope.launch {
                                 val ok = withContext(Dispatchers.IO) { GhostStore.repository(context).balloons.uninstall(balloon) }
                                 reload()
-                                snackbar.showSnackbar(if (ok) "削除しました: ${balloon.name}" else "削除できませんでした: ${balloon.name}")
+                                snackbar.showSnackbar(if (ok) context.getString(R.string.main_deleted, balloon.name) else context.getString(R.string.main_delete_failed, balloon.name))
                             }
                         },
                     )
                 }
                 if (plugins.isNotEmpty()) {
                     item(key = "plugins-header") {
-                        Text("プラグイン", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                        Text(stringResource(R.string.main_plugins_header), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                     }
                 }
                 items(plugins, key = { "plugin:" + it.dir.name }) { plugin ->
@@ -339,7 +349,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                         },
                         onCraftmanUrl = { url ->
                             if (runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.isFailure) {
-                                scope.launch { snackbar.showSnackbar("ページを開けるアプリがありません") }
+                                scope.launch { snackbar.showSnackbar(context.getString(R.string.main_no_browser)) }
                             }
                         },
                         onUninstall = {
@@ -347,23 +357,27 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                                 // 動いていたプラグインは、止めてから消す
                                 val ok = GhostOverlayService.uninstallPlugin(context, plugin)
                                 reload()
-                                snackbar.showSnackbar(if (ok) "削除しました: ${plugin.name}" else "削除できませんでした: ${plugin.name}")
+                                snackbar.showSnackbar(if (ok) context.getString(R.string.main_deleted, plugin.name) else context.getString(R.string.main_delete_failed, plugin.name))
                             }
                         },
                     )
                 }
                 item(key = "settings-header") {
-                    Text("設定", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                    Text(stringResource(R.string.settings_header), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                }
+                // 言語はアプリごとの言語の設定（Android 13 から）で変える
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    item(key = "setting:language") { LanguageRow(onMessage = { scope.launch { snackbar.showSnackbar(it) } }) }
                 }
                 item(key = "setting:alignment") {
                     val prefs = remember { OverlaySettings.prefs(context) }
                     var policy by remember { mutableStateOf(OverlaySettings.alignmentPolicy(prefs)) }
                     SelectButton(
-                        "キャラクター自由移動",
+                        stringResource(R.string.settings_alignment),
                         listOf(
-                            OverlaySettings.ALIGNMENT_GHOST to "ゴースト設定",
-                            OverlaySettings.ALIGNMENT_FREE to "常に自由移動",
-                            OverlaySettings.ALIGNMENT_LIMIT to "常に制限",
+                            OverlaySettings.ALIGNMENT_GHOST to stringResource(R.string.settings_alignment_ghost),
+                            OverlaySettings.ALIGNMENT_FREE to stringResource(R.string.settings_alignment_free),
+                            OverlaySettings.ALIGNMENT_LIMIT to stringResource(R.string.settings_alignment_limit),
                         ),
                         policy,
                         { value ->
@@ -372,38 +386,38 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                         },
                     )
                 }
-                item(key = "setting:developer") { SettingSwitch("開発者向けの機能", OverlaySettings.KEY_DEVELOPER, OverlaySettings::developer) }
-                item(key = "setting:speech") { SettingSwitch("話した文字を読み上げる", OverlaySettings.KEY_SPEECH, OverlaySettings::speech) }
-                item(key = "setting:sstp") { SettingSwitch("ほかのアプリから SSTP を受ける（この端末の中だけ）", OverlaySettings.KEY_SSTP, OverlaySettings::sstp) }
+                item(key = "setting:developer") { SettingSwitch(stringResource(R.string.settings_developer), OverlaySettings.KEY_DEVELOPER, OverlaySettings::developer) }
+                item(key = "setting:speech") { SettingSwitch(stringResource(R.string.settings_speech), OverlaySettings.KEY_SPEECH, OverlaySettings::speech) }
+                item(key = "setting:sstp") { SettingSwitch(stringResource(R.string.settings_sstp), OverlaySettings.KEY_SSTP, OverlaySettings::sstp) }
                 item(key = "setting:wallpaper") {
-                    SettingSwitch("ゴーストが壁紙を変えてよい（元の壁紙には戻せません）", OverlaySettings.KEY_WALLPAPER, OverlaySettings::wallpaper)
+                    SettingSwitch(stringResource(R.string.settings_wallpaper), OverlaySettings.KEY_WALLPAPER, OverlaySettings::wallpaper)
                 }
                 item(key = "setting:calendar") {
                     SettingSwitch(
-                        "今日の予定をゴーストに伝える（端末のカレンダー）", OverlaySettings.KEY_CALENDAR, OverlaySettings::calendar,
+                        stringResource(R.string.settings_calendar), OverlaySettings.KEY_CALENDAR, OverlaySettings::calendar,
                         permission = Manifest.permission.READ_CALENDAR,
-                        onDenied = { scope.launch { snackbar.showSnackbar("カレンダーを読む許可がありません") } },
+                        onDenied = { scope.launch { snackbar.showSnackbar(context.getString(R.string.settings_calendar_denied)) } },
                     )
                 }
                 item(key = "setting:voice") {
                     SettingSwitch(
-                        "名前を呼ぶと声を聞く（マイク）", OverlaySettings.KEY_VOICE, OverlaySettings::voice,
+                        stringResource(R.string.settings_voice), OverlaySettings.KEY_VOICE, OverlaySettings::voice,
                         permission = Manifest.permission.RECORD_AUDIO,
-                        onDenied = { scope.launch { snackbar.showSnackbar("マイクの許可がありません") } },
+                        onDenied = { scope.launch { snackbar.showSnackbar(context.getString(R.string.settings_voice_denied)) } },
                     )
                 }
-                item(key = "setting:usb") { SettingSwitch("USB 機器をつないだり外したりしたらゴーストに伝える", OverlaySettings.KEY_USB, OverlaySettings::usb) }
+                item(key = "setting:usb") { SettingSwitch(stringResource(R.string.settings_usb), OverlaySettings.KEY_USB, OverlaySettings::usb) }
                 item(key = "setting:media") {
                     SettingSwitch(
-                        "再生中の曲や動画をゴーストに伝える（通知へのアクセス）", OverlaySettings.KEY_MEDIA, OverlaySettings::media,
+                        stringResource(R.string.settings_media), OverlaySettings.KEY_MEDIA, OverlaySettings::media,
                         access = SpecialAccess(MediaWatcher::hasAccess) { it.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
-                        onDenied = { scope.launch { snackbar.showSnackbar("通知へのアクセスがありません") } },
+                        onDenied = { scope.launch { snackbar.showSnackbar(context.getString(R.string.settings_media_denied)) } },
                     )
                 }
                 item(key = "setting:mail") { MailAccountRow(onMessage = { scope.launch { snackbar.showSnackbar(it) } }) }
                 item(key = "version") {
                     Text(
-                        stringResource(R.string.product_name) + " バージョン $version",
+                        stringResource(R.string.version_label, stringResource(R.string.product_name), version.label(context)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
@@ -417,7 +431,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
 /** キャラクターの大きさ。起動中のゴーストにもすぐ反映される（OnShellScaling）。 */
 @Composable
 private fun CharacterScaleSlider() = ScaleSlider(
-    label = "キャラクターの大きさ",
+    label = stringResource(R.string.settings_character_scale),
     key = OverlaySettings.KEY_CHARACTER_SCALE,
     read = OverlaySettings::characterScale,
     range = OverlaySettings.MIN_CHARACTER_SCALE..OverlaySettings.MAX_CHARACTER_SCALE,
@@ -426,7 +440,7 @@ private fun CharacterScaleSlider() = ScaleSlider(
 /** バルーンの大きさ。起動中のゴーストにもすぐ反映される（OnBalloonScaling）。 */
 @Composable
 private fun BalloonScaleSlider() = ScaleSlider(
-    label = "バルーンの大きさ",
+    label = stringResource(R.string.settings_balloon_scale),
     key = OverlaySettings.KEY_BALLOON_SCALE,
     read = OverlaySettings::balloonScale,
     range = OverlaySettings.MIN_BALLOON_SCALE..OverlaySettings.MAX_BALLOON_SCALE,
@@ -435,7 +449,7 @@ private fun BalloonScaleSlider() = ScaleSlider(
 /** バルーンの不透明度。起動中のゴーストにもすぐ反映される（入力の箱はバルーンの use_input_alpha が 1 のときだけ） */
 @Composable
 private fun BalloonOpacitySlider() = ScaleSlider(
-    label = "バルーンの不透明度",
+    label = stringResource(R.string.settings_balloon_opacity),
     key = OverlaySettings.KEY_BALLOON_OPACITY,
     read = OverlaySettings::balloonOpacity,
     range = OverlaySettings.MIN_BALLOON_OPACITY..OverlaySettings.MAX_BALLOON_OPACITY,
@@ -455,7 +469,7 @@ private fun ScaleSlider(
     val prefs = remember { OverlaySettings.prefs(context) }
     var scale by remember { mutableFloatStateOf(read(prefs)) }
     Column {
-        Text("$label: ${format(scale)}", style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.main_label_value, label, format(scale)), style = MaterialTheme.typography.bodyMedium)
         Slider(
             value = scale,
             onValueChange = { scale = (it * 10).roundToInt() / 10f },
@@ -522,6 +536,22 @@ private fun SettingSwitch(
 /** 端末の設定の画面で許してもらうアクセス（通知へのアクセスなど）。[granted] で確かめ、無ければ [open] でその画面を開く */
 private class SpecialAccess(val granted: (Context) -> Boolean, val open: (Context) -> Unit)
 
+/** 表示の言語。「変更」で端末のこのアプリの言語の画面を開き、開けなければ [onMessage] で知らせる */
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+@Composable
+private fun LanguageRow(onMessage: (String) -> Unit) {
+    val context = LocalContext.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.settings_language, stringResource(R.string.language_name)), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        TextButton(onClick = {
+            val opened = runCatching {
+                context.startActivity(Intent(Settings.ACTION_APP_LOCALE_SETTINGS, Uri.parse("package:${context.packageName}")))
+            }.isSuccess
+            if (!opened) onMessage(context.getString(R.string.settings_language_unavailable))
+        }) { Text(stringResource(R.string.settings_language_change)) }
+    }
+}
+
 /** メールの確認（\![biff]）のアカウントと、確かめる間隔。アカウントは1つだけ */
 @Composable
 private fun MailAccountRow(onMessage: (String) -> Unit) {
@@ -540,16 +570,21 @@ private fun MailAccountRow(onMessage: (String) -> Unit) {
     }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("メールのアカウント: ${account?.name ?: "なし"}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            TextButton(onClick = { editing = true }, enabled = loaded) { Text("編集") }
-            TextButton(onClick = { confirmDelete = true }, enabled = account != null) { Text("削除") }
+            Text(stringResource(R.string.settings_mail_account, account?.name ?: stringResource(R.string.common_none)), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            TextButton(onClick = { editing = true }, enabled = loaded) { Text(stringResource(R.string.settings_mail_edit)) }
+            TextButton(onClick = { confirmDelete = true }, enabled = account != null) { Text(stringResource(R.string.common_delete)) }
         }
         // 前に入れた値が選べるものに無くても、今の値として出す
         val minutes = listOf(0, 15, 30, 60).let { if (interval in it) it else (it + interval).sorted() }
-        SelectButton("確かめる間隔", minutes.map { it to if (it == 0) "しない" else "$it 分" }, interval, { value ->
-            interval = value
-            MailAccounts.setIntervalMinutes(context, value)
-        })
+        SelectButton(
+            stringResource(R.string.settings_mail_interval),
+            minutes.map { it to if (it == 0) stringResource(R.string.settings_mail_interval_off) else pluralStringResource(R.plurals.settings_mail_interval_minutes, it, it) },
+            interval,
+            { value ->
+                interval = value
+                MailAccounts.setIntervalMinutes(context, value)
+            },
+        )
     }
     if (editing) {
         MailAccountDialog(
@@ -560,7 +595,7 @@ private fun MailAccountRow(onMessage: (String) -> Unit) {
                 scope.launch {
                     val result = withContext(Dispatchers.IO) { runCatching { MailAccounts.save(context, listOf(new)) } }
                     result.onSuccess { account = new }
-                    onMessage(result.fold({ "保存しました" }, { "保存できませんでした: ${it.message}" }))
+                    onMessage(result.fold({ context.getString(R.string.settings_mail_saved) }, { context.getString(R.string.settings_mail_save_failed, it.message.toString()) }))
                 }
             },
         )
@@ -569,19 +604,19 @@ private fun MailAccountRow(onMessage: (String) -> Unit) {
     if (confirmDelete && current != null) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("メールのアカウントを削除") },
-            text = { Text("「${current.name}」を削除しますか？") },
+            title = { Text(stringResource(R.string.settings_mail_delete_title)) },
+            text = { Text(stringResource(R.string.settings_mail_delete_message, current.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     scope.launch {
                         val ok = withContext(Dispatchers.IO) { runCatching { MailAccounts.save(context, emptyList()) }.isSuccess }
                         if (ok) account = null
-                        onMessage(if (ok) "削除しました: ${current.name}" else "削除できませんでした: ${current.name}")
+                        onMessage(if (ok) context.getString(R.string.main_deleted, current.name) else context.getString(R.string.main_delete_failed, current.name))
                     }
-                }) { Text("削除") }
+                }) { Text(stringResource(R.string.common_delete)) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("やめる") } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 }
@@ -601,30 +636,30 @@ private fun MailAccountDialog(account: MailAccount?, onDismiss: () -> Unit, onSa
     val canSave = name.isNotBlank() && host.isNotBlank() && user.isNotBlank() && password.isNotEmpty() && portNumber != null
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("メールのアカウント") },
+        title = { Text(stringResource(R.string.settings_mail_dialog_title)) },
         text = {
             // 小さい画面では入りきらないので流せるようにする
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("名前") }, singleLine = true)
-                OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text("サーバー") }, singleLine = true)
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.settings_mail_name)) }, singleLine = true)
+                OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text(stringResource(R.string.settings_mail_server)) }, singleLine = true)
                 OutlinedTextField(
                     value = port,
                     onValueChange = { port = it },
-                    label = { Text("ポート") },
+                    label = { Text(stringResource(R.string.settings_mail_port)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
-                OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text("ユーザー名") }, singleLine = true)
+                OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text(stringResource(R.string.settings_mail_user)) }, singleLine = true)
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("パスワード") },
+                    label = { Text(stringResource(R.string.settings_mail_password)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 )
-                Text("パスワードは端末の鍵で暗号にして保存します", style = MaterialTheme.typography.bodySmall)
-                SelectButton("種類", listOf("imap" to "IMAP", "pop3" to "POP3"), protocol, { value ->
+                Text(stringResource(R.string.settings_mail_password_note), style = MaterialTheme.typography.bodySmall)
+                SelectButton(stringResource(R.string.settings_mail_protocol), listOf("imap" to "IMAP", "pop3" to "POP3"), protocol, { value ->
                     // ポートが前の種類の決まりのままなら、新しい種類の決まりに合わせる
                     if (port.trim() == defaultMailPort(protocol).toString()) port = defaultMailPort(value).toString()
                     protocol = value
@@ -635,9 +670,9 @@ private fun MailAccountDialog(account: MailAccount?, onDismiss: () -> Unit, onSa
             TextButton(
                 onClick = { portNumber?.let { onSave(MailAccount(name.trim(), protocol, host.trim(), it, user.trim(), password)) } },
                 enabled = canSave,
-            ) { Text("保存") }
+            ) { Text(stringResource(R.string.common_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("やめる") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
@@ -658,13 +693,14 @@ private data class GhostItem(
     val recommendedBalloonLabel: String? = null,
 )
 
-private fun GhostItem(ghost: Ghost, balloons: BalloonRepository) = GhostItem(
+/** [simpleBalloonName] は選ぶメニューに出す簡易バルーンの名前 */
+private fun GhostItem(ghost: Ghost, balloons: BalloonRepository, simpleBalloonName: String) = GhostItem(
     ghost = ghost,
     shells = ghost.shellDirs.map { dir -> dir.name to Shell.nameOf(dir) },
     selectedShell = ghost.shellDir()?.name,
     shellThumbnails = ghost.shellDirs.mapNotNull { dir -> Shell.thumbnailOf(dir)?.let { Pair<String?, File>(dir.name, it) } }.toMap(),
     balloonThumbnails = balloons.list().mapNotNull { b -> b.thumbnailFile()?.let { b.dir.name to it } }.toMap(),
-    balloons = listOf<Pair<String?, String>>(null to "簡易バルーン") + balloons.list().map { it.dir.name to it.name },
+    balloons = listOf<Pair<String?, String>>(null to simpleBalloonName) + balloons.list().map { it.dir.name to it.name },
     selectedBalloon = ghost.balloon(balloons)?.dir?.name,
     recommendedBalloon = ghost.recommendedBalloon(balloons)?.dir?.name,
     recommendedBalloonLabel = if (ghost.hasRecommendedBalloon) {
@@ -678,13 +714,13 @@ private fun GhostItem(ghost: Ghost, balloons: BalloonRepository) = GhostItem(
  * [item] のゴーストにバルーン [dirName]（null は簡易バルーン）を選ぶ前の警告。バルーンがほかのゴースト向け（recommended.ghost）か、
  * ゴーストが別のバルーンを推奨している（recommended.balloon）なら、その文。どちらでもなければ null
  */
-private fun balloonWarning(item: GhostItem, balloons: List<Balloon>, dirName: String?): String? {
+private fun balloonWarning(context: Context, item: GhostItem, balloons: List<Balloon>, dirName: String?): String? {
     val chosen = dirName?.let { d -> balloons.firstOrNull { it.dir.name == d } }
     if (chosen != null && chosen.isRecommendedFor(item.ghost.name, item.ghost.dir.name) == false) {
-        return "バルーン「${chosen.name}」は「${chosen.recommendedGhostLabel.orEmpty()}」のゴースト向けに作られています。ほかのゴーストでは正しく表示されないことがあります。"
+        return context.getString(R.string.main_balloon_for_other_ghost, chosen.name, chosen.recommendedGhostLabel.orEmpty())
     }
     if (item.recommendedBalloonLabel != null && item.recommendedBalloon != dirName) {
-        return "このゴーストは「${item.recommendedBalloonLabel}」のバルーンで使うよう作られています。ほかのバルーンでは正しく表示されないことがあります。"
+        return context.getString(R.string.main_ghost_recommends_balloon, item.recommendedBalloonLabel)
     }
     return null
 }
@@ -708,16 +744,16 @@ private fun BalloonRow(balloon: Balloon, inUse: Boolean, onReadme: () -> Unit, o
                     Spacer(Modifier.width(12.dp))
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(balloon.name + if (inUse) "（使用中）" else "", style = MaterialTheme.typography.bodyLarge)
+                    Text(if (inUse) stringResource(R.string.main_balloon_in_use, balloon.name) else balloon.name, style = MaterialTheme.typography.bodyLarge)
                     balloon.descript["craftmanw"]?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                    balloon.recommendedGhostLabel?.let { Text("「$it」向け", style = MaterialTheme.typography.bodySmall) }
+                    balloon.recommendedGhostLabel?.let { Text(stringResource(R.string.main_balloon_for, it), style = MaterialTheme.typography.bodySmall) }
                 }
-                TextButton(onClick = { confirm = true }, enabled = !inUse) { Text("削除") }
+                TextButton(onClick = { confirm = true }, enabled = !inUse) { Text(stringResource(R.string.common_delete)) }
             }
             if (hasReadme || url != null) {
                 Row {
-                    if (hasReadme) TextButton(onClick = onReadme) { Text("説明を読む") }
-                    url?.let { TextButton(onClick = { onCraftmanUrl(it) }) { Text("作者のページ") } }
+                    if (hasReadme) TextButton(onClick = onReadme) { Text(stringResource(R.string.common_readme)) }
+                    url?.let { TextButton(onClick = { onCraftmanUrl(it) }) { Text(stringResource(R.string.common_author_page)) } }
                 }
             }
         }
@@ -725,15 +761,15 @@ private fun BalloonRow(balloon: Balloon, inUse: Boolean, onReadme: () -> Unit, o
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false },
-            title = { Text("バルーンを削除") },
-            text = { Text("「${balloon.name}」を削除しますか？ このバルーンを選んでいたゴーストは、ゴーストの指定のバルーンか簡易バルーンに戻ります。") },
+            title = { Text(stringResource(R.string.main_delete_balloon_title)) },
+            text = { Text(stringResource(R.string.main_delete_balloon_message, balloon.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false
                     onUninstall()
-                }) { Text("削除") }
+                }) { Text(stringResource(R.string.common_delete)) }
             },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("やめる") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 }
@@ -753,12 +789,12 @@ private fun PluginRow(plugin: Plugin, onReadme: () -> Unit, onCraftmanUrl: (Stri
                     Text(plugin.name, style = MaterialTheme.typography.bodyLarge)
                     plugin.craftmanW.takeIf { it.isNotEmpty() }?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
-                TextButton(onClick = { confirm = true }) { Text("削除") }
+                TextButton(onClick = { confirm = true }) { Text(stringResource(R.string.common_delete)) }
             }
             if (hasReadme || url != null) {
                 Row {
-                    if (hasReadme) TextButton(onClick = onReadme) { Text("説明を読む") }
-                    url?.let { TextButton(onClick = { onCraftmanUrl(it) }) { Text("作者のページ") } }
+                    if (hasReadme) TextButton(onClick = onReadme) { Text(stringResource(R.string.common_readme)) }
+                    url?.let { TextButton(onClick = { onCraftmanUrl(it) }) { Text(stringResource(R.string.common_author_page)) } }
                 }
             }
         }
@@ -766,15 +802,15 @@ private fun PluginRow(plugin: Plugin, onReadme: () -> Unit, onCraftmanUrl: (Stri
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false },
-            title = { Text("プラグインを削除") },
-            text = { Text("「${plugin.name}」を削除しますか？ プラグインが保存していた内容も消え、元に戻せません。") },
+            title = { Text(stringResource(R.string.main_delete_plugin_title)) },
+            text = { Text(stringResource(R.string.main_delete_plugin_message, plugin.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false
                     onUninstall()
-                }) { Text("削除") }
+                }) { Text(stringResource(R.string.common_delete)) }
             },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("やめる") } },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 }
@@ -790,9 +826,9 @@ private fun <T> SelectButton(
     thumbnails: Map<T, File> = emptyMap(),
 ) {
     var open by remember { mutableStateOf(false) }
-    val current = options.firstOrNull { it.first == selected }?.second ?: "なし"
+    val current = options.firstOrNull { it.first == selected }?.second ?: stringResource(R.string.common_none)
     Box(modifier) {
-        TextButton(onClick = { open = true }, enabled = options.size > 1) { Text("$label: $current") }
+        TextButton(onClick = { open = true }, enabled = options.size > 1) { Text(stringResource(R.string.main_label_value, label, current)) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             for ((value, name) in options) {
                 val thumbnail = thumbnails[value]
@@ -845,10 +881,10 @@ private fun GhostRow(
                 }
                 Column(Modifier.weight(1f)) {
                     Text(
-                        ghost.name + when {
-                            loading -> "（読み込み中）"
-                            running -> "（起動中）"
-                            else -> ""
+                        when {
+                            loading -> stringResource(R.string.main_ghost_loading, ghost.name)
+                            running -> stringResource(R.string.main_ghost_running, ghost.name)
+                            else -> ghost.name
                         },
                         style = MaterialTheme.typography.titleMedium,
                     )
@@ -864,17 +900,17 @@ private fun GhostRow(
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // 「起動」はこのゴーストだけにする（動いているほかのゴーストは止まる）
-                        Button(onClick = onStart, enabled = enabled) { Text(if (running) "再起動" else "起動") }
-                        if (canStartBeside) OutlinedButton(onClick = onStartBeside, enabled = besideEnabled) { Text("一緒に起動") }
+                        Button(onClick = onStart, enabled = enabled) { Text(if (running) stringResource(R.string.main_restart) else stringResource(R.string.main_start)) }
+                        if (canStartBeside) OutlinedButton(onClick = onStartBeside, enabled = besideEnabled) { Text(stringResource(R.string.main_start_beside)) }
                     }
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SelectButton("シェル", item.shells, item.selectedShell, { it?.let(onSelectShell) }, Modifier.weight(1f), thumbnails = item.shellThumbnails)
+                SelectButton(stringResource(R.string.main_shell), item.shells, item.selectedShell, { it?.let(onSelectShell) }, Modifier.weight(1f), thumbnails = item.shellThumbnails)
                 // 起動中に消すと、動いているゴーストのファイルが無くなるので先に終了してもらう
-                TextButton(onClick = { confirmUninstall = true }, enabled = !running && !loading) { Text("削除") }
+                TextButton(onClick = { confirmUninstall = true }, enabled = !running && !loading) { Text(stringResource(R.string.common_delete)) }
             }
-            SelectButton("バルーン", item.balloons, item.selectedBalloon, { value ->
+            SelectButton(stringResource(R.string.main_balloon), item.balloons, item.selectedBalloon, { value ->
                 val warning = balloonWarning(value)
                 if (warning == null) onSelectBalloon(value) else pendingBalloon = value to warning
             }, thumbnails = item.balloonThumbnails)
@@ -883,29 +919,29 @@ private fun GhostRow(
     pendingBalloon?.let { (value, warning) ->
         AlertDialog(
             onDismissRequest = { pendingBalloon = null },
-            title = { Text("バルーンを切り替える") },
+            title = { Text(stringResource(R.string.main_switch_balloon_title)) },
             text = { Text(warning) },
             confirmButton = {
                 TextButton(onClick = {
                     pendingBalloon = null
                     onSelectBalloon(value)
-                }) { Text("それでも切り替える") }
+                }) { Text(stringResource(R.string.main_switch_balloon_anyway)) }
             },
-            dismissButton = { TextButton(onClick = { pendingBalloon = null }) { Text("やめる") } },
+            dismissButton = { TextButton(onClick = { pendingBalloon = null }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
     if (confirmUninstall) {
         AlertDialog(
             onDismissRequest = { confirmUninstall = false },
-            title = { Text("ゴーストを削除") },
-            text = { Text("「${ghost.name}」を削除しますか？ ゴーストが保存していた内容も消え、元に戻せません。") },
+            title = { Text(stringResource(R.string.main_delete_ghost_title)) },
+            text = { Text(stringResource(R.string.main_delete_ghost_message, ghost.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmUninstall = false
                     onUninstall()
-                }) { Text("削除") }
+                }) { Text(stringResource(R.string.common_delete)) }
             },
-            dismissButton = { TextButton(onClick = { confirmUninstall = false }) { Text("やめる") } },
+            dismissButton = { TextButton(onClick = { confirmUninstall = false }) { Text(stringResource(R.string.common_cancel)) } },
         )
     }
 }

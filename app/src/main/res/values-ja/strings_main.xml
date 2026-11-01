@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 一覧の画面（MainActivity）の文言 -->
+<resources>
+    <!-- 一覧の画面の上の帯 -->
+    <string name="main_licenses">ライセンス</string>
+    <!-- 「他のアプリの上に重ねて表示」は端末の設定の名前 -->
+    <string name="main_overlay_permission">ゴーストを他のアプリの上に表示するには、「他のアプリの上に重ねて表示」を許可してください。</string>
+    <string name="main_allow">許可する</string>
+    <string name="main_installing">インストール中…</string>
+    <string name="main_install_nar">.nar をインストール</string>
+    <!-- ゴーストのネットワーク更新 -->
+    <string name="main_update">更新</string>
+    <!-- 動いているゴーストをすべて終わらせる -->
+    <string name="main_quit">終了</string>
+    <string name="main_loading_ghosts">ゴーストを読み込み中…</string>
+    <string name="main_no_ghosts">ゴーストがありません。.nar ファイルをインストールしてください。</string>
+    <!-- 一覧の見出し -->
+    <string name="main_balloons_header">バルーン</string>
+    <!-- 一覧の見出し -->
+    <string name="main_plugins_header">プラグイン</string>
+    <string name="main_no_browser">ページを開けるアプリがありません</string>
+    <!-- %1$s は消したものの名前 -->
+    <string name="main_deleted">削除しました: %1$s</string>
+    <!-- %1$s は消せなかったものの名前 -->
+    <string name="main_delete_failed">削除できませんでした: %1$s</string>
+    <!-- 名前を括弧でくくる形（main_delete_left_balloons_message の名前の並び） -->
+    <string name="main_quoted_name">「%1$s」</string>
+    <!-- main_quoted_name を並べるときの区切り（日本語は「」が区切りを兼ねるので空） -->
+    <string name="main_quoted_list_separator">""</string>
+    <string name="main_some_balloons_not_deleted">削除できなかったバルーンがあります</string>
+    <!-- ゴーストを消したあと、そのゴースト向けのバルーンを残すボタン -->
+    <string name="main_keep">残す</string>
+    <string name="main_delete_balloon_title">バルーンを削除</string>
+    <!-- %1$s はバルーンの名前 -->
+    <string name="main_delete_balloon_message">「%1$s」を削除しますか？ このバルーンを選んでいたゴーストは、ゴーストの指定のバルーンか簡易バルーンに戻ります。</string>
+    <!-- %1$s はバルーンの名前 -->
+    <string name="main_balloon_in_use">%1$s（使用中）</string>
+    <!-- %1$s はゴーストの名前（recommended.ghost） -->
+    <string name="main_balloon_for">「%1$s」向け</string>
+    <string name="main_delete_plugin_title">プラグインを削除</string>
+    <!-- %1$s はプラグインの名前 -->
+    <string name="main_delete_plugin_message">「%1$s」を削除しますか？ プラグインが保存していた内容も消え、元に戻せません。</string>
+    <!-- pono-droid の簡易バルーン -->
+    <string name="main_simple_balloon">簡易バルーン</string>
+    <!-- %1$s はバルーンの名前、%2$s はそのバルーンが向けたゴーストの名前 -->
+    <string name="main_balloon_for_other_ghost">バルーン「%1$s」は「%2$s」のゴースト向けに作られています。ほかのゴーストでは正しく表示されないことがあります。</string>
+    <!-- %1$s はゴーストが推奨するバルーンの名前 -->
+    <string name="main_ghost_recommends_balloon">このゴーストは「%1$s」のバルーンで使うよう作られています。ほかのバルーンでは正しく表示されないことがあります。</string>
+    <!-- 「シェル: 名前」のような、項目の名前と今の値 -->
+    <string name="main_label_value">%1$s: %2$s</string>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="main_ghost_loading">%1$s（読み込み中）</string>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="main_ghost_running">%1$s（起動中）</string>
+    <string name="main_start">起動</string>
+    <string name="main_restart">再起動</string>
+    <!-- 動いているほかのゴーストと一緒に起動する -->
+    <string name="main_start_beside">一緒に起動</string>
+    <string name="main_shell">シェル</string>
+    <string name="main_balloon">バルーン</string>
+    <string name="main_switch_balloon_title">バルーンを切り替える</string>
+    <string name="main_switch_balloon_anyway">それでも切り替える</string>
+    <string name="main_delete_ghost_title">ゴーストを削除</string>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="main_delete_ghost_message">「%1$s」を削除しますか？ ゴーストが保存していた内容も消え、元に戻せません。</string>
+    <string name="settings_character_scale">キャラクターの大きさ</string>
+    <string name="settings_balloon_scale">バルーンの大きさ</string>
+    <string name="settings_balloon_opacity">バルーンの不透明度</string>
+    <!-- 一覧の見出し -->
+    <string name="settings_header">設定</string>
+    <!-- 端末の「アプリの言語」の画面を開けなかった -->
+    <string name="settings_language_unavailable">言語の設定を開けませんでした</string>
+    <!-- キャラクターを画面の端に揃えるかどうか -->
+    <string name="settings_alignment">キャラクター自由移動</string>
+    <string name="settings_alignment_ghost">ゴースト設定</string>
+    <string name="settings_alignment_free">常に自由移動</string>
+    <string name="settings_alignment_limit">常に制限</string>
+    <string name="settings_developer">開発者向けの機能</string>
+    <!-- ゴーストが話した文字を読み上げる（音声合成） -->
+    <string name="settings_speech">話した文字を読み上げる</string>
+    <string name="settings_sstp">ほかのアプリから SSTP を受ける（この端末の中だけ）</string>
+    <string name="settings_wallpaper">ゴーストが壁紙を変えてよい（元の壁紙には戻せません）</string>
+    <string name="settings_calendar">今日の予定をゴーストに伝える（端末のカレンダー）</string>
+    <string name="settings_calendar_denied">カレンダーを読む許可がありません</string>
+    <string name="settings_voice">名前を呼ぶと声を聞く（マイク）</string>
+    <string name="settings_voice_denied">マイクの許可がありません</string>
+    <string name="settings_usb">USB 機器をつないだり外したりしたらゴーストに伝える</string>
+    <string name="settings_media">再生中の曲や動画をゴーストに伝える（通知へのアクセス）</string>
+    <string name="settings_media_denied">通知へのアクセスがありません</string>
+    <!-- %1$s はアカウントの名前（無ければ common_none） -->
+    <string name="settings_mail_account">メールのアカウント: %1$s</string>
+    <string name="settings_mail_edit">編集</string>
+    <!-- メールを確かめる間隔 -->
+    <string name="settings_mail_interval">確かめる間隔</string>
+    <!-- 確かめる間隔: 確かめない -->
+    <string name="settings_mail_interval_off">しない</string>
+    <string name="settings_mail_saved">保存しました</string>
+    <!-- %1$s は失敗の理由 -->
+    <string name="settings_mail_save_failed">保存できませんでした: %1$s</string>
+    <string name="settings_mail_delete_title">メールのアカウントを削除</string>
+    <!-- %1$s はアカウントの名前 -->
+    <string name="settings_mail_delete_message">「%1$s」を削除しますか？</string>
+    <string name="settings_mail_dialog_title">メールのアカウント</string>
+    <string name="settings_mail_name">名前</string>
+    <string name="settings_mail_server">サーバー</string>
+    <string name="settings_mail_port">ポート</string>
+    <string name="settings_mail_user">ユーザー名</string>
+    <string name="settings_mail_password">パスワード</string>
+    <string name="settings_mail_password_note">パスワードは端末の鍵で暗号にして保存します</string>
+    <!-- IMAP か POP3 -->
+    <string name="settings_mail_protocol">種類</string>
+    <!-- ゴーストを消したあと、そのゴースト向けのバルーンも消すか聞く。%1$s はゴーストの名前、%2$s は main_quoted_name で括ったバルーンの名前の並び。数はバルーンの数 -->
+    <plurals name="main_delete_left_balloons_message">
+        <item quantity="other">「%1$s」向けのバルーン%2$sも削除しますか？ 元に戻せません。</item>
+    </plurals>
+    <!-- 確かめる間隔。%1$d は分 -->
+    <plurals name="settings_mail_interval_minutes">
+        <item quantity="other">%1$d 分</item>
+    </plurals>
+</resources>

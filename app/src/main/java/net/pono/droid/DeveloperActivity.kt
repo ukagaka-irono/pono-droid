@@ -50,7 +50,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -83,18 +85,18 @@ class DeveloperActivity : ComponentActivity() {
                 Scaffold(
                     topBar = {
                         TopAppBar(
-                            title = { Text(TITLES.getValue(page), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            title = { Text(stringResource(TITLES.getValue(page)), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             navigationIcon = {
-                                if (page != first) TextButton(onClick = { page = first }) { Text("戻る") }
+                                if (page != first) TextButton(onClick = { page = first }) { Text(stringResource(R.string.developer_back)) }
                             },
-                            actions = { TextButton(onClick = { finish() }) { Text("閉じる") } },
+                            actions = { TextButton(onClick = { finish() }) { Text(stringResource(R.string.developer_close)) } },
                         )
                     },
                 ) { padding ->
                     val c = controller
                     if (c == null) {
                         Column(Modifier.padding(padding).padding(16.dp).fillMaxSize()) {
-                            Text("ゴーストが起動していません", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.developer_no_ghost), style = MaterialTheme.typography.bodyMedium)
                         }
                     } else {
                         when (page) {
@@ -120,11 +122,11 @@ class DeveloperActivity : ComponentActivity() {
         const val PAGE_DEVELOPER = "developer"
 
         private val TITLES = mapOf(
-            PAGE_BACKLOG to "発言履歴",
-            PAGE_LOG to "ログ",
-            PAGE_SHIORI_REQUEST to "SHIORI リクエスト",
-            PAGE_SURFACE_TEST to "サーフェステスト",
-            PAGE_DEVELOPER to "開発用パレット",
+            PAGE_BACKLOG to R.string.developer_page_backlog,
+            PAGE_LOG to R.string.developer_page_log,
+            PAGE_SHIORI_REQUEST to R.string.developer_page_shiori_request,
+            PAGE_SURFACE_TEST to R.string.developer_page_surface_test,
+            PAGE_DEVELOPER to R.string.developer_page_palette,
         )
 
         fun start(context: Context, page: String, ghostDir: String? = null) {
@@ -157,7 +159,7 @@ private fun BacklogPage(controller: GhostController, modifier: Modifier) {
     val entries = remember(controller) { controller.backlog.asReversed() }
     Column(modifier.padding(16.dp).fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (entries.isEmpty()) {
-            Text("発言はまだありません", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.developer_backlog_empty), style = MaterialTheme.typography.bodyMedium)
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(entries) { entry ->
@@ -198,7 +200,12 @@ private fun FaceIcon(controller: GhostController, entry: BacklogEntry) {
 
 private val FACE_SIZE = 48.dp
 
-private val LOG_LABELS = mapOf("script" to "スクリプト", "error" to "エラー", "network" to "通信", "update" to "更新")
+private val LOG_LABELS = mapOf(
+    "script" to R.string.developer_log_script,
+    "error" to R.string.developer_log_error,
+    "network" to R.string.developer_log_network,
+    "update" to R.string.developer_log_update,
+)
 
 /** 開発用の記録。種類を1つずつ、新しいものから */
 @Composable
@@ -209,7 +216,7 @@ private fun LogPage(controller: GhostController, modifier: Modifier) {
         // 4つ並ぶと狭い画面では入りきらないので、横にスクロールさせる
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (k in DeveloperLog.KINDS) {
-                val label = LOG_LABELS[k] ?: k
+                val label = LOG_LABELS[k]?.let { stringResource(it) } ?: k
                 if (k == kind) {
                     Button(onClick = {}) { Text(label) }
                 } else {
@@ -218,7 +225,7 @@ private fun LogPage(controller: GhostController, modifier: Modifier) {
             }
         }
         if (entries.isEmpty()) {
-            Text("記録はありません", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.developer_log_empty), style = MaterialTheme.typography.bodyMedium)
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(entries) { entry ->
@@ -237,6 +244,7 @@ private fun LogPage(controller: GhostController, modifier: Modifier) {
 /** イベントを SHIORI に送って、返ってきたスクリプトを見る */
 @Composable
 private fun ShioriRequestPage(controller: GhostController, modifier: Modifier) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var event by rememberSaveable { mutableStateOf("") }
     var references by rememberSaveable { mutableStateOf("") }
@@ -258,7 +266,7 @@ private fun ShioriRequestPage(controller: GhostController, modifier: Modifier) {
                 throw e
             } catch (e: Exception) {
                 result = null
-                failure = "送れませんでした: ${e.message}"
+                failure = context.getString(R.string.developer_send_failed, e.message)
             } finally {
                 sending = false
                 sent = true
@@ -273,26 +281,26 @@ private fun ShioriRequestPage(controller: GhostController, modifier: Modifier) {
         OutlinedTextField(
             value = event,
             onValueChange = { event = it },
-            label = { Text("イベント ID") },
+            label = { Text(stringResource(R.string.developer_event_id)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         OutlinedTextField(
             value = references,
             onValueChange = { references = it },
-            label = { Text("Reference（1行に1つ）") },
+            label = { Text(stringResource(R.string.developer_references)) },
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val canSend = !sending && event.isNotBlank()
-            Button(onClick = { send(play = false) }, enabled = canSend) { Text("送る") }
-            OutlinedButton(onClick = { send(play = true) }, enabled = canSend) { Text("送って再生") }
+            Button(onClick = { send(play = false) }, enabled = canSend) { Text(stringResource(R.string.developer_send)) }
+            OutlinedButton(onClick = { send(play = true) }, enabled = canSend) { Text(stringResource(R.string.developer_send_and_play)) }
         }
         if (sending) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                Text("送信中…", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.developer_sending), style = MaterialTheme.typography.bodyMedium)
             }
         } else if (failure != null) {
             // 失敗は結果の出る場所に出す（スナックバーにはしない）
@@ -300,10 +308,10 @@ private fun ShioriRequestPage(controller: GhostController, modifier: Modifier) {
         } else if (sent) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("返ってきたスクリプト", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.developer_returned_script), style = MaterialTheme.typography.titleMedium)
                     val script = result
                     if (script == null) {
-                        Text("（答えなし）", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.developer_no_answer), style = MaterialTheme.typography.bodyMedium)
                     } else {
                         Text(script, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                     }
@@ -335,7 +343,7 @@ private fun SurfaceTestPage(controller: GhostController, modifier: Modifier) {
             }
         }
         if (groups.all { it.items.isEmpty() }) {
-            Text("サーフェスがありません", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.developer_no_surfaces), style = MaterialTheme.typography.bodyMedium)
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             groups.forEachIndexed { index, group ->
@@ -348,10 +356,10 @@ private fun SurfaceTestPage(controller: GhostController, modifier: Modifier) {
                     Card(Modifier.fillMaxWidth()) {
                         Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text("サーフェス ${item.id}", style = MaterialTheme.typography.bodyLarge)
+                                Text(stringResource(R.string.developer_surface_number, item.id), style = MaterialTheme.typography.bodyLarge)
                                 item.name?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                             }
-                            TextButton(onClick = { controller.testSurface(target, item.id) }) { Text("出す") }
+                            TextButton(onClick = { controller.testSurface(target, item.id) }) { Text(stringResource(R.string.developer_show_surface)) }
                         }
                     }
                 }
@@ -376,21 +384,21 @@ private fun DeveloperPage(controller: GhostController, modifier: Modifier, onOpe
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(controller.ghost.name, style = MaterialTheme.typography.titleMedium)
-                Text("SHIORI: ${controller.ghost.shioriName}", style = MaterialTheme.typography.bodySmall)
-                Text("シェル: ${controller.shell.name}", style = MaterialTheme.typography.bodySmall)
-                Text("バルーン: ${balloon ?: "なし"}", style = MaterialTheme.typography.bodySmall)
-                Text("状態: ${status ?: "なし"}", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.developer_info_shiori, controller.ghost.shioriName), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.developer_info_shell, controller.shell.name), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.developer_info_balloon, balloon ?: stringResource(R.string.common_none)), style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.developer_info_status, status ?: stringResource(R.string.common_none)), style = MaterialTheme.typography.bodySmall)
             }
         }
-        Text("読み直す", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
+        Text(stringResource(R.string.developer_reload), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { controller.reloadFromDeveloper("shiori") }) { Text("SHIORI") }
-            OutlinedButton(onClick = { controller.reloadFromDeveloper("shell") }) { Text("シェル") }
-            OutlinedButton(onClick = { controller.reloadFromDeveloper("ghost") }) { Text("ゴースト") }
+            OutlinedButton(onClick = { controller.reloadFromDeveloper("shell") }) { Text(stringResource(R.string.developer_reload_shell)) }
+            OutlinedButton(onClick = { controller.reloadFromDeveloper("ghost") }) { Text(stringResource(R.string.developer_reload_ghost)) }
         }
-        Text("SHIORI のログ", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
+        Text(stringResource(R.string.developer_shiori_log), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("SHIORI 内部のログを取る", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.developer_shiori_log_enable), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             Switch(
                 checked = logEnabled,
                 onCheckedChange = { on ->
@@ -418,16 +426,16 @@ private fun DeveloperPage(controller: GhostController, modifier: Modifier, onOpe
                     }
                 },
                 enabled = !openingLog,
-            ) { Text("開く") }
+            ) { Text(stringResource(R.string.developer_open_log)) }
         }
         if (logMissing) {
-            Text("ログが見つかりません（SHIORI がログの場所を返さないか、ファイルがありません）", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.developer_log_not_found), style = MaterialTheme.typography.bodyMedium)
         }
-        Text("ほかの画面", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
-        PageLink("発言履歴", "ゴーストが話したことを、新しいものから", onClick = { onOpen(DeveloperActivity.PAGE_BACKLOG) })
-        PageLink("ログ", "スクリプト・エラー・通信・更新の記録", onClick = { onOpen(DeveloperActivity.PAGE_LOG) })
-        PageLink("SHIORI リクエスト", "イベントを送って、返ってきたスクリプトを見る", onClick = { onOpen(DeveloperActivity.PAGE_SHIORI_REQUEST) })
-        PageLink("サーフェステスト", "シェルのサーフェスを1つずつ出してみる", onClick = { onOpen(DeveloperActivity.PAGE_SURFACE_TEST) })
+        Text(stringResource(R.string.developer_other_pages), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
+        PageLink(stringResource(R.string.developer_page_backlog), stringResource(R.string.developer_page_backlog_desc), onClick = { onOpen(DeveloperActivity.PAGE_BACKLOG) })
+        PageLink(stringResource(R.string.developer_page_log), stringResource(R.string.developer_page_log_desc), onClick = { onOpen(DeveloperActivity.PAGE_LOG) })
+        PageLink(stringResource(R.string.developer_page_shiori_request), stringResource(R.string.developer_page_shiori_request_desc), onClick = { onOpen(DeveloperActivity.PAGE_SHIORI_REQUEST) })
+        PageLink(stringResource(R.string.developer_page_surface_test), stringResource(R.string.developer_page_surface_test_desc), onClick = { onOpen(DeveloperActivity.PAGE_SURFACE_TEST) })
     }
 }
 

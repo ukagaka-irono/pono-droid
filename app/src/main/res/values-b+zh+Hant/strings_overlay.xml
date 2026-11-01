@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 通知の「ネットワーク更新」を押したが、ゴーストがいない -->
+    <string name="overlay_no_ghost_running">沒有正在執行的人格</string>
+    <!-- %1$d は同時に動かせる数 -->
+    <plurals name="overlay_too_many_ghosts">
+        <item quantity="other">最多可同時執行 %1$d 個人格</item>
+    </plurals>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="overlay_no_shell">%1$s：沒有外殼</string>
+    <string name="overlay_no_app_to_send">找不到可接收的應用程式</string>
+    <string name="overlay_no_app_to_open">找不到可開啟的應用程式</string>
+    <string name="overlay_wallpaper_failed">無法更換桌布</string>
+    <string name="overlay_no_app_to_edit">找不到可編輯的應用程式</string>
+    <string name="overlay_no_mail_app">找不到郵件應用程式</string>
+    <string name="overlay_no_browser">找不到瀏覽器</string>
+    <string name="overlay_save_failed">無法儲存</string>
+    <!-- %1$d はポートの番号 -->
+    <string name="overlay_sstp_port_in_use">SSTP 連接埠 %1$d 已被其他應用程式使用</string>
+    <!-- 通知のチャンネルの名前（\![set,trayballoon]） -->
+    <string name="overlay_channel_messages">人格的通知</string>
+    <!-- 通知のチャンネルの名前（常駐の通知） -->
+    <string name="overlay_channel_running">執行中的人格</string>
+    <!-- 常駐の通知の題 -->
+    <string name="overlay_notification_hidden">人格已隱藏</string>
+    <!-- 常駐の通知の題 -->
+    <string name="overlay_notification_running">人格正在執行</string>
+    <!-- 常駐の通知のボタン -->
+    <string name="overlay_action_network_update">線上更新</string>
+    <!-- トーストは 2 行で切られうるので短く -->
+    <string name="overlay_permission_revoked">要顯示人格，請允許「顯示在其他應用程式上層」</string>
+    <!-- 簡易バルーンのオンラインの印 -->
+    <string name="overlay_online_marker">● 線上</string>
+    <!-- オンラインの印の画像の説明（読み上げ） -->
+    <string name="overlay_online">線上</string>
+    <!-- クリック待ちの印の画像の説明（読み上げ） -->
+    <string name="overlay_click_wait">等待點擊</string>
+    <!-- バルーンの矢印の説明（読み上げ） -->
+    <string name="overlay_scroll_back">上一頁</string>
+    <!-- バルーンの矢印の説明（読み上げ） -->
+    <string name="overlay_scroll_more">下一頁</string>
+    <!-- 日付の箱の欄 -->
+    <string name="input_year">年</string>
+    <string name="input_month">月</string>
+    <string name="input_day">日</string>
+    <!-- 時刻の箱の欄 -->
+    <string name="input_hour">時</string>
+    <string name="input_minute">分</string>
+    <string name="input_second">秒</string>
+    <string name="input_password_note">輸入的內容會傳給人格的腳本。請不要輸入其他服務的密碼。</string>
+    <string name="input_cancel">取消</string>
+    <!-- 入力の箱の欄の名前 -->
+    <string name="input_kind_input">輸入</string>
+    <string name="input_kind_password">密碼</string>
+    <string name="input_kind_communicate">對話</string>
+    <string name="input_kind_teach">教導</string>
+    <string name="input_kind_date">日期</string>
+    <string name="input_kind_time">時間</string>
+    <string name="input_kind_ip">IP 位址</string>
+    <string name="input_kind_slider">值</string>
+    <string name="input_kind_textarea">輸入（多行）</string>
+    <!-- 音のウィンドウのボタン -->
+    <string name="sound_play">播放</string>
+    <string name="sound_pause">暫停</string>
+    <string name="sound_close">關閉</string>
+    <!-- スライダーの今の値と、選べる幅 -->
+    <string name="input_slider_value">%1$d（%2$d～%3$d）</string>
+</resources>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- x-ukagaka-link: のリンクを開いたが、そのゴーストが動いていない -->
+    <string name="share_ghost_not_running">そのゴーストは起動していません</string>
+    <!-- 共有した文字やファイルを渡すゴーストがいない -->
+    <string name="share_no_ghost">ゴーストが起動していません</string>
+    <string name="share_pick_file">ファイルを選んで共有してください</string>
+    <string name="share_files_too_large">ファイルが大きすぎます（合計 64MB まで）</string>
+    <string name="share_cannot_read">ファイルを読めませんでした</string>
+    <string name="share_some_too_large">大きすぎるファイルは渡しませんでした（合計 64MB まで）</string>
+    <!-- リンクからのインストールの確認の題とボタン -->
+    <string name="share_install">インストール</string>
+    <!-- %1$s は URL -->
+    <string name="share_install_homeurl">「%1$s」から、ネットワーク更新と同じ方法でファイルを取ってきてインストールしますか？</string>
+    <!-- %1$s は URL -->
+    <string name="share_install_nar">「%1$s」の .nar をインストールしますか？</string>
+    <string name="share_fetch_failed">取ってこられませんでした</string>
+    <!-- ゴーストが題を付けなかったときの、色を選ぶダイアログの題 -->
+    <string name="dialog_color_title">色を選ぶ</string>
+    <!-- %1$d は 0〜255 -->
+    <string name="dialog_color_red">赤: %1$d</string>
+    <!-- %1$d は 0〜255 -->
+    <string name="dialog_color_green">緑: %1$d</string>
+    <!-- %1$d は 0〜255 -->
+    <string name="dialog_color_blue">青: %1$d</string>
+    <string name="dialog_color_pick">選ぶ</string>
+    <string name="shortcut_ghost_missing">このゴーストはもう入っていません</string>
+    <string name="store_too_large">ファイルが大きすぎます（1GB まで）</string>
+    <string name="store_cannot_open">ファイルを開けません</string>
+    <!-- %1$s はわけ -->
+    <string name="store_install_failed">インストールできませんでした: %1$s</string>
+    <!-- 入れたものの 1 つ。%1$s は名前 -->
+    <string name="store_item_ghost">ゴースト: %1$s</string>
+    <!-- %1$s は名前 -->
+    <string name="store_item_balloon">バルーン: %1$s</string>
+    <!-- %1$s は名前 -->
+    <string name="store_item_shell">シェル: %1$s</string>
+    <!-- %1$s は名前 -->
+    <string name="store_item_supplement">追加ファイル: %1$s</string>
+    <!-- %1$s は名前 -->
+    <string name="store_item_plugin">プラグイン: %1$s</string>
+    <!-- %1$s は store_item_* を言語の並べ方（ListFormatter）でつないだもの -->
+    <string name="store_installed">%1$s をインストールしました</string>
+</resources>

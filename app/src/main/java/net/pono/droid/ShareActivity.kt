@@ -1,5 +1,6 @@
 package net.pono.droid
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
@@ -44,7 +45,7 @@ class ShareActivity : ComponentActivity() {
                 return
             }
             val controller = GhostOverlayService.controller.value
-            if (controller == null || !controller.onUkagakaLink(link)) toast("そのゴーストは起動していません")
+            if (controller == null || !controller.onUkagakaLink(link)) toast(getString(R.string.share_ghost_not_running))
             finish()
             return
         }
@@ -58,12 +59,12 @@ class ShareActivity : ComponentActivity() {
         val text = runCatching { intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString() }.getOrNull()
             ?.takeIf { uris.isEmpty() && it.isNotBlank() }
         if (text != null) {
-            GhostOverlayService.controller.value?.onTextShared(text) ?: toast("ゴーストが起動していません")
+            GhostOverlayService.controller.value?.onTextShared(text) ?: toast(getString(R.string.share_no_ghost))
             finish()
             return
         }
         if (uris.isEmpty()) {
-            toast("ファイルを選んで共有してください")
+            toast(getString(R.string.share_pick_file))
             finish()
             return
         }
@@ -80,14 +81,14 @@ class ShareActivity : ComponentActivity() {
         // .nar は SSP と同じくインストールする（開いたもの（VIEW）は、名前が .nar でなくても .nar として入れてみる）
         if (uris.size == 1 && (viewed || displayName(uris[0])?.lowercase()?.endsWith(".nar") == true)) {
             val result = withContext(Dispatchers.IO) { runCatching { GhostStore.install(this@ShareActivity, uris[0]) } }
-            toast(result.fold({ GhostStore.describe(it) }, { "インストールできませんでした: ${it.message}" }))
+            toast(result.fold({ GhostStore.describe(this@ShareActivity, it) }, { getString(R.string.store_install_failed, it.message) }))
             result.onSuccess { GhostStore.afterInstall(this@ShareActivity, it) }
             return
         }
-        val controller = GhostOverlayService.controller.value ?: return toast("ゴーストが起動していません")
+        val controller = GhostOverlayService.controller.value ?: return toast(getString(R.string.share_no_ghost))
         val dropped = withContext(Dispatchers.IO) { copyIn(FileDrop.dir(controller.ghost), uris) }
-        if (dropped.files.isEmpty()) return toast(if (dropped.tooLarge) "ファイルが大きすぎます（合計 64MB まで）" else "ファイルを読めませんでした")
-        if (dropped.tooLarge) toast("大きすぎるファイルは渡しませんでした（合計 64MB まで）")
+        if (dropped.files.isEmpty()) return toast(getString(if (dropped.tooLarge) R.string.share_files_too_large else R.string.share_cannot_read))
+        if (dropped.tooLarge) toast(getString(R.string.share_some_too_large))
         controller.onFileDrop(dropped.files.map { it.first.path }, dropped.files.map { it.second })
     }
 
@@ -174,11 +175,11 @@ class ShareActivity : ComponentActivity() {
             MaterialTheme {
                 AlertDialog(
                     onDismissRequest = { finish() },
-                    title = { Text("インストール") },
+                    title = { Text(stringResource(R.string.share_install)) },
                     text = {
                         Text(
-                            if (type == "homeurl") "「$url」から、ネットワーク更新と同じ方法でファイルを取ってきてインストールしますか？"
-                            else "「$url」の .nar をインストールしますか？",
+                            if (type == "homeurl") stringResource(R.string.share_install_homeurl, url)
+                            else stringResource(R.string.share_install_nar, url),
                         )
                     },
                     confirmButton = {
@@ -192,9 +193,9 @@ class ShareActivity : ComponentActivity() {
                                     finish()
                                 }
                             }
-                        }) { Text("インストール") }
+                        }) { Text(stringResource(R.string.share_install)) }
                     },
-                    dismissButton = { TextButton(onClick = { finish() }) { Text("やめる") } },
+                    dismissButton = { TextButton(onClick = { finish() }) { Text(stringResource(R.string.common_cancel)) } },
                 )
             }
         }
@@ -222,12 +223,12 @@ class ShareActivity : ComponentActivity() {
         }
         if (nar == null) {
             work.deleteRecursively()
-            toast("取ってこられませんでした")
+            toast(getString(R.string.share_fetch_failed))
             return
         }
         val result = withContext(Dispatchers.IO) { runCatching { GhostStore.repository(this@ShareActivity).installer().install(nar) } }
         work.deleteRecursively()
-        toast(result.fold({ GhostStore.describe(it) }, { "インストールできませんでした: ${it.message}" }))
+        toast(result.fold({ GhostStore.describe(this@ShareActivity, it) }, { getString(R.string.store_install_failed, it.message) }))
         result.onSuccess { GhostStore.afterInstall(this@ShareActivity, it) }
     }
 

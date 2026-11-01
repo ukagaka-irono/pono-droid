@@ -6,7 +6,7 @@ import android.os.Build
 /** インストールされている pono-droid のバージョン（build.gradle.kts の versionName / versionCode） */
 data class AppVersion(val name: String, val code: Long) {
     /** 画面に出す形。例: 0.1.0（1） */
-    override fun toString() = "$name（$code）"
+    fun label(context: Context): String = context.getString(R.string.version_name_code, name, code)
 
     companion object {
         fun of(context: Context): AppVersion {

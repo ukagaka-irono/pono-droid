@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="developer_back">返回</string>
+    <string name="developer_close">關閉</string>
+    <!-- 開発用の画面の名前 -->
+    <string name="developer_page_backlog">發言記錄</string>
+    <string name="developer_page_log">記錄</string>
+    <string name="developer_page_shiori_request">SHIORI 請求</string>
+    <string name="developer_page_surface_test">表情測試</string>
+    <string name="developer_page_palette">開發者介面</string>
+    <!-- 開発用パレットの「ほかの画面」の説明 -->
+    <string name="developer_page_backlog_desc">人格說過的話，從新到舊</string>
+    <string name="developer_page_log_desc">腳本、錯誤、網路、更新的記錄</string>
+    <string name="developer_page_shiori_request_desc">傳送事件，查看傳回的腳本</string>
+    <string name="developer_page_surface_test_desc">逐一顯示外殼的表情</string>
+    <string name="developer_no_ghost">沒有正在執行的人格</string>
+    <string name="developer_backlog_empty">還沒有發言</string>
+    <!-- ログの種類 -->
+    <string name="developer_log_script">腳本</string>
+    <string name="developer_log_error">錯誤</string>
+    <string name="developer_log_network">網路</string>
+    <string name="developer_log_update">更新</string>
+    <string name="developer_log_empty">沒有記錄</string>
+    <!-- SHIORI リクエスト -->
+    <string name="developer_event_id">事件 ID</string>
+    <string name="developer_references">Reference（每行一個）</string>
+    <string name="developer_send">傳送</string>
+    <string name="developer_send_and_play">傳送並播放</string>
+    <string name="developer_sending">傳送中…</string>
+    <!-- %1$s は例外のメッセージ -->
+    <string name="developer_send_failed">無法傳送：%1$s</string>
+    <string name="developer_returned_script">傳回的腳本</string>
+    <string name="developer_no_answer">（無回應）</string>
+    <!-- サーフェステスト -->
+    <string name="developer_no_surfaces">沒有表情</string>
+    <!-- %1$d はサーフェスの番号 -->
+    <string name="developer_surface_number">表情 %1$d</string>
+    <string name="developer_show_surface">顯示</string>
+    <!-- 開発用パレットのゴーストのようす。%1$s は名前 -->
+    <string name="developer_info_shiori">SHIORI：%1$s</string>
+    <string name="developer_info_shell">外殼：%1$s</string>
+    <string name="developer_info_balloon">對話方塊：%1$s</string>
+    <string name="developer_info_status">狀態：%1$s</string>
+    <!-- 読み直し -->
+    <string name="developer_reload">重新載入</string>
+    <string name="developer_reload_shell">外殼</string>
+    <string name="developer_reload_ghost">人格</string>
+    <!-- SHIORI のログ -->
+    <string name="developer_shiori_log">SHIORI 記錄</string>
+    <string name="developer_shiori_log_enable">保留 SHIORI 內部記錄</string>
+    <string name="developer_open_log">開啟</string>
+    <string name="developer_log_not_found">找不到記錄（SHIORI 沒有傳回記錄的位置，或檔案不存在）</string>
+    <string name="developer_other_pages">其他頁面</string>
+    <!-- AI グラフの画面 -->
+    <string name="aigraph_title">AI 圖表</string>
+    <string name="aigraph_close">關閉</string>
+    <string name="aigraph_empty">沒有 AI 圖表</string>
+    <!-- %1$d はグラフの番号（1 から） -->
+    <string name="aigraph_graph_number">圖表 %1$d</string>
+    <!-- ライセンスの画面 -->
+    <string name="licenses_title">授權</string>
+    <string name="licenses_back">返回</string>
+    <!-- %1$s は product_name -->
+    <string name="licenses_intro">%1$s 及其所使用軟體的授權。點一下名稱即可顯示全文。</string>
+    <!-- 文を読む画面（readme など） -->
+    <string name="viewer_close">關閉</string>
+</resources>

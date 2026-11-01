@@ -40,11 +40,11 @@ object GhostStore {
                         val n = input.read(buf)
                         if (n < 0) break
                         total += n
-                        if (total > MAX_NAR_BYTES) error("ファイルが大きすぎます（1GB まで）")
+                        if (total > MAX_NAR_BYTES) error(context.getString(R.string.store_too_large))
                         out.write(buf, 0, n)
                     }
                 }
-            } ?: error("ファイルを開けません")
+            } ?: error(context.getString(R.string.store_cannot_open))
             val controller = GhostOverlayService.controller.value
             return controller?.installNar(tmp, fromUser = true)?.getOrThrow() ?: repository(context).installer().install(tmp)
         } finally {
@@ -70,7 +70,7 @@ object GhostStore {
                 _installing.value = false
             }
             result.onSuccess { afterInstall(app, it) }
-            _installResults.send(result.fold({ describe(it) }, { "インストールできませんでした: ${it.message}" }))
+            _installResults.send(result.fold({ describe(app, it) }, { app.getString(R.string.store_install_failed, it.message) }))
         }
     }
 
@@ -109,13 +109,22 @@ object GhostStore {
         if (GhostOverlayService.runningGhosts.value.isEmpty() && Settings.canDrawOverlays(context)) GhostOverlayService.start(context, boot)
     }
 
-    fun describe(result: NarInstaller.Result): String = result.installed.joinToString("、") { item ->
-        when (item.type) {
-            NarInstaller.Type.GHOST -> "ゴースト: ${Ghost(item.dir).name}"
-            NarInstaller.Type.BALLOON -> "バルーン: ${Balloon(item.dir).name}"
-            NarInstaller.Type.SHELL -> "シェル: ${item.name}"
-            NarInstaller.Type.SUPPLEMENT -> "追加ファイル: ${item.name}"
-            NarInstaller.Type.PLUGIN -> "プラグイン: ${Plugin(item.dir).name}"
+    fun describe(context: Context, result: NarInstaller.Result): String {
+        val items = result.installed.map { item ->
+            when (item.type) {
+                NarInstaller.Type.GHOST -> context.getString(R.string.store_item_ghost, Ghost(item.dir).name)
+                NarInstaller.Type.BALLOON -> context.getString(R.string.store_item_balloon, Balloon(item.dir).name)
+                NarInstaller.Type.SHELL -> context.getString(R.string.store_item_shell, item.name)
+                NarInstaller.Type.SUPPLEMENT -> context.getString(R.string.store_item_supplement, item.name)
+                NarInstaller.Type.PLUGIN -> context.getString(R.string.store_item_plugin, Plugin(item.dir).name)
+            }
         }
-    } + " をインストールしました"
+        return context.getString(R.string.store_installed, joinNames(context, items))
+    }
+
+    /** 名前を並べる。並べ方（日本語なら「、」）は、出している文字列の言語に合わせる */
+    fun joinNames(context: Context, names: List<String>): String {
+        val locale = java.util.Locale.forLanguageTag(context.getString(R.string.language_code))
+        return android.icu.text.ListFormatter.getInstance(locale).format(names)
+    }
 }

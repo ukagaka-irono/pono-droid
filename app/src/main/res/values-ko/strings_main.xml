@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 一覧の画面（MainActivity）の文言 -->
+<resources>
+    <!-- 一覧の画面の上の帯 -->
+    <string name="main_licenses">라이선스</string>
+    <!-- 「他のアプリの上に重ねて表示」は端末の設定の名前 -->
+    <string name="main_overlay_permission">다른 앱 위에 고스트를 표시하려면 ‘다른 앱 위에 표시’를 허용해 주세요.</string>
+    <string name="main_allow">허용</string>
+    <string name="main_installing">설치 중…</string>
+    <string name="main_install_nar">.nar 설치</string>
+    <!-- ゴーストのネットワーク更新 -->
+    <string name="main_update">업데이트</string>
+    <!-- 動いているゴーストをすべて終わらせる -->
+    <string name="main_quit">종료</string>
+    <string name="main_loading_ghosts">고스트를 불러오는 중…</string>
+    <string name="main_no_ghosts">고스트가 없습니다. .nar 파일을 설치해 주세요.</string>
+    <!-- 一覧の見出し -->
+    <string name="main_balloons_header">말풍선</string>
+    <!-- 一覧の見出し -->
+    <string name="main_plugins_header">플러그인</string>
+    <string name="main_no_browser">이 페이지를 열 수 있는 앱이 없습니다</string>
+    <!-- %1$s は消したものの名前 -->
+    <string name="main_deleted">삭제했습니다: %1$s</string>
+    <!-- %1$s は消せなかったものの名前 -->
+    <string name="main_delete_failed">삭제하지 못했습니다: %1$s</string>
+    <!-- 名前を括弧でくくる形（main_delete_left_balloons_message の名前の並び） -->
+    <string name="main_quoted_name">‘%1$s’</string>
+    <!-- main_quoted_name を並べるときの区切り（日本語は「」が区切りを兼ねるので空） -->
+    <string name="main_quoted_list_separator">", "</string>
+    <string name="main_some_balloons_not_deleted">삭제하지 못한 말풍선이 있습니다</string>
+    <!-- ゴーストを消したあと、そのゴースト向けのバルーンを残すボタン -->
+    <string name="main_keep">남기기</string>
+    <string name="main_delete_balloon_title">말풍선 삭제</string>
+    <!-- %1$s はバルーンの名前 -->
+    <string name="main_delete_balloon_message">‘%1$s’을(를) 삭제할까요? 이 말풍선을 선택한 고스트는 고스트가 지정한 말풍선이나 간이 말풍선으로 돌아갑니다.</string>
+    <!-- %1$s はバルーンの名前 -->
+    <string name="main_balloon_in_use">%1$s (사용 중)</string>
+    <!-- %1$s はゴーストの名前（recommended.ghost） -->
+    <string name="main_balloon_for">‘%1$s’용</string>
+    <string name="main_delete_plugin_title">플러그인 삭제</string>
+    <!-- %1$s はプラグインの名前 -->
+    <string name="main_delete_plugin_message">‘%1$s’을(를) 삭제할까요? 플러그인이 저장한 내용도 지워지며 되돌릴 수 없습니다.</string>
+    <!-- pono-droid の簡易バルーン -->
+    <string name="main_simple_balloon">간이 말풍선</string>
+    <!-- %1$s はバルーンの名前、%2$s はそのバルーンが向けたゴーストの名前 -->
+    <string name="main_balloon_for_other_ghost">말풍선 ‘%1$s’은(는) 고스트 ‘%2$s’용으로 만들어졌습니다. 다른 고스트에서는 제대로 표시되지 않을 수 있습니다.</string>
+    <!-- %1$s はゴーストが推奨するバルーンの名前 -->
+    <string name="main_ghost_recommends_balloon">이 고스트는 말풍선 ‘%1$s’에 맞춰 만들어졌습니다. 다른 말풍선에서는 제대로 표시되지 않을 수 있습니다.</string>
+    <!-- 「シェル: 名前」のような、項目の名前と今の値 -->
+    <string name="main_label_value">%1$s: %2$s</string>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="main_ghost_loading">%1$s (불러오는 중)</string>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="main_ghost_running">%1$s (실행 중)</string>
+    <string name="main_start">시작</string>
+    <string name="main_restart">다시 시작</string>
+    <!-- 動いているほかのゴーストと一緒に起動する -->
+    <string name="main_start_beside">함께 시작</string>
+    <string name="main_shell">쉘</string>
+    <string name="main_balloon">말풍선</string>
+    <string name="main_switch_balloon_title">말풍선 바꾸기</string>
+    <string name="main_switch_balloon_anyway">그래도 바꾸기</string>
+    <string name="main_delete_ghost_title">고스트 삭제</string>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="main_delete_ghost_message">‘%1$s’을(를) 삭제할까요? 고스트가 저장한 내용도 지워지며 되돌릴 수 없습니다.</string>
+    <string name="settings_character_scale">캐릭터 크기</string>
+    <string name="settings_balloon_scale">말풍선 크기</string>
+    <string name="settings_balloon_opacity">말풍선 불투명도</string>
+    <!-- 一覧の見出し -->
+    <string name="settings_header">설정</string>
+    <!-- 端末の「アプリの言語」の画面を開けなかった -->
+    <string name="settings_language_unavailable">언어 설정을 열지 못했습니다</string>
+    <!-- キャラクターを画面の端に揃えるかどうか -->
+    <string name="settings_alignment">캐릭터 자유 이동</string>
+    <string name="settings_alignment_ghost">고스트 설정</string>
+    <string name="settings_alignment_free">항상 자유 이동</string>
+    <string name="settings_alignment_limit">항상 제한</string>
+    <string name="settings_developer">개발자 기능</string>
+    <!-- ゴーストが話した文字を読み上げる（音声合成） -->
+    <string name="settings_speech">고스트가 하는 말 읽어 주기</string>
+    <string name="settings_sstp">다른 앱에서 SSTP 받기(이 기기 안에서만)</string>
+    <string name="settings_wallpaper">고스트가 배경화면을 바꿀 수 있음(원래 배경화면으로 되돌릴 수 없음)</string>
+    <string name="settings_calendar">오늘 일정을 고스트에게 알리기(기기 캘린더)</string>
+    <string name="settings_calendar_denied">캘린더를 읽을 권한이 없습니다</string>
+    <string name="settings_voice">이름을 부르면 듣기(마이크)</string>
+    <string name="settings_voice_denied">마이크 권한이 없습니다</string>
+    <string name="settings_usb">USB 기기를 연결하거나 분리하면 고스트에게 알리기</string>
+    <string name="settings_media">재생 중인 음악이나 동영상을 고스트에게 알리기(알림 접근)</string>
+    <string name="settings_media_denied">알림 접근 권한이 없습니다</string>
+    <!-- %1$s はアカウントの名前（無ければ common_none） -->
+    <string name="settings_mail_account">메일 계정: %1$s</string>
+    <string name="settings_mail_edit">편집</string>
+    <!-- メールを確かめる間隔 -->
+    <string name="settings_mail_interval">확인 간격</string>
+    <!-- 確かめる間隔: 確かめない -->
+    <string name="settings_mail_interval_off">안 함</string>
+    <string name="settings_mail_saved">저장했습니다</string>
+    <!-- %1$s は失敗の理由 -->
+    <string name="settings_mail_save_failed">저장하지 못했습니다: %1$s</string>
+    <string name="settings_mail_delete_title">메일 계정 삭제</string>
+    <!-- %1$s はアカウントの名前 -->
+    <string name="settings_mail_delete_message">‘%1$s’을(를) 삭제할까요?</string>
+    <string name="settings_mail_dialog_title">메일 계정</string>
+    <string name="settings_mail_name">이름</string>
+    <string name="settings_mail_server">서버</string>
+    <string name="settings_mail_port">포트</string>
+    <string name="settings_mail_user">사용자 이름</string>
+    <string name="settings_mail_password">비밀번호</string>
+    <string name="settings_mail_password_note">비밀번호는 기기의 키로 암호화해 저장합니다</string>
+    <!-- IMAP か POP3 -->
+    <string name="settings_mail_protocol">종류</string>
+    <!-- ゴーストを消したあと、そのゴースト向けのバルーンも消すか聞く。%1$s はゴーストの名前、%2$s は main_quoted_name で括ったバルーンの名前の並び。数はバルーンの数 -->
+    <plurals name="main_delete_left_balloons_message">
+        <item quantity="other">‘%1$s’용 말풍선 %2$s도 삭제할까요? 되돌릴 수 없습니다.</item>
+    </plurals>
+    <!-- 確かめる間隔。%1$d は分 -->
+    <plurals name="settings_mail_interval_minutes">
+        <item quantity="other">%1$d분</item>
+    </plurals>
+</resources>

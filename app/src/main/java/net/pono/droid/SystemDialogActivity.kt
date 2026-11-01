@@ -1,6 +1,7 @@
 package net.pono.droid
 
 import android.content.ActivityNotFoundException
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -83,7 +84,7 @@ class SystemDialogActivity : ComponentActivity() {
             "color" -> setContent {
                 MaterialTheme {
                     ColorDialog(
-                        title = request.title.ifBlank { "色を選ぶ" },
+                        title = request.title.ifBlank { stringResource(R.string.dialog_color_title) },
                         initial = request.color ?: 0xFFFFFF,
                         onPick = { r, g, b -> done("$r,$g,$b") },
                         onDismiss = { done(null) },
@@ -197,21 +198,21 @@ private fun ColorDialog(title: String, initial: Int, onPick: (Int, Int, Int) -> 
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.fillMaxWidth().height(48.dp).background(Color(red, green, blue), MaterialTheme.shapes.medium))
-                ColorSlider("赤", red) { red = it }
-                ColorSlider("緑", green) { green = it }
-                ColorSlider("青", blue) { blue = it }
+                ColorSlider(stringResource(R.string.dialog_color_red, red), red) { red = it }
+                ColorSlider(stringResource(R.string.dialog_color_green, green), green) { green = it }
+                ColorSlider(stringResource(R.string.dialog_color_blue, blue), blue) { blue = it }
             }
         },
-        confirmButton = { TextButton(onClick = { onPick(red, green, blue) }) { Text("選ぶ") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("やめる") } },
+        confirmButton = { TextButton(onClick = { onPick(red, green, blue) }) { Text(stringResource(R.string.dialog_color_pick)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) } },
     )
 }
 
-/** 色の1つ分。1 刻み */
+/** 色の1つ分。1 刻み。[label] は「赤: 128」のように値まで入れたもの */
 @Composable
 private fun ColorSlider(label: String, value: Int, onChange: (Int) -> Unit) {
     Column {
-        Text("$label: $value", style = MaterialTheme.typography.bodyMedium)
+        Text(label, style = MaterialTheme.typography.bodyMedium)
         Slider(
             value = value.toFloat(),
             onValueChange = { onChange(it.roundToInt()) },

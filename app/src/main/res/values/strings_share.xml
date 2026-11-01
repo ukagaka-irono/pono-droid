@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- x-ukagaka-link: のリンクを開いたが、そのゴーストが動いていない -->
+    <string name="share_ghost_not_running">That ghost isn\'t running</string>
+    <!-- 共有した文字やファイルを渡すゴーストがいない -->
+    <string name="share_no_ghost">No ghost is running</string>
+    <string name="share_pick_file">Choose a file to share</string>
+    <string name="share_files_too_large">The files are too large (up to 64MB in total)</string>
+    <string name="share_cannot_read">Couldn\'t read the files</string>
+    <string name="share_some_too_large">Files that were too large weren\'t passed (up to 64MB in total)</string>
+    <!-- リンクからのインストールの確認の題とボタン -->
+    <string name="share_install">Install</string>
+    <!-- %1$s は URL -->
+    <string name="share_install_homeurl">Download files from \"%1$s\" the same way as a network update and install them?</string>
+    <!-- %1$s は URL -->
+    <string name="share_install_nar">Install the .nar from \"%1$s\"?</string>
+    <string name="share_fetch_failed">Couldn\'t download it</string>
+    <!-- ゴーストが題を付けなかったときの、色を選ぶダイアログの題 -->
+    <string name="dialog_color_title">Choose a color</string>
+    <!-- %1$d は 0〜255 -->
+    <string name="dialog_color_red">Red: %1$d</string>
+    <!-- %1$d は 0〜255 -->
+    <string name="dialog_color_green">Green: %1$d</string>
+    <!-- %1$d は 0〜255 -->
+    <string name="dialog_color_blue">Blue: %1$d</string>
+    <string name="dialog_color_pick">Choose</string>
+    <string name="shortcut_ghost_missing">This ghost is no longer installed</string>
+    <string name="store_too_large">The file is too large (up to 1GB)</string>
+    <string name="store_cannot_open">Can\'t open the file</string>
+    <!-- %1$s はわけ -->
+    <string name="store_install_failed">Couldn\'t install: %1$s</string>
+    <!-- 入れたものの 1 つ。%1$s は名前 -->
+    <string name="store_item_ghost">Ghost: %1$s</string>
+    <!-- %1$s は名前 -->
+    <string name="store_item_balloon">Balloon: %1$s</string>
+    <!-- %1$s は名前 -->
+    <string name="store_item_shell">Shell: %1$s</string>
+    <!-- %1$s は名前 -->
+    <string name="store_item_supplement">Additional files: %1$s</string>
+    <!-- %1$s は名前 -->
+    <string name="store_item_plugin">Plugin: %1$s</string>
+    <!-- %1$s は store_item_* を言語の並べ方（ListFormatter）でつないだもの -->
+    <string name="store_installed">Installed %1$s</string>
+</resources>

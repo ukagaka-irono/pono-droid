@@ -1,5 +1,7 @@
 package net.pono.droid.overlay
 
+import net.pono.droid.R
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.graphics.PixelFormat
 import android.graphics.SurfaceTexture
@@ -172,8 +174,8 @@ private fun SoundPanel(sound: SoundPlayer.Windowed, player: SoundPlayer, onDrag:
                 TextButton(onClick = {
                     player.togglePause(sound.key)
                     paused = !paused
-                }) { Text(if (paused) "再生" else "一時停止", color = SoundBorder) }
-                TextButton(onClick = { player.close(sound.key) }) { Text("閉じる", color = SoundBorder) }
+                }) { Text(stringResource(if (paused) R.string.sound_play else R.string.sound_pause), color = SoundBorder) }
+                TextButton(onClick = { player.close(sound.key) }) { Text(stringResource(R.string.sound_close), color = SoundBorder) }
             }
         }
     }

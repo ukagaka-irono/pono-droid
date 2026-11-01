@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,8 +79,8 @@ class AiGraphActivity : ComponentActivity() {
                 Scaffold(
                     topBar = {
                         TopAppBar(
-                            title = { Text(hanayu?.title?.takeIf { it.isNotEmpty() } ?: "AI グラフ", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            actions = { TextButton(onClick = { finish() }) { Text("閉じる") } },
+                            title = { Text(hanayu?.title?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.aigraph_title), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            actions = { TextButton(onClick = { finish() }) { Text(stringResource(R.string.aigraph_close)) } },
                         )
                     },
                 ) { padding ->
@@ -90,12 +91,12 @@ class AiGraphActivity : ComponentActivity() {
                         if (hanayu != null) {
                             HanayuChart(hanayu)
                         } else if (graphs.isEmpty()) {
-                            Text("AI グラフがありません", style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(R.string.aigraph_empty), style = MaterialTheme.typography.bodyMedium)
                         }
                         graphs.forEachIndexed { i, graph ->
                             // グラフが何枚もあるときだけ見出しを付ける
                             if (graphs.size > 1) {
-                                Text("グラフ ${i + 1}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
+                                Text(stringResource(R.string.aigraph_graph_number, i + 1), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 4.dp))
                             }
                             RadarChart(graph, logos.getOrNull(i), align, logoX, logoY)
                         }

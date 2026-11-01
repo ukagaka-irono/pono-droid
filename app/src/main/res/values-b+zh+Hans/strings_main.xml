@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 一覧の画面（MainActivity）の文言 -->
+<resources>
+    <!-- 一覧の画面の上の帯 -->
+    <string name="main_licenses">许可证</string>
+    <!-- 「他のアプリの上に重ねて表示」は端末の設定の名前 -->
+    <string name="main_overlay_permission">要在其他应用上层显示人格，请允许“显示在其他应用的上层”。</string>
+    <string name="main_allow">允许</string>
+    <string name="main_installing">正在安装…</string>
+    <string name="main_install_nar">安装 .nar</string>
+    <!-- ゴーストのネットワーク更新 -->
+    <string name="main_update">更新</string>
+    <!-- 動いているゴーストをすべて終わらせる -->
+    <string name="main_quit">退出</string>
+    <string name="main_loading_ghosts">正在载入人格…</string>
+    <string name="main_no_ghosts">没有人格。请安装 .nar 文件。</string>
+    <!-- 一覧の見出し -->
+    <string name="main_balloons_header">对话框</string>
+    <!-- 一覧の見出し -->
+    <string name="main_plugins_header">插件</string>
+    <string name="main_no_browser">没有可以打开此页面的应用</string>
+    <!-- %1$s は消したものの名前 -->
+    <string name="main_deleted">已删除：%1$s</string>
+    <!-- %1$s は消せなかったものの名前 -->
+    <string name="main_delete_failed">无法删除：%1$s</string>
+    <!-- 名前を括弧でくくる形（main_delete_left_balloons_message の名前の並び） -->
+    <string name="main_quoted_name">“%1$s”</string>
+    <!-- main_quoted_name を並べるときの区切り（日本語は「」が区切りを兼ねるので空） -->
+    <string name="main_quoted_list_separator">、</string>
+    <string name="main_some_balloons_not_deleted">部分对话框无法删除</string>
+    <!-- ゴーストを消したあと、そのゴースト向けのバルーンを残すボタン -->
+    <string name="main_keep">保留</string>
+    <string name="main_delete_balloon_title">删除对话框</string>
+    <!-- %1$s はバルーンの名前 -->
+    <string name="main_delete_balloon_message">要删除“%1$s”吗？选择了此对话框的人格将改回人格指定的对话框或简易对话框。</string>
+    <!-- %1$s はバルーンの名前 -->
+    <string name="main_balloon_in_use">%1$s（使用中）</string>
+    <!-- %1$s はゴーストの名前（recommended.ghost） -->
+    <string name="main_balloon_for">适用于“%1$s”</string>
+    <string name="main_delete_plugin_title">删除插件</string>
+    <!-- %1$s はプラグインの名前 -->
+    <string name="main_delete_plugin_message">要删除“%1$s”吗？插件保存的内容也会被清除，且无法撤销。</string>
+    <!-- pono-droid の簡易バルーン -->
+    <string name="main_simple_balloon">简易对话框</string>
+    <!-- %1$s はバルーンの名前、%2$s はそのバルーンが向けたゴーストの名前 -->
+    <string name="main_balloon_for_other_ghost">对话框“%1$s”是为人格“%2$s”制作的。用于其他人格时可能无法正确显示。</string>
+    <!-- %1$s はゴーストが推奨するバルーンの名前 -->
+    <string name="main_ghost_recommends_balloon">此人格是为对话框“%1$s”制作的。使用其他对话框时可能无法正确显示。</string>
+    <!-- 「シェル: 名前」のような、項目の名前と今の値 -->
+    <string name="main_label_value">%1$s：%2$s</string>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="main_ghost_loading">%1$s（载入中）</string>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="main_ghost_running">%1$s（运行中）</string>
+    <string name="main_start">启动</string>
+    <string name="main_restart">重新启动</string>
+    <!-- 動いているほかのゴーストと一緒に起動する -->
+    <string name="main_start_beside">一起启动</string>
+    <string name="main_shell">外壳</string>
+    <string name="main_balloon">对话框</string>
+    <string name="main_switch_balloon_title">切换对话框</string>
+    <string name="main_switch_balloon_anyway">仍然切换</string>
+    <string name="main_delete_ghost_title">删除人格</string>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="main_delete_ghost_message">要删除“%1$s”吗？人格保存的内容也会被清除，且无法撤销。</string>
+    <string name="settings_character_scale">角色大小</string>
+    <string name="settings_balloon_scale">对话框大小</string>
+    <string name="settings_balloon_opacity">对话框不透明度</string>
+    <!-- 一覧の見出し -->
+    <string name="settings_header">设置</string>
+    <!-- 端末の「アプリの言語」の画面を開けなかった -->
+    <string name="settings_language_unavailable">无法打开语言设置</string>
+    <!-- キャラクターを画面の端に揃えるかどうか -->
+    <string name="settings_alignment">角色自由移动</string>
+    <string name="settings_alignment_ghost">按人格设置</string>
+    <string name="settings_alignment_free">始终自由移动</string>
+    <string name="settings_alignment_limit">始终限制</string>
+    <string name="settings_developer">开发者功能</string>
+    <!-- ゴーストが話した文字を読み上げる（音声合成） -->
+    <string name="settings_speech">朗读人格说的话</string>
+    <string name="settings_sstp">接收来自其他应用的 SSTP（仅限本机）</string>
+    <string name="settings_wallpaper">允许人格更换壁纸（无法恢复原来的壁纸）</string>
+    <string name="settings_calendar">将今天的日程告诉人格（设备日历）</string>
+    <string name="settings_calendar_denied">没有读取日历的权限</string>
+    <string name="settings_voice">呼叫人格名字时聆听（麦克风）</string>
+    <string name="settings_voice_denied">没有麦克风权限</string>
+    <string name="settings_usb">USB 设备连接或拔出时告诉人格</string>
+    <string name="settings_media">将正在播放的歌曲或视频告诉人格（通知使用权）</string>
+    <string name="settings_media_denied">没有通知使用权</string>
+    <!-- %1$s はアカウントの名前（無ければ common_none） -->
+    <string name="settings_mail_account">邮件账户：%1$s</string>
+    <string name="settings_mail_edit">编辑</string>
+    <!-- メールを確かめる間隔 -->
+    <string name="settings_mail_interval">检查间隔</string>
+    <!-- 確かめる間隔: 確かめない -->
+    <string name="settings_mail_interval_off">不检查</string>
+    <string name="settings_mail_saved">已保存</string>
+    <!-- %1$s は失敗の理由 -->
+    <string name="settings_mail_save_failed">无法保存：%1$s</string>
+    <string name="settings_mail_delete_title">删除邮件账户</string>
+    <!-- %1$s はアカウントの名前 -->
+    <string name="settings_mail_delete_message">要删除“%1$s”吗？</string>
+    <string name="settings_mail_dialog_title">邮件账户</string>
+    <string name="settings_mail_name">名称</string>
+    <string name="settings_mail_server">服务器</string>
+    <string name="settings_mail_port">端口</string>
+    <string name="settings_mail_user">用户名</string>
+    <string name="settings_mail_password">密码</string>
+    <string name="settings_mail_password_note">密码会用本设备的密钥加密保存</string>
+    <!-- IMAP か POP3 -->
+    <string name="settings_mail_protocol">类型</string>
+    <!-- ゴーストを消したあと、そのゴースト向けのバルーンも消すか聞く。%1$s はゴーストの名前、%2$s は main_quoted_name で括ったバルーンの名前の並び。数はバルーンの数 -->
+    <plurals name="main_delete_left_balloons_message">
+        <item quantity="other">也要删除为“%1$s”制作的对话框%2$s吗？此操作无法撤销。</item>
+    </plurals>
+    <!-- 確かめる間隔。%1$d は分 -->
+    <plurals name="settings_mail_interval_minutes">
+        <item quantity="other">%1$d 分钟</item>
+    </plurals>
+</resources>

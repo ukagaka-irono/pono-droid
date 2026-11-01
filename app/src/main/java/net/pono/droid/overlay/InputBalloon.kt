@@ -1,5 +1,7 @@
 package net.pono.droid.overlay
 
+import net.pono.droid.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.clickable
@@ -234,8 +236,8 @@ private fun SimpleInputBox(
             when (request.kind) {
                 InputRequest.Kind.DATE, InputRequest.Kind.TIME, InputRequest.Kind.IP -> {
                     val labels = when (request.kind) {
-                        InputRequest.Kind.DATE -> listOf("年", "月", "日")
-                        InputRequest.Kind.TIME -> listOf("時", "分", "秒")
+                        InputRequest.Kind.DATE -> listOf(stringResource(R.string.input_year), stringResource(R.string.input_month), stringResource(R.string.input_day))
+                        InputRequest.Kind.TIME -> listOf(stringResource(R.string.input_hour), stringResource(R.string.input_minute), stringResource(R.string.input_second))
                         else -> listOf("1", "2", "3", "4")
                     }
                     // IP アドレスの欄は 0〜255 なので3桁まで
@@ -260,7 +262,7 @@ private fun SimpleInputBox(
                 InputRequest.Kind.SLIDER -> {
                     val min = request.values.getOrNull(1) ?: 0
                     val max = request.values.getOrNull(2) ?: 100
-                    Text("${slider.roundToInt()}（$min〜$max）", color = SimpleText, fontSize = 14.sp)
+                    Text(stringResource(R.string.input_slider_value, slider.roundToInt(), min, max), color = SimpleText, fontSize = 14.sp)
                     Slider(
                         value = slider,
                         onValueChange = onSlider,
@@ -326,7 +328,7 @@ private fun Modifier.inputCursor(): Modifier = LocalBalloonCursors.current?.let 
 @Composable
 private fun PasswordNote(modifier: Modifier) {
     Text(
-        "入力した内容はゴーストのスクリプトに渡されます。他のサービスのパスワードは入れないでください。",
+        stringResource(R.string.input_password_note),
         color = SimpleText.copy(alpha = 0.7f),
         fontSize = 11.sp,
         lineHeight = 14.sp,
@@ -337,7 +339,7 @@ private fun PasswordNote(modifier: Modifier) {
 @Composable
 private fun InputButtons(cancel: () -> Unit, submit: () -> Unit, modifier: Modifier) {
     Row(modifier) {
-        TextButton(onClick = cancel) { Text("キャンセル", color = SimpleBorder) }
+        TextButton(onClick = cancel) { Text(stringResource(R.string.input_cancel), color = SimpleBorder) }
         TextButton(onClick = submit) { Text("OK", color = SimpleBorder) }
     }
 }
@@ -348,17 +350,20 @@ private fun keyboardOptions(request: InputRequest, password: Boolean) = Keyboard
     imeAction = if (request.kind == InputRequest.Kind.TEXTAREA) ImeAction.Default else ImeAction.Done,
 )
 
-private fun InputRequest.label() = when (kind) {
-    InputRequest.Kind.INPUT -> "入力"
-    InputRequest.Kind.PASSWORD -> "パスワード"
-    InputRequest.Kind.COMMUNICATE -> "話しかける"
-    InputRequest.Kind.TEACH -> "教える"
-    InputRequest.Kind.DATE -> "日付"
-    InputRequest.Kind.TIME -> "時刻"
-    InputRequest.Kind.IP -> "IP アドレス"
-    InputRequest.Kind.SLIDER -> "値"
-    InputRequest.Kind.TEXTAREA -> "入力（複数行）"
-}
+@Composable
+private fun InputRequest.label() = stringResource(
+    when (kind) {
+        InputRequest.Kind.INPUT -> R.string.input_kind_input
+        InputRequest.Kind.PASSWORD -> R.string.input_kind_password
+        InputRequest.Kind.COMMUNICATE -> R.string.input_kind_communicate
+        InputRequest.Kind.TEACH -> R.string.input_kind_teach
+        InputRequest.Kind.DATE -> R.string.input_kind_date
+        InputRequest.Kind.TIME -> R.string.input_kind_time
+        InputRequest.Kind.IP -> R.string.input_kind_ip
+        InputRequest.Kind.SLIDER -> R.string.input_kind_slider
+        InputRequest.Kind.TEXTAREA -> R.string.input_kind_textarea
+    },
+)
 
 /**
  * --limit= の文字数で切る（textareabox は改行も 1 文字）。[limit] が null なら切らない。

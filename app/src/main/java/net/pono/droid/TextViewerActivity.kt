@@ -18,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -35,7 +36,7 @@ class TextViewerActivity : ComponentActivity() {
                     topBar = {
                         TopAppBar(
                             title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                            actions = { TextButton(onClick = { finish() }) { Text("閉じる") } },
+                            actions = { TextButton(onClick = { finish() }) { Text(stringResource(R.string.viewer_close)) } },
                         )
                     },
                 ) { padding ->

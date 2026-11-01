@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 通知の「ネットワーク更新」を押したが、ゴーストがいない -->
+    <string name="overlay_no_ghost_running">ゴーストが起動していません</string>
+    <!-- %1$d は同時に動かせる数 -->
+    <plurals name="overlay_too_many_ghosts">
+        <item quantity="other">同時に動かせるゴーストは %1$d 体までです</item>
+    </plurals>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="overlay_no_shell">%1$s: シェルがありません</string>
+    <string name="overlay_no_app_to_send">渡せるアプリが見つかりません</string>
+    <string name="overlay_no_app_to_open">開けるアプリが見つかりません</string>
+    <string name="overlay_wallpaper_failed">壁紙を変えられませんでした</string>
+    <string name="overlay_no_app_to_edit">書き換えられるアプリが見つかりません</string>
+    <string name="overlay_no_mail_app">メールのアプリが見つかりません</string>
+    <string name="overlay_no_browser">ブラウザが見つかりません</string>
+    <string name="overlay_save_failed">保存できませんでした</string>
+    <!-- %1$d はポートの番号 -->
+    <string name="overlay_sstp_port_in_use">SSTP のポート %1$d がほかのアプリに使われています</string>
+    <!-- 通知のチャンネルの名前（\![set,trayballoon]） -->
+    <string name="overlay_channel_messages">ゴーストからのお知らせ</string>
+    <!-- 通知のチャンネルの名前（常駐の通知） -->
+    <string name="overlay_channel_running">常駐中のゴースト</string>
+    <!-- 常駐の通知の題 -->
+    <string name="overlay_notification_hidden">ゴーストを隠しています</string>
+    <!-- 常駐の通知の題 -->
+    <string name="overlay_notification_running">ゴーストが起動しています</string>
+    <!-- 常駐の通知のボタン -->
+    <string name="overlay_action_network_update">ネットワーク更新</string>
+    <!-- トーストは 2 行で切られうるので短く -->
+    <string name="overlay_permission_revoked">ゴーストを出すには「他のアプリの上に重ねて表示」を許可してください</string>
+    <!-- 簡易バルーンのオンラインの印 -->
+    <string name="overlay_online_marker">● オンライン</string>
+    <!-- オンラインの印の画像の説明（読み上げ） -->
+    <string name="overlay_online">オンライン</string>
+    <!-- クリック待ちの印の画像の説明（読み上げ） -->
+    <string name="overlay_click_wait">クリック待ち</string>
+    <!-- バルーンの矢印の説明（読み上げ） -->
+    <string name="overlay_scroll_back">前へ</string>
+    <!-- バルーンの矢印の説明（読み上げ） -->
+    <string name="overlay_scroll_more">続き</string>
+    <!-- 日付の箱の欄 -->
+    <string name="input_year">年</string>
+    <string name="input_month">月</string>
+    <string name="input_day">日</string>
+    <!-- 時刻の箱の欄 -->
+    <string name="input_hour">時</string>
+    <string name="input_minute">分</string>
+    <string name="input_second">秒</string>
+    <string name="input_password_note">入力した内容はゴーストのスクリプトに渡されます。他のサービスのパスワードは入れないでください。</string>
+    <string name="input_cancel">キャンセル</string>
+    <!-- 入力の箱の欄の名前 -->
+    <string name="input_kind_input">入力</string>
+    <string name="input_kind_password">パスワード</string>
+    <string name="input_kind_communicate">話しかける</string>
+    <string name="input_kind_teach">教える</string>
+    <string name="input_kind_date">日付</string>
+    <string name="input_kind_time">時刻</string>
+    <string name="input_kind_ip">IP アドレス</string>
+    <string name="input_kind_slider">値</string>
+    <string name="input_kind_textarea">入力（複数行）</string>
+    <!-- 音のウィンドウのボタン -->
+    <string name="sound_play">再生</string>
+    <string name="sound_pause">一時停止</string>
+    <string name="sound_close">閉じる</string>
+    <!-- スライダーの今の値と、選べる幅 -->
+    <string name="input_slider_value">%1$d（%2$d〜%3$d）</string>
+</resources>

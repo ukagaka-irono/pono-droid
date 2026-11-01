@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 通知の「ネットワーク更新」を押したが、ゴーストがいない -->
+    <string name="overlay_no_ghost_running">No ghost is running</string>
+    <!-- %1$d は同時に動かせる数 -->
+    <plurals name="overlay_too_many_ghosts">
+        <item quantity="one">You can run up to %1$d ghost at a time</item>
+        <item quantity="other">You can run up to %1$d ghosts at a time</item>
+    </plurals>
+    <!-- %1$s はゴーストの名前 -->
+    <string name="overlay_no_shell">%1$s: No shell</string>
+    <string name="overlay_no_app_to_send">No app found to send it to</string>
+    <string name="overlay_no_app_to_open">No app found to open it</string>
+    <string name="overlay_wallpaper_failed">Couldn\'t change the wallpaper</string>
+    <string name="overlay_no_app_to_edit">No app found to edit it</string>
+    <string name="overlay_no_mail_app">No mail app found</string>
+    <string name="overlay_no_browser">No browser found</string>
+    <string name="overlay_save_failed">Couldn\'t save</string>
+    <!-- %1$d はポートの番号 -->
+    <string name="overlay_sstp_port_in_use">SSTP port %1$d is used by another app</string>
+    <!-- 通知のチャンネルの名前（\![set,trayballoon]） -->
+    <string name="overlay_channel_messages">Messages from ghosts</string>
+    <!-- 通知のチャンネルの名前（常駐の通知） -->
+    <string name="overlay_channel_running">Running ghosts</string>
+    <!-- 常駐の通知の題 -->
+    <string name="overlay_notification_hidden">Ghost is hidden</string>
+    <!-- 常駐の通知の題 -->
+    <string name="overlay_notification_running">Ghost is running</string>
+    <!-- 常駐の通知のボタン -->
+    <string name="overlay_action_network_update">Network update</string>
+    <!-- トーストは 2 行で切られうるので短く -->
+    <string name="overlay_permission_revoked">To show ghosts, allow \"Display over other apps\"</string>
+    <!-- 簡易バルーンのオンラインの印 -->
+    <string name="overlay_online_marker">● Online</string>
+    <!-- オンラインの印の画像の説明（読み上げ） -->
+    <string name="overlay_online">Online</string>
+    <!-- クリック待ちの印の画像の説明（読み上げ） -->
+    <string name="overlay_click_wait">Waiting for a tap</string>
+    <!-- バルーンの矢印の説明（読み上げ） -->
+    <string name="overlay_scroll_back">Previous</string>
+    <!-- バルーンの矢印の説明（読み上げ） -->
+    <string name="overlay_scroll_more">More</string>
+    <!-- 日付の箱の欄 -->
+    <string name="input_year">Year</string>
+    <string name="input_month">Month</string>
+    <string name="input_day">Day</string>
+    <!-- 時刻の箱の欄 -->
+    <string name="input_hour">Hour</string>
+    <string name="input_minute">Minute</string>
+    <string name="input_second">Second</string>
+    <string name="input_password_note">What you enter is passed to the ghost\'s script. Don\'t enter passwords for other services.</string>
+    <string name="input_cancel">Cancel</string>
+    <!-- 入力の箱の欄の名前 -->
+    <string name="input_kind_input">Input</string>
+    <string name="input_kind_password">Password</string>
+    <string name="input_kind_communicate">Talk</string>
+    <string name="input_kind_teach">Teach</string>
+    <string name="input_kind_date">Date</string>
+    <string name="input_kind_time">Time</string>
+    <string name="input_kind_ip">IP address</string>
+    <string name="input_kind_slider">Value</string>
+    <string name="input_kind_textarea">Input (multiple lines)</string>
+    <!-- 音のウィンドウのボタン -->
+    <string name="sound_play">Play</string>
+    <string name="sound_pause">Pause</string>
+    <string name="sound_close">Close</string>
+    <!-- スライダーの今の値と、選べる幅 -->
+    <string name="input_slider_value">%1$d (%2$d–%3$d)</string>
+</resources>

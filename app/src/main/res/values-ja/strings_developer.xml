@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="developer_back">戻る</string>
+    <string name="developer_close">閉じる</string>
+    <!-- 開発用の画面の名前 -->
+    <string name="developer_page_backlog">発言履歴</string>
+    <string name="developer_page_log">ログ</string>
+    <string name="developer_page_shiori_request">SHIORI リクエスト</string>
+    <string name="developer_page_surface_test">サーフェステスト</string>
+    <string name="developer_page_palette">開発用パレット</string>
+    <!-- 開発用パレットの「ほかの画面」の説明 -->
+    <string name="developer_page_backlog_desc">ゴーストが話したことを、新しいものから</string>
+    <string name="developer_page_log_desc">スクリプト・エラー・通信・更新の記録</string>
+    <string name="developer_page_shiori_request_desc">イベントを送って、返ってきたスクリプトを見る</string>
+    <string name="developer_page_surface_test_desc">シェルのサーフェスを1つずつ出してみる</string>
+    <string name="developer_no_ghost">ゴーストが起動していません</string>
+    <string name="developer_backlog_empty">発言はまだありません</string>
+    <!-- ログの種類 -->
+    <string name="developer_log_script">スクリプト</string>
+    <string name="developer_log_error">エラー</string>
+    <string name="developer_log_network">通信</string>
+    <string name="developer_log_update">更新</string>
+    <string name="developer_log_empty">記録はありません</string>
+    <!-- SHIORI リクエスト -->
+    <string name="developer_event_id">イベント ID</string>
+    <string name="developer_references">Reference（1行に1つ）</string>
+    <string name="developer_send">送る</string>
+    <string name="developer_send_and_play">送って再生</string>
+    <string name="developer_sending">送信中…</string>
+    <!-- %1$s は例外のメッセージ -->
+    <string name="developer_send_failed">送れませんでした: %1$s</string>
+    <string name="developer_returned_script">返ってきたスクリプト</string>
+    <string name="developer_no_answer">（答えなし）</string>
+    <!-- サーフェステスト -->
+    <string name="developer_no_surfaces">サーフェスがありません</string>
+    <!-- %1$d はサーフェスの番号 -->
+    <string name="developer_surface_number">サーフェス %1$d</string>
+    <string name="developer_show_surface">出す</string>
+    <!-- 開発用パレットのゴーストのようす。%1$s は名前 -->
+    <string name="developer_info_shiori">SHIORI: %1$s</string>
+    <string name="developer_info_shell">シェル: %1$s</string>
+    <string name="developer_info_balloon">バルーン: %1$s</string>
+    <string name="developer_info_status">状態: %1$s</string>
+    <!-- 読み直し -->
+    <string name="developer_reload">読み直す</string>
+    <string name="developer_reload_shell">シェル</string>
+    <string name="developer_reload_ghost">ゴースト</string>
+    <!-- SHIORI のログ -->
+    <string name="developer_shiori_log">SHIORI のログ</string>
+    <string name="developer_shiori_log_enable">SHIORI 内部のログを取る</string>
+    <string name="developer_open_log">開く</string>
+    <string name="developer_log_not_found">ログが見つかりません（SHIORI がログの場所を返さないか、ファイルがありません）</string>
+    <string name="developer_other_pages">ほかの画面</string>
+    <!-- AI グラフの画面 -->
+    <string name="aigraph_title">AI グラフ</string>
+    <string name="aigraph_close">閉じる</string>
+    <string name="aigraph_empty">AI グラフがありません</string>
+    <!-- %1$d はグラフの番号（1 から） -->
+    <string name="aigraph_graph_number">グラフ %1$d</string>
+    <!-- ライセンスの画面 -->
+    <string name="licenses_title">ライセンス</string>
+    <string name="licenses_back">戻る</string>
+    <!-- %1$s は product_name -->
+    <string name="licenses_intro">%1$s と、利用しているソフトウェアのライセンスです。名前をタップすると全文を表示します。</string>
+    <!-- 文を読む画面（readme など） -->
+    <string name="viewer_close">閉じる</string>
+</resources>
