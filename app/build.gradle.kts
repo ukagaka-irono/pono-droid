@@ -81,10 +81,10 @@ abstract class GenerateLicenseAssets : DefaultTask() {
                 cut("yaya/tinyxml2/tinyxml2.cpp", "Original code by Lee Thomason", "distribution."),
             ),
             Entry(
-                "Gumbo", "Apache-2.0", "https://github.com/google/gumbo-parser",
-                cut("yaya/gumbo/src/parser.c", "Copyright 2010 Google Inc.", "limitations under the License.") +
+                "Gumbo", "Apache-2.0", "https://codeberg.org/gumbo-parser/gumbo-parser",
+                cut("gumbo-parser/src/parser.c", "Copyright 2010 Google Inc.", "limitations under the License.") +
                     "\n\nGumbo contains the UTF-8 decoder below.\n\n" +
-                    cut("yaya/gumbo/src/utf8.c", "Copyright (c) 2008-2009 Bjoern Hoehrmann", "substantial portions of the Software."),
+                    cut("gumbo-parser/src/utf8.c", "Copyright (c) 2008-2009 Bjoern Hoehrmann", "substantial portions of the Software."),
             ),
             Entry("uka_regexp", "Unlicense", "https://github.com/ukatech/uka_regexp", read("yaya/uka_regexp/LICENSE").trim()),
             Entry("里々（SATORI）", "BSD 2-Clause", "https://github.com/ukatech/satoriya-shiori", read("satori/LICENSE").trim()),

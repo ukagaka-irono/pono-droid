@@ -85,3 +85,6 @@
 	path = shiori-yaya/src/main/cpp/saori/curl
 	url = https://github.com/curl/curl.git
 	shallow = true
+[submodule "shiori-yaya/src/main/cpp/gumbo-parser"]
+	path = shiori-yaya/src/main/cpp/gumbo-parser
+	url = https://codeberg.org/gumbo-parser/gumbo-parser.git

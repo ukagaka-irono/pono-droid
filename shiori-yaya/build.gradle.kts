@@ -9,6 +9,8 @@ plugins {
 
 val yayaDir = layout.projectDirectory.dir("src/main/cpp/yaya")
 val generatedDir = layout.buildDirectory.dir("generated/yaya")
+// Gumbo（HTML のパーサ）は YAYA の中のフォークではなく、Codeberg の gumbo-parser（サブモジュール）を使う
+val gumboDir = layout.projectDirectory.dir("src/main/cpp/gumbo-parser/src")
 
 /**
  * 写したソースに当てるパッチ（サブモジュールは書き換えない）。[needle] がちょうど [expected] 回あることを確かめてから置き換える。
@@ -78,11 +80,37 @@ fun patchYaya(name: String, text: String): String = when (name) {
     else -> text
 }
 
+/**
+ * Codeberg の gumbo-parser に、YAYA のフォーク（ponapalt/gumbo-parser-mirror）が足した GumboOptions.max_depth を当てる。
+ * 開いている要素がそれを越えたら、入力がそこで終わったことにして止める（深すぎる入れ子で解析が二乗の時間になり、
+ * 木を捨てるときにスタックを使い切るのを防ぐ）。YAYA の html.cpp はこれを使う。0 なら上限なし
+ */
+fun patchGumbo(name: String, text: String): String = when (name) {
+    "gumbo.h" -> patchSource(
+        text, name,
+        "  GumboNamespaceEnum fragment_namespace;\n} GumboOptions;",
+        "  GumboNamespaceEnum fragment_namespace;\n\n  /** pono-droid: 開いている要素の数の上限。越えたら入力がそこで終わったことにする。0 なら上限なし */\n  int max_depth;\n} GumboOptions;",
+    )
+    "parser.c" -> patchSource(
+        patchSource(
+            text, name,
+            "    8, false, -1, GUMBO_TAG_LAST, GUMBO_NAMESPACE_HTML};",
+            "    8, false, -1, GUMBO_TAG_LAST, GUMBO_NAMESPACE_HTML, 0};",
+        ),
+        name,
+        "           !(options->stop_on_first_error && has_error));",
+        "           !(options->stop_on_first_error && has_error) &&\n           !(options->max_depth > 0 &&\n               state->_open_elements.length > (unsigned int) options->max_depth));",
+    )
+    else -> text
+}
+
 // YAYA のソースは Shift_JIS(CP932) なので、clang に渡す前に UTF-8 へ変換する。
 // #line で元のファイルを指すので、エラー位置はサブモジュール側のファイルになる。
+// Gumbo は max_depth を当てて src/gumbo/src/ に置く（html.cpp の #include "gumbo/src/gumbo.h" がここを見る）
 val convertYayaSources = tasks.register("convertYayaSources") {
     val sources = yayaDir.asFileTree.matching { include("*.cpp") }
-    inputs.files(sources)
+    val gumboSources = gumboDir.asFileTree.matching { include("*.c", "*.h") }
+    inputs.files(sources, gumboSources)
     outputs.dir(generatedDir.map { it.dir("src") })
     doLast {
         val out = generatedDir.get().dir("src").asFile
@@ -96,6 +124,12 @@ val convertYayaSources = tasks.register("convertYayaSources") {
                 .decode(ByteBuffer.wrap(src.readBytes()))
             val path = src.absolutePath.replace('\\', '/')
             out.resolve(src.name).writeText("#line 1 \"$path\"\n${patchYaya(src.name, text.toString())}", Charsets.UTF_8)
+        }
+        val gumboOut = out.resolve("gumbo/src").apply { mkdirs() }
+        gumboSources.forEach { src ->
+            val path = src.absolutePath.replace('\\', '/')
+            val text = src.readText(Charsets.UTF_8).replace("\r\n", "\n")
+            gumboOut.resolve(src.name).writeText("#line 1 \"$path\"\n${patchGumbo(src.name, text)}", Charsets.UTF_8)
         }
     }
 }

@@ -278,7 +278,7 @@ limitations under the License.
 | Mersenne Twister (MT19937) | BSD 3-Clause |
 | [parson](https://github.com/kgabis/parson) | MIT |
 | [TinyXML-2](https://github.com/leethomason/tinyxml2) | zlib |
-| [Gumbo](https://github.com/google/gumbo-parser) | Apache-2.0（UTF-8 デコーダは MIT） |
+| [Gumbo](https://codeberg.org/gumbo-parser/gumbo-parser) | Apache-2.0（UTF-8 デコーダは MIT） |
 | [uka_regexp](https://github.com/ukatech/uka_regexp) | Unlicense |
 | [里々（SATORI）](https://github.com/ukatech/satoriya-shiori) | BSD 2-Clause |
 | [華和梨（KAWARI）](https://github.com/kawari/kawari) | BSD |

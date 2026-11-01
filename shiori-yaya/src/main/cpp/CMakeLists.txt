@@ -51,7 +51,8 @@ list(FILTER YAYA_SOURCES EXCLUDE REGEX ".*/(stdafx|aya_profile)\\.cpp$")
 set(GUMBO_SOURCES
     attribute.c char_ref.c char_ref_gperf.c error.c parser.c string_buffer.c
     string_piece.c tag.c tokenizer.c utf8.c util.c vector.c)
-list(TRANSFORM GUMBO_SOURCES PREPEND ${YAYA_DIR}/gumbo/src/)
+# Codeberg の gumbo-parser に max_depth を当てたもの（Gradle の convertYayaSources が作る）
+list(TRANSFORM GUMBO_SOURCES PREPEND ${YAYA_GENERATED_DIR}/src/gumbo/src/)
 
 set(VENDOR_CXX_SOURCES
     ${YAYA_DIR}/parson/parson.c

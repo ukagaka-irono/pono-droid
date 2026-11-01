@@ -758,6 +758,47 @@ class NativeShioriTest {
         assertEquals(ShioriEngine.KAWARI, ShioriEngine.forGhost("shiori.dll", dir))
     }
 
+    /** PARSEHTML は Codeberg の gumbo-parser で読む。深すぎる入れ子は max_depth で打ち切り、すぐにエラーで返す */
+    @Test
+    fun htmlParsedWithGumbo() = runBlocking {
+        val dir = File(root, "html").apply { mkdirs() }
+        File(dir, "yaya.txt").writeText("charset, UTF-8\r\ndic, test.dic\r\n", Charsets.US_ASCII)
+        val dic = """
+            request
+            {
+            	_crlf = CHR(13) + CHR(10)
+            	_r = ''
+            	if RE_SEARCH(_argv[0], 'Reference0: deep') {
+            		_s = '<div>'
+            		for _i = 0; _i < 17; _i++ {
+            			_s += _s
+            		}
+            		_t = GETTICKCOUNT()
+            		_v = PARSEHTML(_s)
+            		_r = TOSTR(GETLASTERROR()) + ',' + TOSTR(GETTICKCOUNT() - _t)
+            	}
+            	else {
+            		_v = PARSEHTML('<p class="a">hello</p>')
+            		_p = _v['children'][1]['children'][0]
+            		_r = _v['name'] + ',' + _p['name'] + ',' + _p['attr']['class'] + ',' + _p['text']
+            	}
+            	'SHIORI/3.0 200 OK' + _crlf + 'Charset: UTF-8' + _crlf + 'Value: ' + _r + _crlf + _crlf
+            }
+        """.trimIndent().replace("\n", "\r\n")
+        File(dir, "test.dic").writeText(dic, Charsets.UTF_8)
+        val session = ShioriSession(NativeShiori(ShioriEngine.YAYA, sandbox(dir)), Charsets.UTF_8)
+        try {
+            assertTrue(session.load(dir))
+            assertEquals("html,p,a,hello", session.get("OnTest", "simple")?.value)
+            // 13 万個の入れ子の <div>。打ち切らなければ何秒もかかる
+            val (error, ms) = session.get("OnTest", "deep")?.value.orEmpty().split(",").map { it.toInt() }
+            assertEquals(26, error)
+            assertTrue("took $ms ms", ms < 2000)
+        } finally {
+            session.unload()
+        }
+    }
+
     @Test
     fun twoGhostsAtOnce() = runBlocking {
         // multi_load で別々の VM になること（片方を閉じてももう片方は動く）
