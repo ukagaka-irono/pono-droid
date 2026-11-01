@@ -417,7 +417,7 @@ private fun GhostListScreen(onShowLicenses: () -> Unit) {
                 item(key = "setting:mail") { MailAccountRow(onMessage = { scope.launch { snackbar.showSnackbar(it) } }) }
                 item(key = "version") {
                     Text(
-                        stringResource(R.string.version_label, stringResource(R.string.product_name), version.label(context)),
+                        stringResource(R.string.version_label, stringResource(R.string.product_name), stringResource(R.string.version_name_code, version.name, version.code)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),

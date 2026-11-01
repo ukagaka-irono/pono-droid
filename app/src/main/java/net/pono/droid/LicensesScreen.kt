@@ -69,7 +69,7 @@ fun LicensesScreen(onBack: () -> Unit) {
         ) {
             item {
                 Text(
-                    stringResource(R.string.version_label, stringResource(R.string.product_name), AppVersion.of(context).label(context)),
+                    AppVersion.of(context).let { stringResource(R.string.version_label, stringResource(R.string.product_name), stringResource(R.string.version_name_code, it.name, it.code)) },
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(top = 8.dp),
                 )
