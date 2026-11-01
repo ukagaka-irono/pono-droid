@@ -80,11 +80,13 @@ import net.pono.baseware.net.SstpServer
 import net.pono.baseware.sakura.MoveCommand
 import net.pono.baseware.sakura.SoundOptions
 import net.pono.baseware.shell.Shell
+import net.pono.baseware.text.Messages
 import net.pono.droid.AppVersion
 import net.pono.droid.DeveloperActivity
 import net.pono.droid.GhostShortcutActivity
 import net.pono.droid.GhostStore
 import net.pono.droid.MainActivity
+import net.pono.droid.PonoApplication
 import net.pono.droid.R
 import net.pono.droid.SystemDialogActivity
 import net.pono.droid.TextViewerActivity
@@ -1387,6 +1389,7 @@ class GhostOverlayService : LifecycleService() {
     /** 画面の向き（OnDisplayChange）・ダークモード（OnDarkTheme）・言語（OnLanguageChange）が変わった */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        PonoApplication.applyLanguage(this)
         val metrics = resources.displayMetrics
         val info = systemInfo()
         controllers.forEach {
@@ -1397,7 +1400,7 @@ class GhostOverlayService : LifecycleService() {
         sessions.forEach { s -> s.allWindows().forEach { w -> w.keepOnScreenLater() } }
     }
 
-    /** 端末の見た目・言語・フォント・更新。言語名と ID は SSP（Windows）と同じ形にする */
+    /** 端末の見た目・アプリの言語・フォント・更新。言語名と ID は SSP の言語（English・1033 など）と同じ形にする */
     /** 端末のフォント。入れ替わることはまず無いので、1回だけ調べる */
     private val systemFonts: List<String> by lazy {
         val fonts = if (Build.VERSION.SDK_INT >= 29) {
@@ -1416,8 +1419,8 @@ class GhostOverlayService : LifecycleService() {
         val filter = getSystemService(NotificationManager::class.java)?.currentInterruptionFilter
         return SystemInfo(
             darkTheme = night,
-            languageName = locale.getDisplayLanguage(java.util.Locale.ENGLISH),
-            languageId = windowsLanguageId(locale),
+            languageName = Messages.sspName(getString(R.string.language_code)),
+            languageId = Messages.sspId(getString(R.string.language_code)),
             fonts = systemFonts,
             osUpdated = Build.TIME.takeIf { it > 0 },
             osUpdateTitle = "Android ${Build.VERSION.RELEASE} (${Build.VERSION.SECURITY_PATCH})",
@@ -1425,21 +1428,6 @@ class GhostOverlayService : LifecycleService() {
             doNotDisturb = filter != null && filter != NotificationManager.INTERRUPTION_FILTER_ALL &&
                 filter != NotificationManager.INTERRUPTION_FILTER_UNKNOWN,
         )
-    }
-
-    /** Windows の言語 ID（LANGID）。よく使うものだけ */
-    private fun windowsLanguageId(locale: java.util.Locale): Int = when (locale.language) {
-        "ja" -> 1041
-        "en" -> if (locale.country == "GB") 2057 else 1033
-        "zh" -> if (locale.country in setOf("TW", "HK", "MO") || locale.script == "Hant") 1028 else 2052
-        "ko" -> 1042
-        "fr" -> 1036
-        "de" -> 1031
-        "es" -> 3082
-        "it" -> 1040
-        "pt" -> if (locale.country == "BR") 1046 else 2070
-        "ru" -> 1049
-        else -> 0
     }
 
     /**

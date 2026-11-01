@@ -1,0 +1,4 @@
+charset,UTF-8
+
+// pono-droid baseware messages (Chinese-Traditional). key,value per line; %1 %2 ... are arguments, %% is a percent sign.
+// The value goes into SakuraScript as it is: \n is a line break, and a label inside \q[...] must not contain a comma.

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">pono-droid</string>
+    <!-- 画面の中に出す名前（app_name と違い、debug / benchmark でも変えない） -->
+    <string name="product_name">pono-droid</string>
+    <!-- この言語の名前（baseware の言語表と OnLanguageChange に使う。Messages.LANGUAGES のどれか） -->
+    <string name="language_code">ko</string>
+    <!-- 設定の「言語」の行に出す、この言語の名前 -->
+    <string name="language_name">한국어</string>
+    <string name="notification_update">업데이트</string>
+    <string name="notification_stop">종료</string>
+    <string name="notification_show">표시</string>
+    <!-- 「共有」の一覧に出る名前 -->
+    <string name="share_label">고스트에게 보내기</string>
+    <!-- あちこちで使う語 -->
+    <string name="common_delete">삭제</string>
+    <string name="common_cancel">취소</string>
+    <string name="common_save">저장</string>
+    <string name="common_readme">설명 읽기</string>
+    <string name="common_author_page">제작자 페이지</string>
+    <string name="common_none">없음</string>
+    <!-- %1$s は product_name、%2$s は版 -->
+    <string name="version_label">%1$s 버전 %2$s</string>
+    <!-- 設定の「言語」の行（Android 13 以降）。%1$s は language_name -->
+    <string name="settings_language">언어: %1$s</string>
+    <string name="settings_language_change">변경</string>
+</resources>

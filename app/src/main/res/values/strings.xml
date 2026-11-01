@@ -3,9 +3,25 @@
     <string name="app_name">pono-droid</string>
     <!-- 画面の中に出す名前（app_name と違い、debug / benchmark でも変えない） -->
     <string name="product_name">pono-droid</string>
-    <string name="notification_update">更新</string>
-    <string name="notification_stop">終了</string>
-    <string name="notification_show">表示</string>
+    <!-- この言語の名前（baseware の言語表と OnLanguageChange に使う。Messages.LANGUAGES のどれか） -->
+    <string name="language_code">en</string>
+    <!-- 設定の「言語」の行に出す、この言語の名前 -->
+    <string name="language_name">English</string>
+    <string name="notification_update">Update</string>
+    <string name="notification_stop">Quit</string>
+    <string name="notification_show">Show</string>
     <!-- 「共有」の一覧に出る名前 -->
-    <string name="share_label">ゴーストに渡す</string>
+    <string name="share_label">Send to ghost</string>
+    <!-- あちこちで使う語 -->
+    <string name="common_delete">Delete</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_save">Save</string>
+    <string name="common_readme">Read me</string>
+    <string name="common_author_page">Author\'s page</string>
+    <string name="common_none">None</string>
+    <!-- %1$s は product_name、%2$s は版 -->
+    <string name="version_label">%1$s version %2$s</string>
+    <!-- 設定の「言語」の行（Android 13 以降）。%1$s は language_name -->
+    <string name="settings_language">Language: %1$s</string>
+    <string name="settings_language_change">Change</string>
 </resources>
