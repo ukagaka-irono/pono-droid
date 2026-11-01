@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import net.pono.baseware.saori.SaoriRequest
 import net.pono.baseware.saori.SaoriResponse
+import net.pono.baseware.text.Messages
 import net.pono.baseware.text.TextCharsets
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -75,7 +76,7 @@ class SstpServer(
                 bind(InetSocketAddress(InetAddress.getLoopbackAddress(), port), BACKLOG)
             }
         } catch (e: IOException) {
-            log("SSTP のポート $port で待てません: ${e.message}")
+            log(Messages.get("log.sstp.listen", port, e.message.toString()))
             return false
         }
         server = s
@@ -100,7 +101,7 @@ class SstpServer(
                     } catch (e: Exception) {
                         // 途中で切られた（RST・Broken pipe）、読み終わる前の時間切れなど。この接続だけ閉じ、待ち受けは続ける
                         // （ここで抜けると待ち受けのコルーチンごと止まり、アプリでは例外で落ちる）
-                        log("SSTP の接続を閉じました: ${e.javaClass.simpleName} ${e.message}")
+                        log(Messages.get("log.sstp.closed", e.javaClass.simpleName, e.message.toString()))
                     } finally {
                         connections.decrementAndGet()
                         runCatching { socket.close() }

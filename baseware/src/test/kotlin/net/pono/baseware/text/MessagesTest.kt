@@ -48,6 +48,27 @@ class MessagesTest {
     }
 
     @Test
+    fun noValueStartsWithABracket() {
+        // \_q などのタグの直後に置く値が [ で始まると、タグの引数として読まれて消える
+        for (language in Messages.LANGUAGES) {
+            for ((key, value) in Messages.table(language)) {
+                assertTrue("$language の $key: $value", !value.startsWith("["))
+            }
+        }
+    }
+
+    @Test
+    fun matchesTextMadeFromAValue() {
+        val pattern = Messages.patternOf("%1: %2%%（%3分）")
+        assertTrue(pattern.matches("a.b: 50%（3分）"))
+        assertTrue(pattern.matches(": %（分）"))
+        assertTrue(!pattern.matches("a: 50（3分）"))
+        assertTrue(Messages.matches("log.shell.notfound", Messages.get("log.shell.notfound", "x(1)")))
+        assertTrue(!Messages.matches("log.shell.notfound", Messages.get("log.balloon.notfound", "x")))
+        assertTrue(!Messages.matches("no.such.key", "no.such.key"))
+    }
+
+    @Test
     fun formatsArgumentsAndFallsBack() {
         assertEquals("a-b-%", Messages.format("%1-%2-%%", arrayOf("a", "b")))
         assertEquals("50%（3）", Messages.format("%1%（%2）", arrayOf(50, 3)))

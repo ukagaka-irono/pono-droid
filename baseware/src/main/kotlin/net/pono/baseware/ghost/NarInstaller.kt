@@ -1,6 +1,7 @@
 package net.pono.baseware.ghost
 
 import net.pono.baseware.text.Descript
+import net.pono.baseware.text.Messages
 import net.pono.baseware.text.TextCharsets
 import net.pono.baseware.update.NetworkUpdater
 import java.io.File
@@ -15,10 +16,11 @@ import java.util.zip.ZipFile
  */
 class NarInstaller(private val ghostRoot: File, private val balloonRoot: File, private val pluginRoot: File = File(ghostRoot.parentFile, "plugin")) {
 
-    open class InstallException(message: String) : IOException(message)
+    /** 入れられなかった。[reason] は OnInstallFailure の理由（invalid type・unsupported・extraction）、[message] は読める文 */
+    open class InstallException(val reason: String, message: String) : IOException(message)
 
     /** install.txt の accept が受け取るゴーストと合わない（OnInstallRefuse） */
-    class RefusedException(val accept: String, val type: String, val name: String) : InstallException("refused")
+    class RefusedException(val accept: String, val type: String, val name: String) : InstallException("refused", "refused")
 
     enum class Type(val id: String) { GHOST("ghost"), BALLOON("balloon"), SHELL("shell"), SUPPLEMENT("supplement"), PLUGIN("plugin") }
 
@@ -42,12 +44,12 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File, p
     private fun install(nar: File, target: Ghost?, depth: Int): Result {
         // 古いアーカイバで作られた nar はファイル名が CP932 のことがある
         val zip = openZip(nar, Charsets.UTF_8) ?: openZip(nar, TextCharsets.CP932)
-            ?: throw InstallException("nar を開けません")
+            ?: throw InstallException("extraction", Messages.get("error.install.open"))
         zip.use {
             // 古いアーカイバは「system\」のように \ で終わる名前でフォルダを入れることがある（ファイルとして作ると、その中に書けなくなる）
             val entries = zip.entries().toList().filterNot { it.isDirectory || it.name.endsWith("\\") }
             val installEntry = entries.firstOrNull { normalize(it.name).equals("install.txt", ignoreCase = true) }
-                ?: throw InstallException("install.txt がありません")
+                ?: throw InstallException("invalid type", Messages.get("error.install.noinstalltxt"))
             val install = Descript.parse(TextCharsets.decode(zip.getInputStream(installEntry).readBytes()))
             val typeName = install["type"]?.trim()?.lowercase()
             if (typeName == "package") return installPackage(zip, entries, target, depth, install["bootghost"]?.let(::safeName))
@@ -57,9 +59,9 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File, p
                 "shell" -> Type.SHELL
                 "supplement" -> Type.SUPPLEMENT
                 "plugin" -> Type.PLUGIN
-                else -> throw InstallException("ゴースト・シェル・バルーン・追加ファイル・プラグイン以外（type=${install["type"]}）は入れられません")
+                else -> throw InstallException("unsupported", Messages.get("error.install.type", install["type"].toString()))
             }
-            val dirName = install["directory"]?.let(::safeName) ?: throw InstallException("install.txt に directory がありません")
+            val dirName = install["directory"]?.let(::safeName) ?: throw InstallException("invalid type", Messages.get("error.install.nodirectory"))
             val name = install["name"]?.trim()?.takeIf { it.isNotEmpty() } ?: dirName
             // シェルと追加ファイルは、accept で名指しされたゴーストにだけ入れる
             if (type == Type.SHELL || type == Type.SUPPLEMENT) {
@@ -83,7 +85,7 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File, p
                 val canonicalStaging = staging.canonicalFile
                 val outs = files.map { entry ->
                     val out = File(staging, normalize(entry.name)).canonicalFile
-                    if (!out.path.startsWith(canonicalStaging.path + File.separator)) throw InstallException("不正なパス: ${entry.name}")
+                    if (!out.path.startsWith(canonicalStaging.path + File.separator)) throw InstallException("extraction", Messages.get("error.install.badpath", entry.name))
                     entry to out
                 }
                 for ((entry, out) in outs) {
@@ -124,9 +126,9 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File, p
 
     /** type,package。中の .nar を順に入れる（package の中の package は入れない） */
     private fun installPackage(zip: ZipFile, entries: List<java.util.zip.ZipEntry>, target: Ghost?, depth: Int, bootGhost: String?): Result {
-        if (depth > 0) throw InstallException("package の中の package は入れられません")
+        if (depth > 0) throw InstallException("extraction", Messages.get("error.install.nestedpackage"))
         val nars = entries.filter { it.name.lowercase().endsWith(".nar") }.take(MAX_PACKAGE_NARS)
-        if (nars.isEmpty()) throw InstallException("package に .nar がありません")
+        if (nars.isEmpty()) throw InstallException("extraction", Messages.get("error.install.emptypackage"))
         val installed = mutableListOf<Installed>()
         for (entry in nars) {
             val tmp = File.createTempFile("package", ".nar")

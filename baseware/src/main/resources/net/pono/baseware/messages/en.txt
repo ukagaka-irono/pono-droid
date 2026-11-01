@@ -2,3 +2,151 @@ charset,UTF-8
 
 // pono-droid baseware messages (English). key,value per line; %1 %2 ... are arguments, %% is a percent sign.
 // The value goes into SakuraScript as it is: \n is a line break, and a label inside \q[...] must not contain a comma.
+// Do not start a value with [: a value placed right after a tag (such as \_q) would be read as the tag's argument.
+
+// Long-press menu (GhostController)
+menu.leavepassive,Leave restricted mode
+menu.hide,Hide
+menu.close,Close ghost
+menu.closeballoon,Close
+menu.recommend,Recommended
+menu.portal,Portal
+menu.middle,Ghost menu (middle click)
+menu.dressup,Dressup
+menu.ghosts,Change ghost
+menu.callghost,Call ghost
+menu.plugins,Plugins
+menu.shells,Shell
+menu.scale,Character size
+menu.balloons,Balloons
+menu.history,History
+menu.terms,Terms of this ghost
+menu.aigraph,AI graph
+menu.rateofuse,Ghost usage statistics
+menu.update,Network update
+menu.resetpos,Reset shell position
+menu.resetballoonpos,Reset balloon position
+menu.balloonmove,Movable balloons
+menu.sntp,Time sync
+menu.quiet,Mute sounds
+menu.speech,Read aloud
+menu.dictation,Speech recognition
+menu.reloadshiori,Reload SHIORI
+menu.biff,Check mail
+menu.sstpblock,Block SSTP from "%1"
+menu.vanish,Uninstall
+menu.install,Install ghost
+menu.explorer,Ghost list
+menu.settings,Settings
+menu.help,Help
+menu.scale.other,Other
+menu.back,Back
+info.aigraph.title,AI graph
+info.rateofuse.title,Ghost usage statistics
+info.rateofuse.row,%1: %2%% (%3 min, boots: %4)
+menu.shell.author,Author: %1
+menu.shell.authorpage,Author's page
+menu.shell.readme,Shell Read Me
+menu.history.ghost,Ghosts
+menu.simpleballoon,Simple balloon
+
+// Confirmations (GhostController)
+confirm.vanish,Uninstall %1?\n(This deletes all of the ghost's files. It cannot be undone.)
+confirm.vanish.yes,Uninstall
+confirm.cancel,Cancel
+confirm.terms.accept,Agree
+confirm.terms.decline,Decline
+confirm.balloon.notforghost,The balloon "%1" was made for the ghost "%2". It may not look right with other ghosts.
+confirm.balloon.ghostwants,This ghost was made for the balloon "%1". It may not look right with other balloons.
+confirm.balloon.force,Change anyway
+
+// Errors and notices (GhostController)
+error.shiori.unsupported,%1: %2 is not supported (supported: YAYA, Satori, Kawari, Kagari)
+error.shiori.load,%1: Couldn't load SHIORI
+error.shiori.crash,%1: SHIORI crashed
+error.shiori.timeout,%1: SHIORI is not responding
+error.repository.missing,No folder to install ghosts in
+info.loading,Loading…
+info.loading.shell,Loading shell…
+info.readme.missing,%1 not found
+info.readme.unreadable,Couldn't read %1
+
+// Developer log (GhostController)
+log.callghost.none,No ghost to call: %1
+log.callghost.failed,Couldn't call %1
+log.mail.noaccount,No mail account to check
+log.reload.shell,Cannot reload the shell: %1
+log.reload.balloon,Cannot reload the balloon: %1
+log.http.insecure,Cannot use --insecure (certificates are still checked): %1
+log.http.logname,Cannot use this as a --log file name: %1
+log.nar.output,Cannot write the nar there: %1
+log.nar.failed,Couldn't create the nar: %1
+log.updatedata.output,Cannot write the update data there: %1
+log.updatedata.failed,Couldn't create the update data: %1
+log.dump.surface,Cannot write surfaces there (only inside the ghost's folder)
+log.dump.balloon,Cannot write balloons there (only inside the ghost's folder)
+log.wallpaper.notfound,Wallpaper image not found: %1
+log.vanish.failed,Couldn't uninstall %1
+log.change.noghost,No ghost to change to: %1
+log.vanish.noother,Cannot uninstall because there is no other ghost
+log.shell.notfound,Shell not found: %1
+log.balloon.notfound,Balloon not found: %1
+log.event.sensitive,%1 [input] -> %2
+log.valuenotify.chain,Stopped: \![raise] from ValueNotify chained more than %1 times: %2
+log.communicate.notarget,Nobody to communicate with: %1
+log.raise.chain,Stopped: \![raise] chained more than %1 times: %2
+log.choice.untrusted,Ignored %1 in a choice sent by another app
+log.property.set.failed,property.set failed: %1
+log.property.set.failedstatus,property.set failed (%1): %2
+log.clock.cannotfix,\6: Cannot set the device clock (only measures the offset)
+log.sound.notfound,Sound not found: %1
+log.image.notfound,Image not found: %1
+log.surface.unknown,Unknown surface: \s[%1]
+log.animation.unknown,Unknown animation: \i[%1]
+log.notify.chain,Stopped: \![notify] chained more than %1 times: %2
+log.embed.external,Did not embed the reply to \![embed,%1] because it is SecurityLevel: external
+log.timerraise.toomany,Too many \![timerraise]: %1
+log.reload.unsupported,Unsupported reload: %1
+log.url.cannotopen,Cannot open URL: %1
+log.tag.unsupported,Unsupported tag: \%1%2
+log.tag.refused,Tag not allowed in SSTP scripts: \%1%2
+
+// Installing (NarInstaller)
+error.install.open,Cannot open the nar
+error.install.noinstalltxt,install.txt not found
+error.install.type,Only ghosts, shells, balloons, supplements and plugins can be installed (type=%1)
+error.install.nodirectory,install.txt has no directory
+error.install.badpath,Invalid path: %1
+error.install.nestedpackage,Cannot install a package inside a package
+error.install.emptypackage,The package has no .nar
+
+// Network update and packaging (NetworkUpdater, GhostPackager)
+error.update.ssl,Couldn't verify the server's certificate
+error.update.host,Server not found
+error.update.connect,Couldn't connect to the server
+error.update.network,Network error
+error.packager.toomany,Too many files
+
+// Plugins and SSTP (PluginHost, SstpServer)
+log.plugin.unsupported,Plugin "%1": %2 cannot run on pono-droid
+log.plugin.load,Couldn't load plugin "%1"
+log.plugin.noreply,Plugin "%1" does not respond to %2
+log.plugin.badreply,(unreadable reply)
+log.sstp.listen,Cannot listen on SSTP port %1: %2
+log.sstp.closed,Closed the SSTP connection: %1 %2
+
+// Surface test (SurfaceNames)
+surface.group.none,(No group)
+surface.group.other,Other
+surface.standard.normal,Normal
+surface.standard.shy,Embarrassed
+surface.standard.surprised,Surprised
+surface.standard.worried,Worried
+surface.standard.down,Down
+surface.standard.smile,Smile
+surface.standard.eyesclosed,Eyes closed
+surface.standard.angry,Angry
+surface.standard.sneer,Sneer
+surface.standard.shyangry,Embarrassed and angry
+surface.standard.singing,Singing
+surface.standard.wideeyed,Wide-eyed

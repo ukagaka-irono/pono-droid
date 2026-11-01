@@ -1,5 +1,6 @@
 package net.pono.baseware.ghost
 
+import net.pono.baseware.text.Messages
 import java.io.File
 import java.security.MessageDigest
 import java.util.zip.ZipEntry
@@ -42,7 +43,7 @@ class GhostPackager(private val root: File) {
                     if (options.excluded(rel, purpose) || ignore.ignored(rel, false)) continue
                     if (include != null && !include.included(rel)) continue
                     out += rel to f
-                    if (out.size > MAX_FILES) throw IllegalStateException("ファイルが多すぎます")
+                    if (out.size > MAX_FILES) throw IllegalStateException(Messages.get("error.packager.toomany"))
                 }
             }
         }

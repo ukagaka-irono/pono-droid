@@ -2,3 +2,151 @@ charset,UTF-8
 
 // pono-droid baseware messages (Japanese). key,value per line; %1 %2 ... are arguments, %% is a percent sign.
 // The value goes into SakuraScript as it is: \n is a line break, and a label inside \q[...] must not contain a comma.
+// Do not start a value with [: a value placed right after a tag (such as \_q) would be read as the tag's argument.
+
+// Long-press menu (GhostController)
+menu.leavepassive,制限モードを解除
+menu.hide,隠す
+menu.close,ゴーストを終了
+menu.closeballoon,閉じる
+menu.recommend,おすすめ
+menu.portal,ポータル
+menu.middle,ゴーストのメニュー（中クリック）
+menu.dressup,きせかえ
+menu.ghosts,ゴースト切り替え
+menu.callghost,ほかのゴーストを呼ぶ
+menu.plugins,プラグイン
+menu.shells,シェル
+menu.scale,キャラクターの大きさ
+menu.balloons,バルーン
+menu.history,履歴
+menu.terms,利用規約
+menu.aigraph,AI グラフ
+menu.rateofuse,使用率
+menu.update,ネットワーク更新
+menu.resetpos,位置を戻す
+menu.resetballoonpos,バルーン位置初期化
+menu.balloonmove,バルーンを動かせる
+menu.sntp,時計合わせ
+menu.quiet,サウンドを鳴らさない
+menu.speech,読み上げ
+menu.dictation,音声認識
+menu.reloadshiori,SHIORI を読み込み直す
+menu.biff,メールを確認
+menu.sstpblock,「%1」の SSTP を受けない
+menu.vanish,消去
+menu.install,ゴーストを入れる
+menu.explorer,ゴーストの一覧
+menu.settings,設定
+menu.help,説明書
+menu.scale.other,その他
+menu.back,戻る
+info.aigraph.title,【AI グラフ】
+info.rateofuse.title,【使用率】
+info.rateofuse.row,%1: %2%%（%3分・%4回）
+menu.shell.author,作者: %1
+menu.shell.authorpage,作者のページ
+menu.shell.readme,シェルの Read Me
+menu.history.ghost,ゴースト
+menu.simpleballoon,簡易バルーン
+
+// Confirmations (GhostController)
+confirm.vanish,%1 を消去しますか？\n（ゴーストのファイルをすべて消します。元に戻せません）
+confirm.vanish.yes,消去する
+confirm.cancel,やめる
+confirm.terms.accept,同意する
+confirm.terms.decline,同意しない
+confirm.balloon.notforghost,バルーン「%1」は「%2」のゴースト向けに作られています。ほかのゴーストでは正しく表示されないことがあります。
+confirm.balloon.ghostwants,このゴーストは「%1」のバルーンで使うよう作られています。ほかのバルーンでは正しく表示されないことがあります。
+confirm.balloon.force,それでも切り替える
+
+// Errors and notices (GhostController)
+error.shiori.unsupported,%1: %2 は未対応です（YAYA・里々・華和梨・Kagari に対応）
+error.shiori.load,%1: SHIORI を読み込めませんでした
+error.shiori.crash,%1: SHIORI が異常終了しました
+error.shiori.timeout,%1: SHIORI が応答しません
+error.repository.missing,ゴーストの置き場がありません
+info.loading,読み込み中…
+info.loading.shell,シェルを読み込み中…
+info.readme.missing,%1 がありません
+info.readme.unreadable,%1 を読めませんでした
+
+// Developer log (GhostController)
+log.callghost.none,呼べるゴーストがありません: %1
+log.callghost.failed,%1 を呼べませんでした
+log.mail.noaccount,確かめるメールのアカウントがありません
+log.reload.shell,シェルを読み直せません: %1
+log.reload.balloon,バルーンを読み直せません: %1
+log.http.insecure,--insecure は使えません（証明書は確かめます）: %1
+log.http.logname,--log のファイル名にできません: %1
+log.nar.output,nar の出力先にできません: %1
+log.nar.failed,nar を作れませんでした: %1
+log.updatedata.output,更新データの出力先にできません: %1
+log.updatedata.failed,更新データを作れませんでした: %1
+log.dump.surface,サーフェスを書き出せる場所ではありません（ゴーストのフォルダの中だけ）
+log.dump.balloon,バルーンを書き出せる場所ではありません（ゴーストのフォルダの中だけ）
+log.wallpaper.notfound,壁紙の画像が見つかりません: %1
+log.vanish.failed,%1 を消去できませんでした
+log.change.noghost,切り替え先のゴーストがありません: %1
+log.vanish.noother,ほかにゴーストがいないので消去できません
+log.shell.notfound,シェルがありません: %1
+log.balloon.notfound,バルーンがありません: %1
+log.event.sensitive,%1 [入力] -> %2
+log.valuenotify.chain,ValueNotify の \![raise] の連鎖が %1 回を超えたので止めました: %2
+log.communicate.notarget,コミュニケートの相手がいません: %1
+log.raise.chain,\![raise] の連鎖が %1 回を超えたので止めました: %2
+log.choice.untrusted,ほかのアプリから届いた選択肢の %1 は動かしません
+log.property.set.failed,property.set が失敗しました: %1
+log.property.set.failedstatus,property.set が失敗しました（%1）: %2
+log.clock.cannotfix,\6: 端末の時計は直せません（ずれを測るだけ）
+log.sound.notfound,音が見つかりません: %1
+log.image.notfound,画像が見つかりません: %1
+log.surface.unknown,知らないサーフェスです: \s[%1]
+log.animation.unknown,知らないアニメーションです: \i[%1]
+log.notify.chain,\![notify] の連鎖が %1 回を超えたので止めました: %2
+log.embed.external,\![embed,%1] の答えは SecurityLevel: external なので埋め込みません
+log.timerraise.toomany,\![timerraise] が多すぎます: %1
+log.reload.unsupported,未対応の reload: %1
+log.url.cannotopen,開けない URL: %1
+log.tag.unsupported,未対応のタグ: \%1%2
+log.tag.refused,SSTP のスクリプトでは使えないタグ: \%1%2
+
+// Installing (NarInstaller)
+error.install.open,nar を開けません
+error.install.noinstalltxt,install.txt がありません
+error.install.type,ゴースト・シェル・バルーン・追加ファイル・プラグイン以外（type=%1）は入れられません
+error.install.nodirectory,install.txt に directory がありません
+error.install.badpath,不正なパス: %1
+error.install.nestedpackage,package の中の package は入れられません
+error.install.emptypackage,package に .nar がありません
+
+// Network update and packaging (NetworkUpdater, GhostPackager)
+error.update.ssl,サーバーの証明書を確認できませんでした
+error.update.host,サーバーが見つかりませんでした
+error.update.connect,サーバーに接続できませんでした
+error.update.network,通信に失敗しました
+error.packager.toomany,ファイルが多すぎます
+
+// Plugins and SSTP (PluginHost, SstpServer)
+log.plugin.unsupported,プラグイン「%1」の %2 は pono-droid では動かせません
+log.plugin.load,プラグイン「%1」を読み込めませんでした
+log.plugin.noreply,プラグイン「%1」が %2 に応えません
+log.plugin.badreply,(読めない答え)
+log.sstp.listen,SSTP のポート %1 で待てません: %2
+log.sstp.closed,SSTP の接続を閉じました: %1 %2
+
+// Surface test (SurfaceNames)
+surface.group.none,（グループなし）
+surface.group.other,そのほか
+surface.standard.normal,素
+surface.standard.shy,照れ
+surface.standard.surprised,驚き
+surface.standard.worried,不安
+surface.standard.down,落ち込み
+surface.standard.smile,微笑み
+surface.standard.eyesclosed,目閉じ
+surface.standard.angry,怒り
+surface.standard.sneer,冷笑
+surface.standard.shyangry,照れ怒り
+surface.standard.singing,歌
+surface.standard.wideeyed,刮目

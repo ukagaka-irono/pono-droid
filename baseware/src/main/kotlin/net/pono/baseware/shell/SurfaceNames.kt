@@ -1,5 +1,6 @@
 package net.pono.baseware.shell
 
+import net.pono.baseware.text.Messages
 import net.pono.baseware.text.TextCharsets
 import java.io.File
 
@@ -61,11 +62,15 @@ data class SurfaceNameTable(val version: Int, val disableNoDefineSurfaces: Boole
             return SurfaceNameTable(version, disable, groups)
         }
 
-        /** surfacetable.txt に名前が無いときの、事実上の標準の名前（SSP のサーフェステストと同じく、これだけは書かなくても付く） */
-        val STANDARD_NAMES = mapOf(
-            0 to "素", 1 to "照れ", 2 to "驚き", 3 to "不安", 4 to "落ち込み", 5 to "微笑み", 6 to "目閉じ", 7 to "怒り", 8 to "冷笑",
-            9 to "照れ怒り", 25 to "歌", 10 to "素", 11 to "刮目", 19 to "歌",
+        /** surfacetable.txt に名前が無いときの、事実上の標準の名前の言語表のキー */
+        private val STANDARD_KEYS = mapOf(
+            0 to "normal", 1 to "shy", 2 to "surprised", 3 to "worried", 4 to "down", 5 to "smile", 6 to "eyesclosed", 7 to "angry", 8 to "sneer",
+            9 to "shyangry", 25 to "singing", 10 to "normal", 11 to "wideeyed", 19 to "singing",
         )
+
+        /** surfacetable.txt に名前が無いときの、事実上の標準の名前（SSP のサーフェステストと同じく、これだけは書かなくても付く）。今の言語で */
+        val STANDARD_NAMES: Map<Int, String>
+            get() = STANDARD_KEYS.mapValues { Messages.get("surface.standard." + it.value) }
     }
 }
 
@@ -84,8 +89,9 @@ fun Shell.surfaceTestGroups(scope: Int): List<SurfaceTestGroup> {
     val ids = surfaceIds()
     val existing = ids.toSet()
     val table = surfaceNames
+    val standard = SurfaceNameTable.STANDARD_NAMES
     fun nameOf(e: SurfaceNameTable.Entry?, id: Int): String? = when {
-        e == null -> SurfaceNameTable.STANDARD_NAMES[id]
+        e == null -> standard[id]
         e.name == "__parts" -> null
         else -> e.name
     }
@@ -99,10 +105,10 @@ fun Shell.surfaceTestGroups(scope: Int): List<SurfaceTestGroup> {
         .mapNotNull { g ->
             val items = g.entries.filter { it.id in existing && it.id !in hidden && shown.add(it.id) }.map { SurfaceTestItem(it.id, nameOf(it, it.id)) }
             // 名前の無いグループ（グループの外に書いたものも）にも見出しを付け、前のグループと続いて見えないようにする
-            items.takeIf { it.isNotEmpty() }?.let { SurfaceTestGroup(g.name.ifEmpty { "（グループなし）" }, it) }
+            items.takeIf { it.isNotEmpty() }?.let { SurfaceTestGroup(g.name.ifEmpty { Messages.get("surface.group.none") }, it) }
         }
     val rest = ids.filter { it !in shown && it !in hidden }
         .filter { !table.disableNoDefineSurfaces || it in listed || surfaces[it] != null }
         .map { SurfaceTestItem(it, nameOf(null, it)) }
-    return if (rest.isEmpty()) groups else groups + SurfaceTestGroup(if (groups.isEmpty()) null else "そのほか", rest)
+    return if (rest.isEmpty()) groups else groups + SurfaceTestGroup(if (groups.isEmpty()) null else Messages.get("surface.group.other"), rest)
 }

@@ -32,6 +32,9 @@ object Messages {
 
     private val tables = ConcurrentHashMap<String, Map<String, String>>()
 
+    /** 文言から作った正規表現（[pattern]）。言語とキーごと */
+    private val patterns = ConcurrentHashMap<String, Regex>()
+
     /** [key] の文言の %1 %2 … に [args] を入れたもの */
     fun get(key: String, vararg args: Any?): String {
         val text = table(language)[key] ?: table("en")[key] ?: key
@@ -49,6 +52,53 @@ object Messages {
         Messages::class.java.getResourceAsStream("/net/pono/baseware/messages/$language.txt")
             ?.use { parse(it.readBytes().toString(Charsets.UTF_8)) }
             .orEmpty()
+    }
+
+    /**
+     * [text] が、今の言語の [key] の文言から作った文か（%1〜%9 には何が入っていてもよい）。
+     * ログの文がどの文言から作られたかを、言語によらず見分けるのに使う。キーがどの表にも無ければ false
+     */
+    fun matches(key: String, text: String): Boolean = pattern(language, key)?.matches(text) == true
+
+    /** [text] が [keys] のどれかの文言から作った文か（[matches]） */
+    fun matchesAny(keys: Iterable<String>, text: String): Boolean = keys.any { matches(it, text) }
+
+    /** [language] の [key] の文言（無ければ英語の文言）から作った正規表現。一度作ったら覚えておく */
+    private fun pattern(language: String, key: String): Regex? {
+        val text = table(language)[key] ?: table("en")[key] ?: return null
+        return patterns.getOrPut("$language\u0000$key") { patternOf(text) }
+    }
+
+    /** 文言の %1〜%9 を何にでも合うものに、ほかを文字どおりに合うものにした正規表現（%% は % 1文字） */
+    internal fun patternOf(text: String): Regex {
+        val out = StringBuilder()
+        val literal = StringBuilder()
+        fun flush() {
+            if (literal.isNotEmpty()) out.append(Regex.escape(literal.toString()))
+            literal.clear()
+        }
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            val next = text.getOrNull(i + 1)
+            when {
+                c == '%' && next == '%' -> {
+                    literal.append('%')
+                    i += 2
+                }
+                c == '%' && next != null && next in '1'..'9' -> {
+                    flush()
+                    out.append("(.*)")
+                    i += 2
+                }
+                else -> {
+                    literal.append(c)
+                    i++
+                }
+            }
+        }
+        flush()
+        return Regex(out.toString(), RegexOption.DOT_MATCHES_ALL)
     }
 
     /** `キー,値` の行を読む。値の前後の空白は残す（文の続きに付ける文言があるため） */

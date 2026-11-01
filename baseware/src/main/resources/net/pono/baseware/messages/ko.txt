@@ -2,3 +2,151 @@ charset,UTF-8
 
 // pono-droid baseware messages (Korean). key,value per line; %1 %2 ... are arguments, %% is a percent sign.
 // The value goes into SakuraScript as it is: \n is a line break, and a label inside \q[...] must not contain a comma.
+// Do not start a value with [: a value placed right after a tag (such as \_q) would be read as the tag's argument.
+
+// Long-press menu (GhostController)
+menu.leavepassive,제한 모드 해제
+menu.hide,숨기기
+menu.close,고스트 종료
+menu.closeballoon,닫기
+menu.recommend,추천
+menu.portal,포털
+menu.middle,고스트 메뉴(가운데 클릭)
+menu.dressup,옷 갈아입히기
+menu.ghosts,고스트 바꾸기
+menu.callghost,다른 고스트 부르기
+menu.plugins,플러그인
+menu.shells,쉘
+menu.scale,캐릭터 크기
+menu.balloons,말풍선
+menu.history,최근 사용
+menu.terms,이용 조건
+menu.aigraph,AI 그래프
+menu.rateofuse,사용 빈도
+menu.update,네트워크 업데이트
+menu.resetpos,쉘 위치 초기화
+menu.resetballoonpos,말풍선 위치 초기화
+menu.balloonmove,말풍선 이동 허용
+menu.sntp,시각 맞추기
+menu.quiet,소리 끄기
+menu.speech,읽어 주기
+menu.dictation,음성 인식
+menu.reloadshiori,SHIORI 다시 불러오기
+menu.biff,메일 확인
+menu.sstpblock,‘%1’의 SSTP 받지 않기
+menu.vanish,제거
+menu.install,고스트 설치
+menu.explorer,고스트 목록
+menu.settings,설정
+menu.help,도움말
+menu.scale.other,기타
+menu.back,뒤로
+info.aigraph.title,【AI 그래프】
+info.rateofuse.title,【사용 빈도】
+info.rateofuse.row,%1: %2%%(%3분, %4회)
+menu.shell.author,제작자: %1
+menu.shell.authorpage,제작자 페이지
+menu.shell.readme,쉘 Read Me
+menu.history.ghost,고스트
+menu.simpleballoon,간이 말풍선
+
+// Confirmations (GhostController)
+confirm.vanish,%1을(를) 제거할까요?\n(고스트의 파일을 모두 지웁니다. 되돌릴 수 없습니다)
+confirm.vanish.yes,제거
+confirm.cancel,취소
+confirm.terms.accept,동의함
+confirm.terms.decline,동의하지 않음
+confirm.balloon.notforghost,말풍선 ‘%1’은(는) 고스트 ‘%2’용으로 만들어졌습니다. 다른 고스트에서는 제대로 표시되지 않을 수 있습니다.
+confirm.balloon.ghostwants,이 고스트는 말풍선 ‘%1’에 맞춰 만들어졌습니다. 다른 말풍선에서는 제대로 표시되지 않을 수 있습니다.
+confirm.balloon.force,그래도 바꾸기
+
+// Errors and notices (GhostController)
+error.shiori.unsupported,%1: %2은(는) 지원하지 않습니다(YAYA, Satori, Kawari, Kagari 지원)
+error.shiori.load,%1: SHIORI를 불러오지 못했습니다
+error.shiori.crash,%1: SHIORI가 비정상 종료되었습니다
+error.shiori.timeout,%1: SHIORI가 응답하지 않습니다
+error.repository.missing,고스트를 둘 곳이 없습니다
+info.loading,불러오는 중…
+info.loading.shell,쉘 불러오는 중…
+info.readme.missing,%1이(가) 없습니다
+info.readme.unreadable,%1을(를) 읽지 못했습니다
+
+// Developer log (GhostController)
+log.callghost.none,부를 수 있는 고스트가 없습니다: %1
+log.callghost.failed,%1을(를) 부를 수 없습니다
+log.mail.noaccount,확인할 메일 계정이 없습니다
+log.reload.shell,쉘을 다시 불러올 수 없습니다: %1
+log.reload.balloon,말풍선을 다시 불러올 수 없습니다: %1
+log.http.insecure,--insecure는 쓸 수 없습니다(인증서는 확인합니다): %1
+log.http.logname,--log 파일 이름으로 쓸 수 없습니다: %1
+log.nar.output,nar을 거기에 만들 수 없습니다: %1
+log.nar.failed,nar을 만들 수 없습니다: %1
+log.updatedata.output,업데이트 데이터를 거기에 만들 수 없습니다: %1
+log.updatedata.failed,업데이트 데이터를 만들 수 없습니다: %1
+log.dump.surface,서페이스를 거기에 내보낼 수 없습니다(고스트 폴더 안에서만 가능)
+log.dump.balloon,말풍선을 거기에 내보낼 수 없습니다(고스트 폴더 안에서만 가능)
+log.wallpaper.notfound,배경 화면 이미지를 찾을 수 없습니다: %1
+log.vanish.failed,%1을(를) 제거할 수 없습니다
+log.change.noghost,바꿀 고스트가 없습니다: %1
+log.vanish.noother,다른 고스트가 없어서 제거할 수 없습니다
+log.shell.notfound,쉘을 찾을 수 없습니다: %1
+log.balloon.notfound,말풍선을 찾을 수 없습니다: %1
+log.event.sensitive,%1 [입력] -> %2
+log.valuenotify.chain,ValueNotify의 \![raise] 연쇄가 %1회를 넘어 멈췄습니다: %2
+log.communicate.notarget,커뮤니케이트할 상대가 없습니다: %1
+log.raise.chain,\![raise] 연쇄가 %1회를 넘어 멈췄습니다: %2
+log.choice.untrusted,다른 앱에서 온 선택지의 %1은(는) 실행하지 않습니다
+log.property.set.failed,property.set 실패: %1
+log.property.set.failedstatus,property.set 실패(%1): %2
+log.clock.cannotfix,\6: 기기 시계는 고칠 수 없습니다(차이만 잽니다)
+log.sound.notfound,소리를 찾을 수 없습니다: %1
+log.image.notfound,이미지를 찾을 수 없습니다: %1
+log.surface.unknown,알 수 없는 서페이스: \s[%1]
+log.animation.unknown,알 수 없는 애니메이션: \i[%1]
+log.notify.chain,\![notify] 연쇄가 %1회를 넘어 멈췄습니다: %2
+log.embed.external,\![embed,%1]의 응답은 SecurityLevel: external이라서 넣지 않습니다
+log.timerraise.toomany,\![timerraise]가 너무 많습니다: %1
+log.reload.unsupported,지원하지 않는 reload: %1
+log.url.cannotopen,열 수 없는 URL: %1
+log.tag.unsupported,지원하지 않는 태그: \%1%2
+log.tag.refused,SSTP 스크립트에서는 쓸 수 없는 태그: \%1%2
+
+// Installing (NarInstaller)
+error.install.open,nar을 열 수 없습니다
+error.install.noinstalltxt,install.txt가 없습니다
+error.install.type,고스트·쉘·말풍선·추가 파일·플러그인만 설치할 수 있습니다(type=%1)
+error.install.nodirectory,install.txt에 directory가 없습니다
+error.install.badpath,잘못된 경로: %1
+error.install.nestedpackage,package 안의 package는 설치할 수 없습니다
+error.install.emptypackage,package에 .nar이 없습니다
+
+// Network update and packaging (NetworkUpdater, GhostPackager)
+error.update.ssl,서버 인증서를 확인할 수 없습니다
+error.update.host,서버를 찾을 수 없습니다
+error.update.connect,서버에 연결할 수 없습니다
+error.update.network,통신에 실패했습니다
+error.packager.toomany,파일이 너무 많습니다
+
+// Plugins and SSTP (PluginHost, SstpServer)
+log.plugin.unsupported,플러그인 ‘%1’의 %2은(는) pono-droid에서 실행할 수 없습니다
+log.plugin.load,플러그인 ‘%1’을(를) 불러오지 못했습니다
+log.plugin.noreply,플러그인 ‘%1’이(가) %2에 응답하지 않습니다
+log.plugin.badreply,(읽을 수 없는 응답)
+log.sstp.listen,SSTP 포트 %1에서 대기할 수 없습니다: %2
+log.sstp.closed,SSTP 연결을 닫았습니다: %1 %2
+
+// Surface test (SurfaceNames)
+surface.group.none,(그룹 없음)
+surface.group.other,기타
+surface.standard.normal,기본
+surface.standard.shy,부끄러움
+surface.standard.surprised,놀람
+surface.standard.worried,불안
+surface.standard.down,우울
+surface.standard.smile,미소
+surface.standard.eyesclosed,눈 감음
+surface.standard.angry,화남
+surface.standard.sneer,냉소
+surface.standard.shyangry,부끄러워 화냄
+surface.standard.singing,노래
+surface.standard.wideeyed,눈 크게 뜸

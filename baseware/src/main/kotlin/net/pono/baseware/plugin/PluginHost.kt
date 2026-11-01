@@ -14,6 +14,7 @@ import net.pono.baseware.ghost.GhostController
 import net.pono.baseware.ghost.GhostHub
 import net.pono.baseware.ghost.GhostRepository
 import net.pono.baseware.shiori.Shiori
+import net.pono.baseware.text.Messages
 import net.pono.baseware.text.TextCharsets
 import java.io.File
 import java.nio.charset.Charset
@@ -103,12 +104,12 @@ class PluginHost(
         if (!dir.canonicalPath.startsWith(p.dir.canonicalPath)) return
         val engine = engines.create(dll.name, dir)
         if (engine == null) {
-            log("プラグイン「${p.name}」の ${p.filename} は pono-droid では動かせません")
+            log(Messages.get("log.plugin.unsupported", p.name, p.filename))
             return
         }
         val ok = withContext(Dispatchers.IO) { withTimeoutOrNull(loadTimeoutMs) { runCatching { engine.load(dir) }.getOrDefault(false) } } ?: false
         if (!ok) {
-            log("プラグイン「${p.name}」を読み込めませんでした")
+            log(Messages.get("log.plugin.load", p.name))
             withContext(Dispatchers.IO) { runCatching { engine.unload() } }
             return
         }
@@ -156,13 +157,13 @@ class PluginHost(
             val req = PluginProtocol.request(notify, id, references, l.charset, sender)
             val bytes = withContext(Dispatchers.IO) { withTimeoutOrNull(requestTimeoutMs) { runCatching { l.engine.request(req) }.getOrNull() } }
             if (bytes == null) {
-                log("プラグイン「${l.plugin.name}」が $id に応えません")
+                log(Messages.get("log.plugin.noreply", l.plugin.name, id))
                 return@withLock null
             }
             PluginProtocol.parse(bytes, l.charset).also { r ->
                 // 毎秒のものは多すぎるので、ほかの要求と答えだけ残す（ゴーストの platform.log と同じ考え）
                 if (id != "OnSecondChange" || r?.event != null || r?.script != null) {
-                    trace("${l.plugin.name}: ${if (notify) "NOTIFY" else "GET"} $id $references -> ${r?.statusCode ?: "(読めない答え)"}" +
+                    trace("${l.plugin.name}: ${if (notify) "NOTIFY" else "GET"} $id $references -> ${r?.statusCode ?: Messages.get("log.plugin.badreply")}" +
                         (r?.event?.let { " Event=$it ${r.references}" } ?: "") + (r?.script?.let { " Script=${it.take(120)}" } ?: ""))
                 }
             }

@@ -2,3 +2,151 @@ charset,UTF-8
 
 // pono-droid baseware messages (Chinese-Traditional). key,value per line; %1 %2 ... are arguments, %% is a percent sign.
 // The value goes into SakuraScript as it is: \n is a line break, and a label inside \q[...] must not contain a comma.
+// Do not start a value with [: a value placed right after a tag (such as \_q) would be read as the tag's argument.
+
+// Long-press menu (GhostController)
+menu.leavepassive,解除限制模式
+menu.hide,隱藏
+menu.close,關閉人格
+menu.closeballoon,關閉
+menu.recommend,推薦
+menu.portal,入口網站
+menu.middle,人格選單（中鍵按一下）
+menu.dressup,換裝
+menu.ghosts,切換人格
+menu.callghost,呼叫人格
+menu.plugins,外掛程式
+menu.shells,外殼
+menu.scale,角色大小
+menu.balloons,對話方塊
+menu.history,歷史記錄
+menu.terms,使用條款
+menu.aigraph,AI 圖表
+menu.rateofuse,人格使用統計
+menu.update,線上更新
+menu.resetpos,重設外殼位置
+menu.resetballoonpos,重設對話方塊位置
+menu.balloonmove,允許移動對話方塊
+menu.sntp,時間同步
+menu.quiet,靜音
+menu.speech,朗讀
+menu.dictation,語音辨識
+menu.reloadshiori,重新載入 SHIORI
+menu.biff,檢查郵件
+menu.sstpblock,不接收「%1」的 SSTP
+menu.vanish,解除安裝
+menu.install,安裝人格
+menu.explorer,人格清單
+menu.settings,設定
+menu.help,說明書
+menu.scale.other,其他
+menu.back,返回
+info.aigraph.title,【AI 圖表】
+info.rateofuse.title,【人格使用統計】
+info.rateofuse.row,%1：%2%%（%3分鐘，%4次）
+menu.shell.author,作者：%1
+menu.shell.authorpage,作者首頁
+menu.shell.readme,外殼的 Read Me
+menu.history.ghost,人格
+menu.simpleballoon,簡易對話方塊
+
+// Confirmations (GhostController)
+confirm.vanish,要解除安裝 %1 嗎？\n（將刪除此人格的所有檔案，且無法復原）
+confirm.vanish.yes,解除安裝
+confirm.cancel,取消
+confirm.terms.accept,同意
+confirm.terms.decline,不同意
+confirm.balloon.notforghost,對話方塊「%1」是為人格「%2」製作的。用於其他人格時可能無法正確顯示。
+confirm.balloon.ghostwants,此人格是為對話方塊「%1」製作的。使用其他對話方塊時可能無法正確顯示。
+confirm.balloon.force,仍要切換
+
+// Errors and notices (GhostController)
+error.shiori.unsupported,%1：不支援 %2（支援 YAYA、Satori、Kawari、Kagari）
+error.shiori.load,%1：無法載入 SHIORI
+error.shiori.crash,%1：SHIORI 異常終止
+error.shiori.timeout,%1：SHIORI 沒有回應
+error.repository.missing,沒有存放人格的位置
+info.loading,正在載入…
+info.loading.shell,正在載入外殼…
+info.readme.missing,找不到 %1
+info.readme.unreadable,無法讀取 %1
+
+// Developer log (GhostController)
+log.callghost.none,沒有可以呼叫的人格：%1
+log.callghost.failed,無法呼叫 %1
+log.mail.noaccount,沒有要檢查的郵件帳戶
+log.reload.shell,無法重新載入外殼：%1
+log.reload.balloon,無法重新載入對話方塊：%1
+log.http.insecure,無法使用 --insecure（仍會檢查憑證）：%1
+log.http.logname,無法用作 --log 的檔名：%1
+log.nar.output,無法將 nar 輸出到此處：%1
+log.nar.failed,無法建立 nar：%1
+log.updatedata.output,無法將更新資料輸出到此處：%1
+log.updatedata.failed,無法建立更新資料：%1
+log.dump.surface,無法將表情匯出到此處（僅限人格資料夾內）
+log.dump.balloon,無法將對話方塊匯出到此處（僅限人格資料夾內）
+log.wallpaper.notfound,找不到桌布圖片：%1
+log.vanish.failed,無法解除安裝 %1
+log.change.noghost,沒有要切換到的人格：%1
+log.vanish.noother,沒有其他人格，無法解除安裝
+log.shell.notfound,找不到外殼：%1
+log.balloon.notfound,找不到對話方塊：%1
+log.event.sensitive,%1 [輸入] -> %2
+log.valuenotify.chain,ValueNotify 的 \![raise] 連鎖超過 %1 次，已停止：%2
+log.communicate.notarget,沒有可以交流的對象：%1
+log.raise.chain,\![raise] 連鎖超過 %1 次，已停止：%2
+log.choice.untrusted,不執行其他應用程式傳來的選項中的 %1
+log.property.set.failed,property.set 失敗：%1
+log.property.set.failedstatus,property.set 失敗（%1）：%2
+log.clock.cannotfix,\6: 無法調整裝置時鐘（只測量偏差）
+log.sound.notfound,找不到聲音：%1
+log.image.notfound,找不到圖片：%1
+log.surface.unknown,未知的表情：\s[%1]
+log.animation.unknown,未知的動畫：\i[%1]
+log.notify.chain,\![notify] 連鎖超過 %1 次，已停止：%2
+log.embed.external,\![embed,%1] 的回應是 SecurityLevel: external，因此不嵌入
+log.timerraise.toomany,\![timerraise] 過多：%1
+log.reload.unsupported,不支援的 reload：%1
+log.url.cannotopen,無法開啟的 URL：%1
+log.tag.unsupported,不支援的標籤：\%1%2
+log.tag.refused,SSTP 腳本中不能使用的標籤：\%1%2
+
+// Installing (NarInstaller)
+error.install.open,無法開啟 nar
+error.install.noinstalltxt,找不到 install.txt
+error.install.type,只能安裝人格、外殼、對話方塊、追加檔案和外掛程式（type=%1）
+error.install.nodirectory,install.txt 中沒有 directory
+error.install.badpath,無效的路徑：%1
+error.install.nestedpackage,無法安裝 package 中的 package
+error.install.emptypackage,package 中沒有 .nar
+
+// Network update and packaging (NetworkUpdater, GhostPackager)
+error.update.ssl,無法驗證伺服器憑證
+error.update.host,找不到伺服器
+error.update.connect,無法連線至伺服器
+error.update.network,通訊失敗
+error.packager.toomany,檔案過多
+
+// Plugins and SSTP (PluginHost, SstpServer)
+log.plugin.unsupported,外掛程式「%1」的 %2 無法在 pono-droid 上執行
+log.plugin.load,無法載入外掛程式「%1」
+log.plugin.noreply,外掛程式「%1」沒有回應 %2
+log.plugin.badreply,(無法讀取的回應)
+log.sstp.listen,無法在 SSTP 連接埠 %1 上監聽：%2
+log.sstp.closed,已關閉 SSTP 連線：%1 %2
+
+// Surface test (SurfaceNames)
+surface.group.none,（未分組）
+surface.group.other,其他
+surface.standard.normal,普通
+surface.standard.shy,害羞
+surface.standard.surprised,驚訝
+surface.standard.worried,不安
+surface.standard.down,沮喪
+surface.standard.smile,微笑
+surface.standard.eyesclosed,閉眼
+surface.standard.angry,生氣
+surface.standard.sneer,冷笑
+surface.standard.shyangry,害羞生氣
+surface.standard.singing,唱歌
+surface.standard.wideeyed,瞪眼

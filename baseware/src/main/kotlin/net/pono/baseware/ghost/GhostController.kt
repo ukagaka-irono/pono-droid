@@ -66,6 +66,7 @@ import net.pono.baseware.shiori.ShioriRequest
 import net.pono.baseware.shiori.ShioriResponse
 import net.pono.baseware.shiori.ShioriSession
 import net.pono.baseware.shiori.ShioriTimeoutException
+import net.pono.baseware.text.Messages
 import net.pono.baseware.text.TextCharsets
 import net.pono.baseware.update.fetchBytes
 import net.pono.baseware.update.FetchResult
@@ -526,7 +527,7 @@ class GhostController(
         }
 
         override fun log(message: String) {
-            if (" -> " !in message && WARNING_WORDS.any { it in message }) developerLog.add("error", "Warning", ghost.name, message)
+            if (" -> " !in message && isWarning(message)) developerLog.add("error", "Warning", ghost.name, message)
             platform.log(message)
         }
     }
@@ -579,7 +580,7 @@ class GhostController(
     fun start() {
         // 辞書の大きいゴーストは読み込みに数秒かかるので、その間は読み込み中と出しておく。
         // 呼んだ側がすぐ「読み込み中か」を見られるよう、launch の前に立てる
-        _state.update { it.copy(loading = "読み込み中…") }
+        _state.update { it.copy(loading = Messages.get("info.loading")) }
         scope.launch {
             resetSurfaces()
             applyWindowDefaults()
@@ -815,7 +816,7 @@ class GhostController(
             "lastinstalled" -> candidates.maxByOrNull { it.dir.lastModified() }
             else -> candidates.firstOrNull { it.name == name || it.sakuraName == name || it.dir.name == name }
         } ?: run {
-            platform.log("呼べるゴーストがありません: $name")
+            platform.log(Messages.get("log.callghost.none", name))
             return false
         }
         scope.launch {
@@ -829,7 +830,7 @@ class GhostController(
                 null
             }
             val caller = PreviousGhost(ghost.sakuraName, script ?: lastScript, ghost.name, ghost.dir.absolutePath + "/", shellName = shell.name)
-            if (platform.callGhost(target.dir.name, caller)) history?.ghostCalled(target.dir.name) else platform.log("${target.name} を呼べませんでした")
+            if (platform.callGhost(target.dir.name, caller)) history?.ghostCalled(target.dir.name) else platform.log(Messages.get("log.callghost.failed", target.name))
         }
         return true
     }
@@ -847,7 +848,7 @@ class GhostController(
     private fun pluginsMenu(scopeId: Int): String {
         val sb = StringBuilder("\\p[$scopeId]\\_q")
         for (p in plugins?.running.orEmpty()) sb.append("\\q[${quote(p.name)},pono:plugin,${quote(p.dir.name)}]\\n")
-        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        sb.append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -867,7 +868,7 @@ class GhostController(
     private fun callGhostsMenu(scopeId: Int): String {
         val sb = StringBuilder("\\p[$scopeId]\\_q")
         for (g in callableGhosts()) sb.append("\\q[${quote(g.name)},pono:callghost,${quote(g.dir.name)}]\\n")
-        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        sb.append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -876,7 +877,7 @@ class GhostController(
     private suspend fun loadShiori(reload: Boolean = false): Boolean {
         val shiori = shioriFactory.create(ghost.shioriName, ghost.masterDir)
         if (shiori == null) {
-            platform.onError("${ghost.name}: ${ghost.shioriName} は未対応です（YAYA・里々・華和梨・Kagari に対応）")
+            platform.onError(Messages.get("error.shiori.unsupported", ghost.name, ghost.shioriName))
             return false
         }
         // 辞書が読み込みの途中でも内蔵 SAORI を呼べるように、読み込む前に教える
@@ -891,7 +892,7 @@ class GhostController(
         // 読み込みで固まる辞書（load で無限ループ）は時間切れの例外になる
         if (!runCatching { s.load(ghost.masterDir) }.getOrDefault(false)) {
             runCatching { s.unload() }
-            platform.onError("${ghost.name}: SHIORI を読み込めませんでした")
+            platform.onError(Messages.get("error.shiori.load", ghost.name))
             return false
         }
         // SHIORI が別プロセスで落ちたら、話せないゴーストを残さず閉じる（アプリは落ちない）
@@ -899,7 +900,7 @@ class GhostController(
             scope.launch {
                 if (session !== s || closing) return@launch
                 closing = true
-                platform.onError("${ghost.name}: SHIORI が異常終了しました")
+                platform.onError(Messages.get("error.shiori.crash", ghost.name))
                 cancelScript()
                 shutdown()
             }
@@ -924,7 +925,7 @@ class GhostController(
         if (notified.isFailure) {
             session = null
             runCatching { s.unload() }
-            platform.onError("${ghost.name}: SHIORI が応答しません")
+            platform.onError(Messages.get("error.shiori.timeout", ghost.name))
             return false
         }
         return true
@@ -1791,7 +1792,7 @@ class GhostController(
      */
     fun checkMail(account: String?) {
         val accounts = platform.mailAccounts().filter { account == null || it.name == account }
-        if (accounts.isEmpty() || mailChecking || closing) return platform.log("確かめるメールのアカウントがありません")
+        if (accounts.isEmpty() || mailChecking || closing) return platform.log(Messages.get("log.mail.noaccount"))
         mailChecking = true
         lastMailCheck = System.currentTimeMillis()
         scope.launch {
@@ -1904,7 +1905,7 @@ class GhostController(
     private fun reloadShell() {
         scope.launch {
             val next = runCatching { withContext(Dispatchers.Default) { Shell(shell.dir) } }.getOrNull()
-                ?: return@launch platform.log("シェルを読み直せません: ${shell.dir.name}")
+                ?: return@launch platform.log(Messages.get("log.reload.shell", shell.dir.name))
             shell = next
             platform.onShellChanged(next)
         }
@@ -1913,7 +1914,7 @@ class GhostController(
     /** \![reload,balloon]。今のバルーンをファイルから読み直す */
     private fun reloadBalloon() {
         val current = balloon ?: return
-        balloon = runCatching { Balloon(current.dir) }.getOrNull() ?: return platform.log("バルーンを読み直せません: ${current.dir.name}")
+        balloon = runCatching { Balloon(current.dir) }.getOrNull() ?: return platform.log(Messages.get("log.reload.balloon", current.dir.name))
         platform.onBalloonChanged(balloon)
     }
 
@@ -1963,7 +1964,7 @@ class GhostController(
         if (httpGetsInFlight >= MAX_HTTP_GETS) {
             return scope.launch { deliverLater(cmd.event("Failure"), failureRefs("busy")) }
         }
-        if (cmd.insecure) platform.log("--insecure は使えません（証明書は確かめます）: $url")
+        if (cmd.insecure) platform.log(Messages.get("log.http.insecure", url))
         httpGetsInFlight++
         if (!cmd.nodescript) httpShowing++
         // 結果のイベントは、通信が終わってから話し終わるのを待って送る（--sync で待っているスクリプトとは別に）。
@@ -2115,7 +2116,7 @@ class GhostController(
      * 本文は [HTTP_LOG_BODY_BYTES] まで（UTF-8 として読めなければ大きさだけ）
      */
     private fun writeHttpLog(name: String, request: HttpRequest, code: Int, headers: List<Pair<String, String>>, body: ByteArray?, failure: String?) {
-        val file = NetworkUpdater.safeFileName(name)?.let { File(ghost.masterDir, "var/$it") } ?: return platform.log("--log のファイル名にできません: $name")
+        val file = NetworkUpdater.safeFileName(name)?.let { File(ghost.masterDir, "var/$it") } ?: return platform.log(Messages.get("log.http.logname", name))
         fun text(b: ByteArray?): String {
             if (b == null || b.isEmpty()) return ""
             val head = b.copyOf(minOf(b.size, HTTP_LOG_BODY_BYTES))
@@ -2410,7 +2411,7 @@ class GhostController(
     private fun createNar(args: List<String>) {
         val given = args.map { it.trim() }.firstOrNull { it.isNotEmpty() }
         val out = if (given != null) ghostPath(given) else File(ghost.dir, GhostPackager.PONO_DIR + "/nar/${ghost.dir.name}.nar")
-        if (out == null || out.isDirectory) return platform.log("nar の出力先にできません: $given")
+        if (out == null || out.isDirectory) return platform.log(Messages.get("log.nar.output", given.toString()))
         packaging {
             val refs = listOf(ghost.name, out.absolutePath, "ghost")
             deliverLater("OnNarCreating", refs)
@@ -2419,7 +2420,7 @@ class GhostController(
                     deliverLater("OnNarCreated", refs)
                     if (given == null) platform.shareFile(out, "application/x-nar")
                 }
-                .onFailure { platform.log("nar を作れませんでした: ${it.message}") }
+                .onFailure { platform.log(Messages.get("log.nar.failed", it.message.toString())) }
         }
     }
 
@@ -2438,7 +2439,7 @@ class GhostController(
     private fun createUpdateData(args: List<String>) {
         val given = args.map { it.trim() }.firstOrNull { it.isNotEmpty() }
         val outputs = if (given != null) {
-            listOf(ghostPath(given)?.takeIf { !it.isDirectory } ?: return platform.log("更新データの出力先にできません: $given"))
+            listOf(ghostPath(given)?.takeIf { !it.isDirectory } ?: return platform.log(Messages.get("log.updatedata.output", given.toString())))
         } else {
             listOf(ghost.dir, ghost.masterDir).flatMap { listOf(File(it, "updates2.dau"), File(it, "updates.txt")) }
         }
@@ -2446,7 +2447,7 @@ class GhostController(
             deliverLater("OnUpdatedataCreating", emptyList())
             withContext(Dispatchers.IO) { runCatching { GhostPackager(ghost.dir).createUpdateData(outputs) } }
                 .onSuccess { deliverLater("OnUpdatedataCreated", emptyList()) }
-                .onFailure { platform.log("更新データを作れませんでした: ${it.message}") }
+                .onFailure { platform.log(Messages.get("log.updatedata.failed", it.message.toString())) }
         }
     }
 
@@ -2496,7 +2497,7 @@ class GhostController(
         val event = opts["event"] ?: opts["async"] ?: positional.getOrNull(4).orEmpty()
         val animation = (opts["animation"] ?: positional.getOrNull(6))?.trim()?.toIntOrNull()
         if (dir == null || dir.isFile || prefix == null) {
-            platform.log("サーフェスを書き出せる場所ではありません（ゴーストのフォルダの中だけ）")
+            platform.log(Messages.get("log.dump.surface"))
             return false
         }
         val dump = SurfaceDump(
@@ -2521,7 +2522,7 @@ class GhostController(
         val prefix = dumpPrefix(opts["prefix"] ?: positional.getOrNull(2), "balloon")
         val event = opts["event"] ?: opts["async"] ?: positional.getOrNull(3).orEmpty()
         if (dir == null || dir.isFile || prefix == null) {
-            platform.log("バルーンを書き出せる場所ではありません（ゴーストのフォルダの中だけ）")
+            platform.log(Messages.get("log.dump.balloon"))
             return false
         }
         val job = scope.launch {
@@ -2551,7 +2552,7 @@ class GhostController(
                 .firstOrNull { it.path.startsWith(root.path + File.separator) && it.isFile }
         }
         if (name != null && file == null) {
-            platform.log("壁紙の画像が見つかりません: $name")
+            platform.log(Messages.get("log.wallpaper.notfound", name))
             return null
         }
         val color = opts["color"]?.let { ScriptPlayer.parseColor(it.split(',', ' ').filter(String::isNotBlank)) }
@@ -2880,7 +2881,7 @@ class GhostController(
 
     /** [rerouted] はこの .nar を回してきたゴースト。package の中身が別々のゴースト宛てでも、同じゴーストの間を回り続けない */
     private suspend fun installNar(nar: File, fromUser: Boolean, rerouted: Set<GhostController>): Result<NarInstaller.Result> {
-        val installer = repository?.installer() ?: return Result.failure(IOException("ゴーストの置き場がありません"))
+        val installer = repository?.installer() ?: return Result.failure(IOException(Messages.get("error.repository.missing")))
         // パッシブモード・誘導モードの間にユーザーが入れたものは、入れるがゴーストには知らせない（SSP と同じ）
         val quiet = fromUser && restricted
         fun raise(event: String, references: List<String>, userInitiated: Boolean) {
@@ -2926,12 +2927,8 @@ class GhostController(
         return result
     }
 
-    /** OnInstallFailure の理由（SSP の決まった言葉に近いもの） */
-    private fun installFailure(e: Throwable): String = when {
-        e.message?.contains("install.txt") == true -> "invalid type"
-        e.message?.contains("type=") == true -> "unsupported"
-        else -> "extraction"
-    }
+    /** OnInstallFailure の理由（SSP の決まった言葉に近いもの）。NarInstaller が決めた理由、無ければ展開の失敗 */
+    private fun installFailure(e: Throwable): String = (e as? NarInstaller.InstallException)?.reason ?: "extraction"
 
     /**
      * \![execute,install,path,ファイル名] / \![execute,install,url,URL,nar]。ゴーストのフォルダの中のファイルか、URL から取ってきた .nar を入れる
@@ -3200,7 +3197,7 @@ class GhostController(
     /** SHIORI を閉じて終わる。[switchTo] があれば、そのゴーストに切り替える。[uninstall] ならこのゴーストを消してから */
     private suspend fun shutdown(switchTo: Pair<Ghost, PreviousGhost>? = null, uninstall: Boolean = false) {
         release()
-        if (uninstall && repository?.uninstall(ghost) != true) platform.log("${ghost.name} を消去できませんでした")
+        if (uninstall && repository?.uninstall(ghost) != true) platform.log(Messages.get("log.vanish.failed", ghost.name))
         hub?.let { h ->
             h.leave(this)
             // 切り替えや消去なら、次のゴーストが起動したときに OnOtherGhostChanged / Vanished で伝える
@@ -3269,7 +3266,7 @@ class GhostController(
             "lastinstalled" -> others.maxByOrNull { it.dir.lastModified() }
             else -> others.firstOrNull { it.name == name || it.sakuraName == name || it.dir.name == name }
         } ?: run {
-            platform.log("切り替え先のゴーストがありません: $name")
+            platform.log(Messages.get("log.change.noghost", name))
             return false
         }
         closing = true
@@ -3354,8 +3351,8 @@ class GhostController(
 
     private fun confirmVanish(scopeId: Int) {
         runScript(
-            "\\p[$scopeId]\\_q" + literalScript(ghost.name) + " を消去しますか？\\n（ゴーストのファイルをすべて消します。元に戻せません）\\n\\n" +
-                "\\q[消去する,pono:vanish-yes]\\n\\q[やめる,pono:vanish-no]\\e",
+            "\\p[$scopeId]\\_q" + Messages.get("confirm.vanish", literalScript(ghost.name)) + "\\n\\n" +
+                "\\q[${Messages.get("confirm.vanish.yes")},pono:vanish-yes]\\n\\q[${Messages.get("confirm.cancel")},pono:vanish-no]\\e",
         )
     }
 
@@ -3364,7 +3361,7 @@ class GhostController(
      * （次のゴーストには OnVanished）。\![vanishbymyself] は確かめずにすぐ（今のスクリプトを話し終えてから）
      */
     private fun vanish(farewell: Boolean) {
-        val next = ghostAfterVanish() ?: return platform.log("ほかにゴーストがいないので消去できません")
+        val next = ghostAfterVanish() ?: return platform.log(Messages.get("log.vanish.noother"))
         if (closing) return
         closing = true
         timerJob?.cancel()
@@ -3390,7 +3387,7 @@ class GhostController(
         // ゴースト名は、消去したあとに切り替える先（見つからなければいつもの次のゴースト）
         vanishNext = args.map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.startsWith("--") }
         if (args.none { it.trim().lowercase() == "--option=query" }) return vanish(farewell = false)
-        if (ghostAfterVanish() == null) return platform.log("ほかにゴーストがいないので消去できません")
+        if (ghostAfterVanish() == null) return platform.log(Messages.get("log.vanish.noother"))
         scope.launch {
             withTimeoutOrNull(CHANGE_WAIT_MS) { _state.first { !it.talking } }
             confirmVanish(0)
@@ -3412,7 +3409,7 @@ class GhostController(
             withTimeoutOrNull(CHANGE_WAIT_MS) { _state.first { !it.talking } }
             runScript(
                 "\\![set,choicetimeout,0]\\0\\_q" + literalScript(text) + "\\n\\n" +
-                    "\\q[同意する,pono:terms,accept]\\n\\q[同意しない,pono:terms,decline]\\e",
+                    "\\q[${Messages.get("confirm.terms.accept")},pono:terms,accept]\\n\\q[${Messages.get("confirm.terms.decline")},pono:terms,decline]\\e",
             )
         }
         return true
@@ -3449,7 +3446,7 @@ class GhostController(
     fun changeShell(name: String, byUser: Boolean = false) {
         scope.launch {
             // surfaces.txt の大きいシェルもあるので、読むのは画面を描くスレッドの外で。その間は読み込み中と出す
-            _state.update { it.copy(loading = "シェルを読み込み中…") }
+            _state.update { it.copy(loading = Messages.get("info.loading.shell")) }
             val found = try {
                 withContext(Dispatchers.Default) {
                     val dirs = ghost.shellDirs
@@ -3464,7 +3461,7 @@ class GhostController(
             } finally {
                 _state.update { it.copy(loading = null) }
             }
-            val (dir, next) = found ?: return@launch platform.log("シェルがありません: $name")
+            val (dir, next) = found ?: return@launch platform.log(Messages.get("log.shell.notfound", name))
             if (byUser) talkAndWait("OnShellChanging", listOf(next.name, shell.name, dir.absolutePath + "/"))
             cancelScript()
             hideBalloons()
@@ -3487,7 +3484,7 @@ class GhostController(
             SIMPLE_BALLOON -> null
             "random" -> balloons.list().randomOrNull()
             "lastinstalled" -> balloons.list().maxByOrNull { it.dir.lastModified() }
-            else -> balloons.findByName(name) ?: balloons.find(name) ?: return platform.log("バルーンがありません: $name")
+            else -> balloons.findByName(name) ?: balloons.find(name) ?: return platform.log(Messages.get("log.balloon.notfound", name))
         }
         ghost.selectBalloon(next?.dir?.name)
         next?.let { history?.balloonUsed(it.dir.name) }
@@ -4111,66 +4108,66 @@ class GhostController(
         }
         // 制限モード（パッシブモード・誘導モード）の間は、強制解除と、許されているものだけ（誘導モードは隠す・終了も）
         if (restricted) {
-            add(item("制限モードを解除", "pono:leavepassive", "leavepassivebutton.caption"))
+            add(item(Messages.get("menu.leavepassive"), "pono:leavepassive", "leavepassivebutton.caption"))
             if (!_state.value.passive) {
-                add(item("隠す", "pono:hide", "hidebutton.caption"))
-                add(item("ゴーストを終了", "pono:close", "quitbutton.caption", "closebutton.caption"))
+                add(item(Messages.get("menu.hide"), "pono:hide", "hidebutton.caption"))
+                add(item(Messages.get("menu.close"), "pono:close", "quitbutton.caption", "closebutton.caption"))
             }
-            sb.append("\\q[${caption("閉じる", "closeballoonbutton.caption")},pono:cancel]\\e")
+            sb.append("\\q[${caption(Messages.get("menu.closeballoon"), "closeballoonbutton.caption")},pono:cancel]\\e")
             return sb.toString()
         }
         if (parseSites(resource("$scopeName.recommendsites")).isNotEmpty()) {
-            add(item("おすすめ", "pono:sites,recommend,$scopeId", "$scopeName.recommendbuttoncaption", "$scopeName.recommendsites.caption", "recommendrootbutton.caption"))
+            add(item(Messages.get("menu.recommend"), "pono:sites,recommend,$scopeId", "$scopeName.recommendbuttoncaption", "$scopeName.recommendsites.caption", "recommendrootbutton.caption"))
         }
         if (parseSites(resource("$scopeName.portalsites")).isNotEmpty()) {
-            add(item("ポータル", "pono:sites,portal,$scopeId", "$scopeName.portalbuttoncaption", "portalrootbutton.caption"))
+            add(item(Messages.get("menu.portal"), "pono:sites,portal,$scopeId", "$scopeName.portalbuttoncaption", "portalrootbutton.caption"))
         }
-        if (!short) sb.append("\\q[ゴーストのメニュー（中クリック）,pono:middle,$scopeId]\\n")
+        if (!short) sb.append("\\q[${Messages.get("menu.middle")},pono:middle,$scopeId]\\n")
         if (!bindDisabled && shell.bindGroups(bindScope).isNotEmpty() && bindMenu(bindScope) != "hidden") {
-            add(item("きせかえ", "pono:dressup,$bindScope", "dressuprootbutton.caption"))
+            add(item(Messages.get("menu.dressup"), "pono:dressup,$bindScope", "dressuprootbutton.caption"))
         }
         if (!short) {
-            if ((repository?.list()?.size ?: 0) > 1) add(item("ゴースト切り替え", "pono:ghosts,$scopeId", "ghostrootbutton.caption"))
-            if (callableGhosts().isNotEmpty()) add(item("ほかのゴーストを呼ぶ", "pono:callghosts,$scopeId", "callghostrootbutton.caption"))
-            if (plugins?.running?.isNotEmpty() == true) add(item("プラグイン", "pono:plugins,$scopeId", "pluginrootbutton.caption"))
-            if (ghost.shellDirs.size > 1) add(item("シェル", "pono:shells,$scopeId", "shellrootbutton.caption"))
-            add(item("キャラクターの大きさ", "pono:scale,$scopeId", "shellscalerootbutton.caption"))
-            if (repository != null) add(item("バルーン", "pono:balloons,$scopeId", "balloonrootbutton.caption"))
+            if ((repository?.list()?.size ?: 0) > 1) add(item(Messages.get("menu.ghosts"), "pono:ghosts,$scopeId", "ghostrootbutton.caption"))
+            if (callableGhosts().isNotEmpty()) add(item(Messages.get("menu.callghost"), "pono:callghosts,$scopeId", "callghostrootbutton.caption"))
+            if (plugins?.running?.isNotEmpty() == true) add(item(Messages.get("menu.plugins"), "pono:plugins,$scopeId", "pluginrootbutton.caption"))
+            if (ghost.shellDirs.size > 1) add(item(Messages.get("menu.shells"), "pono:shells,$scopeId", "shellrootbutton.caption"))
+            add(item(Messages.get("menu.scale"), "pono:scale,$scopeId", "shellscalerootbutton.caption"))
+            if (repository != null) add(item(Messages.get("menu.balloons"), "pono:balloons,$scopeId", "balloonrootbutton.caption"))
             if (historyGhosts().isNotEmpty() || historyBalloons().isNotEmpty() || historyCalls().isNotEmpty()) {
-                add(item("履歴", "pono:history,$scopeId", "historyrootbutton.caption"))
+                add(item(Messages.get("menu.history"), "pono:history,$scopeId", "historyrootbutton.caption"))
             }
             if (ghost.readmeFile() != null) add(item("Read Me", "pono:readme", "readmebutton.caption", "readmebuttoncaption"))
-            if (termsFile() != null) add(item("利用規約", "pono:terms-open", "termsbutton.caption"))
-            if (aiStates().isNotEmpty()) add(item("AI グラフ", "pono:aistate,$scopeId", "aistatebutton.caption"))
-            if (history?.usage()?.isNotEmpty() == true) add(item("使用率", "pono:rateofuse,$scopeId", "rateofusebutton.caption"))
-            add(item("ネットワーク更新", "pono:update", "updatebutton.caption", "updatebuttoncaption"))
-            add(item("位置を戻す", "pono:resetpos", "switchmovetodefaultpositionbutton.caption"))
+            if (termsFile() != null) add(item(Messages.get("menu.terms"), "pono:terms-open", "termsbutton.caption"))
+            if (aiStates().isNotEmpty()) add(item(Messages.get("menu.aigraph"), "pono:aistate,$scopeId", "aistatebutton.caption"))
+            if (history?.usage()?.isNotEmpty() == true) add(item(Messages.get("menu.rateofuse"), "pono:rateofuse,$scopeId", "rateofusebutton.caption"))
+            add(item(Messages.get("menu.update"), "pono:update", "updatebutton.caption", "updatebuttoncaption"))
+            add(item(Messages.get("menu.resetpos"), "pono:resetpos", "switchmovetodefaultpositionbutton.caption"))
             // 指で動かしたバルーンがあるときだけ
             if (_state.value.characters.values.any { it.balloonDrag != null }) {
-                add(item("バルーン位置初期化", "pono:resetballoonpos", "resetballoonpositionbutton.caption"))
+                add(item(Messages.get("menu.resetballoonpos"), "pono:resetballoonpos", "resetballoonpositionbutton.caption"))
             }
-            add(item("バルーンを動かせる", "pono:balloonmove,$scopeId", "enableballoonmovebutton.caption", mark = !userBalloonMoveOff))
-            add(item("時計合わせ", "pono:sntp", "sntpbutton.caption"))
-            add(item("サウンドを鳴らさない", "pono:quiet,$scopeId", "switchquietbutton.caption", mark = soundMuted))
-            add(item("読み上げ", "pono:speech,$scopeId", "texttospeechbutton.caption", mark = platform.speechEnabled()))
-            add(item("音声認識", "pono:dictation,$scopeId", "dictationbutton.caption", mark = platform.voiceRecognitionEnabled()))
-            add(item("SHIORI を読み込み直す", "pono:reloadshiori", "switchreloadbutton.caption"))
+            add(item(Messages.get("menu.balloonmove"), "pono:balloonmove,$scopeId", "enableballoonmovebutton.caption", mark = !userBalloonMoveOff))
+            add(item(Messages.get("menu.sntp"), "pono:sntp", "sntpbutton.caption"))
+            add(item(Messages.get("menu.quiet"), "pono:quiet,$scopeId", "switchquietbutton.caption", mark = soundMuted))
+            add(item(Messages.get("menu.speech"), "pono:speech,$scopeId", "texttospeechbutton.caption", mark = platform.speechEnabled()))
+            add(item(Messages.get("menu.dictation"), "pono:dictation,$scopeId", "dictationbutton.caption", mark = platform.voiceRecognitionEnabled()))
+            add(item(Messages.get("menu.reloadshiori"), "pono:reloadshiori", "switchreloadbutton.caption"))
         }
-        if (!short && platform.mailAccounts().isNotEmpty()) add(item("メールを確認", "pono:biff", "biffbutton.caption"))
-        add(item("隠す", "pono:hide", "hidebutton.caption"))
+        if (!short && platform.mailAccounts().isNotEmpty()) add(item(Messages.get("menu.biff"), "pono:biff", "biffbutton.caption"))
+        add(item(Messages.get("menu.hide"), "pono:hide", "hidebutton.caption"))
         lastSstpSender?.let { sender ->
-            add(item(literalScript("「$sender」の SSTP を受けない"), "pono:sstp-block", "switchblacklistingbutton.caption"))
+            add(item(literalScript(Messages.get("menu.sstpblock", sender)), "pono:sstp-block", "switchblacklistingbutton.caption"))
         }
-        if (!short && vanishVisible()) add(item("消去", "pono:vanish,$scopeId", "vanishbutton.caption", "vanishbuttoncaption"))
+        if (!short && vanishVisible()) add(item(Messages.get("menu.vanish"), "pono:vanish,$scopeId", "vanishbutton.caption", "vanishbuttoncaption"))
         if (!short) {
             // 設定・ゴーストの一覧・ゴーストを入れるのは、どれも pono-droid の画面（ゴーストの一覧と .nar を選ぶところがある）
-            add(item("ゴーストを入れる", "pono:settings", "ghostinstallbutton.caption"))
-            add(item("ゴーストの一覧", "pono:settings", "ghostexplorerbutton.caption"))
-            add(item("設定", "pono:settings", "configurationbutton.caption", "configurationrootbutton.caption"))
-            add(item("説明書", "pono:help", "helpbutton.caption"))
+            add(item(Messages.get("menu.install"), "pono:settings", "ghostinstallbutton.caption"))
+            add(item(Messages.get("menu.explorer"), "pono:settings", "ghostexplorerbutton.caption"))
+            add(item(Messages.get("menu.settings"), "pono:settings", "configurationbutton.caption", "configurationrootbutton.caption"))
+            add(item(Messages.get("menu.help"), "pono:help", "helpbutton.caption"))
         }
-        add(item("ゴーストを終了", "pono:close", "quitbutton.caption", "closebutton.caption"))
-        sb.append("\\q[${caption("閉じる", "closeballoonbutton.caption")},pono:cancel]\\e")
+        add(item(Messages.get("menu.close"), "pono:close", "quitbutton.caption", "closebutton.caption"))
+        sb.append("\\q[${caption(Messages.get("menu.closeballoon"), "closeballoonbutton.caption")},pono:cancel]\\e")
         return sb.toString()
     }
 
@@ -4179,8 +4176,8 @@ class GhostController(
         val current = platform.characterScalePercent()
         val sb = StringBuilder("\\p[$scopeId]\\_q").append(menuColors())
         for (p in SCALE_STEPS) sb.append("\\q[${(if (p == current) "● " else "○ ")}$p%,pono:setscale,$scopeId,$p]\\n")
-        item("その他", "pono:scaleother,$scopeId", "shellscaleotherbutton.caption")?.let(sb::append)
-        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        item(Messages.get("menu.scale.other"), "pono:scaleother,$scopeId", "shellscaleotherbutton.caption")?.let(sb::append)
+        sb.append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -4199,7 +4196,7 @@ class GhostController(
     /** \![open,aigraph] とメニューの「AI グラフ」。グラフの代わりに、ラベルと値をバルーンに並べる */
     private suspend fun aiStateScript(scopeId: Int): String? {
         val graphs = aiStates().takeIf { it.isNotEmpty() } ?: return null
-        val sb = StringBuilder("\\p[$scopeId]\\_q【AI グラフ】\\n")
+        val sb = StringBuilder("\\p[$scopeId]\\_q${Messages.get("info.aigraph.title")}\\n")
         graphs.forEachIndexed { gi, raw ->
             val parts = raw.split('\u0001')
             val values = parts[0].split(',').map { it.trim() }.filter { it.isNotEmpty() }
@@ -4212,7 +4209,7 @@ class GhostController(
                 sb.append(literalScript("$label: $v$limit")).append("\\n")
             }
         }
-        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        sb.append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -4245,13 +4242,13 @@ class GhostController(
         val usage = history?.usage()?.takeIf { it.isNotEmpty() } ?: return null
         val total = usage.sumOf { it.minutes }
         notifyRateOfUse(usage)
-        val sb = StringBuilder("\\p[$scopeId]\\_q【使用率】\\n")
+        val sb = StringBuilder("\\p[$scopeId]\\_q${Messages.get("info.rateofuse.title")}\\n")
         for (u in usage.take(MAX_RATE_ROWS)) {
             val name = repository?.find(u.dirName)?.name ?: u.dirName
             val percent = if (total > 0) formatNumber(u.minutes * 100.0 / total) else "0"
-            sb.append(literalScript("$name: $percent%（${u.minutes}分・${u.boots}回）")).append("\\n")
+            sb.append(literalScript(Messages.get("info.rateofuse.row", name, percent, u.minutes, u.boots))).append("\\n")
         }
-        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        sb.append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -4290,7 +4287,7 @@ class GhostController(
             // "-" は区切り線
             if (site.name == "-") sb.append("\\n") else sb.append("\\q[${quote(site.name)},pono:site,$kind,$scopeId,$i]\\n")
         }
-        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        sb.append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -4314,7 +4311,7 @@ class GhostController(
             for (item in items.filter { it.submenu == name && name != null }) {
                 if (item.id == null) separator() else groups.firstOrNull { it.id == item.id }?.let(::part)
             }
-            sb.append("\\q[戻る,pono:dressup,$scopeId]\\e")
+            sb.append("\\q[${Messages.get("menu.back")},pono:dressup,$scopeId]\\e")
             return sb.toString()
         }
         val shownSubmenus = HashSet<String>()
@@ -4329,7 +4326,7 @@ class GhostController(
         }
         val listed = items.mapNotNull { it.id }.toSet()
         groups.filter { it.id !in listed }.forEach(::part)
-        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        sb.append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -4342,10 +4339,10 @@ class GhostController(
             sb.append("\\q[${quote((if (dir == shell.dir) "● " else "○ ") + name)},pono:shell,${quote(dir.name)}]\\n")
         }
         // 今のシェルの作者・作者のページ・Read Me（descript.txt の craftman / craftmanurl / readme）
-        shell.craftman?.let { sb.append("\\n作者: ").append(literalScript(it)).append("\\n") }
-        shell.craftmanUrl?.let { sb.append("\\q[作者のページ,${quote(it)}]\\n") }
-        if (shell.readmeFile() != null) sb.append("\\q[シェルの Read Me,pono:shellreadme]\\n")
-        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        shell.craftman?.let { sb.append("\\n").append(literalScript(Messages.get("menu.shell.author", it))).append("\\n") }
+        shell.craftmanUrl?.let { sb.append("\\q[${Messages.get("menu.shell.authorpage")},${quote(it)}]\\n") }
+        if (shell.readmeFile() != null) sb.append("\\q[${Messages.get("menu.shell.readme")},pono:shellreadme]\\n")
+        sb.append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -4357,7 +4354,7 @@ class GhostController(
             if (g.dir.canonicalFile == self) continue
             sb.append("\\q[${quote(g.name)},pono:ghost,${quote(g.dir.name)}]\\n")
         }
-        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        sb.append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -4377,11 +4374,11 @@ class GhostController(
     /** メニューの「履歴」。最近のゴースト・バルーン・呼んだゴーストの一覧への入り口（あるものだけ） */
     private suspend fun historyMenu(scopeId: Int): String {
         val sb = StringBuilder("\\p[$scopeId]\\_q").append(menuColors())
-        if (historyGhosts().isNotEmpty()) item("ゴースト", "pono:historylist,$scopeId,ghost", "ghosthistorybutton.caption")?.let(sb::append)
-        if (historyBalloons().isNotEmpty()) item("バルーン", "pono:historylist,$scopeId,balloon", "balloonhistorybutton.caption")?.let(sb::append)
-        if (historyCalls().isNotEmpty()) item("ほかのゴーストを呼ぶ", "pono:historylist,$scopeId,call", "callghosthistorybutton.caption")?.let(sb::append)
-        if (historyPlugins().isNotEmpty()) item("プラグイン", "pono:historylist,$scopeId,plugin", "pluginhistorybutton.caption")?.let(sb::append)
-        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        if (historyGhosts().isNotEmpty()) item(Messages.get("menu.history.ghost"), "pono:historylist,$scopeId,ghost", "ghosthistorybutton.caption")?.let(sb::append)
+        if (historyBalloons().isNotEmpty()) item(Messages.get("menu.balloons"), "pono:historylist,$scopeId,balloon", "balloonhistorybutton.caption")?.let(sb::append)
+        if (historyCalls().isNotEmpty()) item(Messages.get("menu.callghost"), "pono:historylist,$scopeId,call", "callghosthistorybutton.caption")?.let(sb::append)
+        if (historyPlugins().isNotEmpty()) item(Messages.get("menu.plugins"), "pono:historylist,$scopeId,plugin", "pluginhistorybutton.caption")?.let(sb::append)
+        sb.append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -4396,17 +4393,17 @@ class GhostController(
             "call" -> historyCalls().forEach { sb.append("\\q[${quote(it.name)},pono:callghost,${quote(it.dir.name)}]\\n") }
             "plugin" -> historyPlugins().forEach { sb.append("\\q[${quote(it.name)},pono:plugin,${quote(it.dir.name)}]\\n") }
         }
-        sb.append("\\q[戻る,pono:history,$scopeId]\\e")
+        sb.append("\\q[${Messages.get("menu.back")},pono:history,$scopeId]\\e")
         return sb.toString()
     }
 
     private fun balloonsMenu(scopeId: Int): String {
         val sb = StringBuilder("\\p[$scopeId]\\_q")
-        sb.append("\\q[${if (balloon == null) "● " else "○ "}簡易バルーン,pono:balloon,$SIMPLE_BALLOON]\\n")
+        sb.append("\\q[${if (balloon == null) "● " else "○ "}${Messages.get("menu.simpleballoon")},pono:balloon,$SIMPLE_BALLOON]\\n")
         for (b in repository?.balloons?.list().orEmpty()) {
             sb.append("\\q[${quote((if (b.dir == balloon?.dir) "● " else "○ ") + b.name)},pono:balloon,${quote(b.dir.name)}]\\n")
         }
-        sb.append("\\q[戻る,pono:menu,$scopeId]\\e")
+        sb.append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
         return sb.toString()
     }
 
@@ -4900,7 +4897,7 @@ class GhostController(
         // 毎秒・毎分のイベントとなでる（OnMouseMove）は多すぎるので、話すときだけ記録する
         if (value != null || event !in timerEvents) {
             if (sensitive) {
-                platform.log("$event [入力] -> ${if (value != null) "(script)" else "(no content)"}")
+                platform.log(Messages.get("log.event.sensitive", event, if (value != null) "(script)" else "(no content)"))
             } else {
                 platform.log("$event $references -> ${value?.take(120) ?: "(no content)"}")
             }
@@ -4927,7 +4924,7 @@ class GhostController(
         val response = requestLock.withLock {
             runCatching { s.request(ShioriRequest(method, event, references, headers)) }
                 .onFailure {
-                    if (it is ShioriTimeoutException) platform.onError("${ghost.name}: SHIORI が応答しません") else platform.log("$event: ${it.message}")
+                    if (it is ShioriTimeoutException) platform.onError(Messages.get("error.shiori.timeout", ghost.name)) else platform.log("$event: ${it.message}")
                 }
                 .getOrNull()
         } ?: return null
@@ -4981,7 +4978,7 @@ class GhostController(
             runCatching { player.play(filtered, Host(raised, chain = chain)) }.onFailure { platform.log("ValueNotify: ${it.message}") }
             // 答えの ValueNotify で自分を起こし続けないよう、runScript の \![raise] と同じ上限で止める
             if (raised.isNotEmpty() && chain >= MAX_RAISE_CHAIN) {
-                platform.log("ValueNotify の \\![raise] の連鎖が $MAX_RAISE_CHAIN 回を超えたので止めました: ${raised.map { it.event }}")
+                platform.log(Messages.get("log.valuenotify.chain", MAX_RAISE_CHAIN, raised.map { it.event }))
                 return@launch
             }
             for ((event, refs, type) in raised) raise(event, refs, userInitiated = false, sensitive = false, chain = chain + 1, origin = RequestOrigin(type))
@@ -5009,7 +5006,7 @@ class GhostController(
     private fun communicate(target: String, script: String, extra: List<String>, age: Int, marker: String?) {
         if (age > MAX_COMMUNICATE_AGE) return
         val other = hub?.others(this)?.firstOrNull { it.ghost.sakuraName == target || it.ghost.name == target }
-            ?: return platform.log("コミュニケートの相手がいません: $target")
+            ?: return platform.log(Messages.get("log.communicate.notarget", target))
         val chars = _state.value.characters
         val surfaces = "${chars[0]?.surface ?: -1},${chars[1]?.surface ?: -1}"
         other.receiveCommunicate(ghost.sakuraName, script, extra, age, marker, surfaces)
@@ -5200,7 +5197,7 @@ class GhostController(
             if (raised.isNotEmpty()) {
                 // \![raise] が \![raise] を呼び続けると SHIORI を叩き続けてしまうので、連鎖の長さに上限を置く
                 if (chain >= MAX_RAISE_CHAIN) {
-                    platform.log("\\![raise] の連鎖が $MAX_RAISE_CHAIN 回を超えたので止めました: ${raised.map { it.event }}")
+                    platform.log(Messages.get("log.raise.chain", MAX_RAISE_CHAIN, raised.map { it.event }))
                 } else {
                     for ((event, refs, type) in raised) {
                         // プラグインから来たスクリプトの \![get,property] の答えは、そのプラグインに返す（バルーンの大きさを聞くプラグインなど）
@@ -5311,7 +5308,7 @@ class GhostController(
             // ほかのアプリのスクリプトが本体のメニューの ID を出しても（消去・終了など）、確かめずに動かすことはしない
             choice.untrusted && id.startsWith("pono:") -> {
                 hideBalloons()
-                platform.log("ほかのアプリから届いた選択肢の $id は動かしません")
+                platform.log(Messages.get("log.choice.untrusted", id))
             }
             // pono-droid 自身のメニュー（長押し）
             id.startsWith("pono:") -> {
@@ -5394,15 +5391,15 @@ class GhostController(
                         val chosen = balloons?.find(dir)
                         if (chosen != null && chosen.isRecommendedFor(ghost.name, ghost.dir.name) == false) {
                             runScript(
-                                "\\p[$scopeId]\\_qバルーン「${chosen.name}」は「${chosen.recommendedGhostLabel.orEmpty()}」のゴースト向けに作られています。" +
-                                    "ほかのゴーストでは正しく表示されないことがあります。\\n\\n" +
-                                    "\\q[それでも切り替える,pono:balloonforce,${quote(dir)}]\\n\\q[やめる,pono:balloons,$scopeId]\\e",
+                                "\\p[$scopeId]\\_q" + Messages.get("confirm.balloon.notforghost", chosen.name, chosen.recommendedGhostLabel.orEmpty()) +
+                                    "\\n\\n" +
+                                    "\\q[${Messages.get("confirm.balloon.force")},pono:balloonforce,${quote(dir)}]\\n\\q[${Messages.get("confirm.cancel")},pono:balloons,$scopeId]\\e",
                             )
                         } else if (ghost.hasRecommendedBalloon && recommended?.dir?.name != dir) {
                             runScript(
-                                "\\p[$scopeId]\\_qこのゴーストは「${recommended?.name ?: ghost.descript["recommended.balloon"].orEmpty()}」のバルーンで使うよう作られています。" +
-                                    "ほかのバルーンでは正しく表示されないことがあります。\\n\\n" +
-                                    "\\q[それでも切り替える,pono:balloonforce,${quote(dir)}]\\n\\q[やめる,pono:balloons,$scopeId]\\e",
+                                "\\p[$scopeId]\\_q" + Messages.get("confirm.balloon.ghostwants", recommended?.name ?: ghost.descript["recommended.balloon"].orEmpty()) +
+                                    "\\n\\n" +
+                                    "\\q[${Messages.get("confirm.balloon.force")},pono:balloonforce,${quote(dir)}]\\n\\q[${Messages.get("confirm.cancel")},pono:balloons,$scopeId]\\e",
                             )
                         } else {
                             changeBalloon(dir)
@@ -5871,7 +5868,7 @@ class GhostController(
         val host = plugins ?: return false
         val (p, key) = listItem(name.removePrefix("pluginlist"), host.plugins, null) { p, k, i -> pluginProperty(p, k, i) } ?: return false
         val ext = key.removePrefix("ext.").takeIf { key.startsWith("ext.") && it.isNotEmpty() } ?: return false
-        scope.launch { if (!host.propertySet(p, ext, value)) platform.log("property.set が失敗しました: $name") }
+        scope.launch { if (!host.propertySet(p, ext, value)) platform.log(Messages.get("log.property.set.failed", name)) }
         return true
     }
 
@@ -5883,7 +5880,7 @@ class GhostController(
         val c = runningController(g) ?: return false
         scope.launch {
             val status = c.requestResponse("property.set", listOf(ext, value), ShioriMethod.GET, RequestOrigin.INTERNAL)?.statusCode
-            if (status != 204) platform.log("property.set が失敗しました（$status）: $name")
+            if (status != 204) platform.log(Messages.get("log.property.set.failedstatus", status.toString(), name))
         }
         return true
     }
@@ -6324,8 +6321,8 @@ class GhostController(
     /** descript.txt の readme（無ければ readme.txt）の中身。readme.charset があればその文字コードで読む */
     private fun readmeText(): String {
         val name = ghost.descript["readme"]?.takeIf { it.isNotBlank() } ?: "readme.txt"
-        if (ghost.readmeFile() == null) return "$name がありません"
-        return ghost.readmeText() ?: "$name を読めませんでした"
+        if (ghost.readmeFile() == null) return Messages.get("info.readme.missing", name)
+        return ghost.readmeText() ?: Messages.get("info.readme.unreadable", name)
     }
 
     /** スクリプトが終わってから送るイベント（\![raise] か、\![get,property] の答え） */
@@ -6494,7 +6491,7 @@ class GhostController(
 
         override fun adjustClock() = startSntp()
 
-        override fun correctClock() = platform.log("\\6: 端末の時計は直せません（ずれを測るだけ）")
+        override fun correctClock() = platform.log(Messages.get("log.clock.cannotfix"))
 
         override fun nudge(scope: Int, away: Boolean) {
             _state.update { it.update(scope) { c -> c.copy(nudge = ++animationCounter to away) } }
@@ -6526,7 +6523,7 @@ class GhostController(
         override fun playSound(file: String, loop: Boolean, volume: Int?) = playSound(file, loop, SoundOptions(volume = volume))
 
         override fun playSound(file: String, loop: Boolean, options: SoundOptions) {
-            val f = soundFile(file) ?: return platform.log("音が見つかりません: $file")
+            val f = soundFile(file) ?: return platform.log(Messages.get("log.sound.notfound", file))
             // メニューで「サウンドを鳴らさない」にしている間は鳴らさない
             if (soundMuted) return
             soundNames[f.path] = file
@@ -6534,7 +6531,7 @@ class GhostController(
         }
 
         override fun soundControl(command: String, file: String?, options: SoundOptions) {
-            val f = file?.let { soundFile(it) ?: return platform.log("音が見つかりません: $it") }
+            val f = file?.let { soundFile(it) ?: return platform.log(Messages.get("log.sound.notfound", it)) }
             if (f != null && file != null) soundNames[f.path] = file
             platform.soundControl(command, f, options)
         }
@@ -6704,13 +6701,13 @@ class GhostController(
 
         override fun choiceImage(file: String, opaque: Boolean, options: BalloonImageOptions): ChoiceImage? {
             val f = (if (file.startsWith("data:", ignoreCase = true)) dataImage(file) else ghostFile(file) ?: sharedImageFile(file))
-                ?: return null.also { platform.log("画像が見つかりません: ${file.take(80)}") }
+                ?: return null.also { platform.log(Messages.get("log.image.notfound", file.take(80))) }
             return ChoiceImage(f.path, opaque, options)
         }
 
         override fun addImage(scope: Int, file: String, x: Int?, y: Int?, opaque: Boolean, options: BalloonImageOptions) {
             val f = (if (file.startsWith("data:", ignoreCase = true)) dataImage(file) else ghostFile(file) ?: sharedImageFile(file))
-                ?: return platform.log("画像が見つかりません: ${file.take(80)}")
+                ?: return platform.log(Messages.get("log.image.notfound", file.take(80)))
             _state.update { it.update(scope) { c -> c.append(BalloonItem.Image(f.path, x, y, opaque, options)) } }
         }
 
@@ -6764,7 +6761,7 @@ class GhostController(
         override fun setSurface(scope: Int, surface: String) {
             val id = shell.surfaces.resolve(scope, surface) ?: run {
                 if (strict) developerLog.add("error", "Error", ghost.name, "strict: \\s[$surface]")
-                return platform.log("知らないサーフェスです: \\s[$surface]")
+                return platform.log(Messages.get("log.surface.unknown", surface))
             }
             setSurface(scope, id)
         }
@@ -6830,7 +6827,7 @@ class GhostController(
         override fun startAnimation(scope: Int, id: Int) = command(scope, AnimationCommand.Start(id))
 
         override fun startAnimation(scope: Int, key: String) {
-            animationId(scope, key)?.let { startAnimation(scope, it) } ?: platform.log("知らないアニメーションです: \\i[$key]")
+            animationId(scope, key)?.let { startAnimation(scope, it) } ?: platform.log(Messages.get("log.animation.unknown", key))
         }
 
         override suspend fun waitAnimation(scope: Int, key: String) {
@@ -7031,7 +7028,7 @@ class GhostController(
         override fun notify(event: String, references: List<String>) {
             // 答えの ValueNotify の \![notify] が自分を呼び続けないよう、\![raise] と同じ上限で止める
             if (chain >= MAX_RAISE_CHAIN) {
-                platform.log("\\![notify] の連鎖が $MAX_RAISE_CHAIN 回を超えたので止めました: $event")
+                platform.log(Messages.get("log.notify.chain", MAX_RAISE_CHAIN, event))
                 return
             }
             this@GhostController.notify(event, references, RequestOrigin.INTERNAL.copy(chain = chain + 1))
@@ -7041,7 +7038,7 @@ class GhostController(
             val embedded = request(event, references, translate = false, origin = RequestOrigin("internal,embed")) ?: return null
             // SecurityLevel: external の答えを、制限なしのスクリプトの中に埋め込むと制限が外れるので、埋め込まない
             if (takeExternal(embedded) && !untrusted) {
-                platform.log("\\![embed,$event] の答えは SecurityLevel: external なので埋め込みません")
+                platform.log(Messages.get("log.embed.external", event))
                 return null
             }
             return embedded
@@ -7051,7 +7048,7 @@ class GhostController(
             timers.remove(event)?.cancel()
             if (delayMs <= 0 || closing) return
             if (timers.size >= MAX_TIMERS) {
-                platform.log("\\![timerraise] が多すぎます: $event")
+                platform.log(Messages.get("log.timerraise.toomany", event))
                 return
             }
             // 繰り返しは1秒より短くしない（SHIORI を叩き続けないように）
@@ -7081,7 +7078,7 @@ class GhostController(
             timers.remove(key)?.cancel()
             if (delayMs <= 0 || closing) return
             if (timers.size >= MAX_TIMERS) {
-                platform.log("\\![timerraise] が多すぎます: $key")
+                platform.log(Messages.get("log.timerraise.toomany", key))
                 return
             }
             val interval = if (once) delayMs else delayMs.coerceAtLeast(1000)
@@ -7116,7 +7113,7 @@ class GhostController(
                 "ghost", "descript" -> reloadGhost()
                 // MAKOTO と AI グラフは pono-droid に無い
                 "makoto", "aigraph" -> {}
-                else -> platform.log("未対応の reload: $what")
+                else -> platform.log(Messages.get("log.reload.unsupported", what))
             }
         }
 
@@ -7148,7 +7145,7 @@ class GhostController(
         override fun openUrl(url: String) {
             val lower = url.lowercase()
             // ウェブのページと、新しいメールを作る mailto: だけ
-            if (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("mailto:")) platform.openUrl(url) else platform.log("開けない URL: $url")
+            if (lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("mailto:")) platform.openUrl(url) else platform.log(Messages.get("log.url.cannotopen", url))
         }
 
         override fun envVariable(name: String): String? {
@@ -7179,11 +7176,11 @@ class GhostController(
         }
 
         override fun unknownTag(tag: Token.Tag) {
-            platform.log("未対応のタグ: \\${tag.name}${tag.args}")
+            platform.log(Messages.get("log.tag.unsupported", tag.name, tag.args))
             if (strict) developerLog.add("error", "Error", ghost.name, "strict: \\${tag.name}${tag.args}")
         }
 
-        override fun refused(tag: Token.Tag) = platform.log("SSTP のスクリプトでは使えないタグ: \\${tag.name}${tag.args}")
+        override fun refused(tag: Token.Tag) = platform.log(Messages.get("log.tag.refused", tag.name, tag.args))
     }
 
     companion object {
@@ -7225,8 +7222,18 @@ class GhostController(
         /** 使用率に並べるゴーストの数 */
         private const val MAX_RATE_ROWS = 10
 
-        /** この言葉を含むログは、エラーログ（developer.log.error）にも Warning として残す */
+        /** この言葉を含むログは、エラーログ（developer.log.error）にも Warning として残す（ゴーストや SHIORI が出す日本語のログも） */
         private val WARNING_WORDS = listOf("未対応", "できません", "ありません", "見つかりません", "失敗")
+
+        /** 日本語の文言に [WARNING_WORDS] を含む言語表のキー。訳したログは、このキーの今の言語の文言に合えば Warning */
+        private val WARNING_KEYS: List<String> by lazy {
+            // ログに出すのは log.* と error.* だけ（info.* などの形まで入れると、ほかの文まで拾ってしまう）
+            Messages.table("ja").filter { (key, v) -> (key.startsWith("log.") || key.startsWith("error.")) && WARNING_WORDS.any { it in v } }.keys.toList()
+        }
+
+        /** エラーログにも Warning として残すログか。[WARNING_WORDS] を直に含むか、[WARNING_KEYS] の文言から作った文 */
+        internal fun isWarning(message: String): Boolean =
+            WARNING_WORDS.any { it in message } || Messages.matchesAny(WARNING_KEYS, message)
 
         /** 通信のイベント（developer.log.network に残す） */
         private val NETWORK_EVENTS = listOf("OnExecuteHTTP", "OnExecuteRSS", "OnExecuteICal", "OnExecuteWebSocket", "OnPing", "OnNSLookup", "OnSNTP", "OnURLDrop")

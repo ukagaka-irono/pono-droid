@@ -2,6 +2,7 @@ package net.pono.baseware.update
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import net.pono.baseware.text.Messages
 import net.pono.baseware.text.TextCharsets
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -136,10 +137,10 @@ class UrlConnectionFetcher(private val userAgent: String) : HttpFetcher {
             // ゴーストはこの理由をそのまま話すことがあるので、例外の名前ではなく読める言葉にする
             FetchResult.Failed(
                 when (e) {
-                    is javax.net.ssl.SSLException -> "サーバーの証明書を確認できませんでした"
-                    is java.net.UnknownHostException -> "サーバーが見つかりませんでした"
-                    is java.net.ConnectException -> "サーバーに接続できませんでした"
-                    else -> "通信に失敗しました"
+                    is javax.net.ssl.SSLException -> Messages.get("error.update.ssl")
+                    is java.net.UnknownHostException -> Messages.get("error.update.host")
+                    is java.net.ConnectException -> Messages.get("error.update.connect")
+                    else -> Messages.get("error.update.network")
                 },
             )
         } finally {
