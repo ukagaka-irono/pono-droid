@@ -67,8 +67,30 @@ abstract class GenerateLicenseAssets : DefaultTask() {
 
         val entries = listOf(
             Entry(
-                "pono-droid", "Apache-2.0", "https://github.com/ukagaka-irono/pono-droid",
-                "Copyright 2026 ukagaka-irono\n\nLicensed under the Apache License, Version 2.0.",
+                "pono-droid", "MIT", "https://github.com/ukagaka-irono/pono-droid",
+                """
+                MIT License
+
+                Copyright (c) 2026 ukagaka-irono
+
+                Permission is hereby granted, free of charge, to any person obtaining a copy
+                of this software and associated documentation files (the "Software"), to deal
+                in the Software without restriction, including without limitation the rights
+                to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+                copies of the Software, and to permit persons to whom the Software is
+                furnished to do so, subject to the following conditions:
+
+                The above copyright notice and this permission notice shall be included in all
+                copies or substantial portions of the Software.
+
+                THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+                IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+                FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+                AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+                LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+                OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+                SOFTWARE.
+                """.trimIndent(),
             ),
             Entry("YAYA", "BSD 3-Clause", "https://github.com/YAYA-shiori/yaya-shiori", read("yaya/LICENSE").trim()),
             Entry(
@@ -330,8 +352,8 @@ abstract class GenerateLicenseAssets : DefaultTask() {
 
 val generateLicenseAssets = tasks.register<GenerateLicenseAssets>("generateLicenseAssets") {
     cppDir.set(rootProject.layout.projectDirectory.dir("shiori-yaya/src/main/cpp"))
-    // pono-droid 自体のライセンスファイル（Apache License 2.0 の全文）をそのまま使う
-    apacheLicense.set(rootProject.layout.projectDirectory.file("LICENSE"))
+    // Apache License 2.0 の全文。Gumbo・BoringSSL・AndroidX などが使う
+    apacheLicense.set(layout.projectDirectory.file("licenses/Apache-2.0.txt"))
     rustLicenses.set(rootProject.layout.projectDirectory.file("shiori-yaya/src/main/rust/licenses.txt"))
     outputDir.set(layout.buildDirectory.dir("generated/licenses"))
 }

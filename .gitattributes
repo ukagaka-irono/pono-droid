@@ -2,3 +2,4 @@ gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
 LICENSE -text
+app/licenses/Apache-2.0.txt -text

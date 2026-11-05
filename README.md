@@ -252,22 +252,12 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 
 ## ライセンス
 
-pono-droid は [Apache License 2.0](LICENSE) で公開しています。
+pono-droid は [MIT License](LICENSE) で公開しています。
 
 ```
-Copyright 2026 ukagaka-irono
+Copyright (c) 2026 ukagaka-irono
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Released under the MIT License.
 ```
 
 同梱・利用しているソフトウェアは次のとおりです（[NOTICE](NOTICE) も参照）。ライセンスの全文はアプリの「ライセンス」画面で確認できます。SHIORI とその依存ライブラリはサブモジュールのまま配布し、手を加えていません。
