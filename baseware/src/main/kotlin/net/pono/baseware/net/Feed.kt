@@ -10,6 +10,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.net.URI
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -22,9 +23,14 @@ data class FeedItem(val title: String, val link: String, val updated: LocalDateT
     ).joinToString("\u0001") { it.replace('\r', ' ').replace('\n', ' ').replace('\u0001', ' ') }
 }
 
+/** フィードの配信元（link は XML の取得先ではなくサイトの URL）。 */
+data class FeedDocument(val title: String, val link: String, val items: List<FeedItem>)
+
 /** RSS 1.0 / 2.0 と Atom を読む。外の実体（DTD など）は読まない */
 object FeedParser {
-    fun parse(bytes: ByteArray): List<FeedItem>? {
+    fun parse(bytes: ByteArray): List<FeedItem>? = parseDocument(bytes)?.items
+
+    fun parseDocument(bytes: ByteArray, sourceUrl: String? = null): FeedDocument? {
         val doc = runCatching {
             val factory = DocumentBuilderFactory.newInstance().apply {
                 isNamespaceAware = true
@@ -37,26 +43,39 @@ object FeedParser {
                 )) runCatching { setFeature(feature.first, feature.second) }
                 runCatching { setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true) }
             }
-            factory.newDocumentBuilder().parse(ByteArrayInputStream(bytes))
+            factory.newDocumentBuilder().apply {
+                setEntityResolver { _, _ -> throw org.xml.sax.SAXException("External entities are disabled") }
+                setErrorHandler(object : org.xml.sax.helpers.DefaultHandler() {
+                    override fun fatalError(e: org.xml.sax.SAXParseException) { throw e }
+                })
+            }.parse(ByteArrayInputStream(bytes))
         }.getOrNull() ?: return null
         val root = doc.documentElement ?: return null
+        if (root.localName() !in setOf("rss", "rdf", "feed", "RDF")) return null
+        fun link(element: Element): String {
+            val links = elements(element).filter { it.localName() == "link" }
+            val selected = links.firstOrNull { it.getAttribute("rel") in setOf("", "alternate") } ?: return ""
+            val raw = selected.getAttribute("href").ifEmpty { selected.textContent.trim() }
+            if (raw.isBlank()) return ""
+            return runCatching { sourceUrl?.let { URI(it).resolve(raw).toString() } ?: raw }.getOrDefault(raw)
+        }
         val items = elements(root).filter { it.localName() == "item" || it.localName() == "entry" }
-        if (items.isEmpty() && root.localName() !in setOf("rss", "rdf", "feed", "RDF")) return null
-        return items.map { item ->
+        val metadata = elements(root).firstOrNull { it.localName() == "channel" } ?: root
+        val title = elements(metadata).firstOrNull { it.localName() == "title" }?.textContent?.trim().orEmpty()
+        return FeedDocument(title, link(metadata), items.map { item ->
             val children = elements(item)
             fun text(vararg names: String) = names.firstNotNullOfOrNull { n -> children.firstOrNull { it.localName() == n }?.textContent?.trim() }.orEmpty()
-            val link = children.firstOrNull { it.localName() == "link" }?.let { l -> l.getAttribute("href").ifEmpty { l.textContent.trim() } }.orEmpty()
             val author = children.firstOrNull { it.localName() == "author" }?.let { a ->
                 elements(a).firstOrNull { it.localName() == "name" }?.textContent?.trim() ?: a.textContent.trim()
             } ?: text("creator")
             FeedItem(
                 title = text("title"),
-                link = link,
+                link = link(item),
                 updated = parseDate(text("pubDate", "updated", "published", "date")),
                 author = author,
                 content = text("description", "summary", "content", "encoded"),
             )
-        }
+        })
     }
 
     /** --from / --to / --limit で絞る（SSP 2.8.92）。期間を決めたら、更新日時の無い項目は返さない。--limit なら新しい順に打ち切る */

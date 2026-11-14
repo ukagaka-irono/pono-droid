@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="input_title">キー・ゲームパッド</string>
+    <string name="input_help">この画面からゴーストにキーを送れます。この画面を開いている間は、接続したキーボードやゲームパッドも使えます。</string>
+    <string name="input_scope">キャラクター</string>
+    <string name="input_stopped">このゴーストは終了しています。</string>
+    <string name="input_close">閉じる</string>
+</resources>

@@ -167,6 +167,7 @@ class Ghost(val dir: File) {
  * ゴースト置き場。バルーンは [balloons]（既定ではゴースト置き場と同じ階層の balloon/）に置く。
  */
 class GhostRepository(val root: File, val balloons: BalloonRepository = BalloonRepository(File(root.parentFile, "balloon"))) {
+    val headlines = net.pono.baseware.headline.HeadlineRepository(File(root.parentFile, "headline"))
     init {
         root.mkdirs()
     }

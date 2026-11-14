@@ -150,3 +150,11 @@ surface.standard.sneer,Sneer
 surface.standard.shyangry,Embarrassed and angry
 surface.standard.singing,Singing
 surface.standard.wideeyed,Wide-eyed
+
+menu.headlines,RSS / Headlines
+menu.headline.add,Add RSS / Atom
+menu.headline.remove,Remove
+confirm.headline.remove,Remove %1?
+error.headline.feed,Unable to read this RSS / Atom feed.
+error.headline.read,Unable to read %1: %2
+menu.calendar,Calendar

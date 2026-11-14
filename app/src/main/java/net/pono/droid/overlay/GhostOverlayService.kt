@@ -110,6 +110,10 @@ class GhostOverlayService : LifecycleService() {
     /** ゴーストどうしをつなぐ（\![raiseother] や OnOtherGhost*） */
     private val hub = GhostHub()
 
+    private val gamepads by lazy {
+        GamepadInput(this) { event, references -> controllers.filter { it.state.value.booted }.forEach { it.raise(event, references, userInitiated = false) } }
+    }
+
     /** インストール済みのプラグイン（:plugin のプロセスで動かす）。どのゴーストにも同じものを渡す */
     private val pluginHost by lazy {
         PluginHost(
@@ -315,6 +319,7 @@ class GhostOverlayService : LifecycleService() {
         private var scopesJob: Job? = null
         private var positionsJob: Job? = null
         private var windowJob: Job? = null
+        private var gamepadBootJob: Job? = null
 
         /** 動かし終えた \![move] と \4 / \5 の通し番号（キャラクターごと） */
         private val handledMoves = HashMap<Int, Int>()
@@ -500,6 +505,11 @@ class GhostOverlayService : LifecycleService() {
                     }
 
                     override fun showText(title: String, text: String) = TextViewerActivity.start(this@GhostOverlayService, title, text)
+
+                    override fun openCalendar(): Boolean = runCatching {
+                        net.pono.droid.GhostCalendarActivity.start(this@GhostOverlayService, dirName)
+                        true
+                    }.getOrDefault(false)
 
                     override fun openSystemDialog(request: SystemDialogRequest): Boolean {
                         SystemDialogActivity.start(this@GhostOverlayService, request, controller ?: return false)
@@ -791,6 +801,10 @@ class GhostOverlayService : LifecycleService() {
                 c.state.map { it.input?.kind }.distinctUntilChanged().collect { applyInput(c) }
             }
             c.start()
+            gamepadBootJob = lifecycleScope.launch {
+                c.state.first { it.booted }
+                if (controller === c) gamepads.state.indices.forEach { c.raise("OnGamepadConnected", listOf(it.toString()), userInitiated = false) }
+            }
             // SHIORI を読み終わるまで、アプリの一覧にも読み込み中と出す（start で読み込み中になる）
             loadingJob = lifecycleScope.launch {
                 c.state.first { it.loading == null }
@@ -1010,6 +1024,8 @@ class GhostOverlayService : LifecycleService() {
 
         /** このゴーストのウィンドウと見張りを片付ける。ゴーストがまだ動いていれば、何も送らずに止める（その片付けの Job を返す） */
         fun teardown(): Job? {
+            gamepadBootJob?.cancel()
+            gamepadBootJob = null
             startJob?.cancel()
             startJob = null
             loadingJob?.cancel()
@@ -1348,6 +1364,7 @@ class GhostOverlayService : LifecycleService() {
 
     override fun onCreate() {
         super.onCreate()
+        gamepads.start()
         instance = this
         pluginHost.start()
         OverlaySettings.prefs(this).let {
@@ -1468,6 +1485,7 @@ class GhostOverlayService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        gamepads.stop()
         if (instance === this) instance = null
         OverlaySettings.prefs(this).unregisterOnSharedPreferenceChangeListener(scaleListener)
         mediaWatcher?.stop()
@@ -1610,6 +1628,12 @@ class GhostOverlayService : LifecycleService() {
     }
 
     companion object {
+        /** 入力画面が選んだゴースト。止まっていれば null。 */
+        fun findController(dirName: String): GhostController? = instance?.sessions?.firstOrNull { it.dirName == dirName }?.controller
+
+        fun gamepadKey(event: android.view.KeyEvent): Boolean = instance?.gamepads?.key(event) == true
+        fun gamepadMotion(event: android.view.MotionEvent): Boolean = instance?.gamepads?.motion(event) == true
+        fun releaseGamepadInputs() { instance?.gamepads?.state?.releaseInputs() }
         /** 壁紙を変えてから、変化の知らせを self とみなす時間 */
         private const val WALLPAPER_SELF_MS = 10_000L
 
@@ -1669,6 +1693,7 @@ class GhostOverlayService : LifecycleService() {
         /** アプリの画面や共有から入れたものを、動いているプラグインに知らせる（プラグインなら読み込み直す） */
         fun pluginInstalled(result: NarInstaller.Result) {
             val items = result.installed
+            instance?.sessions?.forEach { it.controller?.headlineInstalled(items) }
             instance?.pluginHost?.installComplete(items.map { it.type.id }, items.map { it.name }, items.map { it.dir.absolutePath + "/" })
         }
 

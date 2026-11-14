@@ -150,3 +150,11 @@ surface.standard.sneer,冷笑
 surface.standard.shyangry,照れ怒り
 surface.standard.singing,歌
 surface.standard.wideeyed,刮目
+
+menu.headlines,RSS・ヘッドライン
+menu.headline.add,RSS・Atom を追加
+menu.headline.remove,削除
+confirm.headline.remove,%1 を削除しますか？
+error.headline.feed,RSS・Atom フィードを読み込めませんでした。
+error.headline.read,%1 を読み込めませんでした: %2
+menu.calendar,カレンダー

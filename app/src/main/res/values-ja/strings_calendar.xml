@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calendar_title">カレンダー</string>
+    <string name="calendar_previous">前日</string>
+    <string name="calendar_today">今日</string>
+    <string name="calendar_next">翌日</string>
+    <string name="calendar_help">予定を選ぶとゴーストに伝えます。端末の予定は設定で許可した場合に表示します。</string>
+    <string name="calendar_empty">予定はありません</string>
+    <string name="calendar_all_day">終日</string>
+    <string name="calendar_choose">選択</string>
+</resources>

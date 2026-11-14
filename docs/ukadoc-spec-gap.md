@@ -1,10 +1,14 @@
 # ukadoc-spec との差
 
 [ukadoc-spec](https://github.com/ukatech/ukadoc-spec)（UKADOC の Markdown 版、b1f8ab1 時点）の項目を1つずつ pono-droid と比べた結果。
-項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / IMPOSSIBLE / NA）。作ったら DONE に書き換える。
+現在の項目ごとの状態は [ukadoc-spec-status.tsv](ukadoc-spec-status.tsv)（DONE / PARTIAL / BUILD / NA）。
+2026-11-14 に Windows DLL を含む完全互換を目標とし、旧 IMPOSSIBLE の除外を取り消した。
+実装・テストの範囲と残作業は [ssp-porting.md](ssp-porting.md) を参照。
 前に HTML 版の ukadoc から作った一覧は [ssp-gap.md](ssp-gap.md)。
 
-全 2050 項目: 済み 1527・一部だけ 0・作る 0・作れない 185・ベースウェアのことではない 338
+現在の台帳は全 2050 項目: DONE 1542・PARTIAL 34・BUILD 137・NA 337。旧 DONE / NA の再監査も必要で、この件数は互換率ではない。
+
+以下の分類別リストは旧調査時の記録。本文中の「作れない」「作らない」は現在の開発方針ではなく、更新済み台帳と上記の進捗文書を優先する。
 
 ## バルーンの descript.txt など
 

@@ -99,6 +99,8 @@
         <activity
             android:name=".DeveloperActivity"
             android:exported="false" />
+        <activity android:name=".GhostInputActivity" android:exported="false" />
+        <activity android:name=".GhostCalendarActivity" android:exported="false" />
 
         <!-- \![open,dialog,open / save / folder / color]。選ぶ画面は Android のもので、色だけこの画面で選ぶ -->
         <activity

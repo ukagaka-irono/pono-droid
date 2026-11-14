@@ -1,5 +1,7 @@
 # SSP にあって pono-droid に無いもの（洗い出し）
 
+2026-11-14: Windows 専用ゴースト・DLL を含む完全互換を目標とする。ここにある「作らない」という旧方針は除外の根拠にしない。現在の進捗は [ssp-porting.md](ssp-porting.md) を参照。
+
 ukadoc（SSP の仕様書）のイベント・さくらスクリプト・プロパティシステム・SHIORI リソース・surfaces.txt の項目を全部取り出し、
 pono-droid のコードと突き合わせた一覧（2026-10-24 時点）。
 

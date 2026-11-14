@@ -1,0 +1,38 @@
+name: Windows module host
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-host:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: |
+            17
+            21
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Install Windows Rust targets
+        run: rustup target add i686-pc-windows-msvc x86_64-pc-windows-msvc
+      - name: Test x86 and x64 DLL hosts and JVM transport
+        shell: pwsh
+        run: ./windows-module-host/Test.ps1
+      - name: Upload integration test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-module-host-test-report
+          path: baseware/build/reports/tests/test/
+          if-no-files-found: ignore

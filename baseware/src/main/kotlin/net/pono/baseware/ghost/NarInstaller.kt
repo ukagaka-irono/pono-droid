@@ -14,7 +14,7 @@ import java.util.zip.ZipFile
  * 受け取るゴースト（[install] の target。install.txt の accept と名前が合うもの）に入れ、package は中の .nar を順に入れる。
  * ゴーストやシェルの .nar に同梱のバルーンがあれば、そのバルーンもバルーン置き場に入れる（SSP と同じ）。
  */
-class NarInstaller(private val ghostRoot: File, private val balloonRoot: File, private val pluginRoot: File = File(ghostRoot.parentFile, "plugin")) {
+class NarInstaller(private val ghostRoot: File, private val balloonRoot: File, private val pluginRoot: File = File(ghostRoot.parentFile, "plugin"), private val headlineRoot: File = File(ghostRoot.parentFile, "headline")) {
 
     /** 入れられなかった。[reason] は OnInstallFailure の理由（invalid type・unsupported・extraction）、[message] は読める文 */
     open class InstallException(val reason: String, message: String) : IOException(message)
@@ -22,7 +22,7 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File, p
     /** install.txt の accept が受け取るゴーストと合わない（OnInstallRefuse） */
     class RefusedException(val accept: String, val type: String, val name: String) : InstallException("refused", "refused")
 
-    enum class Type(val id: String) { GHOST("ghost"), BALLOON("balloon"), SHELL("shell"), SUPPLEMENT("supplement"), PLUGIN("plugin") }
+    enum class Type(val id: String) { GHOST("ghost"), BALLOON("balloon"), SHELL("shell"), SUPPLEMENT("supplement"), PLUGIN("plugin"), HEADLINE("headline") }
 
     /** 入れたもの1つ。[name] は install.txt の name（無ければ directory） */
     data class Installed(val type: Type, val name: String, val dir: File)
@@ -59,6 +59,7 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File, p
                 "shell" -> Type.SHELL
                 "supplement" -> Type.SUPPLEMENT
                 "plugin" -> Type.PLUGIN
+                "headline" -> Type.HEADLINE
                 else -> throw InstallException("unsupported", Messages.get("error.install.type", install["type"].toString()))
             }
             val dirName = install["directory"]?.let(::safeName) ?: throw InstallException("invalid type", Messages.get("error.install.nodirectory"))
@@ -72,6 +73,7 @@ class NarInstaller(private val ghostRoot: File, private val balloonRoot: File, p
                 Type.GHOST -> File(ghostRoot, dirName)
                 Type.BALLOON -> File(balloonRoot, dirName)
                 Type.PLUGIN -> File(pluginRoot, dirName)
+                Type.HEADLINE -> File(headlineRoot, dirName)
                 Type.SHELL -> File(target!!.dir, "shell/$dirName")
                 Type.SUPPLEMENT -> target!!.dir
             }

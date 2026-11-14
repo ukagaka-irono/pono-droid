@@ -150,3 +150,11 @@ surface.standard.sneer,냉소
 surface.standard.shyangry,부끄러워 화냄
 surface.standard.singing,노래
 surface.standard.wideeyed,눈 크게 뜸
+
+menu.headlines,RSS / 헤드라인
+menu.headline.add,RSS / Atom 추가
+menu.headline.remove,삭제
+confirm.headline.remove,%1을 삭제할까요?
+error.headline.feed,RSS / Atom 피드를 읽을 수 없습니다.
+error.headline.read,%1을 읽을 수 없습니다: %2
+menu.calendar,달력

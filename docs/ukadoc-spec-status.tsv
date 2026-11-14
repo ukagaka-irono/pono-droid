@@ -211,7 +211,7 @@ descript/ghost/descript-txt/kero.defaulty.md	DONE	kero.defaulty,Y座標	同上
 descript/ghost/descript-txt/kero.name.md	DONE	kero.name,名前	keroName
 descript/ghost/descript-txt/kero.seriko.alignmenttodesktop.md	DONE	kero.seriko.alignmenttodesktop,位置情報	ゴースト全体＜これ＜シェル全体＜シェルのスコープの順で起動時の吸着にする
 descript/ghost/descript-txt/kero.seriko.defaultsurface.md	DONE	kero.seriko.defaultsurface,数値	scopeName で読む（defaultSurface）
-descript/ghost/descript-txt/makoto.md	IMPOSSIBLE	makoto,ファイル名	MAKOTO は Windows の DLL（⛔）
+descript/ghost/descript-txt/makoto.md	BUILD	makoto,ファイル名	完全互換に向けて再評価が必要。旧判断: MAKOTO は Windows の DLL（⛔）
 descript/ghost/descript-txt/menu.font.height.md	DONE	menu.font.height,フォントサイズ	メニューの頭に \f[height] を付ける（シェルの指定が先）
 descript/ghost/descript-txt/menu.font.name.md	DONE	menu.font.name,フォント名	メニューの頭に \f[name] を付ける（シェルの指定が先）
 descript/ghost/descript-txt/mousecursor.arrow.md	DONE	mousecursor.arrow,ファイル名	当たり判定の外など、system:arrow の代わりのカーソル
@@ -257,18 +257,18 @@ descript/ghost/recommended-balloon/default.balloon.path.md	DONE	default.balloon.
 descript/ghost/recommended-balloon/index.md	NA	descript.txt - 推奨バルーン	一覧のページ
 descript/ghost/recommended-balloon/recommended.balloon.md	DONE	recommended.balloon,バルーン名	既定のバルーンにし、ほかに切り替えるときはバルーンで確かめる
 descript/ghost/recommended-balloon/recommended.balloon.path.md	DONE	recommended.balloon.path,パス	パスで探す。ほかに切り替えるときはバルーンで確かめる
-descript/headline/descript-txt/alwaysdisplay.md	IMPOSSIBLE	alwaysdisplay,数値	ヘッドラインは作らない（⛔）
-descript/headline/descript-txt/charset.md	IMPOSSIBLE	charset,文字コード	ヘッドラインは作らない（⛔）
-descript/headline/descript-txt/dllname.md	IMPOSSIBLE	dllname,ファイル名	ヘッドラインは作らない（⛔。Windows の DLL）
-descript/headline/descript-txt/homeurl.md	IMPOSSIBLE	homeurl,URL	ヘッドラインは作らない（⛔）
-descript/headline/descript-txt/index.md	IMPOSSIBLE	descript.txt	ヘッドラインは作らない（⛔）
-descript/headline/descript-txt/introduction_descript.txt.md	IMPOSSIBLE	descript.txt（Headlineの）	ヘッドラインは作らない（⛔）
-descript/headline/descript-txt/name.md	IMPOSSIBLE	name,ヘッドライン名	ヘッドラインは作らない（⛔）
-descript/headline/descript-txt/openurl.md	IMPOSSIBLE	openurl,URL	ヘッドラインは作らない（⛔）
-descript/headline/descript-txt/readme.charset.md	IMPOSSIBLE	readme.charset,文字コード	ヘッドラインは作らない（⛔）
-descript/headline/descript-txt/readme.md	IMPOSSIBLE	readme,ファイル名	ヘッドラインは作らない（⛔）
-descript/headline/descript-txt/url.md	IMPOSSIBLE	url,URL	ヘッドラインは作らない（⛔）
-descript/headline/index.md	IMPOSSIBLE	Headline設定	ヘッドラインは作らない（⛔）
+descript/headline/descript-txt/alwaysdisplay.md	PARTIAL	alwaysdisplay,数値	設定モデル、NAR インストール、readme、RSS 登録、homeurl 更新を実装。DLL の Android 実行環境は未接続。HeadlineTest
+descript/headline/descript-txt/charset.md	PARTIAL	charset,文字コード	設定モデル、NAR インストール、readme、RSS 登録、homeurl 更新を実装。DLL の Android 実行環境は未接続。HeadlineTest
+descript/headline/descript-txt/dllname.md	PARTIAL	dllname,ファイル名	設定モデル、NAR インストール、readme、RSS 登録、homeurl 更新を実装。DLL の Android 実行環境は未接続。HeadlineTest
+descript/headline/descript-txt/homeurl.md	PARTIAL	homeurl,URL	設定モデル、NAR インストール、readme、RSS 登録、homeurl 更新を実装。DLL の Android 実行環境は未接続。HeadlineTest
+descript/headline/descript-txt/index.md	PARTIAL	descript.txt	設定モデル、NAR インストール、readme、RSS 登録、homeurl 更新を実装。DLL の Android 実行環境は未接続。HeadlineTest
+descript/headline/descript-txt/introduction_descript.txt.md	PARTIAL	descript.txt（Headlineの）	設定モデル、NAR インストール、readme、RSS 登録、homeurl 更新を実装。DLL の Android 実行環境は未接続。HeadlineTest
+descript/headline/descript-txt/name.md	PARTIAL	name,ヘッドライン名	設定モデル、NAR インストール、readme、RSS 登録、homeurl 更新を実装。DLL の Android 実行環境は未接続。HeadlineTest
+descript/headline/descript-txt/openurl.md	PARTIAL	openurl,URL	設定モデル、NAR インストール、readme、RSS 登録、homeurl 更新を実装。DLL の Android 実行環境は未接続。HeadlineTest
+descript/headline/descript-txt/readme.charset.md	PARTIAL	readme.charset,文字コード	設定モデル、NAR インストール、readme、RSS 登録、homeurl 更新を実装。DLL の Android 実行環境は未接続。HeadlineTest
+descript/headline/descript-txt/readme.md	PARTIAL	readme,ファイル名	設定モデル、NAR インストール、readme、RSS 登録、homeurl 更新を実装。DLL の Android 実行環境は未接続。HeadlineTest
+descript/headline/descript-txt/url.md	PARTIAL	url,URL	設定モデル、NAR インストール、readme、RSS 登録、homeurl 更新を実装。DLL の Android 実行環境は未接続。HeadlineTest
+descript/headline/index.md	PARTIAL	Headline設定	設定モデル、NAR インストール、readme、RSS 登録、homeurl 更新を実装。DLL の Android 実行環境は未接続。HeadlineTest
 descript/install/delete.txt/entry.md	DONE	相対パス	\ を / にし、末尾が \ のフォルダは中身ごと消す。外と pono/ は消さない
 descript/install/delete.txt/index.md	NA	delete.txt	一覧のページ
 descript/install/delete.txt/introduction_delete.txt.md	DONE	delete.txt	更新と .nar のインストールで applyDeleteList（charset 行は消す対象にならず害が無い）
@@ -291,7 +291,7 @@ descript/install/install-txt/star-.directory.md	DONE	\*.directory,ディレク�
 descript/install/install-txt/star-.refresh.md	DONE	\*.refresh,数値	balloonN.refresh
 descript/install/install-txt/star-.refreshundeletemask.md	DONE	\*.refreshundeletemask,ファイル名1:ファイル名2...	balloonN.refreshundeletemask
 descript/install/install-txt/star-.source.directory.md	DONE	\*.source.directory,ディレクトリ名	階層のあるパスも使える。外を指すものは写さない
-descript/install/install-txt/type.md	DONE	type,種別	ghost / shell / supplement / balloon / package。plugin・headline・language・calendar は ⛔ で入れない
+descript/install/install-txt/type.md	PARTIAL	type,種別	ghost / shell / supplement / balloon / plugin / headline / package。language / calendar は未対応
 descript/install/narignore-updateignore-narinclude-updateinclude.md	DONE	.narignore / .updateignore / .narinclude / .updateinclude	GhostPackager（include: は 3 階層まで、フォルダの外は読まない）
 descript/install/updates_def-txt/entry.md	DONE	相対パス,ignore	更新データを作るとき、相対パス,ignore のファイルを外す（フォルダは書けない。developer_options.txt の方が勝つ）
 descript/install/updates_def-txt/index.md	NA	updates_def.txt	一覧のページ
@@ -352,8 +352,8 @@ descript/shell-surfaces/surface-brace/animation-star-.option-3.md	DONE	animation
 descript/shell-surfaces/surface-brace/animation-star-.option-4.md	DONE	animation\*.option,オプション	+ でつないだ指定と、exclusive だけに効く (1,3,5) を読む
 descript/shell-surfaces/surface-brace/animation-star-.option.md	DONE	animation\*.option,exclusive	exclusive と exclusive,(1,3,5) を扱う
 descript/shell-surfaces/surface-brace/animation-star-.pattern-star.md	DONE	animation\*.pattern\*,描画メソッド,サーフェス番号,ウェイト,X座標,Y座標(,オプション...)	--alpha、サーフェス番号 -2（ほかのアニメーションを止める）、サーフェス番号の別名（name / surface.alias）を読む
-descript/shell-surfaces/surface-brace/balloon.offsetx.md	IMPOSSIBLE	balloon.offsetx,座標	サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
-descript/shell-surfaces/surface-brace/balloon.offsety.md	IMPOSSIBLE	balloon.offsety,座標	サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
+descript/shell-surfaces/surface-brace/balloon.offsetx.md	DONE	balloon.offsetx,座標	surface ごとの汎用・スコープ別・方向別オフセット。surface 切り替え時に再計算し descript にフォールバック。SurfaceBalloonOffsetsTest
+descript/shell-surfaces/surface-brace/balloon.offsety.md	DONE	balloon.offsety,座標	surface ごとの汎用・スコープ別・方向別オフセット。surface 切り替え時に再計算し descript にフォールバック。SurfaceBalloonOffsetsTest
 descript/shell-surfaces/surface-brace/caption_basesurface.md	DONE	ベースサーフェス	element0 があれば surfaceN.png を使わない
 descript/shell-surfaces/surface-brace/caption_seriko-redefine.md	DONE	SERIKOの旧定義と新定義について	旧定義の start / alternativestart なども、描画メソッドの後ろの相手を読む
 descript/shell-surfaces/surface-brace/caption_standarddef.md	DONE	サーフェスIDの割り振り	\0 は 0、\1 は 10、descript の defaultsurface も見る
@@ -462,8 +462,8 @@ descript/shell-surfaces/surface-brace/index.md	NA	surfaceブレス	目次のペ�
 descript/shell-surfaces/surface-brace/introduction_mayuna.md	DONE	着せ替え（MAYUNA）	多重着せ替え（コマに使ったサーフェスの身に着けている着せ替えも重ねる。循環は止める）もある
 descript/shell-surfaces/surface-brace/introduction_seriko.md	DONE	アニメーション（SERIKO）	説明のページ。SERIKO は SerikoAnimator で動かす
 descript/shell-surfaces/surface-brace/introduction_surfacebrace.md	DONE	surfaceブレス記述例	記述例のページ。書いてある項目は読める
-descript/shell-surfaces/surface-brace/kero.balloon.offsetx.md	IMPOSSIBLE	kero.balloon.offsetx,座標	サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
-descript/shell-surfaces/surface-brace/kero.balloon.offsety.md	IMPOSSIBLE	kero.balloon.offsety,座標	サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
+descript/shell-surfaces/surface-brace/kero.balloon.offsetx.md	DONE	kero.balloon.offsetx,座標	surface ごとの汎用・スコープ別・方向別オフセット。surface 切り替え時に再計算し descript にフォールバック。SurfaceBalloonOffsetsTest
+descript/shell-surfaces/surface-brace/kero.balloon.offsety.md	DONE	kero.balloon.offsety,座標	surface ごとの汎用・スコープ別・方向別オフセット。surface 切り替え時に再計算し descript にフォールバック。SurfaceBalloonOffsetsTest
 descript/shell-surfaces/surface-brace/name.md	DONE	name,定義名	\s[定義名] で使える
 descript/shell-surfaces/surface-brace/point.basepos.x.md	DONE	point.basepos.x,座標	実装済み
 descript/shell-surfaces/surface-brace/point.basepos.y.md	DONE	point.basepos.y,座標	実装済み
@@ -471,8 +471,8 @@ descript/shell-surfaces/surface-brace/point.centerx.md	DONE	point.centerx,座標
 descript/shell-surfaces/surface-brace/point.centery.md	DONE	point.centery,座標	実装済み
 descript/shell-surfaces/surface-brace/point.kinoko.centerx.md	DONE	point.kinoko.centerx,座標	実装済み
 descript/shell-surfaces/surface-brace/point.kinoko.centery.md	DONE	point.kinoko.centery,座標	実装済み
-descript/shell-surfaces/surface-brace/sakura.balloon.offsetx.md	IMPOSSIBLE	sakura.balloon.offsetx,座標	サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
-descript/shell-surfaces/surface-brace/sakura.balloon.offsety.md	IMPOSSIBLE	sakura.balloon.offsety,座標	サーフェスごとのバルーン位置は使わない（バルーンはいつもキャラクターの上。ssp-gap.md の決め事）
+descript/shell-surfaces/surface-brace/sakura.balloon.offsetx.md	DONE	sakura.balloon.offsetx,座標	surface ごとの汎用・スコープ別・方向別オフセット。surface 切り替え時に再計算し descript にフォールバック。SurfaceBalloonOffsetsTest
+descript/shell-surfaces/surface-brace/sakura.balloon.offsety.md	DONE	sakura.balloon.offsety,座標	surface ごとの汎用・スコープ別・方向別オフセット。surface 切り替え時に再計算し descript にフォールバック。SurfaceBalloonOffsetsTest
 descript/shell-surfaces/tooltip-brace/entry.md	DONE	当たり判定名,表示内容	カーソルの代わりに、触れている間に出す
 descript/shell-surfaces/tooltip-brace/index.md	NA	tooltipブレス	目次のページ
 descript/shell-surfaces/tooltip-brace/introduction_tooltipbrace.md	DONE	tooltipブレス記述例	sakura / kero / charN.tooltips を読む
@@ -532,30 +532,30 @@ descript/shell/descript-txt/kero.menuitem-star.md	DONE	kero.menuitem\*,ID	着せ
 descript/shell/descript-txt/kero.menuitemex-star.md	DONE	kero.menuitemex\*,メニュー名,ID	メニュー名の階層を作り、その中にこの順に並べる
 descript/shell/descript-txt/kero.name.md	DONE	kero.name,名前	シェルの名前で %selfname・%keroname・scope(n).name・呼びかけを上書きする（name.allowoverride が 0 なら使わない）
 descript/shell/descript-txt/kero.seriko.alignmenttodesktop.md	DONE	kero.seriko.alignmenttodesktop,位置情報	シェルのスコープ＞シェル全体＞ゴーストのスコープ＞ゴースト全体の順で起動時の吸着にする
-descript/shell/descript-txt/menu.background.alignment.md	IMPOSSIBLE	menu.background.alignment,位置	メニューはバルーンに出すので、メニューの絵が無い（⛔）
-descript/shell/descript-txt/menu.background.bitmap.filename.md	IMPOSSIBLE	menu.background.bitmap.filename,ファイル名	メニューの絵が無い（⛔）
+descript/shell/descript-txt/menu.background.alignment.md	BUILD	menu.background.alignment,位置	完全互換に向けて再評価が必要。旧判断: メニューはバルーンに出すので、メニューの絵が無い（⛔）
+descript/shell/descript-txt/menu.background.bitmap.filename.md	BUILD	menu.background.bitmap.filename,ファイル名	完全互換に向けて再評価が必要。旧判断: メニューの絵が無い（⛔）
 descript/shell/descript-txt/menu.background.font.color.b.md	DONE	menu.background.font.color.b,数値	SHIORI リソース、無ければシェルの descript.txt の色をメニューに使う
 descript/shell/descript-txt/menu.background.font.color.g.md	DONE	menu.background.font.color.g,数値	SHIORI リソース、無ければシェルの descript.txt の色をメニューに使う
 descript/shell/descript-txt/menu.background.font.color.r.md	DONE	menu.background.font.color.r,数値	SHIORI リソース、無ければシェルの descript.txt の色をメニューに使う
-descript/shell/descript-txt/menu.disable.font.color.b.md	IMPOSSIBLE	menu.disable.font.color.b	押せない項目を出さない（⛔）
-descript/shell/descript-txt/menu.disable.font.color.g.md	IMPOSSIBLE	menu.disable.font.color.g	押せない項目を出さない（⛔）
-descript/shell/descript-txt/menu.disable.font.color.r.md	IMPOSSIBLE	menu.disable.font.color.r	押せない項目を出さない（⛔）
+descript/shell/descript-txt/menu.disable.font.color.b.md	BUILD	menu.disable.font.color.b	完全互換に向けて再評価が必要。旧判断: 押せない項目を出さない（⛔）
+descript/shell/descript-txt/menu.disable.font.color.g.md	BUILD	menu.disable.font.color.g	完全互換に向けて再評価が必要。旧判断: 押せない項目を出さない（⛔）
+descript/shell/descript-txt/menu.disable.font.color.r.md	BUILD	menu.disable.font.color.r	完全互換に向けて再評価が必要。旧判断: 押せない項目を出さない（⛔）
 descript/shell/descript-txt/menu.font.height.md	DONE	menu.font.height,フォントサイズ	メニューの頭に \f[height] を付ける（シェル＞ゴースト）
 descript/shell/descript-txt/menu.font.name.md	DONE	menu.font.name,フォント名	メニューの頭に \f[name] を付ける（シェル＞ゴースト）
-descript/shell/descript-txt/menu.foreground.alignment.md	IMPOSSIBLE	menu.foreground.alignment,位置	メニューの絵が無い（⛔）
-descript/shell/descript-txt/menu.foreground.bitmap.filename.md	IMPOSSIBLE	menu.foreground.bitmap.filename,ファイル名	メニューの絵が無い（⛔）
+descript/shell/descript-txt/menu.foreground.alignment.md	BUILD	menu.foreground.alignment,位置	完全互換に向けて再評価が必要。旧判断: メニューの絵が無い（⛔）
+descript/shell/descript-txt/menu.foreground.bitmap.filename.md	BUILD	menu.foreground.bitmap.filename,ファイル名	完全互換に向けて再評価が必要。旧判断: メニューの絵が無い（⛔）
 descript/shell/descript-txt/menu.foreground.font.color.b.md	DONE	menu.foreground.font.color.b,数値	SHIORI リソース、無ければシェルの descript.txt の色をメニューに使う
 descript/shell/descript-txt/menu.foreground.font.color.g.md	DONE	menu.foreground.font.color.g,数値	SHIORI リソース、無ければシェルの descript.txt の色をメニューに使う
 descript/shell/descript-txt/menu.foreground.font.color.r.md	DONE	menu.foreground.font.color.r,数値	SHIORI リソース、無ければシェルの descript.txt の色をメニューに使う
-descript/shell/descript-txt/menu.frame.color.b.md	IMPOSSIBLE	menu.frame.color.b,数値	メニューの枠が無い（⛔）
-descript/shell/descript-txt/menu.frame.color.g.md	IMPOSSIBLE	menu.frame.color.g,数値	メニューの枠が無い（⛔）
-descript/shell/descript-txt/menu.frame.color.r.md	IMPOSSIBLE	menu.frame.color.r,数値	メニューの枠が無い（⛔）
+descript/shell/descript-txt/menu.frame.color.b.md	BUILD	menu.frame.color.b,数値	完全互換に向けて再評価が必要。旧判断: メニューの枠が無い（⛔）
+descript/shell/descript-txt/menu.frame.color.g.md	BUILD	menu.frame.color.g,数値	完全互換に向けて再評価が必要。旧判断: メニューの枠が無い（⛔）
+descript/shell/descript-txt/menu.frame.color.r.md	BUILD	menu.frame.color.r,数値	完全互換に向けて再評価が必要。旧判断: メニューの枠が無い（⛔）
 descript/shell/descript-txt/menu.md	DONE	menu,hidden	shellMenu が読む（hidden ならシェルのメニューに出さない）
-descript/shell/descript-txt/menu.separator.color.b.md	IMPOSSIBLE	menu.separator.color.b,数値	メニューの区切り線が無い（⛔）
-descript/shell/descript-txt/menu.separator.color.g.md	IMPOSSIBLE	menu.separator.color.g,数値	メニューの区切り線が無い（⛔）
-descript/shell/descript-txt/menu.separator.color.r.md	IMPOSSIBLE	menu.separator.color.r,数値	メニューの区切り線が無い（⛔）
-descript/shell/descript-txt/menu.sidebar.alignment.md	IMPOSSIBLE	menu.sidebar.alignment,位置	メニューの絵が無い（⛔）
-descript/shell/descript-txt/menu.sidebar.bitmap.filename.md	IMPOSSIBLE	menu.sidebar.bitmap.filename,ファイル名	メニューの絵が無い（⛔）
+descript/shell/descript-txt/menu.separator.color.b.md	BUILD	menu.separator.color.b,数値	完全互換に向けて再評価が必要。旧判断: メニューの区切り線が無い（⛔）
+descript/shell/descript-txt/menu.separator.color.g.md	BUILD	menu.separator.color.g,数値	完全互換に向けて再評価が必要。旧判断: メニューの区切り線が無い（⛔）
+descript/shell/descript-txt/menu.separator.color.r.md	BUILD	menu.separator.color.r,数値	完全互換に向けて再評価が必要。旧判断: メニューの区切り線が無い（⛔）
+descript/shell/descript-txt/menu.sidebar.alignment.md	BUILD	menu.sidebar.alignment,位置	完全互換に向けて再評価が必要。旧判断: メニューの絵が無い（⛔）
+descript/shell/descript-txt/menu.sidebar.bitmap.filename.md	BUILD	menu.sidebar.bitmap.filename,ファイル名	完全互換に向けて再評価が必要。旧判断: メニューの絵が無い（⛔）
 descript/shell/descript-txt/name.md	DONE	name,シェル名	Shell.name
 descript/shell/descript-txt/note-1.md	NA	補足	位置情報・メニュー画像の位置・アイコン枠の説明のページ
 descript/shell/descript-txt/readme.charset.md	DONE	readme.charset,文字コード	シェルの readme をこの文字コードで読む（無ければ charset 行か中身から決める）
@@ -609,7 +609,7 @@ list/plugin-event/plugin-event/OnSecondChange.md	DONE	OnSecondChange	secondchang
 list/plugin-event/plugin-event/balloonpathlist.md	DONE	balloonpathlist	読み込みの直後に NOTIFY で送る
 list/plugin-event/plugin-event/bang-raiseplugin-bang-notifyplugin.md	DONE	\![raiseplugin]および\![notifyplugin]に指定された任意名イベント	\![raiseplugin] は GET、\![notifyplugin] は NOTIFY で送る（Sender はゴースト名）
 list/plugin-event/plugin-event/ghostpathlist.md	DONE	ghostpathlist	読み込みの直後に NOTIFY で送る
-list/plugin-event/plugin-event/headlinepathlist.md	NA	headlinepathlist	pono-droid にヘッドライン（ヘッドラインセンサ）は無いので送らない
+list/plugin-event/plugin-event/headlinepathlist.md	DONE	headlinepathlist	headline の置き場とインストール済みの名前を通知。プラグインへの headlinepathlist も対応
 list/plugin-event/plugin-event/index.md	DONE	PLUGIN Event	PLUGIN/2.0 に対応。プラグインは :plugin のプロセスで、filename の yaya.dll・kagari.dll・kawari.dll・satori.dll を pono-droid の YAYA・Kagari・華和梨・里々で動かす（Windows の DLL は動かせない）。要求・答え（Target・Event・EventOption・Reference・Script・ScriptOption）・Sender・\![raiseplugin] / \![notifyplugin] に対応
 list/plugin-event/plugin-event/installedballoonname.md	DONE	installedballoonname	読み込みの直後に NOTIFY で送る
 list/plugin-event/plugin-event/installedghostname.md	DONE	installedghostname	読み込みの直後に NOTIFY で送る（ゴースト名・\0 名・\1 名）
@@ -726,18 +726,18 @@ list/propertysystem/property-system/ghostlist.count.md	DONE	ghostlist.count	実�
 list/propertysystem/property-system/ghostlist.current.md	DONE	ghostlist.current.汎用プロパティ名	自分を返す
 list/propertysystem/property-system/ghostlist.index-ID.md	DONE	ghostlist.index(ID).汎用プロパティ名	入っているゴーストの並びから選ぶ
 list/propertysystem/property-system/ghostlist.md	DONE	ghostlist(ゴースト名/本体側名/パス).汎用プロパティ名	名前・本体側名・パスで選ぶ
-list/propertysystem/property-system/headlinelist.count.md	IMPOSSIBLE	headlinelist.count	ヘッドラインセンサーは作らない（決めたこと）
-list/propertysystem/property-system/headlinelist.index-ID.md	IMPOSSIBLE	headlinelist.index(ID).汎用プロパティ名	ヘッドラインセンサーは作らない（決めたこと）
-list/propertysystem/property-system/headlinelist.md	IMPOSSIBLE	headlinelist(ヘッドライン名/パス).汎用プロパティ名	ヘッドラインセンサーは作らない（決めたこと）
+list/propertysystem/property-system/headlinelist.count.md	DONE	headlinelist.count	HeadlineRepository / UsageHistory。名前・フォルダ名・パス・index による参照。HeadlineControllerTest
+list/propertysystem/property-system/headlinelist.index-ID.md	DONE	headlinelist.index(ID).汎用プロパティ名	HeadlineRepository / UsageHistory。名前・フォルダ名・パス・index による参照。HeadlineControllerTest
+list/propertysystem/property-system/headlinelist.md	DONE	headlinelist(ヘッドライン名/パス).汎用プロパティ名	HeadlineRepository / UsageHistory。名前・フォルダ名・パス・index による参照。HeadlineControllerTest
 list/propertysystem/property-system/history.balloon.count.md	DONE	history.balloon.count	実装済み
 list/propertysystem/property-system/history.balloon.index-ID.md	DONE	history.balloon.index(ID).汎用プロパティ名	使った順のバルーン
 list/propertysystem/property-system/history.balloon.md	DONE	history.balloon(バルーン名/パス).汎用プロパティ名	使った順のバルーンを名前で選ぶ
 list/propertysystem/property-system/history.ghost.count.md	DONE	history.ghost.count	実装済み
 list/propertysystem/property-system/history.ghost.index-ID.md	DONE	history.ghost.index(ID).汎用プロパティ名	使った順のゴースト
 list/propertysystem/property-system/history.ghost.md	DONE	history.ghost(ゴースト名/パス).汎用プロパティ名	使った順のゴーストを名前で選ぶ
-list/propertysystem/property-system/history.headline.count.md	IMPOSSIBLE	history.headline.count	ヘッドラインセンサーは作らない（決めたこと）
-list/propertysystem/property-system/history.headline.index-ID.md	IMPOSSIBLE	history.headline.index(ID).汎用プロパティ名	ヘッドラインセンサーは作らない（決めたこと）
-list/propertysystem/property-system/history.headline.md	IMPOSSIBLE	history.headline(ヘッドライン名/パス).汎用プロパティ名	ヘッドラインセンサーは作らない（決めたこと）
+list/propertysystem/property-system/history.headline.count.md	DONE	history.headline.count	HeadlineRepository / UsageHistory。名前・フォルダ名・パス・index による参照。HeadlineControllerTest
+list/propertysystem/property-system/history.headline.index-ID.md	DONE	history.headline.index(ID).汎用プロパティ名	HeadlineRepository / UsageHistory。名前・フォルダ名・パス・index による参照。HeadlineControllerTest
+list/propertysystem/property-system/history.headline.md	DONE	history.headline(ヘッドライン名/パス).汎用プロパティ名	HeadlineRepository / UsageHistory。名前・フォルダ名・パス・index による参照。HeadlineControllerTest
 list/propertysystem/property-system/history.plugin-ID.md	DONE	history.plugin(プラグイン名/パス/ID).汎用プロパティ名	メニューから使ったプラグイン（新しいものから。動いているものだけ）
 list/propertysystem/property-system/history.plugin.count.md	DONE	history.plugin.count	メニューから使ったプラグイン（新しいものから。動いているものだけ）
 list/propertysystem/property-system/history.plugin.index-ID.md	DONE	history.plugin.index(ID).汎用プロパティ名	メニューから使ったプラグイン（新しいものから。動いているものだけ）
@@ -934,19 +934,19 @@ list/sakura-script/environment-variable/pct-selfname2.md	DONE	%selfname2	実装�
 list/sakura-script/environment-variable/pct-star.md	DONE	%\*	%* を \![*] と同じ印にする
 list/sakura-script/environment-variable/pct-username.md	DONE	%username	実装済み
 list/sakura-script/environment-variable/pct-wronghour.md	DONE	%wronghour	実装済み
-list/sakura-script/event/6.md	IMPOSSIBLE	\6	アプリは端末の時計を合わせられない（ずれを測るだけ）
+list/sakura-script/event/6.md	BUILD	\6	完全互換に向けて再評価が必要。旧判断: アプリは端末の時計を合わせられない（ずれを測るだけ）
 list/sakura-script/event/7.md	DONE	\7	実装済み
 list/sakura-script/event/_-plus.md	DONE	\_+	実装済み
 list/sakura-script/event/a.md	DONE	\a	実装済み
 list/sakura-script/event/bang-biff.md	DONE	\![biff(,アカウント名)]	実装済み
 list/sakura-script/event/bang-call-ghost-option-eq-raise-event.md	DONE	\![call,ghost,ゴースト名(,--option=raise-event)]	実装済み
 list/sakura-script/event/bang-change-balloon.md	DONE	\![change,balloon,バルーン名]	lastinstalled を読まない（random はある）
-list/sakura-script/event/bang-change-calendarskin.md	IMPOSSIBLE	\![change,calendarskin,カレンダースキン名]	カレンダーの画面が無い（決めたこと）
+list/sakura-script/event/bang-change-calendarskin.md	BUILD	\![change,calendarskin,カレンダースキン名]	完全互換に向けて再評価が必要。旧判断: カレンダーの画面が無い（決めたこと）
 list/sakura-script/event/bang-change-ghost-option-eq-raise-event.md	DONE	\![change,ghost,ゴースト名(,--option=raise-event)]	実装済み
 list/sakura-script/event/bang-change-shell-option-eq-raise-event.md	DONE	\![change,shell,シェル名(,--option=raise-event)]	--option=raise-event（OnShellChanging）と lastinstalled を読まない
 list/sakura-script/event/bang-embed-r0-r1-r2.md	DONE	\![embed,イベント名,r0,r1,r2...]	実装済み
-list/sakura-script/event/bang-execute-calendarplugin.md	IMPOSSIBLE	\![execute,calendarplugin,カレンダープラグイン名]	カレンダープラグイン（スケジュールセンサ）は DLL のプラグイン
-list/sakura-script/event/bang-execute-headline.md	IMPOSSIBLE	\![execute,headline,ヘッドライン名]	ヘッドラインセンサーは作らない（決めたこと）
+list/sakura-script/event/bang-execute-calendarplugin.md	BUILD	\![execute,calendarplugin,カレンダープラグイン名]	完全互換に向けて再評価が必要。旧判断: カレンダープラグイン（スケジュールセンサ）は DLL のプラグイン
+list/sakura-script/event/bang-execute-headline.md	PARTIAL	\![execute,headline,ヘッドライン名]	名前・random・lastinstalled で手動実行。RSS / Atom は実装済み、Windows DLL は Android 未接続
 list/sakura-script/event/bang-executesntp.md	DONE	\![executesntp]	実装済み
 list/sakura-script/event/bang-notify-r0-r1-r2.md	DONE	\![notify,イベント名,r0,r1,r2...]	実装済み
 list/sakura-script/event/bang-notifyother-r0-r1-r2.md	DONE	\![notifyother,ゴースト名,イベント名,r0,r1,r2...]	実装済み
@@ -954,8 +954,8 @@ list/sakura-script/event/bang-notifyplugin-ID-r0-r1-r2.md	DONE	\![notifyplugin,�
 list/sakura-script/event/bang-raise-r0-r1-r2.md	DONE	\![raise,イベント名,r0,r1,r2...]	実装済み
 list/sakura-script/event/bang-raiseother-r0-r1-r2.md	DONE	\![raiseother,ゴースト名,イベント名,r0,r1,r2...]	実装済み
 list/sakura-script/event/bang-raiseplugin-ID-r0-r1-r2.md	DONE	\![raiseplugin,プラグインのIDまたは名前,イベント名,r0,r1,r2...]	プラグインに送る（名前・ID・パス・random・lastinstalled で選ぶ）。見つからなければ OnRaisePluginFailure（notfound）、GET の答えが 200 以外ならその状態コード
-list/sakura-script/event/bang-restore-wallpaper.md	IMPOSSIBLE	\![restore,wallpaper]	Android 13 からアプリが今の壁紙を読めないので戻せない
-list/sakura-script/event/bang-save-wallpaper.md	IMPOSSIBLE	\![save,wallpaper]	同上
+list/sakura-script/event/bang-restore-wallpaper.md	BUILD	\![restore,wallpaper]	完全互換に向けて再評価が必要。旧判断: Android 13 からアプリが今の壁紙を読めないので戻せない
+list/sakura-script/event/bang-save-wallpaper.md	BUILD	\![save,wallpaper]	完全互換に向けて再評価が必要。旧判断: 同上
 list/sakura-script/event/bang-set-otherghosttalk-true-false-before-after.md	DONE	\![set,otherghosttalk,true|false|before|after]	実装済み
 list/sakura-script/event/bang-set-othersurfacechange-true-false.md	DONE	\![set,othersurfacechange,trueかfalse]	実装済み
 list/sakura-script/event/bang-set-tasktrayicon-.ico-duration-eq-runcount-eq.md	DONE	\![set,tasktrayicon,ファイル名.ico,テキスト(,--duration=待機時間(,--runcount=繰り返し回数))]	常駐の通知に文を出し、ファイル（.ico など）があれば通知のアイコンにする
@@ -973,7 +973,7 @@ list/sakura-script/event/bang-timerraiseplugin-ID-r0-r1-r2.md	DONE	\![timerraise
 list/sakura-script/event/bang-update-platform.md	DONE	\![update,platform]	実装済み
 list/sakura-script/event/bang-update.md	DONE	\![update,更新対象(,オプション,オプション...)]	ghost+shell+balloon と all、オプションを読む。結果は OnUpdateResult
 list/sakura-script/event/bang-updatebymyself.md	DONE	\![updatebymyself(,オプション,オプション...)]	実装済み
-list/sakura-script/event/bang-updateother.md	DONE	\![updateother,更新対象/オプション群,...]	--shell / --balloon と --option。--plugin・--headline・--language は pono-droid に無い
+list/sakura-script/event/bang-updateother.md	PARTIAL	\![updateother,更新対象/オプション群,...]	--shell / --balloon / --plugin / --headline と --option。--language は未対応。HeadlineControllerTest
 list/sakura-script/event/bang-vanishbymyself.md	DONE	\![vanishbymyself]	実装済み
 list/sakura-script/event/e.md	DONE	\e	実装済み
 list/sakura-script/event/entry.md	DONE	\-	実装済み
@@ -1020,7 +1020,7 @@ list/sakura-script/misc/bang-execute-createupdatedata.md	DONE	\![execute,createu
 list/sakura-script/misc/bang-execute-dropdefault-file-.-bang-execute-dropdefault-url-URL.md	DONE	\![execute,dropdefault,file,ファイルパス,ファイルパス...] \![execute,dropdefault,url,URL,種別]	実装済み
 list/sakura-script/misc/bang-execute-dumpballoon-ID-prefix-ID.md	DONE	\![execute,dumpballoon,ディレクトリ,スコープID,prefix,イベントID]	--hide=balloonmarker,balloonnum は、その印（SSTP の印も）を描かずに描き直してから書き出す
 list/sakura-script/misc/bang-execute-dumpsurface-ID-prefix-ID-ID.md	DONE	\![execute,dumpsurface,ディレクトリ,スコープID,サーフェスリスト,prefix,イベントID,ゼロ位置切り出し,アニメーションID]	実装済み
-list/sakura-script/misc/bang-execute-emptyrecyclebin.md	IMPOSSIBLE	\![execute,emptyrecyclebin]	Android にごみ箱が無い（決めたこと）
+list/sakura-script/misc/bang-execute-emptyrecyclebin.md	BUILD	\![execute,emptyrecyclebin]	完全互換に向けて再評価が必要。旧判断: Android にごみ箱が無い（決めたこと）
 list/sakura-script/misc/bang-execute-extractarchive.md	DONE	\![execute,extractarchive,ファイル名,ディレクトリ名,オプション...]	--password（AES の ZIP。zip4j）も
 list/sakura-script/misc/bang-execute-filewatch.md	DONE	\![execute,filewatch,パス,オプション...]	実装済み
 list/sakura-script/misc/bang-execute-http-delete-URL.md	DONE	\![execute,http-delete,URL,オプション,オプション,オプション...]	HttpCommand で扱う
@@ -1049,24 +1049,24 @@ list/sakura-script/misc/bang-leave-collisionmode.md	DONE	\![leave,collisionmode]
 list/sakura-script/misc/bang-leave-inductionmode.md	DONE	\![leave,inductionmode]	解除する
 list/sakura-script/misc/bang-leave-passivemode.md	DONE	\![leave,passivemode]	解除する
 list/sakura-script/misc/bang-leave-selectmode.md	DONE	\![leave,selectmode]	実装済み
-list/sakura-script/misc/bang-load-makoto.md	IMPOSSIBLE	\![load,makoto]	MAKOTO は Windows の DLL
+list/sakura-script/misc/bang-load-makoto.md	BUILD	\![load,makoto]	完全互換に向けて再評価が必要。旧判断: MAKOTO は Windows の DLL
 list/sakura-script/misc/bang-load-shiori.md	DONE	\![load,shiori]	実装済み
 list/sakura-script/misc/bang-reload-aigraph.md	DONE	\![reload,aigraph]	AI グラフは開くたびに SHIORI に聞くので、読み直すものが無い
 list/sakura-script/misc/bang-reload-balloon.md	DONE	\![reload,balloon]	実装済み
 list/sakura-script/misc/bang-reload-descript-2.md	DONE	\![reload,descript,パラメータ]	種類を問わず全部読み直す
 list/sakura-script/misc/bang-reload-descript.md	DONE	\![reload,descript]	実装済み
 list/sakura-script/misc/bang-reload-ghost.md	DONE	\![reload,ghost]	実装済み
-list/sakura-script/misc/bang-reload-makoto.md	IMPOSSIBLE	\![reload,makoto]	同上
+list/sakura-script/misc/bang-reload-makoto.md	BUILD	\![reload,makoto]	完全互換に向けて再評価が必要。旧判断: 同上
 list/sakura-script/misc/bang-reload-shell.md	DONE	\![reload,shell]	実装済み
 list/sakura-script/misc/bang-reload-shiori.md	DONE	\![reload,shiori]	実装済み
 list/sakura-script/misc/bang-reloadsurface.md	DONE	\![reloadsurface]	実装済み
 list/sakura-script/misc/bang-send-websocket-URL-data1-data2.md	DONE	\![send,websocket,URL,data1,data2,...]	実装済み
 list/sakura-script/misc/bang-send-websocket-binary-URL-base64data.md	DONE	\![send,websocket-binary,URL,base64data]	実装済み
 list/sakura-script/misc/bang-set-shioridebugmode-true-false.md	DONE	\![set,shioridebugmode,(true/false)]	実装済み
-list/sakura-script/misc/bang-unload-makoto.md	IMPOSSIBLE	\![unload,makoto]	同上
+list/sakura-script/misc/bang-unload-makoto.md	BUILD	\![unload,makoto]	完全互換に向けて再評価が必要。旧判断: 同上
 list/sakura-script/misc/bang-unload-shiori.md	DONE	\![unload,shiori]	実装済み
 list/sakura-script/misc/index.md	NA	未分類コマンド	目次のページ
-list/sakura-script/misc/m-umsg-wparam-lparam.md	IMPOSSIBLE	\m[umsg,wparam,lparam]	Windows のメッセージ
+list/sakura-script/misc/m-umsg-wparam-lparam.md	BUILD	\m[umsg,wparam,lparam]	完全互換に向けて再評価が必要。旧判断: Windows のメッセージ
 list/sakura-script/misc/notes_executehttp.md	DONE	http/rss/ical/websocket オプション	--log=（送ったものと返ってきたものを ghost/master/var/ のファイルに足す）など全部。--insecure だけは安全のため使わない（証明書をいつも確かめる。決めたこと）
 list/sakura-script/misc/notes_executeical.md	DONE	iCal絞り込みオプション \[2.8.90\]	ICal で期間・展開・件数を決める
 list/sakura-script/misc/notes_executerss.md	DONE	RSS絞り込みオプション \[2.8.92\]	--from / --to / --limit を Feed.filter で絞る
@@ -1087,9 +1087,9 @@ list/sakura-script/open/bang-open-archiveviewer.md	DONE	\![open,archiveviewer,(�
 list/sakura-script/open/bang-open-backlogviewer.md	DONE	\![open,backlogviewer]	実装済み
 list/sakura-script/open/bang-open-balloonexplorer.md	DONE	\![open,balloonexplorer]	実装済み
 list/sakura-script/open/bang-open-browser.md	DONE	\![open,browser,パラメータ]	実装済み
-list/sakura-script/open/bang-open-calendar.md	IMPOSSIBLE	\![open,calendar]	カレンダーの画面は作らない（決めたこと）
-list/sakura-script/open/bang-open-calendarpluginexplorer.md	IMPOSSIBLE	\![open,calendarpluginexplorer]	カレンダープラグインは DLL
-list/sakura-script/open/bang-open-calendarskinexplorer.md	IMPOSSIBLE	\![open,calendarskinexplorer]	カレンダーの画面が無い（決めたこと）
+list/sakura-script/open/bang-open-calendar.md	PARTIAL	\![open,calendar]	Android の予定一覧を開く。日付選択・繰り返し予定・購読・許可済み端末予定に対応。SSP のスキン・編集 UI は未対応
+list/sakura-script/open/bang-open-calendarpluginexplorer.md	BUILD	\![open,calendarpluginexplorer]	完全互換に向けて再評価が必要。旧判断: カレンダープラグインは DLL
+list/sakura-script/open/bang-open-calendarskinexplorer.md	BUILD	\![open,calendarskinexplorer]	完全互換に向けて再評価が必要。旧判断: カレンダーの画面が無い（決めたこと）
 list/sakura-script/open/bang-open-communicatebox.md	DONE	\![open,communicatebox]	--text= か位置引数の文字。InputBox オプションも読む
 list/sakura-script/open/bang-open-configurationdialog-ID.md	DONE	\![open,configurationdialog,ダイアログID]	アプリの設定を開く（ダイアログ ID は使わない）
 list/sakura-script/open/bang-open-dateinput-ID.md	DONE	\![open,dateinput,ID,表示時間,年,月,日,オプション]	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
@@ -1104,12 +1104,12 @@ list/sakura-script/open/bang-open-errorlog.md	DONE	\![open,errorlog]	実装済�
 list/sakura-script/open/bang-open-explorer.md	DONE	\![open,explorer,ファイル]	ファイラーが無いのでほかのアプリで開く。種類,名前 でフォルダを開く形は扱えない
 list/sakura-script/open/bang-open-file.md	DONE	\![open,file,ファイル名]	ゴーストのフォルダの中のファイルをほかのアプリで開く。Windows の環境変数や exe の探索は無い
 list/sakura-script/open/bang-open-ghostexplorer.md	DONE	\![open,ghostexplorer]	実装済み
-list/sakura-script/open/bang-open-headlinesensorexplorer.md	IMPOSSIBLE	\![open,headlinesensorexplorer]	ヘッドラインセンサーは作らない（決めたこと）
+list/sakura-script/open/bang-open-headlinesensorexplorer.md	PARTIAL	\![open,headlinesensorexplorer]	バルーン内の一覧で実行・RSS 追加・readme・削除。SSP のエクスプローラ UI 全体は未移植
 list/sakura-script/open/bang-open-help-ID.md	DONE	\![open,help,ダイアログID]	pono-droid の説明を開く
 list/sakura-script/open/bang-open-inputbox-ID.md	DONE	\![open,inputbox,ID,表示時間,テキスト,オプション,...]	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
 list/sakura-script/open/bang-open-ipinput-ID-IP1-IP2-IP3-IP4.md	DONE	\![open,ipinput,ID,表示時間,IP1桁目,IP2桁目,IP3桁目,IP4桁目,オプション]	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
 list/sakura-script/open/bang-open-mailer.md	DONE	\![open,mailer,パラメータ]	実装済み
-list/sakura-script/open/bang-open-messenger.md	IMPOSSIBLE	\![open,messenger]	SSP のメッセンジャーが無い（決めたこと）
+list/sakura-script/open/bang-open-messenger.md	BUILD	\![open,messenger]	完全互換に向けて再評価が必要。旧判断: SSP のメッセンジャーが無い（決めたこと）
 list/sakura-script/open/bang-open-passwordinput-ID.md	DONE	\![open,passwordinput,ID,表示時間,テキスト,オプション]	InputBox オプション（--timeout= / --text= が位置引数の代わり、--option=noclose・noclear、--placeholder=、--limit=、--balloon=、--reference=）。時間切れで OnUserInputCancel に答えが無ければ timeout の OnUserInput
 list/sakura-script/open/bang-open-pictureviewer.md	DONE	\![open,pictureviewer,(ファイル名)]	ビューアは持たないので、ファイルを指定されたら見られるほかのアプリで開く（ファイルが無ければ何もしない）
 list/sakura-script/open/bang-open-pluginexplorer.md	DONE	\![open,pluginexplorer]	アプリの一覧（プラグインの欄で、説明・作者のページ・削除）を開く
@@ -1141,7 +1141,7 @@ list/sakura-script/scope/pID.md	DONE	\pID番号	1桁の \p0〜\p9 を読む
 list/sakura-script/sound/8.md	DONE	\8[ファイル名]	実装済み
 list/sakura-script/sound/_V-2.md	DONE	\_V	実装済み
 list/sakura-script/sound/_v.md	DONE	\_v[ファイル名]	実装済み
-list/sakura-script/sound/bang-sound-cdplay-No.md	IMPOSSIBLE	\![sound,cdplay,トラックNo.]	音楽 CD は Android に無い
+list/sakura-script/sound/bang-sound-cdplay-No.md	BUILD	\![sound,cdplay,トラックNo.]	完全互換に向けて再評価が必要。旧判断: 音楽 CD は Android に無い
 list/sakura-script/sound/bang-sound-load.md	DONE	\!\...\]	--spectrum 系を読む。--sound-only は、pono-droid が動画もいつも音だけ鳴らすので、そのとおりになる
 list/sakura-script/sound/bang-sound-loop.md	DONE	\![sound,loop,ファイル名]	実装済み
 list/sakura-script/sound/bang-sound-option.md	DONE	\!\...\]	--spectrum 系を読む。--sound-only は、pono-droid が動画もいつも音だけ鳴らすので、そのとおりになる
@@ -1165,11 +1165,11 @@ list/sakura-script/surface/bang-anim-resume-ID.md	DONE	\![anim,resume,ID]	実装
 list/sakura-script/surface/bang-anim-stop-ID.md	DONE	\![anim,stop,ID]	実装済み
 list/sakura-script/surface/bang-bind-noevent.md	DONE	\![bind-noevent,カテゴリ名,パーツ名,数値]	\![bind] と同じに扱い、OnDressupChanged と OnNotifyDressupInfo を送ってしまう
 list/sakura-script/surface/bang-bind.md	DONE	\![bind,カテゴリ名,パーツ名,数値]	パーツ名を空にしたカテゴリごとの着脱が無い（category と part が両方合うものだけ）
-list/sakura-script/surface/bang-effect.md	IMPOSSIBLE	\![effect,プラグイン名,速度倍率,パラメータ]	DLL のプラグイン
-list/sakura-script/surface/bang-effect2-ID.md	IMPOSSIBLE	\![effect2,追加サーフェスID,プラグイン名,速度倍率,パラメータ]	DLL のプラグイン
+list/sakura-script/surface/bang-effect.md	BUILD	\![effect,プラグイン名,速度倍率,パラメータ]	完全互換に向けて再評価が必要。旧判断: DLL のプラグイン
+list/sakura-script/surface/bang-effect2-ID.md	BUILD	\![effect2,追加サーフェスID,プラグイン名,速度倍率,パラメータ]	完全互換に向けて再評価が必要。旧判断: DLL のプラグイン
 list/sakura-script/surface/bang-execute-resetwindowpos.md	DONE	\![execute,resetwindowpos]	実装済み
-list/sakura-script/surface/bang-filter-2.md	IMPOSSIBLE	\![filter]	DLL のプラグイン（解除するものも無い）
-list/sakura-script/surface/bang-filter.md	IMPOSSIBLE	\![filter,プラグイン名,起動時間,パラメータ]	DLL のプラグイン
+list/sakura-script/surface/bang-filter-2.md	BUILD	\![filter]	完全互換に向けて再評価が必要。旧判断: DLL のプラグイン（解除するものも無い）
+list/sakura-script/surface/bang-filter.md	BUILD	\![filter,プラグイン名,起動時間,パラメータ]	完全互換に向けて再評価が必要。旧判断: DLL のプラグイン
 list/sakura-script/surface/bang-lock-repaint.md	DONE	\![lock,repaint]	実装済み
 list/sakura-script/surface/bang-move.md	DONE	\![move]	実装済み
 list/sakura-script/surface/bang-moveasync.md	DONE	\![moveasync]	\![moveasync,cancel] で、動いている途中のキャラクターをその場で止める
@@ -1432,17 +1432,17 @@ list/shiori-event/biff/OnBIFFFailure.md	DONE	OnBIFFFailure	実装済み
 list/shiori-event/biff/index.md	NA	メールチェックイベント	目次のページ
 list/shiori-event/boot-close-change/OnBalloonChange.md	DONE	OnBalloonChange	実装済み
 list/shiori-event/boot-close-change/OnBasewareUpdated.md	DONE	OnBasewareUpdated	前に起動したときと pono-droid の版が違えば OnBoot の前に送り、答えが無ければ OnBoot
-list/shiori-event/boot-close-change/OnBasewareUpdating.md	IMPOSSIBLE	OnBasewareUpdating	アプリの更新は Play ストアが行い、置き換える前にアプリへ知らせが来ない
+list/shiori-event/boot-close-change/OnBasewareUpdating.md	BUILD	OnBasewareUpdating	完全互換に向けて再評価が必要。旧判断: アプリの更新は Play ストアが行い、置き換える前にアプリへ知らせが来ない
 list/shiori-event/boot-close-change/OnBoot.md	DONE	OnBoot	実装済み
-list/shiori-event/boot-close-change/OnCacheRestore.md	IMPOSSIBLE	OnCacheRestore	ゴーストキャッシュが無い（決めたこと）
-list/shiori-event/boot-close-change/OnCacheSuspend.md	IMPOSSIBLE	OnCacheSuspend	ゴーストキャッシュが無い（決めたこと）
+list/shiori-event/boot-close-change/OnCacheRestore.md	BUILD	OnCacheRestore	完全互換に向けて再評価が必要。旧判断: ゴーストキャッシュが無い（決めたこと）
+list/shiori-event/boot-close-change/OnCacheSuspend.md	BUILD	OnCacheSuspend	完全互換に向けて再評価が必要。旧判断: ゴーストキャッシュが無い（決めたこと）
 list/shiori-event/boot-close-change/OnClose.md	DONE	OnClose	実装済み
 list/shiori-event/boot-close-change/OnCloseAll.md	DONE	OnCloseAll	実装済み
 list/shiori-event/boot-close-change/OnDestroy.md	DONE	OnDestroy	SHIORI を外す直前に NOTIFY（読み込み直しは reload）
 list/shiori-event/boot-close-change/OnDressupChanged.md	DONE	OnDressupChanged	実装済み
 list/shiori-event/boot-close-change/OnFirstBoot.md	DONE	OnFirstBoot	実装済み
-list/shiori-event/boot-close-change/OnFullScreenAppMinimize.md	IMPOSSIBLE	OnFullScreenAppMinimize	ほかのアプリが全画面になったことをオーバーレイから確かに知る方法が無い（決めたこと）
-list/shiori-event/boot-close-change/OnFullScreenAppRestore.md	IMPOSSIBLE	OnFullScreenAppRestore	ほかのアプリが全画面になったことをオーバーレイから確かに知る方法が無い（決めたこと）
+list/shiori-event/boot-close-change/OnFullScreenAppMinimize.md	BUILD	OnFullScreenAppMinimize	完全互換に向けて再評価が必要。旧判断: ほかのアプリが全画面になったことをオーバーレイから確かに知る方法が無い（決めたこと）
+list/shiori-event/boot-close-change/OnFullScreenAppRestore.md	BUILD	OnFullScreenAppRestore	完全互換に向けて再評価が必要。旧判断: ほかのアプリが全画面になったことをオーバーレイから確かに知る方法が無い（決めたこと）
 list/shiori-event/boot-close-change/OnGhostCallComplete.md	DONE	OnGhostCallComplete	実装済み
 list/shiori-event/boot-close-change/OnGhostCalled.md	DONE	OnGhostCalled	実装済み
 list/shiori-event/boot-close-change/OnGhostCalling.md	DONE	OnGhostCalling	実装済み
@@ -1456,18 +1456,18 @@ list/shiori-event/boot-close-change/OnShellChanged.md	DONE	OnShellChanged	実装
 list/shiori-event/boot-close-change/OnShellChanging.md	DONE	OnShellChanging	実装済み
 list/shiori-event/boot-close-change/OnSysResume.md	DONE	OnSysResume	実装済み
 list/shiori-event/boot-close-change/OnSysSuspend.md	DONE	OnSysSuspend	実装済み
-list/shiori-event/boot-close-change/OnVirtualDesktopChanged.md	IMPOSSIBLE	OnVirtualDesktopChanged	Windows の仮想デスクトップ
+list/shiori-event/boot-close-change/OnVirtualDesktopChanged.md	BUILD	OnVirtualDesktopChanged	完全互換に向けて再評価が必要。旧判断: Windows の仮想デスクトップ
 list/shiori-event/boot-close-change/OnWindowStateMinimize.md	DONE	OnWindowStateMinimize	実装済み
 list/shiori-event/boot-close-change/OnWindowStateRestore.md	DONE	OnWindowStateRestore	実装済み
 list/shiori-event/boot-close-change/index.md	NA	起動・終了・切り替えイベント	目次のページ
 list/shiori-event/calendar/OnSchedule5MinutesToGo.md	DONE	OnSchedule5MinutesToGo	決まった値で送る
-list/shiori-event/calendar/OnScheduleRead.md	IMPOSSIBLE	OnScheduleRead	カレンダーのアイコンもカーソルも無い（決めたこと）
+list/shiori-event/calendar/OnScheduleRead.md	PARTIAL	OnScheduleRead	予定のタップ・長押しで Reference0～3 を送信。カーソル静止・SSP カレンダースキンは未対応。JVM テストあり
 list/shiori-event/calendar/OnScheduleTodayNotify.md	DONE	OnScheduleTodayNotify	決まった値で送る
-list/shiori-event/calendar/OnSchedulepostBegin.md	IMPOSSIBLE	OnSchedulepostBegin	スケジュールセンサー・ポストはプラグイン（決めたこと）
-list/shiori-event/calendar/OnSchedulepostComplete.md	IMPOSSIBLE	OnSchedulepostComplete	スケジュールセンサー・ポストはプラグイン（決めたこと）
-list/shiori-event/calendar/OnSchedulesenseBegin.md	IMPOSSIBLE	OnSchedulesenseBegin	スケジュールセンサー・ポストはプラグイン（決めたこと）
-list/shiori-event/calendar/OnSchedulesenseComplete.md	IMPOSSIBLE	OnSchedulesenseComplete	スケジュールセンサー・ポストはプラグイン（決めたこと）
-list/shiori-event/calendar/OnSchedulesenseFailure.md	IMPOSSIBLE	OnSchedulesenseFailure	スケジュールセンサー・ポストはプラグイン（決めたこと）
+list/shiori-event/calendar/OnSchedulepostBegin.md	BUILD	OnSchedulepostBegin	完全互換に向けて再評価が必要。旧判断: スケジュールセンサー・ポストはプラグイン（決めたこと）
+list/shiori-event/calendar/OnSchedulepostComplete.md	BUILD	OnSchedulepostComplete	完全互換に向けて再評価が必要。旧判断: スケジュールセンサー・ポストはプラグイン（決めたこと）
+list/shiori-event/calendar/OnSchedulesenseBegin.md	BUILD	OnSchedulesenseBegin	完全互換に向けて再評価が必要。旧判断: スケジュールセンサー・ポストはプラグイン（決めたこと）
+list/shiori-event/calendar/OnSchedulesenseComplete.md	BUILD	OnSchedulesenseComplete	完全互換に向けて再評価が必要。旧判断: スケジュールセンサー・ポストはプラグイン（決めたこと）
+list/shiori-event/calendar/OnSchedulesenseFailure.md	BUILD	OnSchedulesenseFailure	完全互換に向けて再評価が必要。旧判断: スケジュールセンサー・ポストはプラグイン（決めたこと）
 list/shiori-event/calendar/caption_schedulesensetiming.md	NA	スケジュールセンサの更新タイミングとイベント	スケジュールセンサー（プラグイン）の説明
 list/shiori-event/calendar/caption_scheduletype.md	NA	スケジュールタイプ	値の表。ずれは OnSchedule5MinutesToGo の行に書いた
 list/shiori-event/calendar/index.md	NA	カレンダーイベント	目次のページ
@@ -1482,7 +1482,7 @@ list/shiori-event/choice/OnChoiceSelect.md	DONE	OnChoiceSelect	実装済み
 list/shiori-event/choice/OnChoiceSelectEx.md	DONE	OnChoiceSelectEx	実装済み
 list/shiori-event/choice/OnChoiceTimeout.md	DONE	OnChoiceTimeout	実装済み
 list/shiori-event/choice/index.md	NA	選択肢イベント	目次のページ
-list/shiori-event/dialogbox/OnConfigurationDialogHelp.md	IMPOSSIBLE	OnConfigurationDialogHelp	SSP の設定画面の項目ごとのヘルプ。pono-droid の設定画面には同じ仕組みが無い（決めたこと）
+list/shiori-event/dialogbox/OnConfigurationDialogHelp.md	BUILD	OnConfigurationDialogHelp	完全互換に向けて再評価が必要。旧判断: SSP の設定画面の項目ごとのヘルプ。pono-droid の設定画面には同じ仕組みが無い（決めたこと）
 list/shiori-event/dialogbox/OnGhostTermsAccept.md	DONE	OnGhostTermsAccept	実装済み
 list/shiori-event/dialogbox/OnGhostTermsDecline.md	DONE	OnGhostTermsDecline	実装済み
 list/shiori-event/dialogbox/OnSystemDialog.md	DONE	OnSystemDialog	実装済み
@@ -1494,41 +1494,41 @@ list/shiori-event/event-send-failure/OnRaiseOtherFailure.md	DONE	OnRaiseOtherFai
 list/shiori-event/event-send-failure/OnRaisePluginFailure.md	DONE	OnRaisePluginFailure	OnRaisePluginFailure（notfound・状態コード）
 list/shiori-event/event-send-failure/index.md	NA	イベント送信失敗イベント	目次のページ
 list/shiori-event/file-drop/OnArchiveViewerOpen.md	DONE	OnArchiveViewerOpen	答えの無い zip などを書庫を開けるアプリで開いて送る（\![execute,dropdefault,file] でも）
-list/shiori-event/file-drop/OnDirectoryDrop.md	IMPOSSIBLE	OnDirectoryDrop	Android の共有ではフォルダーを渡せない
+list/shiori-event/file-drop/OnDirectoryDrop.md	BUILD	OnDirectoryDrop	完全互換に向けて再評価が必要。旧判断: Android の共有ではフォルダーを渡せない
 list/shiori-event/file-drop/OnFileDrop.md	DONE	OnFileDrop	OnFileDrop2 と OnFileDropEx に答えが無ければ、1ファイルずつ送る
 list/shiori-event/file-drop/OnFileDrop2.md	DONE	OnFileDrop2	実装済み
 list/shiori-event/file-drop/OnFileDropEx.md	DONE	OnFileDropEx	実装済み
 list/shiori-event/file-drop/OnFileDropped.md	DONE	OnFileDropped	OnFileDrop の後に1ファイルずつ NOTIFY
-list/shiori-event/file-drop/OnFileDropping.md	IMPOSSIBLE	OnFileDropping	落とす前のドラッグが無い。共有で渡すだけ（決めたこと）
+list/shiori-event/file-drop/OnFileDropping.md	BUILD	OnFileDropping	完全互換に向けて再評価が必要。旧判断: 落とす前のドラッグが無い。共有で渡すだけ（決めたこと）
 list/shiori-event/file-drop/OnMediaPlayerOpen.md	DONE	OnMediaPlayerOpen	実装済み
 list/shiori-event/file-drop/OnNarCreated.md	DONE	OnNarCreated	実装済み
 list/shiori-event/file-drop/OnNarCreating.md	DONE	OnNarCreating	実装済み
-list/shiori-event/file-drop/OnOtherObjectDropped.md	IMPOSSIBLE	OnOtherObjectDropped	Windows の「PC」などファイルでないものは Android に無い
-list/shiori-event/file-drop/OnOtherObjectDropping.md	IMPOSSIBLE	OnOtherObjectDropping	Windows の「PC」などファイルでないものは Android に無い
+list/shiori-event/file-drop/OnOtherObjectDropped.md	BUILD	OnOtherObjectDropped	完全互換に向けて再評価が必要。旧判断: Windows の「PC」などファイルでないものは Android に無い
+list/shiori-event/file-drop/OnOtherObjectDropping.md	BUILD	OnOtherObjectDropping	完全互換に向けて再評価が必要。旧判断: Windows の「PC」などファイルでないものは Android に無い
 list/shiori-event/file-drop/OnPictureViewerOpen.md	DONE	OnPictureViewerOpen	実装済み
 list/shiori-event/file-drop/OnUpdatedataCreated.md	DONE	OnUpdatedataCreated	実装済み
 list/shiori-event/file-drop/OnUpdatedataCreating.md	DONE	OnUpdatedataCreating	実装済み
-list/shiori-event/file-drop/OnWallpaperChange.md	IMPOSSIBLE	OnWallpaperChange	共有した画像は見るアプリで開き、壁紙にはしない（SSP も 2.8.51 から画像は開く）
+list/shiori-event/file-drop/OnWallpaperChange.md	BUILD	OnWallpaperChange	完全互換に向けて再評価が必要。旧判断: 共有した画像は見るアプリで開き、壁紙にはしない（SSP も 2.8.51 から画像は開く）
 list/shiori-event/file-drop/index.md	NA	ファイルドロップイベント	目次のページ
-list/shiori-event/gamepad/OnGamepadAxisMove.md	IMPOSSIBLE	OnGamepadAxisMove	オーバーレイはフォーカスを取らないので、ゲームパッドのボタンや軸を受けられない（決めたこと）
-list/shiori-event/gamepad/OnGamepadButtonDown.md	IMPOSSIBLE	OnGamepadButtonDown	オーバーレイはフォーカスを取らないので、ゲームパッドのボタンや軸を受けられない（決めたこと）
-list/shiori-event/gamepad/OnGamepadButtonUp.md	IMPOSSIBLE	OnGamepadButtonUp	オーバーレイはフォーカスを取らないので、ゲームパッドのボタンや軸を受けられない（決めたこと）
-list/shiori-event/gamepad/OnGamepadConnected.md	IMPOSSIBLE	OnGamepadConnected	つないだ・外したは InputManager で分かるが、ボタンを受けられないので作らない（決めたこと）
-list/shiori-event/gamepad/OnGamepadDisconnected.md	IMPOSSIBLE	OnGamepadDisconnected	つないだ・外したは InputManager で分かるが、ボタンを受けられないので作らない（決めたこと）
+list/shiori-event/gamepad/OnGamepadAxisMove.md	PARTIAL	OnGamepadAxisMove	InputManager と専用入力画面で接続・ボタン・軸イベント。全起動ゴーストへ配信。実機とバックグラウンド入力は未検証／未対応。GamepadStateTest
+list/shiori-event/gamepad/OnGamepadButtonDown.md	PARTIAL	OnGamepadButtonDown	InputManager と専用入力画面で接続・ボタン・軸イベント。全起動ゴーストへ配信。実機とバックグラウンド入力は未検証／未対応。GamepadStateTest
+list/shiori-event/gamepad/OnGamepadButtonUp.md	PARTIAL	OnGamepadButtonUp	InputManager と専用入力画面で接続・ボタン・軸イベント。全起動ゴーストへ配信。実機とバックグラウンド入力は未検証／未対応。GamepadStateTest
+list/shiori-event/gamepad/OnGamepadConnected.md	PARTIAL	OnGamepadConnected	InputManager と専用入力画面で接続・ボタン・軸イベント。全起動ゴーストへ配信。実機とバックグラウンド入力は未検証／未対応。GamepadStateTest
+list/shiori-event/gamepad/OnGamepadDisconnected.md	PARTIAL	OnGamepadDisconnected	InputManager と専用入力画面で接続・ボタン・軸イベント。全起動ゴーストへ配信。実機とバックグラウンド入力は未検証／未対応。GamepadStateTest
 list/shiori-event/gamepad/caption_gamepad_axis.md	NA	軸名一覧	ゲームパッドの説明（ゲームパッドは作らない）
 list/shiori-event/gamepad/caption_gamepad_button.md	NA	ボタン名一覧	ゲームパッドの説明（ゲームパッドは作らない）
 list/shiori-event/gamepad/caption_gamepad_padindex.md	NA	パッドインデックスについて	ゲームパッドの説明（ゲームパッドは作らない）
 list/shiori-event/gamepad/caption_gamepad_xinput.md	NA	Windows上のSSPにおけるXInput固有の仕様	Windows の XInput の説明
 list/shiori-event/gamepad/index.md	NA	ゲームパッドイベント	目次のページ
-list/shiori-event/headline-rss/OnHeadlinesense.OnFind.md	IMPOSSIBLE	OnHeadlinesense.OnFind	ヘッドラインセンサーは作らない（決めたこと）。RSS は \![execute,rss-get] の OnExecuteRSS* で使える
-list/shiori-event/headline-rss/OnHeadlinesenseBegin.md	IMPOSSIBLE	OnHeadlinesenseBegin	ヘッドラインセンサーは作らない（決めたこと）。RSS は \![execute,rss-get] の OnExecuteRSS* で使える
-list/shiori-event/headline-rss/OnHeadlinesenseComplete.md	IMPOSSIBLE	OnHeadlinesenseComplete	ヘッドラインセンサーは作らない（決めたこと）。RSS は \![execute,rss-get] の OnExecuteRSS* で使える
-list/shiori-event/headline-rss/OnHeadlinesenseFailure.md	IMPOSSIBLE	OnHeadlinesenseFailure	ヘッドラインセンサーは作らない（決めたこと）。RSS は \![execute,rss-get] の OnExecuteRSS* で使える
-list/shiori-event/headline-rss/OnRSSBegin.md	IMPOSSIBLE	OnRSSBegin	ヘッドラインセンサーは作らない（決めたこと）。RSS は \![execute,rss-get] の OnExecuteRSS* で使える
-list/shiori-event/headline-rss/OnRSSComplete.md	IMPOSSIBLE	OnRSSComplete	ヘッドラインセンサーは作らない（決めたこと）。RSS は \![execute,rss-get] の OnExecuteRSS* で使える
-list/shiori-event/headline-rss/OnRSSFailure.md	IMPOSSIBLE	OnRSSFailure	ヘッドラインセンサーは作らない（決めたこと）。RSS は \![execute,rss-get] の OnExecuteRSS* で使える
-list/shiori-event/headline-rss/caption_headlinesensephase.md	NA	ヘッドラインセンスOnFindフェーズ	ヘッドラインセンサーの説明（作らない）
-list/shiori-event/headline-rss/caption_headlinesenseresult.md	NA	ヘッドラインセンス終了理由	ヘッドラインセンサーの説明（作らない）
+list/shiori-event/headline-rss/OnHeadlinesense.OnFind.md	PARTIAL	OnHeadlinesense.OnFind	RSS / Atom の手動取得、差分、失敗、従来 OnHeadlinesense イベントへのフォールバックを実装。DLL は Android 未接続。HeadlineControllerTest
+list/shiori-event/headline-rss/OnHeadlinesenseBegin.md	PARTIAL	OnHeadlinesenseBegin	RSS / Atom の手動取得、差分、失敗、従来 OnHeadlinesense イベントへのフォールバックを実装。DLL は Android 未接続。HeadlineControllerTest
+list/shiori-event/headline-rss/OnHeadlinesenseComplete.md	PARTIAL	OnHeadlinesenseComplete	RSS / Atom の手動取得、差分、失敗、従来 OnHeadlinesense イベントへのフォールバックを実装。DLL は Android 未接続。HeadlineControllerTest
+list/shiori-event/headline-rss/OnHeadlinesenseFailure.md	PARTIAL	OnHeadlinesenseFailure	RSS / Atom の手動取得、差分、失敗、従来 OnHeadlinesense イベントへのフォールバックを実装。DLL は Android 未接続。HeadlineControllerTest
+list/shiori-event/headline-rss/OnRSSBegin.md	PARTIAL	OnRSSBegin	RSS / Atom の手動取得、差分、失敗、従来 OnHeadlinesense イベントへのフォールバックを実装。DLL は Android 未接続。HeadlineControllerTest
+list/shiori-event/headline-rss/OnRSSComplete.md	PARTIAL	OnRSSComplete	RSS / Atom の手動取得、差分、失敗、従来 OnHeadlinesense イベントへのフォールバックを実装。DLL は Android 未接続。HeadlineControllerTest
+list/shiori-event/headline-rss/OnRSSFailure.md	PARTIAL	OnRSSFailure	RSS / Atom の手動取得、差分、失敗、従来 OnHeadlinesense イベントへのフォールバックを実装。DLL は Android 未接続。HeadlineControllerTest
+list/shiori-event/headline-rss/caption_headlinesensephase.md	NA	ヘッドラインセンスOnFindフェーズ	イベントのフェーズと終了理由の説明。RSS と互換イベントで使用
+list/shiori-event/headline-rss/caption_headlinesenseresult.md	NA	ヘッドラインセンス終了理由	イベントのフェーズと終了理由の説明。RSS と互換イベントで使用
 list/shiori-event/headline-rss/index.md	NA	ヘッドライン/RSSセンスイベント	目次のページ
 list/shiori-event/index.md	NA	SHIORI Eventリスト	目次のページ
 list/shiori-event/inputbox/OnCommunicate.md	DONE	OnCommunicate	実装済み
@@ -1549,7 +1549,7 @@ list/shiori-event/install/OnInstallCompleteEx.md	DONE	OnInstallCompleteEx	実装
 list/shiori-event/install/OnInstallFailure.md	DONE	OnInstallFailure	決まった値で送る
 list/shiori-event/install/OnInstallRefuse.md	DONE	OnInstallRefuse	実装済み
 list/shiori-event/install/OnInstallReroute.md	DONE	OnInstallReroute	accept が一緒に起動しているほかのゴーストなら、受けたゴーストに OnInstallReroute を送り、そちらへ入れる（以降のイベントもそちら）
-list/shiori-event/install/caption_install-identifier.md	DONE	インストールの識別子	ghost / shell / balloon / supplement を送る。plugin・headline・calendar は入れられない
+list/shiori-event/install/caption_install-identifier.md	PARTIAL	インストールの識別子	ghost / shell / balloon / supplement / plugin / headline。calendar / language は未対応
 list/shiori-event/install/caption_install-reasonoffailure.md	NA	インストールの失敗理由	値の表。ずれは OnInstallFailure の行に書いた
 list/shiori-event/install/index.md	NA	インストールイベント	目次のページ
 list/shiori-event/mouse/OnMouseClick.md	DONE	OnMouseClick	実装済み
@@ -1601,7 +1601,7 @@ list/shiori-event/network-update/caption_updateorder.md	NA	ネットワーク更
 list/shiori-event/network-update/caption_updatereason.md	DONE	ネットワーク更新理由	メニューと「更新」は manual、スクリプトは script（自動更新の設定は無いので auto は来ない）
 list/shiori-event/network-update/caption_updateresultcomplete.md	DONE	ネットワーク更新成功理由	none / changed を送る
 list/shiori-event/network-update/caption_updateresultfailure.md	DONE	ネットワーク失敗理由	決まった値で送る
-list/shiori-event/network-update/caption_updatetype.md	DONE	ネットワーク更新対象の種別	ghost / shell / balloon を送る。plugin・headline は無い
+list/shiori-event/network-update/caption_updatetype.md	DONE	ネットワーク更新対象の種別	ghost / shell / balloon / plugin / headline を送る
 list/shiori-event/network-update/index.md	NA	ネットワーク更新イベント	目次のページ
 list/shiori-event/notify/OnNotifyBalloonInfo.md	DONE	OnNotifyBalloonInfo	実装済み
 list/shiori-event/notify/OnNotifyDressupInfo.md	DONE	OnNotifyDressupInfo	実装済み
@@ -1614,21 +1614,21 @@ list/shiori-event/notify/OnNotifyShellInfo.md	DONE	OnNotifyShellInfo	実装済�
 list/shiori-event/notify/OnNotifyUserInfo.md	DONE	OnNotifyUserInfo	実装済み
 list/shiori-event/notify/balloonpathlist.md	DONE	balloonpathlist	起動時にバルーンの置き場の絶対パスを NOTIFY
 list/shiori-event/notify/basewareversion.md	DONE	basewareversion	決まった値で送る
-list/shiori-event/notify/calendarpluginpathlist.md	IMPOSSIBLE	calendarpluginpathlist	カレンダーのプラグインは作らない（決めたこと）
-list/shiori-event/notify/calendarskinpathlist.md	IMPOSSIBLE	calendarskinpathlist	カレンダーの画面が無い（決めたこと）
+list/shiori-event/notify/calendarpluginpathlist.md	BUILD	calendarpluginpathlist	完全互換に向けて再評価が必要。旧判断: カレンダーのプラグインは作らない（決めたこと）
+list/shiori-event/notify/calendarskinpathlist.md	BUILD	calendarskinpathlist	完全互換に向けて再評価が必要。旧判断: カレンダーの画面が無い（決めたこと）
 list/shiori-event/notify/capability.md	DONE	capability	起動時に、送る request.* と読む response.* のヘッダ名（小文字）を NOTIFY
 list/shiori-event/notify/configuredbiffname.md	DONE	configuredbiffname	起動時に設定したメールのアカウント名を NOTIFY
 list/shiori-event/notify/enable_debug.md	DONE	enable_debug	\![set,shioridebugmode] で送る
 list/shiori-event/notify/enable_log.md	DONE	enable_log	開発用の画面の「SHIORI 内部のログを取る」（ゴーストごとに覚える）。起動時と変えたときに NOTIFY
 list/shiori-event/notify/ghostpathlist.md	DONE	ghostpathlist	起動時にゴーストの置き場の絶対パスを NOTIFY
-list/shiori-event/notify/headlinepathlist.md	IMPOSSIBLE	headlinepathlist	ヘッドラインセンサーは作らない（決めたこと）
-list/shiori-event/notify/hwnd.md	IMPOSSIBLE	hwnd	Windows のウィンドウハンドルが無い
+list/shiori-event/notify/headlinepathlist.md	DONE	headlinepathlist	headline の置き場とインストール済みの名前を通知。プラグインへの headlinepathlist も対応
+list/shiori-event/notify/hwnd.md	BUILD	hwnd	完全互換に向けて再評価が必要。旧判断: Windows のウィンドウハンドルが無い
 list/shiori-event/notify/index.md	NA	Notifyイベント	目次のページ
 list/shiori-event/notify/installedballoonname.md	DONE	installedballoonname	起動時に入っているバルーンの名前を NOTIFY
-list/shiori-event/notify/installedcalendarpluginname.md	IMPOSSIBLE	installedcalendarpluginname	カレンダーのプラグインは作らない（決めたこと）
-list/shiori-event/notify/installedcalendarskinname.md	IMPOSSIBLE	installedcalendarskinname	カレンダーの画面が無い（決めたこと）
+list/shiori-event/notify/installedcalendarpluginname.md	BUILD	installedcalendarpluginname	完全互換に向けて再評価が必要。旧判断: カレンダーのプラグインは作らない（決めたこと）
+list/shiori-event/notify/installedcalendarskinname.md	BUILD	installedcalendarskinname	完全互換に向けて再評価が必要。旧判断: カレンダーの画面が無い（決めたこと）
 list/shiori-event/notify/installedghostname.md	DONE	installedghostname	起動時に入っているゴーストの名前を NOTIFY（installedsakuraname / installedkeroname の後、同じ並び）
-list/shiori-event/notify/installedheadlinename.md	IMPOSSIBLE	installedheadlinename	ヘッドラインセンサーは作らない（決めたこと）
+list/shiori-event/notify/installedheadlinename.md	DONE	installedheadlinename	headline の置き場とインストール済みの名前を通知。プラグインへの headlinepathlist も対応
 list/shiori-event/notify/installedkeroname.md	DONE	installedkeroname	起動時に入っているゴーストの kero.name を、installedghostname の前に同じ並びで NOTIFY
 list/shiori-event/notify/installedplugin.md	DONE	installedplugin	起動時に NOTIFY で送る（名前と ID を 0x01 でつなぐ）
 list/shiori-event/notify/installedsakuraname.md	DONE	installedsakuraname	起動時に入っているゴーストの sakura.name を、installedghostname の前に同じ並びで NOTIFY
@@ -1651,24 +1651,24 @@ list/shiori-event/os-state/OnDeviceArrival.md	DONE	OnDeviceArrival	実装済み
 list/shiori-event/os-state/OnDeviceRemove.md	DONE	OnDeviceRemove	実装済み
 list/shiori-event/os-state/OnDisplayChange.md	DONE	OnDisplayChange	実装済み
 list/shiori-event/os-state/OnDisplayChangeEx.md	DONE	OnDisplayChangeEx	画面1枚分（0,0,幅,高さ,32,1,unknown,0）。起動時は init で NOTIFY、回転などは update で GET（答えが無ければ OnDisplayChange）
-list/shiori-event/os-state/OnDisplayHandover.md	IMPOSSIBLE	OnDisplayHandover	オーバーレイは1つの画面にしか出ない（決めたこと）
+list/shiori-event/os-state/OnDisplayHandover.md	BUILD	OnDisplayHandover	完全互換に向けて再評価が必要。旧判断: オーバーレイは1つの画面にしか出ない（決めたこと）
 list/shiori-event/os-state/OnDisplayPowerStatus.md	DONE	OnDisplayPowerStatus	実装済み
 list/shiori-event/os-state/OnMemoryLoadHigh.md	DONE	OnMemoryLoadHigh	実装済み
 list/shiori-event/os-state/OnMemoryLoadLow.md	DONE	OnMemoryLoadLow	実装済み
 list/shiori-event/os-state/OnNetworkHeavy.md	DONE	OnNetworkHeavy	実装済み
 list/shiori-event/os-state/OnNetworkStatusChange.md	DONE	OnNetworkStatusChange	実装済み
 list/shiori-event/os-state/OnOSUpdateInfo.md	DONE	OnOSUpdateInfo	実装済み
-list/shiori-event/os-state/OnRecycleBinEmpty.md	IMPOSSIBLE	OnRecycleBinEmpty	Android にごみ箱が無い（決めたこと）
-list/shiori-event/os-state/OnRecycleBinEmptyFromOther.md	IMPOSSIBLE	OnRecycleBinEmptyFromOther	Android にごみ箱が無い（決めたこと）
-list/shiori-event/os-state/OnRecycleBinStatusUpdate.md	IMPOSSIBLE	OnRecycleBinStatusUpdate	Android にごみ箱が無い（決めたこと）
+list/shiori-event/os-state/OnRecycleBinEmpty.md	BUILD	OnRecycleBinEmpty	完全互換に向けて再評価が必要。旧判断: Android にごみ箱が無い（決めたこと）
+list/shiori-event/os-state/OnRecycleBinEmptyFromOther.md	BUILD	OnRecycleBinEmptyFromOther	完全互換に向けて再評価が必要。旧判断: Android にごみ箱が無い（決めたこと）
+list/shiori-event/os-state/OnRecycleBinStatusUpdate.md	BUILD	OnRecycleBinStatusUpdate	完全互換に向けて再評価が必要。旧判断: Android にごみ箱が無い（決めたこと）
 list/shiori-event/os-state/OnScreenSaverEnd.md	DONE	OnScreenSaverEnd	実装済み
 list/shiori-event/os-state/OnScreenSaverStart.md	DONE	OnScreenSaverStart	実装済み
-list/shiori-event/os-state/OnSessionDisconnect.md	IMPOSSIBLE	OnSessionDisconnect	Windows のユーザー切り替え（決めたこと）
+list/shiori-event/os-state/OnSessionDisconnect.md	BUILD	OnSessionDisconnect	完全互換に向けて再評価が必要。旧判断: Windows のユーザー切り替え（決めたこと）
 list/shiori-event/os-state/OnSessionLock.md	DONE	OnSessionLock	実装済み
-list/shiori-event/os-state/OnSessionReconnect.md	IMPOSSIBLE	OnSessionReconnect	Windows のユーザー切り替え（決めたこと）
+list/shiori-event/os-state/OnSessionReconnect.md	BUILD	OnSessionReconnect	完全互換に向けて再評価が必要。旧判断: Windows のユーザー切り替え（決めたこと）
 list/shiori-event/os-state/OnSessionUnlock.md	DONE	OnSessionUnlock	実装済み
-list/shiori-event/os-state/OnTabletMode.md	IMPOSSIBLE	OnTabletMode	Windows のタブレットモード（決めたこと）
-list/shiori-event/os-state/OnWindowModeChange.md	IMPOSSIBLE	OnWindowModeChange	SSP のコンテナに出すモードが無い。いつも normal（決めたこと）
+list/shiori-event/os-state/OnTabletMode.md	BUILD	OnTabletMode	完全互換に向けて再評価が必要。旧判断: Windows のタブレットモード（決めたこと）
+list/shiori-event/os-state/OnWindowModeChange.md	BUILD	OnWindowModeChange	完全互換に向けて再評価が必要。旧判断: SSP のコンテナに出すモードが無い。いつも normal（決めたこと）
 list/shiori-event/os-state/index.md	NA	OS状態イベント	目次のページ
 list/shiori-event/other-communication/OnExecuteFileWatchChange.md	DONE	OnExecuteFileWatchChange	実装済み
 list/shiori-event/other-communication/OnExecuteFileWatchFailure.md	DONE	OnExecuteFileWatchFailure	実装済み
@@ -1702,16 +1702,16 @@ list/shiori-event/other/OnAITalk.md	DONE	OnAITalk	実装済み
 list/shiori-event/other/OnBalloonScaling.md	DONE	OnBalloonScaling	実装済み
 list/shiori-event/other/OnCompressArchiveComplete.md	DONE	OnCompressArchiveComplete	base + "Complete" で送っている
 list/shiori-event/other/OnCompressArchiveFailure.md	DONE	OnCompressArchiveFailure	base + "Failure" で送っている。理由の言葉はエラーコードの行
-list/shiori-event/other/OnEmbryoExist.md	IMPOSSIBLE	OnEmbryoExist	Windows の materia.exe
+list/shiori-event/other/OnEmbryoExist.md	BUILD	OnEmbryoExist	完全互換に向けて再評価が必要。旧判断: Windows の materia.exe
 list/shiori-event/other/OnExtractArchiveComplete.md	DONE	OnExtractArchiveComplete	base + "Complete" で送っている
 list/shiori-event/other/OnExtractArchiveFailure.md	DONE	OnExtractArchiveFailure	base + "Failure" で送っている。理由の言葉はエラーコードの行
 list/shiori-event/other/OnInternalSaoriComplete.md	DONE	OnInternalSaoriComplete	内蔵 SAORI の --async の結果（識別子が On で始まらないとき）
 list/shiori-event/other/OnInternalSaoriFailure.md	DONE	OnInternalSaoriFailure	内蔵 SAORI の --async の結果（識別子が On で始まらないとき）
-list/shiori-event/other/OnKeyPress.md	IMPOSSIBLE	OnKeyPress	オーバーレイがキーを受けると、ほかのアプリへの入力を横取りする（決めたこと）
+list/shiori-event/other/OnKeyPress.md	PARTIAL	OnKeyPress	専用入力画面で物理・画面キー、Win32 VK、repeat、scope、修飾キーを送信。全キーボード配列と実機は未検証。KeyboardTest / WindowsKeysTest
 list/shiori-event/other/OnLanguageChange.md	DONE	OnLanguageChange	実装済み
 list/shiori-event/other/OnMusicPlay.md	DONE	OnMusicPlay	SSTP の GIVE Song と、設定で選んで通知へのアクセスを許したときの端末の MediaSession（OnMusicPlayEx に答えが無いとき）
 list/shiori-event/other/OnMusicPlayEx.md	DONE	OnMusicPlayEx	🔒 設定で選び、通知へのアクセスを許したときだけ。曲名・アーティストと album・albumartist・subtitle・source・duration・genre・composer（artwork は無し）
-list/shiori-event/other/OnNekodorifExist.md	IMPOSSIBLE	OnNekodorifExist	Windows の猫どりふ
+list/shiori-event/other/OnNekodorifExist.md	BUILD	OnNekodorifExist	完全互換に向けて再評価が必要。旧判断: Windows の猫どりふ
 list/shiori-event/other/OnOtherGhostTalk.md	DONE	OnOtherGhostTalk	実装済み
 list/shiori-event/other/OnRecommendsiteChoice.md	DONE	OnRecommendsiteChoice	実装済み
 list/shiori-event/other/OnResetWindowPos.md	DONE	OnResetWindowPos	実装済み
@@ -1742,8 +1742,8 @@ list/shiori-event/select-region-mode/index.md	NA	選択領域モードイベン�
 list/shiori-event/sntp/OnSNTPBegin.md	DONE	OnSNTPBegin	実装済み
 list/shiori-event/sntp/OnSNTPCompare.md	DONE	OnSNTPCompare	実装済み
 list/shiori-event/sntp/OnSNTPCompareEx.md	DONE	OnSNTPCompareEx	実装済み
-list/shiori-event/sntp/OnSNTPCorrect.md	IMPOSSIBLE	OnSNTPCorrect	アプリは端末の時計を直せない。ずれを測るだけ
-list/shiori-event/sntp/OnSNTPCorrectEx.md	IMPOSSIBLE	OnSNTPCorrectEx	アプリは端末の時計を直せない。ずれを測るだけ
+list/shiori-event/sntp/OnSNTPCorrect.md	BUILD	OnSNTPCorrect	完全互換に向けて再評価が必要。旧判断: アプリは端末の時計を直せない。ずれを測るだけ
+list/shiori-event/sntp/OnSNTPCorrectEx.md	BUILD	OnSNTPCorrectEx	完全互換に向けて再評価が必要。旧判断: アプリは端末の時計を直せない。ずれを測るだけ
 list/shiori-event/sntp/OnSNTPFailure.md	DONE	OnSNTPFailure	実装済み
 list/shiori-event/sntp/index.md	NA	時計合わせイベント	目次のページ
 list/shiori-event/speech/OnSpeechSynthesisStatus.md	DONE	OnSpeechSynthesisStatus	実装済み
@@ -1765,7 +1765,7 @@ list/shiori-event/time/index.md	NA	時間イベント	目次のページ
 list/shiori-event/tray-balloon/OnTrayBalloonClick.md	DONE	OnTrayBalloonClick	実装済み
 list/shiori-event/tray-balloon/OnTrayBalloonTimeout.md	DONE	OnTrayBalloonTimeout	実装済み
 list/shiori-event/tray-balloon/index.md	NA	トレイバルーンイベント	目次のページ
-list/shiori-event/url-drop/OnURLDragDropping.md	IMPOSSIBLE	OnURLDragDropping	落とす前のドラッグが無い。共有で渡すだけ（決めたこと）
+list/shiori-event/url-drop/OnURLDragDropping.md	BUILD	OnURLDragDropping	完全互換に向けて再評価が必要。旧判断: 落とす前のドラッグが無い。共有で渡すだけ（決めたこと）
 list/shiori-event/url-drop/OnURLDropFailure.md	DONE	OnURLDropFailure	実装済み
 list/shiori-event/url-drop/OnURLDropped.md	DONE	OnURLDropped	実装済み
 list/shiori-event/url-drop/OnURLDropping.md	DONE	OnURLDropping	実装済み
@@ -1780,7 +1780,7 @@ list/shiori-event/vanish/OnVanishSelecting.md	DONE	OnVanishSelecting	実装済�
 list/shiori-event/vanish/OnVanished.md	DONE	OnVanished	実装済み
 list/shiori-event/vanish/index.md	NA	消滅イベント	目次のページ
 list/shiori-resource/caption_shioriresource.md	NA	SHIORI Resource	SHIORI Resource の説明
-list/shiori-resource/ghost/boxname.defaultleft.md	IMPOSSIBLE	(入力ボックス種類).defaultleft　(入力ボックス種類).defaulttop	入力の箱は \0 のバルーンの位置に出す（決めたこと）
+list/shiori-resource/ghost/boxname.defaultleft.md	BUILD	(入力ボックス種類).defaultleft　(入力ボックス種類).defaulttop	完全互換に向けて再評価が必要。旧判断: 入力の箱は \0 のバルーンの位置に出す（決めたこと）
 list/shiori-resource/ghost/char-star-.defaultleft.md	DONE	char\*.defaultleft	実装済み
 list/shiori-resource/ghost/char-star-.defaulttop.md	DONE	char\*.defaulttop	実装済み
 list/shiori-resource/ghost/char-star-.defaultx.md	DONE	char\*.defaultx	実装済み
@@ -1826,117 +1826,117 @@ list/shiori-resource/ownerdraw-color/index.md	NA	オーナードローメニュ�
 list/shiori-resource/ownerdraw-color/menu.background.font.color.b.md	DONE	menu.background.font.color.b	"$prefix.$c" で聞き、項目の文字の色にしている
 list/shiori-resource/ownerdraw-color/menu.background.font.color.g.md	DONE	menu.background.font.color.g	"$prefix.$c" で聞き、項目の文字の色にしている
 list/shiori-resource/ownerdraw-color/menu.background.font.color.r.md	DONE	menu.background.font.color.r	"$prefix.$c" で聞き、項目の文字の色にしている
-list/shiori-resource/ownerdraw-color/menu.disable.font.color.b.md	IMPOSSIBLE	menu.disable.font.color.b	バルーンのメニューに押せない項目が無い（決めたこと）
-list/shiori-resource/ownerdraw-color/menu.disable.font.color.g.md	IMPOSSIBLE	menu.disable.font.color.g	バルーンのメニューに押せない項目が無い（決めたこと）
-list/shiori-resource/ownerdraw-color/menu.disable.font.color.r.md	IMPOSSIBLE	menu.disable.font.color.r	バルーンのメニューに押せない項目が無い（決めたこと）
+list/shiori-resource/ownerdraw-color/menu.disable.font.color.b.md	BUILD	menu.disable.font.color.b	完全互換に向けて再評価が必要。旧判断: バルーンのメニューに押せない項目が無い（決めたこと）
+list/shiori-resource/ownerdraw-color/menu.disable.font.color.g.md	BUILD	menu.disable.font.color.g	完全互換に向けて再評価が必要。旧判断: バルーンのメニューに押せない項目が無い（決めたこと）
+list/shiori-resource/ownerdraw-color/menu.disable.font.color.r.md	BUILD	menu.disable.font.color.r	完全互換に向けて再評価が必要。旧判断: バルーンのメニューに押せない項目が無い（決めたこと）
 list/shiori-resource/ownerdraw-color/menu.foreground.font.color.b.md	DONE	menu.foreground.font.color.b	"$prefix.$c" で聞き、選んでいる項目の文字の色にしている
 list/shiori-resource/ownerdraw-color/menu.foreground.font.color.g.md	DONE	menu.foreground.font.color.g	"$prefix.$c" で聞き、選んでいる項目の文字の色にしている
 list/shiori-resource/ownerdraw-color/menu.foreground.font.color.r.md	DONE	menu.foreground.font.color.r	"$prefix.$c" で聞き、選んでいる項目の文字の色にしている
-list/shiori-resource/ownerdraw-color/menu.frame.color.b.md	IMPOSSIBLE	menu.frame.color.b	バルーンのメニューに枠が無い（決めたこと）
-list/shiori-resource/ownerdraw-color/menu.frame.color.g.md	IMPOSSIBLE	menu.frame.color.g	バルーンのメニューに枠が無い（決めたこと）
-list/shiori-resource/ownerdraw-color/menu.frame.color.r.md	IMPOSSIBLE	menu.frame.color.r	バルーンのメニューに枠が無い（決めたこと）
-list/shiori-resource/ownerdraw-color/menu.separator.color.b.md	IMPOSSIBLE	menu.separator.color.b	バルーンのメニューに区切り線が無い（決めたこと）
-list/shiori-resource/ownerdraw-color/menu.separator.color.g.md	IMPOSSIBLE	menu.separator.color.g	バルーンのメニューに区切り線が無い（決めたこと）
-list/shiori-resource/ownerdraw-color/menu.separator.color.r.md	IMPOSSIBLE	menu.separator.color.r	バルーンのメニューに区切り線が無い（決めたこと）
+list/shiori-resource/ownerdraw-color/menu.frame.color.b.md	BUILD	menu.frame.color.b	完全互換に向けて再評価が必要。旧判断: バルーンのメニューに枠が無い（決めたこと）
+list/shiori-resource/ownerdraw-color/menu.frame.color.g.md	BUILD	menu.frame.color.g	完全互換に向けて再評価が必要。旧判断: バルーンのメニューに枠が無い（決めたこと）
+list/shiori-resource/ownerdraw-color/menu.frame.color.r.md	BUILD	menu.frame.color.r	完全互換に向けて再評価が必要。旧判断: バルーンのメニューに枠が無い（決めたこと）
+list/shiori-resource/ownerdraw-color/menu.separator.color.b.md	BUILD	menu.separator.color.b	完全互換に向けて再評価が必要。旧判断: バルーンのメニューに区切り線が無い（決めたこと）
+list/shiori-resource/ownerdraw-color/menu.separator.color.g.md	BUILD	menu.separator.color.g	完全互換に向けて再評価が必要。旧判断: バルーンのメニューに区切り線が無い（決めたこと）
+list/shiori-resource/ownerdraw-color/menu.separator.color.r.md	BUILD	menu.separator.color.r	完全互換に向けて再評価が必要。旧判断: バルーンのメニューに区切り線が無い（決めたこと）
 list/shiori-resource/ownerdraw-image/index.md	NA	オーナードローメニュー画像	目次のページ
-list/shiori-resource/ownerdraw-image/menu.background.bitmap.filename.md	IMPOSSIBLE	menu.background.bitmap.filename	メニューはバルーンに出すので絵を敷かない（決めたこと）
-list/shiori-resource/ownerdraw-image/menu.foreground.bitmap.filename.md	IMPOSSIBLE	menu.foreground.bitmap.filename	メニューはバルーンに出すので絵を敷かない（決めたこと）
-list/shiori-resource/ownerdraw-image/menu.sidebar.bitmap.filename.md	IMPOSSIBLE	menu.sidebar.bitmap.filename	メニューはバルーンに出すので絵を敷かない（決めたこと）
+list/shiori-resource/ownerdraw-image/menu.background.bitmap.filename.md	BUILD	menu.background.bitmap.filename	完全互換に向けて再評価が必要。旧判断: メニューはバルーンに出すので絵を敷かない（決めたこと）
+list/shiori-resource/ownerdraw-image/menu.foreground.bitmap.filename.md	BUILD	menu.foreground.bitmap.filename	完全互換に向けて再評価が必要。旧判断: メニューはバルーンに出すので絵を敷かない（決めたこと）
+list/shiori-resource/ownerdraw-image/menu.sidebar.bitmap.filename.md	BUILD	menu.sidebar.bitmap.filename	完全互換に向けて再評価が必要。旧判断: メニューはバルーンに出すので絵を敷かない（決めたこと）
 list/shiori-resource/ownerdraw-item-display.md	DONE	オーナードローメニュー項目表示	メニューの項目ごとに *.caption を *.visible にしたものを聞き、0 なら出さない
-list/shiori-resource/ownerdraw-item-name/activaterootbutton.caption.md	IMPOSSIBLE	activaterootbutton.caption	Windows の手前に出す設定。オーバーレイはいつも手前（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/addressbarbutton.caption.md	IMPOSSIBLE	addressbarbutton.caption	SSP のアドレスバー。メニューに無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/activaterootbutton.caption.md	BUILD	activaterootbutton.caption	完全互換に向けて再評価が必要。旧判断: Windows の手前に出す設定。オーバーレイはいつも手前（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/addressbarbutton.caption.md	BUILD	addressbarbutton.caption	完全互換に向けて再評価が必要。旧判断: SSP のアドレスバー。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/aistatebutton.caption.md	DONE	aistatebutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/alignrootbutton.caption.md	IMPOSSIBLE	alignrootbutton.caption	キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
-list/shiori-resource/ownerdraw-item-name/alwaysstayontopbutton.caption.md	IMPOSSIBLE	alwaysstayontopbutton.caption	オーバーレイはいつも手前（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/alwaystrayiconvisiblebutton.caption.md	IMPOSSIBLE	alwaystrayiconvisiblebutton.caption	タスクトレイが無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/alignrootbutton.caption.md	BUILD	alignrootbutton.caption	完全互換に向けて再評価が必要。旧判断: キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
+list/shiori-resource/ownerdraw-item-name/alwaysstayontopbutton.caption.md	BUILD	alwaysstayontopbutton.caption	完全互換に向けて再評価が必要。旧判断: オーバーレイはいつも手前（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/alwaystrayiconvisiblebutton.caption.md	BUILD	alwaystrayiconvisiblebutton.caption	完全互換に向けて再評価が必要。旧判断: タスクトレイが無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/balloonhistorybutton.caption.md	DONE	balloonhistorybutton.caption	「履歴」の「バルーン」。最近使ったバルーンに替える（推奨と違えば確かめる）
 list/shiori-resource/ownerdraw-item-name/balloonrootbutton.caption.md	DONE	balloonrootbutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/biffallbutton.caption.md	IMPOSSIBLE	biffallbutton.caption	アカウントごとに分けず、「メールを確認」が全部を確かめる（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/biffallbutton.caption.md	BUILD	biffallbutton.caption	完全互換に向けて再評価が必要。旧判断: アカウントごとに分けず、「メールを確認」が全部を確かめる（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/biffbutton.caption.md	DONE	biffbutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/calendarbutton.caption.md	IMPOSSIBLE	calendarbutton.caption	カレンダーの画面が無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/calendarbutton.caption.md	DONE	calendarbutton.caption	本体メニューのカレンダー項目の表示名に反映
 list/shiori-resource/ownerdraw-item-name/callghosthistorybutton.caption.md	DONE	callghosthistorybutton.caption	「履歴」の「ほかのゴーストを呼ぶ」。最近呼んだゴーストのうち今呼べるもの
 list/shiori-resource/ownerdraw-item-name/callghostrootbutton.caption.md	DONE	callghostrootbutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/callsstpsendboxbutton.caption.md	IMPOSSIBLE	callsstpsendboxbutton.caption	SSTP 送信ボックスが無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/callsstpsendboxbutton.caption.md	BUILD	callsstpsendboxbutton.caption	完全互換に向けて再評価が必要。旧判断: SSTP 送信ボックスが無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/caption_menushortcut.md	DONE	ショートカットキー	キーボードは無いので、& の印を表示から消す（&& は &）
 list/shiori-resource/ownerdraw-item-name/char-star-.recommendsites.caption.md	DONE	char\*.recommendsites.caption	\p[2] 以降のおすすめの名前として、charN.recommendbuttoncaption の次に聞く
-list/shiori-resource/ownerdraw-item-name/charsetbutton.caption.md	IMPOSSIBLE	charsetbutton.caption	文字コードの選択が無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/charsetbutton.caption.md	BUILD	charsetbutton.caption	完全互換に向けて再評価が必要。旧判断: 文字コードの選択が無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/closeballoonbutton.caption.md	DONE	closeballoonbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/closebutton.caption.md	DONE	closebutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/collisionvisiblebutton.caption.md	IMPOSSIBLE	collisionvisiblebutton.caption	Materia の当たり判定表示。メニューに無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/collisionvisiblebutton.caption.md	BUILD	collisionvisiblebutton.caption	完全互換に向けて再評価が必要。旧判断: Materia の当たり判定表示。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/configurationbutton.caption.md	DONE	configurationbutton.caption	メニューの「設定」（pono-droid の画面を開く）の名前
 list/shiori-resource/ownerdraw-item-name/configurationrootbutton.caption.md	DONE	configurationrootbutton.caption	メニューの「設定」の名前（configurationbutton.caption の次に聞く）
-list/shiori-resource/ownerdraw-item-name/debugballoonbutton.caption.md	IMPOSSIBLE	debugballoonbutton.caption	Materia のバルーンマーカー表示。メニューに無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/definedsurfaceonlybutton.caption.md	IMPOSSIBLE	definedsurfaceonlybutton.caption	SSP の互換の切り替え。メニューに無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/debugballoonbutton.caption.md	BUILD	debugballoonbutton.caption	完全互換に向けて再評価が必要。旧判断: Materia のバルーンマーカー表示。メニューに無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/definedsurfaceonlybutton.caption.md	BUILD	definedsurfaceonlybutton.caption	完全互換に向けて再評価が必要。旧判断: SSP の互換の切り替え。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/dictationbutton.caption.md	DONE	dictationbutton.caption	メニューの音声認識の入り切りの名前（マイクの許可が無ければ設定の画面を開く）
 list/shiori-resource/ownerdraw-item-name/dressuprootbutton.caption.md	DONE	dressuprootbutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/duibutton.caption.md	IMPOSSIBLE	duibutton.caption	DUI が無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/duibutton.caption.md	BUILD	duibutton.caption	完全互換に向けて再評価が必要。旧判断: DUI が無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/enableballoonmovebutton.caption.md	DONE	enableballoonmovebutton.caption	メニューの「バルーンを動かせる」。切るとバルーンを指で動かせない（ゴーストごとに覚える）
 list/shiori-resource/ownerdraw-item-name/entry.md	NA	-	変更できない項目（言語）。pono-droid のメニューに言語は無い
-list/shiori-resource/ownerdraw-item-name/firststaffbutton.caption.md	IMPOSSIBLE	firststaffbutton.caption	バージョン情報の画面が無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/firststaffbutton.caption.md	BUILD	firststaffbutton.caption	完全互換に向けて再評価が必要。旧判断: バージョン情報の画面が無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/ghostexplorerbutton.caption.md	DONE	ghostexplorerbutton.caption	メニューの「ゴーストの一覧」（pono-droid の画面を開く）の名前
 list/shiori-resource/ownerdraw-item-name/ghosthistorybutton.caption.md	DONE	ghosthistorybutton.caption	「履歴」の「ゴースト」。最近起動したゴースト（自分を除く）に切り替える
 list/shiori-resource/ownerdraw-item-name/ghostinstallbutton.caption.md	DONE	ghostinstallbutton.caption	メニューの「ゴーストを入れる」（.nar を選べる pono-droid の画面を開く）の名前
 list/shiori-resource/ownerdraw-item-name/ghostrootbutton.caption.md	DONE	ghostrootbutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/headlinesensehistorybutton.caption.md	IMPOSSIBLE	headlinesensehistorybutton.caption	ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/headlinesenserootbutton.caption.md	IMPOSSIBLE	headlinesenserootbutton.caption	ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/headlinesensehistorybutton.caption.md	DONE	headlinesensehistorybutton.caption	RSS・ヘッドラインと履歴のメニュー項目で SHIORI リソースを利用
+list/shiori-resource/ownerdraw-item-name/headlinesenserootbutton.caption.md	DONE	headlinesenserootbutton.caption	RSS・ヘッドラインと履歴のメニュー項目で SHIORI リソースを利用
 list/shiori-resource/ownerdraw-item-name/helpbutton.caption.md	DONE	helpbutton.caption	メニューの「説明書」（pono-droid の説明を開く）の名前
 list/shiori-resource/ownerdraw-item-name/hidebutton.caption.md	DONE	hidebutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/historyrootbutton.caption.md	DONE	historyrootbutton.caption	メニューの「履歴」（最近のゴースト・バルーン・呼んだゴーストがあるときだけ）
 list/shiori-resource/ownerdraw-item-name/index.md	NA	オーナードローメニュー項目名	目次のページ
-list/shiori-resource/ownerdraw-item-name/inforootbutton.caption.md	IMPOSSIBLE	inforootbutton.caption	SSP の情報の下位メニュー。メニューに無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/inforootbutton.caption.md	BUILD	inforootbutton.caption	完全互換に向けて再評価が必要。旧判断: SSP の情報の下位メニュー。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/leavepassivebutton.caption.md	DONE	leavepassivebutton.caption	パッシブモードの間、メニューのいちばん上に出す強制解除の名前
-list/shiori-resource/ownerdraw-item-name/messengerbutton.caption.md	IMPOSSIBLE	messengerbutton.caption	SSP メッセンジャが無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/messengerbutton.caption.md	BUILD	messengerbutton.caption	完全互換に向けて再評価が必要。旧判断: SSP メッセンジャが無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/pluginhistorybutton.caption.md	DONE	pluginhistorybutton.caption	メニューの「履歴」の「プラグイン」の項目名を替えられる
 list/shiori-resource/ownerdraw-item-name/pluginrootbutton.caption.md	DONE	pluginrootbutton.caption	メニューの「プラグイン」の項目名を替えられる
 list/shiori-resource/ownerdraw-item-name/portalrootbutton.caption.md	DONE	portalrootbutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/purgeghostcachebutton.caption.md	IMPOSSIBLE	purgeghostcachebutton.caption	ゴーストキャッシュが無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/purgeghostcachebutton.caption.md	BUILD	purgeghostcachebutton.caption	完全互換に向けて再評価が必要。旧判断: ゴーストキャッシュが無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/quitbutton.caption.md	DONE	quitbutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/rateofuseballoonbutton.caption.md	IMPOSSIBLE	rateofuseballoonbutton.caption	Materia の使用率の下位メニュー。rateofusebutton で足りる（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/rateofuseballoonbutton.caption.md	BUILD	rateofuseballoonbutton.caption	完全互換に向けて再評価が必要。旧判断: Materia の使用率の下位メニュー。rateofusebutton で足りる（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/rateofusebutton.caption.md	DONE	rateofusebutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/rateofuserootbutton.caption.md	IMPOSSIBLE	rateofuserootbutton.caption	Materia の使用率の下位メニュー。rateofusebutton で足りる（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/rateofusetotalbutton.caption.md	IMPOSSIBLE	rateofusetotalbutton.caption	Materia の使用率の下位メニュー。rateofusebutton で足りる（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/rateofuserootbutton.caption.md	BUILD	rateofuserootbutton.caption	完全互換に向けて再評価が必要。旧判断: Materia の使用率の下位メニュー。rateofusebutton で足りる（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/rateofusetotalbutton.caption.md	BUILD	rateofusetotalbutton.caption	完全互換に向けて再評価が必要。旧判断: Materia の使用率の下位メニュー。rateofusebutton で足りる（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/readmebutton.caption.md	DONE	readmebutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/recommendrootbutton.caption.md	DONE	recommendrootbutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/regionenabledbutton.caption.md	IMPOSSIBLE	regionenabledbutton.caption	Windows のリージョン（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/reloadinfobutton.caption.md	IMPOSSIBLE	reloadinfobutton.caption	SSP の動作情報の読み込み直し。メニューに無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/regionenabledbutton.caption.md	BUILD	regionenabledbutton.caption	完全互換に向けて再評価が必要。旧判断: Windows のリージョン（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/reloadinfobutton.caption.md	BUILD	reloadinfobutton.caption	完全互換に向けて再評価が必要。旧判断: SSP の動作情報の読み込み直し。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/resetballoonpositionbutton.caption.md	DONE	resetballoonpositionbutton.caption	長押しメニューのバルーン位置初期化（動かしているときだけ出す）の名前
-list/shiori-resource/ownerdraw-item-name/resettodefaultbutton.caption.md	IMPOSSIBLE	resettodefaultbutton.caption	SSP の設定を標準に戻す。メニューに無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/scriptlogbutton.caption.md	IMPOSSIBLE	scriptlogbutton.caption	SSP の開発用パレットのスクリプトログ。メニューに無く、開発用の画面で見る
+list/shiori-resource/ownerdraw-item-name/resettodefaultbutton.caption.md	BUILD	resettodefaultbutton.caption	完全互換に向けて再評価が必要。旧判断: SSP の設定を標準に戻す。メニューに無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/scriptlogbutton.caption.md	BUILD	scriptlogbutton.caption	完全互換に向けて再評価が必要。旧判断: SSP の開発用パレットのスクリプトログ。メニューに無く、開発用の画面で見る
 list/shiori-resource/ownerdraw-item-name/shellrootbutton.caption.md	DONE	shellrootbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/shellscaleotherbutton.caption.md	DONE	shellscaleotherbutton.caption	大きさの下位メニューの「その他」（スライダーで倍率を聞く）の名前
 list/shiori-resource/ownerdraw-item-name/shellscalerootbutton.caption.md	DONE	shellscalerootbutton.caption	メニューの「キャラクターの大きさ」（50〜200% とその他。変えると OnShellScaling）の名前
 list/shiori-resource/ownerdraw-item-name/sntpbutton.caption.md	DONE	sntpbutton.caption	メニューの「時計合わせ」（\7 と同じ、ずれを測るだけ）の名前
-list/shiori-resource/ownerdraw-item-name/switchactivatewhentalkbutton.caption.md	IMPOSSIBLE	switchactivatewhentalkbutton.caption	Windows の手前に出す設定。オーバーレイはいつも手前（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchactivatewhentalkexceptupdatebutton.caption.md	IMPOSSIBLE	switchactivatewhentalkexceptupdatebutton.caption	Windows の手前に出す設定。オーバーレイはいつも手前（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchautobiffbutton.caption.md	IMPOSSIBLE	switchautobiffbutton.caption	Materia のスイッチ。間隔はアプリの設定にある（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchautoheadlinesensebutton.caption.md	IMPOSSIBLE	switchautoheadlinesensebutton.caption	ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchactivatewhentalkbutton.caption.md	BUILD	switchactivatewhentalkbutton.caption	完全互換に向けて再評価が必要。旧判断: Windows の手前に出す設定。オーバーレイはいつも手前（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchactivatewhentalkexceptupdatebutton.caption.md	BUILD	switchactivatewhentalkexceptupdatebutton.caption	完全互換に向けて再評価が必要。旧判断: Windows の手前に出す設定。オーバーレイはいつも手前（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchautobiffbutton.caption.md	BUILD	switchautobiffbutton.caption	完全互換に向けて再評価が必要。旧判断: Materia のスイッチ。間隔はアプリの設定にある（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchautoheadlinesensebutton.caption.md	BUILD	switchautoheadlinesensebutton.caption	完全互換に向けて再評価が必要。旧判断: ヘッドラインセンサーは作らない（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchblacklistingbutton.caption.md	DONE	switchblacklistingbutton.caption	メニューの「SSTP を受けない」の名前
-list/shiori-resource/ownerdraw-item-name/switchcompatiblemodebutton.caption.md	IMPOSSIBLE	switchcompatiblemodebutton.caption	SSP の旧仕様サポートの切り替え。メニューに無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchconsolealwaysvisiblebutton.caption.md	IMPOSSIBLE	switchconsolealwaysvisiblebutton.caption	Materia のコンソール（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchconsolevisiblebutton.caption.md	IMPOSSIBLE	switchconsolevisiblebutton.caption	Materia のコンソール（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchdeactivatebutton.caption.md	IMPOSSIBLE	switchdeactivatebutton.caption	Windows の裏へ沈む設定（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchdontactivatebutton.caption.md	IMPOSSIBLE	switchdontactivatebutton.caption	Windows の手前に出す設定（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchdontforcealignbutton.caption.md	IMPOSSIBLE	switchdontforcealignbutton.caption	キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
-list/shiori-resource/ownerdraw-item-name/switchduivisiblebutton.caption.md	IMPOSSIBLE	switchduivisiblebutton.caption	DUI が無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchforcealignfreebutton.caption.md	IMPOSSIBLE	switchforcealignfreebutton.caption	キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
-list/shiori-resource/ownerdraw-item-name/switchforcealignlimitbutton.caption.md	IMPOSSIBLE	switchforcealignlimitbutton.caption	キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
-list/shiori-resource/ownerdraw-item-name/switchignoreserikomovebutton.caption.md	IMPOSSIBLE	switchignoreserikomovebutton.caption	SERIKO の move を無視する切り替えが無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchlocalsstpbutton.caption.md	IMPOSSIBLE	switchlocalsstpbutton.caption	Materia のスイッチ。SSTP はアプリの設定で選ぶ（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchcompatiblemodebutton.caption.md	BUILD	switchcompatiblemodebutton.caption	完全互換に向けて再評価が必要。旧判断: SSP の旧仕様サポートの切り替え。メニューに無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchconsolealwaysvisiblebutton.caption.md	BUILD	switchconsolealwaysvisiblebutton.caption	完全互換に向けて再評価が必要。旧判断: Materia のコンソール（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchconsolevisiblebutton.caption.md	BUILD	switchconsolevisiblebutton.caption	完全互換に向けて再評価が必要。旧判断: Materia のコンソール（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchdeactivatebutton.caption.md	BUILD	switchdeactivatebutton.caption	完全互換に向けて再評価が必要。旧判断: Windows の裏へ沈む設定（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchdontactivatebutton.caption.md	BUILD	switchdontactivatebutton.caption	完全互換に向けて再評価が必要。旧判断: Windows の手前に出す設定（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchdontforcealignbutton.caption.md	BUILD	switchdontforcealignbutton.caption	完全互換に向けて再評価が必要。旧判断: キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
+list/shiori-resource/ownerdraw-item-name/switchduivisiblebutton.caption.md	BUILD	switchduivisiblebutton.caption	完全互換に向けて再評価が必要。旧判断: DUI が無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchforcealignfreebutton.caption.md	BUILD	switchforcealignfreebutton.caption	完全互換に向けて再評価が必要。旧判断: キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
+list/shiori-resource/ownerdraw-item-name/switchforcealignlimitbutton.caption.md	BUILD	switchforcealignlimitbutton.caption	完全互換に向けて再評価が必要。旧判断: キャラクター自由移動の切り替えはアプリの設定の画面（ゴースト設定・常に自由移動・常に制限。決めたこと）なので、メニューに項目が無い
+list/shiori-resource/ownerdraw-item-name/switchignoreserikomovebutton.caption.md	BUILD	switchignoreserikomovebutton.caption	完全互換に向けて再評価が必要。旧判断: SERIKO の move を無視する切り替えが無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchlocalsstpbutton.caption.md	BUILD	switchlocalsstpbutton.caption	完全互換に向けて再評価が必要。旧判断: Materia のスイッチ。SSTP はアプリの設定で選ぶ（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchmovetodefaultpositionbutton.caption.md	DONE	switchmovetodefaultpositionbutton.caption	メニューの「位置を戻す」の名前
-list/shiori-resource/ownerdraw-item-name/switchproxybutton.caption.md	IMPOSSIBLE	switchproxybutton.caption	プロキシの設定が無い（端末の設定に従う）（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchproxybutton.caption.md	BUILD	switchproxybutton.caption	完全互換に向けて再評価が必要。旧判断: プロキシの設定が無い（端末の設定に従う）（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/switchquietbutton.caption.md	DONE	switchquietbutton.caption	メニューの「サウンドを鳴らさない」（入り切り。入っている間は音を鳴らさない）の名前
 list/shiori-resource/ownerdraw-item-name/switchreloadbutton.caption.md	DONE	switchreloadbutton.caption	メニューの「SHIORI を読み込み直す」の名前
-list/shiori-resource/ownerdraw-item-name/switchreloadtempghostbutton.caption.md	IMPOSSIBLE	switchreloadtempghostbutton.caption	一時起動ゴーストが無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchremotesstpbutton.caption.md	IMPOSSIBLE	switchremotesstpbutton.caption	LAN からの SSTP は受けない（決めたこと）（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchrootbutton.caption.md	IMPOSSIBLE	switchrootbutton.caption	Materia のスイッチの下位メニュー（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/switchtalkghostbutton.caption.md	IMPOSSIBLE	switchtalkghostbutton.caption	話す間隔の設定がメニューに無い（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/systeminfobutton.caption.md	IMPOSSIBLE	systeminfobutton.caption	SSP のシステム情報の提出（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchreloadtempghostbutton.caption.md	BUILD	switchreloadtempghostbutton.caption	完全互換に向けて再評価が必要。旧判断: 一時起動ゴーストが無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchremotesstpbutton.caption.md	BUILD	switchremotesstpbutton.caption	完全互換に向けて再評価が必要。旧判断: LAN からの SSTP は受けない（決めたこと）（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchrootbutton.caption.md	BUILD	switchrootbutton.caption	完全互換に向けて再評価が必要。旧判断: Materia のスイッチの下位メニュー（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/switchtalkghostbutton.caption.md	BUILD	switchtalkghostbutton.caption	完全互換に向けて再評価が必要。旧判断: 話す間隔の設定がメニューに無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/systeminfobutton.caption.md	BUILD	systeminfobutton.caption	完全互換に向けて再評価が必要。旧判断: SSP のシステム情報の提出（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/termsbutton.caption.md	DONE	termsbutton.caption	実装済み
 list/shiori-resource/ownerdraw-item-name/texttospeechbutton.caption.md	DONE	texttospeechbutton.caption	メニューの読み上げの入り切りの名前
 list/shiori-resource/ownerdraw-item-name/updatebutton.caption.md	DONE	updatebutton.caption	実装済み
-list/shiori-resource/ownerdraw-item-name/updatefmobutton.caption.md	IMPOSSIBLE	updatefmobutton.caption	Windows の FMO（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/updateplatformbutton.caption.md	IMPOSSIBLE	updateplatformbutton.caption	アプリの更新は Play ストア（決めたこと・メニューに無い）
-list/shiori-resource/ownerdraw-item-name/utilityrootbutton.caption.md	IMPOSSIBLE	utilityrootbutton.caption	SSP の機能の下位メニュー。メニューに無い（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/updatefmobutton.caption.md	BUILD	updatefmobutton.caption	完全互換に向けて再評価が必要。旧判断: Windows の FMO（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/updateplatformbutton.caption.md	BUILD	updateplatformbutton.caption	完全互換に向けて再評価が必要。旧判断: アプリの更新は Play ストア（決めたこと・メニューに無い）
+list/shiori-resource/ownerdraw-item-name/utilityrootbutton.caption.md	BUILD	utilityrootbutton.caption	完全互換に向けて再評価が必要。旧判断: SSP の機能の下位メニュー。メニューに無い（決めたこと・メニューに無い）
 list/shiori-resource/ownerdraw-item-name/vanishbutton.caption.md	DONE	vanishbutton.caption	実装済み
 list/shiori-resource/shiori/craftman.md	DONE	craftman	実装済み
 list/shiori-resource/shiori/craftmanw.md	DONE	craftmanw	実装済み
@@ -1955,18 +1955,18 @@ manual/ghost.md	DONE	ゴースト	thumbnail.png（ghost/master。アプリのゴ
 manual/install.md	DONE	インストール	.nar（zip）のインストール。lzh・cab・自己解凍 exe は対象外
 manual/owner-draw-menu.md	DONE	オーナードローメニュー	メニューはバルーンに出す。絵の指定は決めたとおり作らない
 manual/shell.md	DONE	シェル	surface*.png や element の APNG / GIF / WebP は動く（Android 9 から）。SERIKO のコマと書いた順のとおりに重なる
-manual/translator.md	IMPOSSIBLE	トランスレータ	MAKOTO（makoto.dll）は Windows の DLL
+manual/translator.md	BUILD	トランスレータ	完全互換に向けて再評価が必要。旧判断: MAKOTO（makoto.dll）は Windows の DLL
 manual/update.md	DONE	ネットワーク更新	delete.txt と delete1.txt などの delete[数字].txt を順に読む（更新とインストールの後）
 memo/memo.md	NA	メモ	ベースウェアの比較などのメモ
 memo/shiori-event.md	NA	補足: SHIORI Eventとは	SHIORI Event の説明
 migration/README.md	NA	HTML 版からの移行メモ	仕様書の移行メモ
-spec/dll.md	IMPOSSIBLE	DLL共通仕様	Windows の DLL の決まり。pono-droid は SHIORI を組み込みで動かす
-spec/fmo-mutex/chapter0.md	IMPOSSIBLE	FMO/Mutex	Windows だけの仕組み
-spec/fmo-mutex/fmo-mutex.md	IMPOSSIBLE	FMO用Mutex	Windows の名前つき Mutex
-spec/fmo-mutex/fmo.md	IMPOSSIBLE	FMO (File Mapping Object)	Windows の共有メモリ。代わりの EXECUTE GetFMO は method_execute に書いた
-spec/fmo-mutex/index.md	IMPOSSIBLE	FMO/Mutex	Windows だけの仕組み
-spec/fmo-mutex/mutex.md	IMPOSSIBLE	Mutex	Windows の名前つき Mutex（ssp / sakura）。ほかのアプリから見る手段が無い
-spec/headline.md	IMPOSSIBLE	HEADLINE/2.0	ヘッドラインは Windows の DLL。決めたとおり作らない
+spec/dll.md	PARTIAL	DLL共通仕様	Windows x86/x64 の共通 ABI ホストと JVM バイト転送・タイムアウトを実装、Windows 統合テスト済み。Android 実行環境は未接続
+spec/fmo-mutex/chapter0.md	BUILD	FMO/Mutex	完全互換に向けて再評価が必要。旧判断: Windows だけの仕組み
+spec/fmo-mutex/fmo-mutex.md	BUILD	FMO用Mutex	完全互換に向けて再評価が必要。旧判断: Windows の名前つき Mutex
+spec/fmo-mutex/fmo.md	BUILD	FMO (File Mapping Object)	完全互換に向けて再評価が必要。旧判断: Windows の共有メモリ。代わりの EXECUTE GetFMO は method_execute に書いた
+spec/fmo-mutex/index.md	BUILD	FMO/Mutex	完全互換に向けて再評価が必要。旧判断: Windows だけの仕組み
+spec/fmo-mutex/mutex.md	BUILD	Mutex	完全互換に向けて再評価が必要。旧判断: Windows の名前つき Mutex（ssp / sakura）。ほかのアプリから見る手段が無い
+spec/headline.md	PARTIAL	HEADLINE/2.0	HEADLINE/2.0 の複数 Headline ヘッダ・Charset / RequestCharset・旧新ファイルの解析。モックテスト済み、Android DLL ランタイム未接続
 spec/plugin.md	DONE	PLUGIN/2.0	PLUGIN/2.0 に対応。プラグインは :plugin のプロセスで、filename の yaya.dll・kagari.dll・kawari.dll・satori.dll を pono-droid の YAYA・Kagari・華和梨・里々で動かす（Windows の DLL は動かせない）。要求・答え（Target・Event・EventOption・Reference・Script・ScriptOption）・Sender・\![raiseplugin] / \![notifyplugin] に対応
 spec/saori-ex/async.md	DONE	非同期の呼び出し	--async= で 204 を返し、結果は OnInternalSaoriComplete / Failure（識別子が On で始まればその名前と＋Failure）で届ける。同時に動くのは CPU の数（2～4）まで。SHIORI を読み込み直したら届けない
 spec/saori-ex/chapter0.md	DONE	SAORI over DirectSSTP	YAYA の FUNCTIONEX / LOADLIB（拡張子なしの internal_* を DLL として読ませるビルドのときのパッチと、dlopen の差し替え）と里々の（internal_…）から、本体の内蔵モジュールを呼べる
@@ -1997,7 +1997,7 @@ spec/saori-ex/internal_data/internal_data.Compress.md	DONE	Compress	java.util.zi
 spec/saori-ex/internal_data/internal_data.Convert.md	DONE	Convert	java.util.zip と自前の形式の変換（hex・base64・base32・url・bech32）
 spec/saori-ex/internal_data/internal_data.Decompress.md	DONE	Decompress	gzip（複数のメンバーも）・zlib・deflate と、brotli（org.brotli:dec）・zstd（zstd-jni。つないだフレームも）の展開。壊れている・切れている・後ろに余計なデータがあれば invalid encoding、8MB を超えれば too large
 spec/saori-ex/internal_file/index.md	DONE	internal_file	\![execute,extractarchive / compressarchive] と同じ zip4j。読み書きはゴーストのフォルダの中だけ（外は 400 path not allowed）
-spec/saori-ex/internal_file/internal_file.CompressArchive.md	IMPOSSIBLE	CompressArchive	overwrite・append・--password・lzma（ZIP の方式 14 を自分で書く。--password と一緒なら WinZip AES-256。ExtractArchive でも読める）は済み。headerencrypt（中央ディレクトリの暗号化）は PKWARE だけの仕様で公開された実装が無く、500 unknown method（決めたこと）
+spec/saori-ex/internal_file/internal_file.CompressArchive.md	BUILD	CompressArchive	完全互換に向けて再評価が必要。旧判断: overwrite・append・--password・lzma（ZIP の方式 14 を自分で書く。--password と一緒なら WinZip AES-256。ExtractArchive でも読める）は済み。headerencrypt（中央ディレクトリの暗号化）は PKWARE だけの仕様で公開された実装が無く、500 unknown method（決めたこと）
 spec/saori-ex/internal_file/internal_file.ExtractArchive.md	DONE	ExtractArchive	\![execute,extractarchive / compressarchive] と同じ zip4j。読み書きはゴーストのフォルダの中だけ（外は 400 path not allowed）
 spec/saori-ex/internal_file/internal_file.MediaInfo.md	DONE	MediaInfo	画像は BitmapFactory で大きさだけ、音声・動画は MediaMetadataRetriever（comment は取れないので空）。改行は 0x01、知らないキーは空
 spec/saori-ex/internal_file/internal_file_impl.md	DONE	MediaInfoを実装するベースウェア向けの注記	画像は BitmapFactory で大きさだけ、音声・動画は MediaMetadataRetriever（comment は取れないので空）。改行は 0x01、知らないキーは空
@@ -2027,7 +2027,7 @@ spec/shiori3/index.md	DONE	SHIORI/3.0	SHIORI/3.0 の GET / NOTIFY でやりと�
 spec/shiori3/request.md	DONE	request	SenderType（internal / external と raise・embed・property・sstp・communicate）・SecurityLevel・SecurityOrigin・Status・BaseID・Age・X-SSTP-PassThru-*
 spec/shiori3/response.md	DONE	response	ValueNotify・SecurityLevel・ErrorLevel / ErrorDescription・BalloonOffset・Marker（バルーンの印）・Reference0 のコミュニケート（Age・MarkerSend は相手のバルーンの印）・X-SSTP-PassThru-* を扱う
 spec/sstp/chapter0.md	DONE	SSTP/1.x	SSTP サーバーがある（設定で選んだとき、端末の中だけ）
-spec/sstp/direct.md	IMPOSSIBLE	Direct SSTP	Windows の WM_COPYDATA。Android には同じものが無い
+spec/sstp/direct.md	BUILD	Direct SSTP	完全互換に向けて再評価が必要。旧判断: Windows の WM_COPYDATA。Android には同じものが無い
 spec/sstp/http.md	DONE	SSTP over HTTP	POST /api/sstp/v1 と keep-alive。localhost でない Origin は制限付きで受けるのでなく 403 で断る
 spec/sstp/index.md	DONE	SSTP/1.x	目次
 spec/sstp/keepalive.md	DONE	keep-alive	Connection: keep-alive、Keep-Alive: timeout、Content-Length

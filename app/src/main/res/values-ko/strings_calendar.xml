@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calendar_title">달력</string>
+    <string name="calendar_previous">이전 날</string>
+    <string name="calendar_today">오늘</string>
+    <string name="calendar_next">다음 날</string>
+    <string name="calendar_help">일정을 선택하면 고스트에게 전달합니다. 기기 일정은 설정에서 허용한 경우 표시합니다.</string>
+    <string name="calendar_empty">일정이 없습니다</string>
+    <string name="calendar_all_day">하루 종일</string>
+    <string name="calendar_choose">선택</string>
+</resources>

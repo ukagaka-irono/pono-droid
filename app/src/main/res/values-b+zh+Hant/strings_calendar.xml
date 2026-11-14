@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calendar_title">行事曆</string>
+    <string name="calendar_previous">前一天</string>
+    <string name="calendar_today">今天</string>
+    <string name="calendar_next">後一天</string>
+    <string name="calendar_help">選擇行程讓 Ghost 讀取。裝置行事曆僅在設定中啟用後顯示。</string>
+    <string name="calendar_empty">沒有行程</string>
+    <string name="calendar_all_day">全天</string>
+    <string name="calendar_choose">選擇</string>
+</resources>

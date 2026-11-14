@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calendar_title">Calendar</string>
+    <string name="calendar_previous">Previous day</string>
+    <string name="calendar_today">Today</string>
+    <string name="calendar_next">Next day</string>
+    <string name="calendar_help">Select an appointment to have the ghost read it. Device calendars appear when enabled in settings.</string>
+    <string name="calendar_empty">No appointments</string>
+    <string name="calendar_all_day">All day</string>
+    <string name="calendar_choose">Choose</string>
+</resources>

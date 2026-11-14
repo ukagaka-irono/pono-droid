@@ -53,6 +53,9 @@ class ShioriSession(
     suspend fun get(id: String, vararg references: String): ShioriResponse? =
         request(ShioriRequest(ShioriMethod.GET, id, references.toList()))
 
+    /** HEADLINE 等の共通 DLL ABI も同じスレッドとタイムアウトで動かす。文字コードは呼び出し側が扱う。 */
+    suspend fun rawRequest(bytes: ByteArray): ByteArray? = call(requestTimeoutMs, "request") { shiori.request(bytes) }
+
     suspend fun notify(id: String, vararg references: String) {
         request(ShioriRequest(ShioriMethod.NOTIFY, id, references.toList()))
     }

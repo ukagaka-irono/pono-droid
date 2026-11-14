@@ -265,6 +265,9 @@ class SurfaceDefinition(val id: Int) {
     /** `name,定義名`（SSP 2.8.24）。\s[定義名] で、番号の代わりにこの名前で呼べる */
     var name: String? = null
 
+    /** このサーフェスだけのバルーン位置。キーは balloon.offsetx / sakura.balloon.offsetyl など。 */
+    val balloonOffsets = LinkedHashMap<String, Int>()
+
     val elements = sortedMapOf<Int, SurfaceElement>()
     val animations = sortedMapOf<Int, Animation>()
 
@@ -424,6 +427,7 @@ class SurfaceTable(
         private val oldOption = Regex("""^(\d+)option$""")
         private val element = Regex("""^element(\d+)$""")
         private val collision = Regex("""^collision(\d+)$""")
+        private val balloonOffset = Regex("""^(?:(?:sakura|kero|char\d+)\.)?balloon\.offset[xy][lrcb]?$""")
         private val collisionEx = Regex("""^collisionex(\d+)$""")
 
         /** ブレスの種類（surface / surface.alias / tooltips / cursor / descript） */
@@ -653,6 +657,13 @@ class SurfaceTable(
         private fun applyLine(def: SurfaceDefinition, line: String) {
             val key = line.substringBefore(',').trim().lowercase()
             val args = line.substringAfter(',', "").split(',').map { it.trim() }
+
+            // offset.x / offset.y は balloon.offsetx / balloon.offsety の別名。
+            val offsetKey = if (key.startsWith("offset.")) "balloon.offset" + key.removePrefix("offset.") else key
+            if (balloonOffset.matches(offsetKey)) {
+                args.firstOrNull()?.toIntOrNull()?.let { def.balloonOffsets[offsetKey] = it }
+                return
+            }
 
             when (key) {
                 "name" -> {

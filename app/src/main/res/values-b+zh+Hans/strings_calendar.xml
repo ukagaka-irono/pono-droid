@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="calendar_title">日历</string>
+    <string name="calendar_previous">前一天</string>
+    <string name="calendar_today">今天</string>
+    <string name="calendar_next">后一天</string>
+    <string name="calendar_help">选择日程让幽灵读取。设备日历仅在设置中启用后显示。</string>
+    <string name="calendar_empty">没有日程</string>
+    <string name="calendar_all_day">全天</string>
+    <string name="calendar_choose">选择</string>
+</resources>

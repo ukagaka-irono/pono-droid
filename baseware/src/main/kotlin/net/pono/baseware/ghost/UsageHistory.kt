@@ -66,6 +66,15 @@ class UsageHistory(private val file: File, private val clock: () -> LocalDate = 
     fun recentPlugins(): List<String> = list(KEY_PLUGINS)
 
     @Synchronized
+    fun recentHeadlines(): List<String> = list(KEY_HEADLINES)
+
+    @Synchronized
+    fun headlineUsed(dirName: String) {
+        push(KEY_HEADLINES, dirName)
+        save()
+    }
+
+    @Synchronized
     fun pluginUsed(dirName: String) {
         push(KEY_PLUGINS, dirName)
         save()
@@ -125,6 +134,7 @@ class UsageHistory(private val file: File, private val clock: () -> LocalDate = 
         const val KEY_BALLOONS = "recent.balloon"
         const val KEY_CALLS = "recent.call"
         const val KEY_PLUGINS = "recent.plugin"
+        const val KEY_HEADLINES = "recent.headline"
         const val MAX_RECENT = 20
         const val KEEP_DAYS = 31
     }

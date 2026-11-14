@@ -2,10 +2,15 @@ package net.pono.baseware.ghost
 
 import net.pono.baseware.plugin.PluginHost
 import net.pono.baseware.plugin.Plugin
+import net.pono.baseware.headline.Headline
+import net.pono.baseware.headline.HeadlineAnalyzer
+import net.pono.baseware.headline.HeadlineReader
+import net.pono.baseware.headline.HeadlineResult
 import net.pono.baseware.sakura.BalloonCoord
 import net.pono.baseware.sakura.BalloonImageOptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -324,6 +329,9 @@ interface GhostPlatform {
     /** [day] のユーザーの予定（端末のカレンダー）。読む許可が無ければ空 */
     fun deviceSchedule(day: java.time.LocalDate): List<DeviceEvent> = emptyList()
 
+    /** 本体カレンダーを表示する。端末の予定を読む許可は既存の設定に従う。 */
+    fun openCalendar(): Boolean = false
+
     /** \![set,wallpaper]。アプリの設定で許したときだけ壁紙を変える。変えたら true */
     fun setWallpaper(request: WallpaperRequest): Boolean = false
 
@@ -492,6 +500,8 @@ class GhostController(
     private val calledBy: PreviousGhost? = null,
     /** インストール済みのプラグイン（アプリが1つ持ち、どのゴーストにも同じものを渡す）。null ならプラグインは無い */
     private val plugins: PluginHost? = null,
+    /** Windows ランタイム等が提供する HEADLINE DLL の実行環境。RSS はこれが無くても動く。 */
+    private val headlineAnalyzer: HeadlineAnalyzer? = null,
 ) {
     /** \![set,otherghosttalk]（false / before / after）と \![set,othersurfacechange] */
     @Volatile private var otherGhostTalk = "false"
@@ -518,6 +528,9 @@ class GhostController(
 
     /** 使ったゴーストとバルーン（history.*）と使用率（rateofuselist.*）。ゴースト置き場が無ければ記録しない */
     private val history: UsageHistory? = repository?.let { UsageHistory(File(it.root.parentFile ?: it.root, "pono/history.properties")) }
+    private val headlineReader = repository?.let { HeadlineReader(httpClient, File(it.root.parentFile, "pono/headline-cache"), headlineAnalyzer) }
+    private var headlineJob: Job? = null
+    private var lastInstalledHeadline: String? = null
 
     /** エラーと「できなかった」記録を、開発のための記録にも残す */
     private val platform: GhostPlatform = object : GhostPlatform by platform {
@@ -946,6 +959,10 @@ class GhostController(
         repository?.balloons?.list()?.takeIf { it.isNotEmpty() }?.let { list -> s.notify("installedballoonname", *list.map { it.name }.toTypedArray()) }
         repository?.root?.let { s.notify("ghostpathlist", it.absolutePath + "/") }
         repository?.balloons?.root?.let { s.notify("balloonpathlist", it.absolutePath + "/") }
+        repository?.headlines?.let { h ->
+            s.notify("installedheadlinename", *h.list().map { it.name }.toTypedArray())
+            s.notify("headlinepathlist", h.root.absolutePath + "/")
+        }
         plugins?.let { p ->
             p.plugins.takeIf { it.isNotEmpty() }?.let { list -> s.notify("installedplugin", *list.map { "${it.name}\u0001${it.id}" }.toTypedArray()) }
             s.notify("pluginpathlist", p.repository.root.absolutePath + "/")
@@ -1099,7 +1116,7 @@ class GhostController(
     /** バルーンのオンラインの印は、\![enter,onlinemode] の間とネットワーク更新の間に出す */
     private fun refreshOnline() = _state.update { it.copy(online = onlineMode || updating || httpShowing > 0) }
 
-    /** ネットワーク更新するもの。[type] は ghost / shell / balloon / plugin、[name] は名前（OnUpdateResultEx） */
+    /** ネットワーク更新するもの。[type] は ghost / shell / balloon / plugin / headline、[name] は名前（OnUpdateResultEx） */
     private class UpdateTarget(val type: String, val name: String, val dir: File, val homeUrl: String?)
 
     /**
@@ -1156,7 +1173,8 @@ class GhostController(
                     ?.let { UpdateTarget("balloon", it.name, it.dir, it.descript["homeurl"]) }
                 o.startsWith("--plugin=") -> plugins?.plugins?.firstOrNull { it.name == name || it.dir.name == name }
                     ?.let { UpdateTarget("plugin", it.name, it.dir, it.descript["homeurl"]) }
-                // ヘッドライン・言語は pono-droid に無い
+                o.startsWith("--headline=") -> repository?.headlines?.find(name)
+                    ?.let { UpdateTarget("headline", it.name, it.dir, it.descript["homeurl"]) }
                 else -> null
             }
         }
@@ -1184,6 +1202,7 @@ class GhostController(
             val results = mutableListOf<String>()
             try {
                 for (t in targets) {
+                    if (t.type == "headline") headlineJob?.cancelAndJoin()
                     val row = updateOne(t, mode, reason, extended)
                     results += row
                     // 確かめるだけでなければ、結果と時刻を残す（update_result / update_time）
@@ -1316,6 +1335,16 @@ class GhostController(
             GhostSchedule.todayReference(GhostSchedule.DEFAULT_TYPE, d.title, d.description, "", e, day, d.start.toLocalDate())
         }
         return schedule.today(day) + subscribedSchedule(day) + user
+    }
+
+    /** UI からは IO スレッドで呼ぶ。選んだ日の繰り返し予定も展開する。 */
+    fun calendarEntries(day: java.time.LocalDate): List<CalendarEntry> = todaySchedule(day).mapNotNull(CalendarEntry::parse)
+        .sortedWith(compareBy({ it.start.time != null }, { it.start.date }, { it.start.time }))
+
+    /** マウスの静止の代わりに、予定をタップまたは長押ししたときに読む。 */
+    fun onScheduleRead(entry: CalendarEntry) {
+        if (closing) return
+        raise("OnScheduleRead", entry.references, sensitive = true)
     }
 
     /** 毎分: 日付が変わったら今日の予定を知らせ直し、知らせる時刻になった予定は OnSchedule5MinutesToGo */
@@ -1664,7 +1693,7 @@ class GhostController(
             "getghostnamelist" -> lines(repository?.list()?.map { it.name } ?: listOf(ghost.name))
             "getshellnamelist" -> lines(ghost.shellDirs.map { Shell.nameOf(it) })
             "getballoonnamelist" -> lines(repository?.balloons?.list()?.map { it.name }.orEmpty())
-            "getheadlinenamelist" -> SstpResponse(204)
+            "getheadlinenamelist" -> repository?.headlines?.list()?.takeIf { it.isNotEmpty() }?.let { lines(it.map { h -> h.name }) } ?: SstpResponse(204)
             "getpluginnamelist" -> plugins?.plugins?.takeIf { it.isNotEmpty() }?.let { list -> lines(list.map { it.name }) } ?: SstpResponse(204)
             "getstatus" -> data(property("currentghost.status"))
             // 一緒に動いているゴーストを FMO の形で（ウィンドウハンドルは Android に無いので 0）
@@ -2893,6 +2922,7 @@ class GhostController(
             val items = r.installed
             lastInstalledObject = items.firstOrNull()?.name
             items.firstOrNull { it.type == NarInstaller.Type.GHOST }?.let { lastInstalledGhost = it.name }
+            headlineInstalled(items)
             plugins?.installComplete(items.map { it.type.id }, items.map { it.name }, items.map { it.dir.absolutePath + "/" })
             val refs = listOf(
                 items.joinToString("\u0001") { it.type.id },
@@ -3210,6 +3240,7 @@ class GhostController(
 
     /** タイマー・WebSocket・ファイルの見張り・通信・houchi・音・SHIORI をすべて片付ける */
     private suspend fun release() {
+        headlineJob?.cancel()
         timerJob?.cancel()
         if (pluginsBooted) {
             pluginsBooted = false
@@ -4130,10 +4161,12 @@ class GhostController(
             if ((repository?.list()?.size ?: 0) > 1) add(item(Messages.get("menu.ghosts"), "pono:ghosts,$scopeId", "ghostrootbutton.caption"))
             if (callableGhosts().isNotEmpty()) add(item(Messages.get("menu.callghost"), "pono:callghosts,$scopeId", "callghostrootbutton.caption"))
             if (plugins?.running?.isNotEmpty() == true) add(item(Messages.get("menu.plugins"), "pono:plugins,$scopeId", "pluginrootbutton.caption"))
+            if (repository != null) add(item(Messages.get("menu.headlines"), "pono:headlines,$scopeId", "headlinesenserootbutton.caption"))
+            add(item(Messages.get("menu.calendar"), "pono:calendar", "calendarbutton.caption"))
             if (ghost.shellDirs.size > 1) add(item(Messages.get("menu.shells"), "pono:shells,$scopeId", "shellrootbutton.caption"))
             add(item(Messages.get("menu.scale"), "pono:scale,$scopeId", "shellscalerootbutton.caption"))
             if (repository != null) add(item(Messages.get("menu.balloons"), "pono:balloons,$scopeId", "balloonrootbutton.caption"))
-            if (historyGhosts().isNotEmpty() || historyBalloons().isNotEmpty() || historyCalls().isNotEmpty()) {
+            if (historyGhosts().isNotEmpty() || historyBalloons().isNotEmpty() || historyCalls().isNotEmpty() || historyHeadlines().isNotEmpty() || historyPlugins().isNotEmpty()) {
                 add(item(Messages.get("menu.history"), "pono:history,$scopeId", "historyrootbutton.caption"))
             }
             if (ghost.readmeFile() != null) add(item("Read Me", "pono:readme", "readmebutton.caption", "readmebuttoncaption"))
@@ -4378,6 +4411,7 @@ class GhostController(
         if (historyBalloons().isNotEmpty()) item(Messages.get("menu.balloons"), "pono:historylist,$scopeId,balloon", "balloonhistorybutton.caption")?.let(sb::append)
         if (historyCalls().isNotEmpty()) item(Messages.get("menu.callghost"), "pono:historylist,$scopeId,call", "callghosthistorybutton.caption")?.let(sb::append)
         if (historyPlugins().isNotEmpty()) item(Messages.get("menu.plugins"), "pono:historylist,$scopeId,plugin", "pluginhistorybutton.caption")?.let(sb::append)
+        if (historyHeadlines().isNotEmpty()) item(Messages.get("menu.headlines"), "pono:historylist,$scopeId,headline", "headlinesensehistorybutton.caption")?.let(sb::append)
         sb.append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
         return sb.toString()
     }
@@ -4392,9 +4426,110 @@ class GhostController(
             }
             "call" -> historyCalls().forEach { sb.append("\\q[${quote(it.name)},pono:callghost,${quote(it.dir.name)}]\\n") }
             "plugin" -> historyPlugins().forEach { sb.append("\\q[${quote(it.name)},pono:plugin,${quote(it.dir.name)}]\\n") }
+            "headline" -> historyHeadlines().forEach { sb.append("\\__q[pono:headline,${quote(it.dir.name)}]${literalScript(it.name)}\\__q\\n") }
         }
         sb.append("\\q[${Messages.get("menu.back")},pono:history,$scopeId]\\e")
         return sb.toString()
+    }
+
+    private fun historyHeadlines(): List<Headline> = history?.recentHeadlines().orEmpty().mapNotNull { repository?.headlines?.find(it) }
+
+    fun headlineInstalled(items: List<NarInstaller.Installed>) {
+        items.lastOrNull { it.type == NarInstaller.Type.HEADLINE }?.let { lastInstalledHeadline = it.dir.name }
+    }
+
+    private fun headlinesMenu(scopeId: Int): String = buildString {
+        append("\\p[$scopeId]\\_q${literalScript(Messages.get("menu.headlines"))}\\n")
+        for (h in repository?.headlines?.list().orEmpty()) {
+            append("\\__q[pono:headline,${quote(h.dir.name)}]${literalScript(h.name)}\\__q")
+            append("  \\q[Read Me,pono:headline-readme,${quote(h.dir.name)}]")
+            append("  \\q[${quote(Messages.get("menu.headline.remove"))},pono:headline-remove,${quote(h.dir.name)}]\\n")
+        }
+        append("\\q[${quote(Messages.get("menu.headline.add"))},pono:headline-add]\\n")
+        append("\\q[${Messages.get("menu.back")},pono:menu,$scopeId]\\e")
+    }
+
+    /** RSS の登録はユーザーが URL を確定したときだけ。取得に失敗した URL は保存しない。 */
+    private fun addFeed(value: String) {
+        val repo = repository?.headlines ?: return
+        val reader = headlineReader ?: return
+        headlineJob?.cancel()
+        headlineJob = scope.launch {
+            val source = Headline.webUrl(value)
+            try {
+                val feed = source?.let { reader.fetchFeed(it) }
+                if (feed == null) {
+                    platform.onError(Messages.get("error.headline.feed"))
+                    return@launch
+                }
+                val h = withContext(Dispatchers.IO) { repo.addFeed(source, feed) }
+                lastInstalledHeadline = h.dir.name
+                session?.let { notifyInstalled(it) }
+                cancelScript()
+                runScript(headlinesMenu(0))
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) { platform.onError(Messages.get("error.headline.feed")) }
+        }
+    }
+
+    /** 手動実行と \\![execute,headline]。通信はゴーストの SHIORI スレッドを塞がない。 */
+    fun executeHeadline(name: String): Boolean {
+        if (closing || restricted) return false
+        val repo = repository?.headlines ?: return false
+        val reader = headlineReader ?: return false
+        val headline = when (name.lowercase()) {
+            "random" -> repo.list().randomOrNull()
+            "lastinstalled" -> lastInstalledHeadline?.let(repo::find)
+            else -> repo.find(name)
+        } ?: return false
+        headlineJob?.cancel()
+        headlineJob = scope.launch {
+            history?.headlineUsed(headline.dir.name)
+            suspend fun event(id: String, refs: List<String>): Boolean {
+                if (closing) return false
+                val script = request(id, refs)?.takeIf { it.isNotBlank() } ?: return false
+                cancelScript()
+                runScript(script).join()
+                return true
+            }
+            suspend fun fallback(suffix: String, refs: List<String>): Boolean {
+                if (headline.isFeed && event("OnRSS$suffix", refs)) return true
+                return event("OnHeadlinesense$suffix", refs)
+            }
+            fallback("Begin", listOf(headline.name, headline.url))
+            val result = try { reader.read(headline)
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) { HeadlineResult.Failure("can't analyze") }
+            if (closing) return@launch
+            when (result) {
+                is HeadlineResult.Failure -> if (!fallback("Failure", listOf(result.reason))) {
+                    platform.onError(Messages.get("error.headline.read", headline.name, result.reason))
+                }
+                HeadlineResult.Unchanged -> fallback("Complete", listOf("no update"))
+                is HeadlineResult.Updated -> {
+                    val feed = result.feed
+                    if (feed != null && event("OnRSSComplete", listOf(feed.title.ifBlank { headline.name }, feed.link.ifBlank { headline.openUrl }) + feed.items.map { it.reference() })) return@launch
+                    val defaultLines = mutableListOf<String>()
+                    result.items.forEachIndexed { i, item ->
+                        val phase = when {
+                            result.items.size == 1 -> "First and Last"
+                            i == 0 -> "First"
+                            i == result.items.lastIndex -> "Last"
+                            else -> "Next"
+                        }
+                        val title = literalScript(item.title)
+                        val url = Headline.webUrl(item.url)
+                        val line = if (url == null) title else "\\__q[${quote(url)}]$title\\__q"
+                        if (!event("OnHeadlinesense.OnFind", listOf(headline.name, headline.url, phase, line))) defaultLines += line
+                    }
+                    if (defaultLines.isNotEmpty()) {
+                        cancelScript()
+                        runScript("\\0\\_q${literalScript(headline.name)}\\n" + defaultLines.joinToString("\\n") + "\\e")
+                    }
+                }
+            }
+        }
+        return true
     }
 
     private fun balloonsMenu(scopeId: Int): String {
@@ -4732,6 +4867,10 @@ class GhostController(
             text.trim().toIntOrNull()?.let { platform.setCharacterScale(it.coerceIn(SCALE_MIN, SCALE_MAX)) }
             return
         }
+        if (request.id == FEED_INPUT) {
+            addFeed(text)
+            return
+        }
         // ユーザーが打った文字（パスワードのこともある）はログに残さない
         // ID が On で始まればそのイベント（Reference0 = 答え）、そうでなければ OnUserInput（ID, 答え）。
         // その次が補足（スライダーの「最小,最大」。ほかは空）で、--reference= の追加情報はその後ろ
@@ -4847,6 +4986,14 @@ class GhostController(
     }
 
     // ---- イベント ----
+
+    /** アクティブな入力画面のキー。端末のキー番号ではなく Win32 仮想キーコードを受け取る。 */
+    fun onKeyPress(key: String, virtualKey: Int, repeat: Int = 0, scopeId: Int = 0, modifiers: Set<String> = emptySet()) {
+        if (closing || virtualKey !in 0..255 || scopeId !in _state.value.characters) return
+        lastUserActivity = System.currentTimeMillis()
+        raise("OnKeyPress", listOf(key.take(32), virtualKey.toString(), repeat.coerceAtLeast(0).toString(), scopeId.toString(),
+            listOf("shift", "ctrl", "alt", "win").filter { it in modifiers }.joinToString(",")), sensitive = true)
+    }
 
     /**
      * イベントを SHIORI に送り、返ってきたスクリプトを再生する。
@@ -5381,6 +5528,25 @@ class GhostController(
                     "pono:ghost" -> refs.firstOrNull()?.let { changeGhost(it, byUser = true) }
                     "pono:callghosts" -> runScript(callGhostsMenu(scopeId))
                     "pono:plugins" -> runScript(pluginsMenu(scopeId))
+                    "pono:headlines" -> runScript(headlinesMenu(scopeId))
+                    "pono:calendar" -> platform.openCalendar()
+                    "pono:headline" -> refs.firstOrNull()?.let(::executeHeadline)
+                    "pono:headline-add" -> openInput(InputRequest(InputRequest.Kind.INPUT, FEED_INPUT, "", 0, ++inputSerial, placeholder = "RSS / Atom URL"))
+                    "pono:headline-readme" -> refs.firstOrNull()?.let { repository?.headlines?.find(it) }?.let { h -> h.readmeText()?.let { platform.showText(h.name, it) } }
+                    "pono:headline-remove" -> refs.firstOrNull()?.let { repository?.headlines?.find(it) }?.let { h ->
+                        runScript("\\p[$scopeId]\\_q${literalScript(Messages.get("confirm.headline.remove", h.name))}\\n" +
+                            "\\q[${quote(Messages.get("menu.headline.remove"))},pono:headline-delete,${quote(h.dir.name)}]\\n" +
+                            "\\q[${Messages.get("menu.back")},pono:headlines,$scopeId]\\e")
+                    }
+                    "pono:headline-delete" -> refs.firstOrNull()?.let { repository?.headlines?.find(it) }?.let { h ->
+                        headlineJob?.cancel()
+                        scope.launch {
+                            withContext(Dispatchers.IO) { repository?.headlines?.uninstall(h) }
+                            session?.let { notifyInstalled(it) }
+                            cancelScript()
+                            runScript(headlinesMenu(scopeId))
+                        }
+                    }
                     "pono:plugin" -> refs.firstOrNull()?.let(::execPlugin)
                     "pono:callghost" -> refs.firstOrNull()?.let { callGhost(it, raiseEvent = true, byUser = true) }
                     // descript.txt の recommended.balloon と違うものに替えるときは、先に確かめる（SSP の警告と同じ）
@@ -5588,12 +5754,18 @@ class GhostController(
     }
 
     /**
-     * シェルの、次にゴーストの descript.txt の sakura.balloon.offsetx / offsety と、向きを付けた offsetxl / xr / xc / xb など。
+     * 現在の surface の balloon.offset、シェル、ゴーストの descript.txt の順に sakura.balloon.offsetx / offsety と方向別の値を探す。
      * 足元（b）が無ければ頭上・足元（c）、それも無ければ向きなし。左右と頭上・足元は向きなしを使う。x と y は別々に決める
      */
-    private fun balloonOffsets(scope: Int): BalloonOffsets {
+    private fun balloonOffsets(scope: Int, surface: Int): BalloonOffsets {
         val name = Shell.scopeName(scope)
+        val offsets = shell.surfaces[surface]?.balloonOffsets.orEmpty()
         fun value(axis: String, vararg suffixes: String): Int {
+            // サーフェス内で向きの既定値まで探してから descript.txt に戻る。軸は別々に解決する。
+            for (s in suffixes) {
+                (offsets["$name.balloon.offset$axis$s"] ?: offsets["balloon.offset$axis$s"])
+                    ?.let { return it.coerceIn(-MAX_BALLOON_OFFSET, MAX_BALLOON_OFFSET) }
+            }
             for (s in suffixes) {
                 val key = "$name.balloon.offset$axis$s"
                 (shell.descript.int(key) ?: ghost.descript.int(key))?.let { return it.coerceIn(-MAX_BALLOON_OFFSET, MAX_BALLOON_OFFSET) }
@@ -5625,7 +5797,7 @@ class GhostController(
                         alignment = alignmentOf(scope),
                         balloonOffset = it.characters[scope]?.balloonOffset,
                         balloonOffsetRelative = it.characters[scope]?.balloonOffsetRelative ?: (false to false),
-                        balloonOffsets = balloonOffsets(scope),
+                        balloonOffsets = balloonOffsets(scope, defaultSurface(scope)),
                         // 指で動かしたバルーンのずれは、起動し直しても覚えている
                         balloonDrag = it.characters[scope]?.balloonDrag ?: savedBalloonDrag(scope),
                         balloonMoveLocked = balloonMoveLocked(scope),
@@ -5687,6 +5859,9 @@ class GhostController(
             n.startsWith("history.ghost") -> historyProperty(n.removePrefix("history.ghost"), history?.recentGhosts().orEmpty().mapNotNull { repository?.find(it) }) { g, key, i -> ghostProperty(g, key, i) }
             n.startsWith("history.balloon") -> historyProperty(n.removePrefix("history.balloon"), history?.recentBalloons().orEmpty().mapNotNull { repository?.balloons?.find(it) }) { b, key, i -> balloonProperty(b, key, i) }
             n.startsWith("history.plugin") -> historyProperty(n.removePrefix("history.plugin"), historyPlugins()) { p, key, i -> pluginProperty(p, key, i) }
+            n.startsWith("history.headline") -> historyProperty(n.removePrefix("history.headline"), historyHeadlines(), ::headlineProperty)
+            n == "headlinelist.count" -> (repository?.headlines?.list()?.size ?: 0).toString()
+            n.startsWith("headlinelist") -> listProperty(n.removePrefix("headlinelist"), repository?.headlines?.list().orEmpty(), null, ::headlineProperty)
             n == "pluginlist.count" -> (plugins?.plugins?.size ?: 0).toString()
             n.startsWith("pluginlist") -> listProperty(n.removePrefix("pluginlist"), plugins?.plugins.orEmpty(), null) { p, key, i -> pluginProperty(p, key, i) }
             n.startsWith("rateofuselist.") || n.startsWith("rateofuselist(") -> rateOfUseProperty(n.removePrefix("rateofuselist").removePrefix("."))
@@ -5929,6 +6104,15 @@ class GhostController(
         "path" -> b.dir.absolutePath + "/"
         "index" -> index.toString()
         else -> packageProperty(b.dir, b.descript, key)
+    }
+
+    private fun headlineProperty(h: Headline, key: String, index: Int): String? = when (key) {
+        "name" -> h.name
+        "path" -> h.dir.absolutePath + "/"
+        "index" -> index.toString()
+        "url" -> h.url
+        "openurl" -> h.openUrl
+        else -> packageProperty(h.dir, h.descript, key)
     }
 
     private fun currentGhostProperty(key: String): String? {
@@ -6427,6 +6611,7 @@ class GhostController(
                 .associate { it.substring(2).substringBefore('=').lowercase() to it.substringAfter('=', "") }
             when (name) {
                 "resetwindowpos" -> resetWindowPositions()
+                "headline" -> return executeHeadline(args.firstOrNull().orEmpty())
                 "websocket" -> return args.firstOrNull()?.let { openWebSocket(it, args.drop(1)) } ?: false
                 "ping" -> return ping(opts)
                 "nslookup" -> return nslookup(opts)
@@ -6769,7 +6954,7 @@ class GhostController(
         override fun setSurface(scope: Int, surface: Int) {
             val old = _state.value.characters[scope]?.surface ?: -1
             val changed = old != surface
-            _state.update { it.update(scope) { c -> c.copy(surface = surface) } }
+            _state.update { it.update(scope) { c -> c.copy(surface = surface, balloonOffsets = balloonOffsets(scope, surface)) } }
             if (changed) {
                 announceSurface(scope, surface, old)
                 val chars = _state.value.characters
@@ -6936,6 +7121,8 @@ class GhostController(
             }
             when (kind) {
                 "readme" -> platform.showText(ghost.name, readmeText())
+                "calendar" -> return platform.openCalendar()
+                "headlinesensorexplorer" -> scope.launch { cancelScript(); runScript(headlinesMenu(0)) }
                 "terms" -> return showTerms()
                 // 一覧をバルーンに出すときは、今のスクリプトを止めてから（止めないと、前のスクリプトのバルーンのタイムアウトが
                 // 新しい一覧を消し、OnBalloonTimeout も送ってしまう）
@@ -7312,6 +7499,7 @@ class GhostController(
 
         /** \![open,addressbar] の箱の ID */
         private const val ADDRESSBAR_INPUT = "pono:addressbar"
+        private const val FEED_INPUT = "pono:headline-add"
 
         /** 一緒に動いているゴーストが増減したことを知らせるイベント（otherghostname を送り直す） */
         private val OTHER_GHOST_CHANGES = setOf("OnOtherGhostBooted", "OnOtherGhostClosed", "OnOtherGhostChanged", "OnOtherGhostVanished")

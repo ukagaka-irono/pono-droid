@@ -867,6 +867,7 @@ private fun GhostRow(
     onUninstall: () -> Unit,
 ) {
     val ghost = item.ghost
+    val context = LocalContext.current
     var confirmUninstall by remember { mutableStateOf(false) }
     // 推奨と違うバルーンを選んだ。切り替える前に確かめる（選んだバルーンと、その警告）
     var pendingBalloon by remember { mutableStateOf<Pair<String?, String>?>(null) }
@@ -914,6 +915,8 @@ private fun GhostRow(
                 val warning = balloonWarning(value)
                 if (warning == null) onSelectBalloon(value) else pendingBalloon = value to warning
             }, thumbnails = item.balloonThumbnails)
+            if (running) TextButton(onClick = { GhostInputActivity.start(context, ghost.dir.name) }) { Text(stringResource(R.string.input_title)) }
+            if (running) TextButton(onClick = { GhostCalendarActivity.start(context, ghost.dir.name) }) { Text(stringResource(R.string.calendar_title)) }
         }
     }
     pendingBalloon?.let { (value, warning) ->

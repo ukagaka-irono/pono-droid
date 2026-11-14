@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="input_title">Keyboard / gamepad</string>
+    <string name="input_help">Open this screen to send keys to the ghost. A connected keyboard or gamepad also works while this screen is active.</string>
+    <string name="input_scope">Character</string>
+    <string name="input_stopped">This ghost has stopped.</string>
+    <string name="input_close">Close</string>
+</resources>

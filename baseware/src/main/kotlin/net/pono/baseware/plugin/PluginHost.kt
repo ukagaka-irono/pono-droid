@@ -142,6 +142,7 @@ class PluginHost(
             add("installedballoonname" to listOf(g.balloons.list().joinToString("\u0001") { it.name }))
             add("ghostpathlist" to listOf(g.root.absolutePath + "/"))
             add("balloonpathlist" to listOf(g.balloons.root.absolutePath + "/"))
+            add("headlinepathlist" to listOf(g.headlines.root.absolutePath + "/"))
         }
         add("pluginpathlist" to listOf(repository.root.absolutePath + "/"))
     }

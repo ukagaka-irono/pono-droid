@@ -150,3 +150,11 @@ surface.standard.sneer,冷笑
 surface.standard.shyangry,害羞生氣
 surface.standard.singing,唱歌
 surface.standard.wideeyed,瞪眼
+
+menu.headlines,RSS / 標題
+menu.headline.add,新增 RSS / Atom
+menu.headline.remove,刪除
+confirm.headline.remove,刪除 %1？
+error.headline.feed,無法讀取此 RSS / Atom 訂閱。
+error.headline.read,無法讀取 %1：%2
+menu.calendar,行事曆

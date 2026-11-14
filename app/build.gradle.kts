@@ -422,6 +422,13 @@ android {
         debug {
             applicationIdSuffix = ".debug"
         }
+        // 以前のデバッグ署名鍵が手元に無い場合にも、既存アプリとデータを残して確認できる版。
+        // 通常の debug / benchmark とは別のアプリとしてインストールする。
+        create("preview") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".preview"
+            matchingFallbacks += "debug"
+        }
         // 動きの速さを確かめるための版。中身はリリースと同じ（デバッグできない）で、デバッグ版と同じ鍵・同じ
         // net.pono.droid.debug なので、端末に入っているデバッグ版の上にデータを残したまま入れられる
         create("benchmark") {

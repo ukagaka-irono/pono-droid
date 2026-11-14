@@ -39,14 +39,21 @@ jobs:
 
       # Android SDK は runner に入っている。compileSdk 37 のプラットフォームと NDK / CMake は
       # 足りなければ Android Gradle Plugin がビルド中にインストールする
-      - name: Build debug APK and run unit tests
-        run: ./gradlew :baseware:test :app:testDebugUnitTest :app:assembleDebug --stacktrace
+      - name: Build debug and preview APKs and run unit tests
+        run: ./gradlew :baseware:test :app:testDebugUnitTest :app:assembleDebug :app:assemblePreview --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
         with:
           name: pono-droid-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload preview APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: pono-droid-preview-apk
+          path: app/build/outputs/apk/preview/*.apk
           if-no-files-found: error
 
       # 落ちたテストを注釈にして出す（ログを開かなくても、どのテストがなぜ落ちたか分かるように）

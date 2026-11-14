@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="input_title">键盘与手柄</string>
+    <string name="input_help">在此页面向角色发送按键。此页面处于前台时，也可使用连接的键盘或手柄。</string>
+    <string name="input_scope">角色</string>
+    <string name="input_stopped">此角色已停止运行。</string>
+    <string name="input_close">关闭</string>
+</resources>

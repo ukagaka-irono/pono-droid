@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="input_title">鍵盤與控制器</string>
+    <string name="input_help">在此頁面向角色傳送按鍵。此頁面位於前景時，也可使用連接的鍵盤或控制器。</string>
+    <string name="input_scope">角色</string>
+    <string name="input_stopped">此角色已停止執行。</string>
+    <string name="input_close">關閉</string>
+</resources>

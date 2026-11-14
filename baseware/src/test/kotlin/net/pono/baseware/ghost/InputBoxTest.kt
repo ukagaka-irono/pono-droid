@@ -71,7 +71,7 @@ class InputBoxTest {
             // スクリプトの中で開いて閉じた箱は残らない
             delay(300)
             assertNull(controller.state.value.input)
-            assertEquals(emptyList<String>(), shiori.events.map { it.first }.filter { it == "OnUserInput" || it == "OnCommunicate" })
+            assertEquals(emptyList<String>(), synchronized(shiori.events) { shiori.events.map { it.first }.filter { it == "OnUserInput" || it == "OnCommunicate" } })
         } finally {
             scope.cancel()
         }
@@ -136,10 +136,10 @@ class InputBoxTest {
             // 時間切れで OnUserInputCancel に答えが無ければ、"timeout" の OnUserInput
             controller.raise("OnLate", emptyList())
             withTimeout(5000) {
-                while (shiori.events.lastOrNull { it.first == "OnUserInputCancel" }?.second != listOf("Late", "timeout")) delay(20)
+                while (synchronized(shiori.events) { shiori.events.lastOrNull { it.first == "OnUserInputCancel" }?.second } != listOf("Late", "timeout")) delay(20)
             }
             withTimeout(5000) {
-                while (shiori.events.lastOrNull { it.first == "OnUserInput" }?.second != listOf("Late", "timeout")) delay(20)
+                while (synchronized(shiori.events) { shiori.events.lastOrNull { it.first == "OnUserInput" }?.second } != listOf("Late", "timeout")) delay(20)
             }
 
             // アドレスバーで打った文字は、共有で渡したのと同じ（URL でなければ OnTextDrop）。取り消してもゴーストには知らせない

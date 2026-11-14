@@ -93,6 +93,7 @@ object GhostStore {
             NarInstaller.Type.BALLOON -> Balloon(item.dir).let { b -> b.readmeText()?.let { b.name to it } }
             NarInstaller.Type.SHELL -> Shell.readmeOf(item.dir)?.let { Shell.nameOf(item.dir) to it }
             NarInstaller.Type.PLUGIN -> Plugin(item.dir).let { p -> p.readmeText()?.let { p.name to it } }
+            NarInstaller.Type.HEADLINE -> net.pono.baseware.headline.Headline(item.dir).let { h -> h.readmeText()?.let { h.name to it } }
             else -> null
         }
     }
@@ -117,6 +118,7 @@ object GhostStore {
                 NarInstaller.Type.SHELL -> context.getString(R.string.store_item_shell, item.name)
                 NarInstaller.Type.SUPPLEMENT -> context.getString(R.string.store_item_supplement, item.name)
                 NarInstaller.Type.PLUGIN -> context.getString(R.string.store_item_plugin, Plugin(item.dir).name)
+                NarInstaller.Type.HEADLINE -> context.getString(R.string.store_item_headline, net.pono.baseware.headline.Headline(item.dir).name)
             }
         }
         return context.getString(R.string.store_installed, joinNames(context, items))
