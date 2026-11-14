@@ -88,3 +88,6 @@
 [submodule "shiori-yaya/src/main/cpp/gumbo-parser"]
 	path = shiori-yaya/src/main/cpp/gumbo-parser
 	url = https://codeberg.org/gumbo-parser/gumbo-parser.git
+[submodule "shiori-yaya/src/main/cpp/nashi"]
+	path = shiori-yaya/src/main/cpp/nashi
+	url = https://github.com/ukagaka-irono/nashi-shiori-studio-2.git

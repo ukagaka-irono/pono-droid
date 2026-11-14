@@ -1,9 +1,11 @@
 # pono-droid
 
 伺か（ukagaka）のゴーストを Android で動かすベースウェアです。
-ゴーストを他のアプリの上に常駐させ、SHIORI（ゴーストの頭脳）には YAYA・里々・華和梨・Kagari・Minato・Pasta・QuickSHIORI を Android 向けにビルドして使います。
+ゴーストを他のアプリの上に常駐させ、SHIORI（ゴーストの頭脳）には YAYA・里々・華和梨・Kagari・Minato・Pasta・QuickSHIORI・なし栞 2 を Android 向けにビルドして使います。
 
 Windows 専用ゴーストと DLL を含む SSP 完全互換に向けて移植中です。現在の実装範囲と残作業は [移植の進捗](docs/ssp-porting.md) を参照してください。任意の Windows DLL を Android で実行する機能はまだ接続していません。
+
+全ての栞を移植対象としています。[栞ごとの対応状況](docs/shiori-support.md) に、組み込み済みのエンジンと残る実行環境・配布条件の確認を記録しています。
 
 > 開発中のソフトウェアです。動作確認は moto g05（Android 15）と YAYA 製のゴースト1体で行っています。
 
@@ -247,7 +249,7 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 
 ## 既知の制限
 
-- SHIORI は上記 7 エンジンに対応しています。ほかの Windows SHIORI は、互換ランタイムを接続するまで動きません。
+- SHIORI は上記 8 エンジンを組み込んでいます。なし栞 2 の OS 入出力・SAORI は Android 向けの移植実装です。ほかの Windows SHIORI は、追加移植または互換ランタイムの接続が必要です。
 - SAORI は内蔵の互換モジュールと Android 向けに組み込んだモジュールに対応します。任意の同梱 Windows DLL や外部プログラムの起動はまだ対応していません。
 - `\_l` による選択肢の横並びは、座標どおりではなく列に分けて並べます。
 - サウンドは同時に鳴らせるのが1回分とループ1つまでです。
@@ -286,6 +288,8 @@ Released under the MIT License.
 
 同梱・利用しているソフトウェアは次のとおりです（[NOTICE](NOTICE) も参照）。ライセンスの全文はアプリの「ライセンス」画面で確認できます。SHIORI とその依存ライブラリはサブモジュールのまま配布し、手を加えていません。
 
+なし栞 2 の移植は、月見里 彩葉 (miyagawa-yukinterface) さんの [なし栞 + なしスタジオ](https://github.com/miyagawa-yukinterface/nashi-shiori-studio) をもとにした [nashi-shiori-studio-2](https://github.com/ukagaka-irono/nashi-shiori-studio-2) を使用しています。pono-droid が OS 入出力・SAORI・JNI を Android 向けに変更した版です。原作者の Windows 版とは異なります。サブモジュールのソース自体は変更せず、アダプタを本リポジトリで管理しています。
+
 | 名前 | ライセンス |
 |------|------------|
 | [YAYA](https://github.com/YAYA-shiori/yaya-shiori) | BSD 3-Clause |
@@ -297,6 +301,7 @@ Released under the MIT License.
 | [里々（SATORI）](https://github.com/ukatech/satoriya-shiori) | BSD 2-Clause |
 | [華和梨（KAWARI）](https://github.com/kawari/kawari) | BSD |
 | [Kagari](https://github.com/Tatakinov/kagari_shiori) | MIT |
+| [なし栞 2](https://github.com/ukagaka-irono/nashi-shiori-studio-2) | なしライセンス 1.1 |
 | [Lua](https://www.lua.org/) | MIT |
 | [sol2](https://github.com/ThePhD/sol2) | MIT |
 | [SQLite](https://www.sqlite.org/) | Public Domain |

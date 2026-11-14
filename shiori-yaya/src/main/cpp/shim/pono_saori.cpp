@@ -18,6 +18,8 @@ std::mutex g_lock;
 JavaVM *g_vm = nullptr;
 jclass g_bridge = nullptr;
 jmethodID g_request = nullptr;
+jmethodID g_capture = nullptr;
+jmethodID g_set_context = nullptr;
 
 // SHIORI が自分で作ったスレッド（湊の SAORI の呼び出し）を JVM につないだもの。スレッドが終わるときに外す
 struct AttachedThread {
@@ -57,7 +59,31 @@ void pono_saori_attach(JNIEnv *env) {
     } else {
         g_bridge = static_cast<jclass>(env->NewGlobalRef(c));
     }
+    g_capture = env->GetStaticMethodID(c, "capture", "()Lnet/pono/shiori/yaya/SaoriContext;");
+    g_set_context = env->GetStaticMethodID(c, "setContext", "(Lnet/pono/shiori/yaya/SaoriContext;)V");
+    if (env->ExceptionCheck()) env->ExceptionClear();
     env->DeleteLocalRef(c);
+}
+
+jobject pono_saori_capture_context() {
+    JNIEnv* env = CurrentEnv();
+    if (!env || !g_bridge || !g_capture || !g_set_context) return nullptr;
+    jobject local = env->CallStaticObjectMethod(g_bridge, g_capture);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return nullptr; }
+    jobject global = local ? env->NewGlobalRef(local) : nullptr;
+    if (local) env->DeleteLocalRef(local);
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    return global;
+}
+bool pono_saori_set_context(jobject context) {
+    JNIEnv* env = CurrentEnv();
+    if (!env || !g_bridge || !g_set_context) return false;
+    env->CallStaticVoidMethod(g_bridge, g_set_context, context);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+    return true;
+}
+void pono_saori_release_context(jobject context) {
+    if (context) { JNIEnv* env = CurrentEnv(); if (env) env->DeleteGlobalRef(context); }
 }
 
 extern "C" int pono_saori_direct_available(void) { return g_bridge != nullptr && CurrentEnv() != nullptr ? 1 : 0; }

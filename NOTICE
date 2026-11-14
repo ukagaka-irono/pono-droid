@@ -30,6 +30,11 @@ in the app's ライセンス screen and are kept in those submodules.
   https://github.com/kawari/kawari
 - Kagari (MIT License), Copyright (c) 2019 Tatakinov
   https://github.com/Tatakinov/kagari_shiori
+- nashi 2 (Nashi License 1.1), Copyright (c) 2026 月見里 彩葉 (miyagawa-yukinterface)
+  Original project: https://github.com/miyagawa-yukinterface/nashi-shiori-studio
+  Based on: https://github.com/ukagaka-irono/nashi-shiori-studio-2
+  Modified for pono-droid: Android file/encoding services, SAORI adapter and JNI integration.
+  The full license is in shiori-yaya/src/main/cpp/nashi/LICENSE and the app's license screen.
 - Lua (MIT License), Copyright (C) 1994-2024 Lua.org, PUC-Rio
   https://www.lua.org/
 - sol2 (MIT License), Copyright (c) 2013-2022 Rapptz, ThePhD, and contributors

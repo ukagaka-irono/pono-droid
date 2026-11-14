@@ -23,4 +23,9 @@ int pono_saori_module_name(const char *path, char *out, size_t outSize);
 
 // Kotlin の SaoriBridge を覚える。jni_common.h が load / request のたびに呼ぶ（2回目からは何もしない）
 void pono_saori_attach(JNIEnv *env);
+
+// 非同期の呼び出し元を保持する。capture の global ref は release で返す。
+jobject pono_saori_capture_context();
+bool pono_saori_set_context(jobject context);
+void pono_saori_release_context(jobject context);
 #endif

@@ -40,7 +40,7 @@ jobs:
       # Android SDK は runner に入っている。compileSdk 37 のプラットフォームと NDK / CMake は
       # 足りなければ Android Gradle Plugin がビルド中にインストールする
       - name: Build debug and preview APKs and run unit tests
-        run: ./gradlew :baseware:test :app:testDebugUnitTest :app:assembleDebug :app:assemblePreview --stacktrace
+        run: ./gradlew :baseware:test :shiori-yaya:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :app:assemblePreview :shiori-yaya:assembleDebugAndroidTest --stacktrace
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
@@ -56,13 +56,20 @@ jobs:
           path: app/build/outputs/apk/preview/*.apk
           if-no-files-found: error
 
+      - name: Upload native test APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: shiori-native-tests-apk
+          path: shiori-yaya/build/outputs/apk/androidTest/debug/*.apk
+          if-no-files-found: error
+
       # 落ちたテストを注釈にして出す（ログを開かなくても、どのテストがなぜ落ちたか分かるように）
       - name: Show failed tests
         if: failure()
         run: |
           python3 - <<'EOF'
           import glob, xml.etree.ElementTree as E
-          paths = glob.glob('baseware/build/test-results/test/*.xml') + glob.glob('app/build/test-results/testDebugUnitTest/*.xml')
+          paths = glob.glob('baseware/build/test-results/test/*.xml') + glob.glob('app/build/test-results/testDebugUnitTest/*.xml') + glob.glob('shiori-yaya/build/test-results/testDebugUnitTest/*.xml')
           for p in paths:
               for tc in E.parse(p).getroot().iter('testcase'):
                   for x in tc:
@@ -78,4 +85,41 @@ jobs:
         with:
           name: baseware-test-reports
           path: baseware/build/reports/tests/
+          if-no-files-found: ignore
+
+  nashi-native-tests:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 35]
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: shiori-native-tests-apk
+          path: native-test
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run nashi JNI tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: |
+            adb install -t native-test/shiori-yaya-debug-androidTest.apk
+            adb shell am instrument -w -r -e class net.pono.shiori.yaya.NashiNativeTest net.pono.shiori.yaya.test/androidx.test.runner.AndroidJUnitRunner | tee nashi-results.txt
+            python3 -c "import pathlib, re; text = pathlib.Path('nashi-results.txt').read_text(); assert re.search(r'OK \(5 tests\)', text), text"
+      - name: Upload native test output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nashi-test-results-api-${{ matrix.api }}
+          path: nashi-results.txt
           if-no-files-found: ignore

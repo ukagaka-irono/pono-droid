@@ -8,6 +8,7 @@ package net.pono.shiori.yaya
  */
 object SaoriBridge {
     private val current = ThreadLocal<((ByteArray, String?) -> ByteArray?)?>()
+    private val inherited = ThreadLocal<SaoriContext?>()
 
     @Volatile
     private var active: ((ByteArray, String?) -> ByteArray?)? = null
@@ -28,6 +29,23 @@ object SaoriBridge {
 
     /** SAORI/1.0 の要求に答える。渡す先が無い・答えられなければ null（ネイティブ側が 500 にする） */
     @JvmStatic
-    fun request(request: ByteArray, module: String?): ByteArray? =
-        runCatching { (current.get() ?: active)?.invoke(request, module) }.getOrNull()
+    fun request(request: ByteArray, module: String?): ByteArray? {
+        inherited.get()?.let { return it.request(request, module) }
+        return runCatching { (current.get() ?: active)?.invoke(request, module) }.getOrNull()
+    }
+
+    /** 非同期 SAORI が request の終了後も、呼び出し元のゴーストへ返せるように保持する。 */
+    @JvmStatic
+    fun capture(): SaoriContext = inherited.get() ?: SaoriContext(current.get() ?: active)
+
+    /** 新しく作ったネイティブ worker の間だけ設定し、終了時に null で外す。 */
+    @JvmStatic
+    fun setContext(context: SaoriContext?) {
+        if (context == null) inherited.remove() else inherited.set(context)
+    }
+}
+
+class SaoriContext internal constructor(private val handler: ((ByteArray, String?) -> ByteArray?)?) {
+    // JNI から呼ぶ。別のゴーストの active にフォールバックしない。
+    fun request(request: ByteArray, module: String?): ByteArray? = runCatching { handler?.invoke(request, module) }.getOrNull()
 }

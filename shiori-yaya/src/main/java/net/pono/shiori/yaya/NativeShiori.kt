@@ -103,6 +103,13 @@ internal object QuickShioriNative : NativeBinding {
     external override fun unload(id: Long): Boolean
 }
 
+internal object NashiNative : NativeBinding {
+    init { System.loadLibrary("nashi") }
+    external override fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray, readableDirs: ByteArray): Long
+    external override fun request(id: Long, request: ByteArray): ByteArray?
+    external override fun unload(id: Long): Boolean
+}
+
 /** pono-droid で動かせる SHIORI */
 enum class ShioriEngine(internal val binding: () -> NativeBinding) {
     YAYA({ YayaNative }),
@@ -112,6 +119,7 @@ enum class ShioriEngine(internal val binding: () -> NativeBinding) {
     MINATO({ MinatoNative }),
     PASTA({ PastaNative }),
     QUICKSHIORI({ QuickShioriNative }),
+    NASHI({ NashiNative }),
     ;
 
     companion object {
@@ -124,6 +132,7 @@ enum class ShioriEngine(internal val binding: () -> NativeBinding) {
             "minato.dll" to MINATO,
             "pasta.dll" to PASTA,
             "quickshiori.dll" to QUICKSHIORI,
+            "nashi.dll" to NASHI,
         )
 
         /**
@@ -141,6 +150,7 @@ enum class ShioriEngine(internal val binding: () -> NativeBinding) {
                 has("config.toml") && has("talks/main.mnt") -> MINATO
                 has("pasta.toml") -> PASTA
                 has("index.js") -> QUICKSHIORI
+                NashiDictionary.matches(File(masterDir, "ghost.json")) || NashiDictionary.matches(File(masterDir, "nashi.json")) -> NASHI
                 else -> null
             }
         }

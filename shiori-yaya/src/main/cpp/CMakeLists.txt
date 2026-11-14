@@ -107,6 +107,22 @@ target_compile_definitions(satori PRIVATE POSIX SATORI_DLL PONO_SAORI_DIRECT _FI
 target_compile_options(satori PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=c++11 -include ${CMAKE_CURRENT_SOURCE_DIR}/shim/android_compat.h>)
 pono_shiori_library(satori)
 
+# ---- なし栞 2（解釈部は upstream、Win32 の入出力と SAORI は Android 向けのアダプタ）----
+set(NASHI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/nashi)
+file(READ ${NASHI_DIR}/VERSION NASHI_VERSION)
+string(STRIP "${NASHI_VERSION}" NASHI_VERSION)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nashi)
+file(CONFIGURE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/nashi/version_gen.h
+    CONTENT "#define NASHI_VERSION \"@NASHI_VERSION@-pono\"\n" @ONLY)
+add_library(nashi SHARED
+    ${NASHI_DIR}/shiori/src/json.cpp ${NASHI_DIR}/shiori/src/program.cpp
+    ${NASHI_DIR}/shiori/src/interp.cpp ${NASHI_DIR}/shiori/src/shiori.cpp ${NASHI_DIR}/shiori/src/util.cpp
+    shim/pono_nashi_platform.cpp shim/pono_nashi_saori.cpp jni_nashi.cpp $<TARGET_OBJECTS:pono_iconv>)
+target_include_directories(nashi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/shim/compat/nashi
+    ${CMAKE_CURRENT_SOURCE_DIR}/shim ${NASHI_DIR}/shiori/src ${CMAKE_CURRENT_BINARY_DIR}/nashi)
+target_compile_features(nashi PRIVATE cxx_std_17)
+pono_shiori_library(nashi)
+
 # ---- 華和梨 ----
 
 # files.mak の CORESRC と SHIOSRC（SAORI は native だけ。Java / Python の SAORI と shiori.cpp の入口は使わない）

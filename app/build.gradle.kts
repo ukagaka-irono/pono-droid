@@ -113,6 +113,10 @@ abstract class GenerateLicenseAssets : DefaultTask() {
             Entry("華和梨（KAWARI）", "BSD", "https://github.com/kawari/kawari", read("kawari/LICENSE").trim()),
             Entry("Kagari", "MIT", "https://github.com/Tatakinov/kagari_shiori", read("kagari/LICENSE").trim()),
             Entry("QuickShiori", "BSD-3-Clause", "https://github.com/cronfox/quickshiori", read("quickshiori/LICENSE").trim()),
+            Entry("なし栞 2（Android 移植）", "Nashi License 1.1", "https://github.com/miyagawa-yukinterface/nashi-shiori-studio",
+                "原作者: 月見里 彩葉 (miyagawa-yukinterface)\n" +
+                    "nashi-shiori-studio-2 の解釈部を使用し、pono-droid が OS 入出力・SAORI・JNI を Android 向けに変更しています。\n\n" +
+                    read("nashi/LICENSE").trim()),
             Entry("QuickJS-ng", "MIT", "https://github.com/quickjs-ng/quickjs", read("quickshiori/3rd/quickjs/LICENSE").trim()),
             Entry("qjs-ng-sqlite3", "MIT", "https://github.com/cronfox/qjs-ng-sqlite3", read("quickshiori/3rd/qjs-ng-sqlite3/LICENSE.txt").trim()),
             // Kagari に入れる Lua の C のモジュール（luamod/）
