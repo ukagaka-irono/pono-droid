@@ -1,6 +1,6 @@
 # SHIORI 対応状況
 
-更新: 2026-11-14
+更新: 2026-11-15
 
 目標は全ての栞への対応。Windows 専用 DLL、古い栞、ゴースト独自の栞も対象とする。
 この表は現時点で確認した実装と候補の台帳であり、世の中の全ての栞を列挙し終えたものではない。
@@ -12,7 +12,7 @@
 |---|---|---|
 | YAYA | yaya.dll / aya.dll / aya5.dll | yaya.txt / aya.txt |
 | 里々 | satori.dll | satori_conf.txt、または保存ファイルと辞書 |
-| 華和梨 | kawari.dll / kawari8.dll | kawarirc.kis / kawari.ini |
+| 華和梨 8 | kawari.dll / kawari8.dll | kawarirc.kis / kawari.ini |
 | Kagari | kagari.dll | index.lua |
 | Minato | minato.dll | config.toml と talks/main.mnt |
 | Pasta | pasta.dll | pasta.toml |
@@ -46,16 +46,35 @@ Android の `NashiNativeTest` は、JNI 経由の辞書・要求の UTF-8 / CP93
 Build ワークフローは 4 ABI の APK とテスト APK を作り、後続ジョブで API 26 / 35 の x86_64 エミュレータにテスト APK を入れて実行する。
 ローカル PC に接続済み端末・AVD はないため、テスト APK のコンパイル成功と端末での実行成功を区別する。CI の結果は該当コミットの実行結果を参照する。
 
+2026-11-15（日本時間）の確認結果:
+
+| 検証 | 結果 |
+|---|---|
+| 追加した JVM 回帰テスト | 8 件成功（辞書判定 6 件、SAORI コンテキスト 2 件） |
+| API 26 / x86_64 の Android エミュレータ | `NashiNativeTest`: 5 件成功 |
+| API 35 / x86_64 の Android エミュレータ | `NashiNativeTest`: 5 件成功 |
+| APK とテスト APK | arm64-v8a / armeabi-v7a / x86 / x86_64 の 4 ABI でビルド成功 |
+| 既存の baseware / app 単体テスト | CI 成功 |
+| Windows DLL ホスト | x86 / x64 の CI 成功 |
+
+対象コードのコミットは `1f4f8732e615e518ad6ec9e02b0cb79d414ab23e`。
+[APK・Android 試験の実行結果](https://github.com/ukagaka-irono/pono-droid/actions/runs/43607029503)、
+[Windows ホストの実行結果](https://github.com/ukagaka-irono/pono-droid/actions/runs/43607029485)。
+実配布ゴーストの全機能や、物理 Android 端末での動作まで確認できたことを意味しない。
+
 ## 追加対応が必要な系統
 
 | 対象・一次資料 | 現状 | 必要な作業 |
 |---|---|---|
 | [蒼空](https://github.com/kanadelab/aosora-shiori) | 未組み込み | `license.txt` は配布 DLL の SHIORI / SAORI 利用と配布を認める一方、ソースの利用は個人利用・プロジェクト参加などに制限している。Android 移植版の APK 同梱は現条件から許可を確認できないため保留。配布 DLL を動かす経路も対象とする |
 | [AYA 5](https://github.com/ponapalt/aya5-shiori) | YAYA の互換経路のみ | readme.txt は改変・再配布を許可。旧ソース専用ビルド、Boost.Regex 依存、CP932・64 bit・Android の API 差分と旧ゴーストでの比較が必要 |
+| [華和梨 7](https://github.com/kawari/kawari7) | 未組み込み | `license.txt` は BSD 系の条件で改変・再配布を許可。独立したエンジンのビルドに加え、SHIORI/2.x の要求・応答への対応が必要。現在の `ShioriSession` は SHIORI/3.0 で送信するため、DLL 名や kawari.ini の存在だけでは旧版への対応を保証できない |
 | [MiyoJS](https://github.com/Narazaka/miyojs) | 未組み込み | Node.js とモジュール依存を調査し、実行環境を移植する。QuickSHIORI の JavaScript エンジンとは別物として扱う |
 | [phiori](https://github.com/phiori/phiori) | 未組み込み | Python を使う DLL の実行環境、依存ライブラリ、Android 向けアダプタと配布条件の確認 |
 | [ShioriSharp](https://github.com/Narazaka/ShioriSharp) / [dnproxy](https://github.com/nikolat/dnproxy) | 未組み込み | .NET 系の栞・プロキシと、それぞれのゴースト固有コードを扱う経路の調査 |
+| [PowerSHIORI](https://github.com/ukatech/powershiori) | 未組み込み | PowerShell / .NET Framework を使う Windows DLL。Windows 実行環境と PowerShell のホストが必要 |
 | [shioruby](https://github.com/Narazaka/shioruby) / [shiolink-ruby](https://github.com/Narazaka/shiolink-ruby) | 未組み込み | Ruby の実行環境、SHIOLINK プロセス、追加 gem / native extension の扱い |
+| [aktk](https://github.com/kinokon/aktk) / [dktrtk](https://github.com/kinokon/dktrtk) / [krht](https://github.com/kinokon/krht) | 未組み込み | それぞれ mruby / AngelScript / Tcl を使う栞。各言語のランタイム、DLL アダプタ、ゴーストの依存機能が必要。確認したルートと ReadMe.txt では本体の再配布条件を特定できていないため、ソースの APK 同梱前に確認を続ける |
 | [cshiori](https://github.com/Narazaka/cshiori)、Go / Rust / Nim / Zig 等で書かれた独自栞 | 個別ゴーストの生成 DLL は未対応 | 開発用ライブラリを追加するだけでは、既に配布された各ゴーストの DLL は動かない。ソース別の Android ビルドか Windows DLL 実行環境が必要 |
 | 美坂、偽栞、文の旧世代、結奈、翡翠、里珠、忍、Lisp 系など | 未対応・調査継続 | 原配布物・版・ソース・配布条件の特定、または Windows DLL 経路。名称だけで既存エンジンへ割り当てない |
 | 未知・非公開・ゴースト専用の SHIORI DLL | 未対応 | 下記の共通 Windows DLL 実行経路 |
