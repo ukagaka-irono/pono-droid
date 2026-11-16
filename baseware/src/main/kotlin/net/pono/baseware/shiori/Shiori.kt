@@ -2,11 +2,16 @@ package net.pono.baseware.shiori
 
 import java.io.File
 
+enum class ShioriProtocolVersion { V3, V2_6 }
+
 /**
  * SHIORI モジュール（ゴーストの頭脳）。DLL の load / request / unload に相当する。
  * 実装はスレッドセーフでなくてよい。呼び出し側（[ShioriSession]）が1スレッドに固定する。
  */
 interface Shiori {
+    /** 古い栞は ShioriSession が SHIORI/2.6 の要求と応答に変換する。 */
+    val protocolVersion: ShioriProtocolVersion get() = ShioriProtocolVersion.V3
+
     /** @param dir ghost/master ディレクトリ */
     fun load(dir: File): Boolean
 

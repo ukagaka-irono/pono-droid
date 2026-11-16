@@ -1,7 +1,7 @@
 # pono-droid
 
 伺か（ukagaka）のゴーストを Android で動かすベースウェアです。
-ゴーストを他のアプリの上に常駐させ、SHIORI（ゴーストの頭脳）には YAYA・里々・華和梨・Kagari・Minato・Pasta・QuickSHIORI・なし栞 2 を Android 向けにビルドして使います。
+ゴーストを他のアプリの上に常駐させ、SHIORI（ゴーストの頭脳）には YAYA・里々・華和梨 8・華和梨 7・Kagari・Minato・Pasta・QuickSHIORI・なし栞 2 を Android 向けにビルドして使います。
 
 Windows 専用ゴーストと DLL を含む SSP 完全互換に向けて移植中です。現在の実装範囲と残作業は [移植の進捗](docs/ssp-porting.md) を参照してください。任意の Windows DLL を Android で実行する機能はまだ接続していません。
 
@@ -212,6 +212,7 @@ shiori-yaya/  SHIORI を NDK でビルドする Android ライブラリ（JNI、
   src/main/cpp/yaya   YAYA 本体（サブモジュール。手を加えていません。以下のサブモジュールも同じ）
   src/main/cpp/satori 里々
   src/main/cpp/kawari 華和梨
+  src/main/cpp/kawari7 華和梨 7.5.0（SHIORI/2.6）
   src/main/cpp/kagari Kagari（辞書を Lua で書く SHIORI）。lua（5.4）と sol2 を一緒にビルドする
   src/main/cpp/shim   Android 向けの差し替え（CP932 対応の iconv、statx / shm_open、ゴーストにできることを絞る pono_sandbox）
 ```
@@ -221,7 +222,7 @@ SHIORI を Android で動かすための工夫:
 - SHIORI はエンジンごとに別の .so（libyaya・libsatori・libkawari・libkagari）にし、アプリとは別のプロセス（`:shiori`）で動かして Binder（AIDL）でやりとりします。SHIORI の中で落ちてもアプリは落ちず、ゴーストを閉じて知らせます。辞書が無限ループして応答しなくなったときも、時間切れでそのプロセスを止めてゴーストを閉じます。
 - SHIORI が呼ぶ libc の関数（`dlopen` / `fork` / `system` / `popen` / `open` など）をリンク時の `--wrap` で `shim/pono_sandbox.cpp` に差し替え、辞書が触れるファイルをゴーストのディレクトリに限っています（下の「ゴーストにできること」）。
 
-- YAYA と里々のソースは Shift_JIS なので、ビルド時に Gradle で UTF-8 に変換してからコンパイルします（`#line` で元のファイルを指すので、エラー位置はサブモジュール側を指します）。華和梨は文字列が ASCII だけなのでそのまま、C++98 でコンパイルします。
+- YAYA と里々のソースは Shift_JIS なので、ビルド時に Gradle で UTF-8 に変換してからコンパイルします（`#line` で元のファイルを指すので、エラー位置はサブモジュール側を指します）。華和梨 8 は文字列が ASCII だけなのでそのまま、華和梨 7 は Shift_JIS のバイトをエスケープした生成コピーを C++98 でコンパイルします。
 - どの SHIORI を使うかは descript.txt の `shiori`（`yaya.dll`・`satori.dll`・`kawari.dll`・`kagari.dll` など）で決め、`shiori.dll` としか書かれていなければ ghost/master の辞書の設定ファイル（`yaya.txt`・`kawarirc.kis`・`index.lua` など）で見分けます。
 - Android の libc の iconv は CP932 を持たないため、Java の `windows-31j` から変換表を作り、自前の iconv に差し替えています。
 - サブモジュールは書き換えず、足りない関数は強制インクルードするヘッダで補っています。
@@ -249,7 +250,7 @@ SSP（Windows の伺かベースウェア）と同じイベント・タグをで
 
 ## 既知の制限
 
-- SHIORI は上記 8 エンジンを組み込んでいます。なし栞 2 の OS 入出力・SAORI は Android 向けの移植実装です。ほかの Windows SHIORI は、追加移植または互換ランタイムの接続が必要です。
+- SHIORI は上記 9 エンジンを組み込んでいます。華和梨 7 は専用エンジンと SHIORI/2.6 変換を使います。なし栞 2 の OS 入出力・SAORI は Android 向けの移植実装です。ほかの Windows SHIORI は、追加移植または互換ランタイムの接続が必要です。
 - SAORI は内蔵の互換モジュールと Android 向けに組み込んだモジュールに対応します。任意の同梱 Windows DLL や外部プログラムの起動はまだ対応していません。
 - `\_l` による選択肢の横並びは、座標どおりではなく列に分けて並べます。
 - サウンドは同時に鳴らせるのが1回分とループ1つまでです。
@@ -300,6 +301,7 @@ Released under the MIT License.
 | [uka_regexp](https://github.com/ukatech/uka_regexp) | Unlicense |
 | [里々（SATORI）](https://github.com/ukatech/satoriya-shiori) | BSD 2-Clause |
 | [華和梨（KAWARI）](https://github.com/kawari/kawari) | BSD |
+| [華和梨 7](https://github.com/kawari/kawari7) | BSD |
 | [Kagari](https://github.com/Tatakinov/kagari_shiori) | MIT |
 | [なし栞 2](https://github.com/ukagaka-irono/nashi-shiori-studio-2) | なしライセンス 1.1 |
 | [Lua](https://www.lua.org/) | MIT |

@@ -91,3 +91,6 @@
 [submodule "shiori-yaya/src/main/cpp/nashi"]
 	path = shiori-yaya/src/main/cpp/nashi
 	url = https://github.com/ukagaka-irono/nashi-shiori-studio-2.git
+[submodule "shiori-yaya/src/main/cpp/kawari7"]
+	path = shiori-yaya/src/main/cpp/kawari7
+	url = https://github.com/kawari/kawari7.git

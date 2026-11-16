@@ -28,6 +28,10 @@ in the app's ライセンス screen and are kept in those submodules.
   https://github.com/ukatech/satoriya-shiori
 - 華和梨 KAWARI (BSD-style License), Copyright (C) 2001-2015 KAWARI Development Team
   https://github.com/kawari/kawari
+
+- 華和梨 KAWARI 7.5.0 (BSD-style License), Copyright (C) 2001-2003 KAWARI Development Team
+  https://github.com/kawari/kawari7
+  Android 用の JNI・SAORI 接続を追加。ビルド時のコピーに 64 bit・Sender・SAORI 読込処理の修正を適用。
 - Kagari (MIT License), Copyright (c) 2019 Tatakinov
   https://github.com/Tatakinov/kagari_shiori
 - nashi 2 (Nashi License 1.1), Copyright (c) 2026 月見里 彩葉 (miyagawa-yukinterface)

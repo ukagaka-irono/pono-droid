@@ -9,6 +9,18 @@ import org.junit.rules.TemporaryFolder
 class ShioriEngineTest {
     @get:Rule val temp = TemporaryFolder()
 
+    @Test fun legacyKawariDictionaryUsesItsOwnEngine() {
+        temp.newFile("kawari.ini")
+        assertEquals(ShioriEngine.KAWARI7, ShioriEngine.forGhost("kawari.dll", temp.root))
+        assertEquals(ShioriEngine.KAWARI7, ShioriEngine.forGhost("shiori.dll", temp.root))
+        assertEquals(ShioriEngine.KAWARI7, ShioriEngine.forGhost("KAWARI7.DLL", temp.root))
+        assertEquals(ShioriEngine.KAWARI, ShioriEngine.forGhost("kawari8.dll", temp.root))
+        temp.newFile("kawarirc.kis")
+        assertEquals(ShioriEngine.KAWARI, ShioriEngine.forGhost("kawari.dll", temp.root))
+        assertEquals(ShioriEngine.KAWARI, ShioriEngine.forGhost("shiori.dll", temp.root))
+        assertEquals(ShioriEngine.YAYA, ShioriEngine.forGhost("yaya.dll", temp.root))
+    }
+
     @Test fun declaredNashiWorksWithoutProbingTheDictionary() {
         assertEquals(ShioriEngine.NASHI, ShioriEngine.forGhost(" NASHI.DLL ", temp.root))
     }

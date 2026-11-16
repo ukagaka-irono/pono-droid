@@ -148,6 +148,24 @@ target_include_directories(kawari PRIVATE ${KAWARI_SRC})
 target_compile_options(kawari PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-std=c++11>)
 pono_shiori_library(kawari)
 
+# ---- 華和梨 7（SHIORI/2.6、kawari.ini）----
+set(KAWARI7_SOURCES
+    libkawari/kawari.cpp libkawari/kawari_engine.cpp libkawari/kawari_dict.cpp
+    libkawari/kawari_code.cpp libkawari/kawari_iscript.cpp libkawari/kawari_lexer.cpp
+    libkawari/kawari_matchdict.cpp libkawari/kawari_matchcode.cpp libkawari/sequence_gen.cpp
+    libkawari/kawari_crypt.cpp misc/base64.cpp misc/misc.cpp misc/mt19937ar.cpp misc/phttp.cpp misc/i18n.cpp
+    saori/saori.cpp kis/kis_echo.cpp kis/kis_dict.cpp kis/kis_test.cpp kis/kis_date.cpp
+    kis/kis_counter.cpp kis/kis_cpiro.cpp kis/kis_expr.cpp kis/kis_file.cpp kis/kis_escape.cpp
+    kis/kis_help.cpp kis/kis_urllist.cpp kis/kis_saori.cpp kis/kis_substitute.cpp)
+list(TRANSFORM KAWARI7_SOURCES PREPEND ${KAWARI7_GENERATED_DIR}/)
+set_source_files_properties(${KAWARI7_SOURCES} PROPERTIES GENERATED TRUE COMPILE_OPTIONS "-w;-std=gnu++98")
+add_library(kawari7 SHARED ${KAWARI7_SOURCES} jni_kawari7.cpp shim/pono_kawari7_saori.cpp)
+target_include_directories(kawari7 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/shim/compat/kawari7 ${KAWARI7_GENERATED_DIR})
+target_compile_definitions(kawari7 PRIVATE I18N_HACK)
+target_compile_features(kawari7 PRIVATE cxx_std_11)
+target_link_libraries(kawari7 PRIVATE dl)
+pono_shiori_library(kawari7)
+
 # ---- Kagari（Lua 5.4 と sol2 を一緒に入れる）----
 
 set(LUA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lua)

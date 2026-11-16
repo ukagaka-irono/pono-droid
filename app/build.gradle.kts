@@ -111,6 +111,7 @@ abstract class GenerateLicenseAssets : DefaultTask() {
             Entry("uka_regexp", "Unlicense", "https://github.com/ukatech/uka_regexp", read("yaya/uka_regexp/LICENSE").trim()),
             Entry("里々（SATORI）", "BSD 2-Clause", "https://github.com/ukatech/satoriya-shiori", read("satori/LICENSE").trim()),
             Entry("華和梨（KAWARI）", "BSD", "https://github.com/kawari/kawari", read("kawari/LICENSE").trim()),
+            Entry("華和梨 7（KAWARI 7.5.0）", "BSD", "https://github.com/kawari/kawari7", read("kawari7/license.txt").trim()),
             Entry("Kagari", "MIT", "https://github.com/Tatakinov/kagari_shiori", read("kagari/LICENSE").trim()),
             Entry("QuickShiori", "BSD-3-Clause", "https://github.com/cronfox/quickshiori", read("quickshiori/LICENSE").trim()),
             Entry("なし栞 2（Android 移植）", "Nashi License 1.1", "https://github.com/miyagawa-yukinterface/nashi-shiori-studio",

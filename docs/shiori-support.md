@@ -1,6 +1,6 @@
 # SHIORI 対応状況
 
-更新: 2026-11-15
+更新: 2026-11-16
 
 目標は全ての栞への対応。Windows 専用 DLL、古い栞、ゴースト独自の栞も対象とする。
 この表は現時点で確認した実装と候補の台帳であり、世の中の全ての栞を列挙し終えたものではない。
@@ -12,7 +12,8 @@
 |---|---|---|
 | YAYA | yaya.dll / aya.dll / aya5.dll | yaya.txt / aya.txt |
 | 里々 | satori.dll | satori_conf.txt、または保存ファイルと辞書 |
-| 華和梨 8 | kawari.dll / kawari8.dll | kawarirc.kis / kawari.ini |
+| 華和梨 8 | kawari.dll / kawari8.dll | kawarirc.kis |
+| 華和梨 7.5.0 | kawari7.dll / kawari.dll（下記参照） | kawari.ini |
 | Kagari | kagari.dll | index.lua |
 | Minato | minato.dll | config.toml と talks/main.mnt |
 | Pasta | pasta.dll | pasta.toml |
@@ -22,6 +23,19 @@
 実装の正本は `ShioriEngine.forGhost` と CMake のビルド対象。
 `aya.dll` / `aya5.dll` は現在 YAYA で実行する。AYA の全世代との同一動作を保証するものではない。
 既知の DLL 名が優先され、その次に辞書を判定する。
+ただし `kawari.dll` は 7 / 8 共通の名前なので、`kawari.ini` だけがあれば 7、`kawarirc.kis` があれば 8 を選ぶ。
+
+## 華和梨 7 の移植
+
+- ソース: [kawari7](https://github.com/kawari/kawari7)、固定コミット `6b2586c4579e6071b5bedc58fc091d1b46a3c8af`。BSD 系の `license.txt` 全文をアプリに同梱する。
+- 華和梨 8 と独立した `libkawari7.so` として、7.5.0 の辞書・インラインスクリプト・暗号化辞書の処理をビルドする。
+- ソースを直接変更せず、生成コピーで Shift_JIS のバイトをエスケープし、64 bit の文字列位置、Sender の末尾除去、noresident SAORI の読み込みを修正する。
+- JNI は辞書とロケールをインスタンスごとに保持する。SAORI は既存の内蔵・移植済みモジュールに接続し、ファイル操作には既存のサンドボックスを適用する。
+- 共通の終了処理でも呼び出し元の SAORI ハンドラと JNI スレッドを設定する。複数のゴーストを動かした後の OnUnload も、そのゴーストのハンドラへ渡す。
+- 共通の `ShioriSession` に SHIORI/2.6 経路を追加。Version / String / Sentence、OnCommunicate、OnTeach、OnTranslate、ownerghostname / otherghostname を変換する。3.0 の一般 NOTIFY に相当する 2.x イベントは送らない。
+- 読み込み直後に GET Version で文字コードを確認する。forceencoding と escape_unknown は旧栞にも適用する。応答の Sentence / String / Version を Value に、To と追加 Reference を 3.0 の会話形式に合わせる。
+- `Kawari7NativeTest` は日本語辞書・要求、旧プロトコル、SAORI の 3 読込モード、2 インスタンスの文字コード、別プロセス接続、保存と再読み込み、書込範囲を検証する。CI では既存のなし栞 5 件と合わせて 11 件を API 26 / 35 で実行する。
+- 日本語ファイル名や Windows のパス表記を含む全辞書、および実配布ゴースト全体の動作比較は未完了。任意の Windows DLL を動かす機能ではない。
 
 ## なし栞 2 の移植
 
@@ -68,7 +82,6 @@ Build ワークフローは 4 ABI の APK とテスト APK を作り、後続ジ
 |---|---|---|
 | [蒼空](https://github.com/kanadelab/aosora-shiori) | 未組み込み | `license.txt` は配布 DLL の SHIORI / SAORI 利用と配布を認める一方、ソースの利用は個人利用・プロジェクト参加などに制限している。Android 移植版の APK 同梱は現条件から許可を確認できないため保留。配布 DLL を動かす経路も対象とする |
 | [AYA 5](https://github.com/ponapalt/aya5-shiori) | YAYA の互換経路のみ | readme.txt は改変・再配布を許可。旧ソース専用ビルド、Boost.Regex 依存、CP932・64 bit・Android の API 差分と旧ゴーストでの比較が必要 |
-| [華和梨 7](https://github.com/kawari/kawari7) | 未組み込み | `license.txt` は BSD 系の条件で改変・再配布を許可。独立したエンジンのビルドに加え、SHIORI/2.x の要求・応答への対応が必要。現在の `ShioriSession` は SHIORI/3.0 で送信するため、DLL 名や kawari.ini の存在だけでは旧版への対応を保証できない |
 | [MiyoJS](https://github.com/Narazaka/miyojs) | 未組み込み | Node.js とモジュール依存を調査し、実行環境を移植する。QuickSHIORI の JavaScript エンジンとは別物として扱う |
 | [phiori](https://github.com/phiori/phiori) | 未組み込み | Python を使う DLL の実行環境、依存ライブラリ、Android 向けアダプタと配布条件の確認 |
 | [ShioriSharp](https://github.com/Narazaka/ShioriSharp) / [dnproxy](https://github.com/nikolat/dnproxy) | 未組み込み | .NET 系の栞・プロキシと、それぞれのゴースト固有コードを扱う経路の調査 |

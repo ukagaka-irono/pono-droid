@@ -264,6 +264,68 @@ val prepareKawariSources = tasks.register("prepareKawariSources") {
     }
 }
 
+// Kawari 7 stores Shift_JIS bytes in literals. Escape bytes as upstream's sjis2ascii.rb does,
+// including the second byte of a pair (which can be '\\'), without changing include filenames.
+val kawari7Dir = layout.projectDirectory.dir("src/main/cpp/kawari7/src")
+val kawari7GeneratedDir = layout.buildDirectory.dir("generated/kawari7")
+val prepareKawari7Sources = tasks.register("prepareKawari7Sources") {
+    val sources = kawari7Dir.asFileTree.matching { include("**/*.cpp", "**/*.h", "**/*.inc"); exclude("**/old/**") }
+    inputs.files(sources)
+    outputs.dir(kawari7GeneratedDir)
+    doLast {
+        val files = linkedMapOf<String, ByteArray>()
+        for (source in sources) {
+            val path = source.relativeTo(kawari7Dir.asFile).invariantSeparatorsPath
+            val bytes = source.readBytes()
+            var trail = false
+            var text = buildString {
+                for (byte in bytes) {
+                    val c = byte.toInt() and 255
+                    if (trail) { append('\\').append(c.toString(8).padStart(3, '0')); trail = false }
+                    else if (c >= 128) {
+                        append('\\').append(c.toString(8).padStart(3, '0'))
+                        trail = c in 0x81..0x9f || c in 0xe0..0xfc
+                    } else append(c.toChar())
+                }
+            }
+            fun fix(from: String, to: String, count: Int = 1) { text = patchSource(text, path, from, to, count) }
+            when (path) {
+                "kis/kis_expr.cpp" -> {
+                    fix("unsigned int idx;", "size_t idx;", 2)
+                    fix("unsigned int idx = string::npos;", "size_t idx = string::npos;")
+                }
+                "kis/kis_saori.cpp" -> {
+                    fix("unsigned int pos=statusline.find", "size_t pos=statusline.find")
+                    fix("unsigned int npos=statusline.find", "size_t npos=statusline.find")
+                }
+                "libkawari/kawari_code.cpp" -> fix("unsigned int pos2 = Data.find", "size_t pos2 = Data.find")
+                "misc/phttp.cpp" -> fix("unsigned int pos=buff.find", "size_t pos=buff.find")
+                "misc/i18n.cpp" -> {
+                    fix("int index = locale.find", "size_t index = locale.find")
+                    // Modern libc++ also declares the locale overload of tolower.
+                    fix("ret.end(), ret.begin(), tolower);", "ret.end(), ret.begin(), static_cast<int (*)(int)>(std::tolower));")
+                    fix("enc.end(), enc.begin(), tolower);", "enc.end(), enc.begin(), static_cast<int (*)(int)>(std::tolower));")
+                }
+                "libkawari/kawari.cpp" -> {
+                    // SecurityLevel already supplies the route; only strip a suffix that actually exists.
+                    for (suffix in listOf("(local)", "(external)")) {
+                        val n = suffix.length
+                        fix("sender=sender.substr(0, sender.length()-$n);",
+                            "if (sender.size() >= $n && sender.compare(sender.size()-$n, $n, \"$suffix\")==0) sender.resize(sender.size()-$n);")
+                    }
+                }
+                "saori/saori.cpp" -> {
+                    // Calling Request here also Detatch-es NORESIDENT modules before the real request.
+                    fix("if (!Request(request, response)\n\t\t\t|| !(response.GetStartline().find(\"SAORI/1.\")==0))",
+                        "response.Deserialize(bind->Request(request.Serialize()));\n\t\tif (!(response.GetStartline().find(\"SAORI/1.\")==0))")
+                }
+            }
+            files[path] = text.toByteArray(Charsets.US_ASCII)
+        }
+        syncFiles(kawari7GeneratedDir.get().asFile, files)
+    }
+}
+
 // tukinami さんたちの Rust の SAORI（サブモジュール saori/saori-*）。Windows だけの lib.rs（DllMain と HGLOBAL）と
 // chars.rs（MultiByteToWideChar）を src/main/rust の pono_entry.rs・pono_chars.rs に替え、ほかのソースはそのまま写す。
 // Cargo.toml と Cargo.lock は src/main/rust/<名前>/ のもの。ビルドは CMake が cargo を呼ぶ
@@ -555,6 +617,7 @@ android {
                     "-DYAYA_GENERATED_DIR=${generatedDir.get().asFile.absolutePath.replace('\\', '/')}",
                     "-DSATORI_GENERATED_DIR=${satoriGeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
                     "-DKAWARI_GENERATED_DIR=${kawariGeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
+                    "-DKAWARI7_GENERATED_DIR=${kawari7GeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
                     "-DRUST_SAORI_DIR=${rustSaoriGeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
                     "-DRUST_SHIORI_DIR=${rustShioriGeneratedDir.get().asFile.absolutePath.replace('\\', '/')}",
                     // cargo の出力は ABI と debug / release で分けず 1 つにする（どれも --release で、target ごとに分かれる）
@@ -585,7 +648,7 @@ android {
 }
 
 tasks.matching { it.name.startsWith("configureCMake") || it.name.startsWith("buildCMake") }.configureEach {
-    dependsOn(convertYayaSources, convertSatoriSources, prepareKawariSources, generateCp932Table, prepareRustSaoriSources, prepareRustShioriSources)
+    dependsOn(convertYayaSources, convertSatoriSources, prepareKawariSources, prepareKawari7Sources, generateCp932Table, prepareRustSaoriSources, prepareRustShioriSources)
 }
 
 dependencies {

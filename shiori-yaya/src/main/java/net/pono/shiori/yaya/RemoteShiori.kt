@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit
  * bind の完了はメインスレッドで届くので、[load] はメインスレッド以外から呼ぶこと（ShioriSession は専用のスレッドで呼ぶ）。
  */
 class RemoteShiori(context: Context, private val engine: ShioriEngine, private val slot: Int = 0) : Shiori {
+    override val protocolVersion get() = engine.protocolVersion
     private val context = context.applicationContext
     @Volatile private var service: IShioriService? = null
     private var binder: IBinder? = null

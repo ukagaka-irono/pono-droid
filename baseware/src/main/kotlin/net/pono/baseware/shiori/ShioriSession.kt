@@ -16,7 +16,7 @@ import java.util.concurrent.Executors
 class ShioriTimeoutException(message: String) : RuntimeException(message)
 
 /**
- * 1つの SHIORI を1本のスレッドで動かし、SHIORI/3.0 の文字列でやりとりする。
+ * 1つの SHIORI を1本のスレッドで動かす。既定は SHIORI/3.0、旧栞では 2.6 に変換する。
  * 文字コードは最初は descript.txt の指定を使い、以後は SHIORI が返した `Charset` に合わせる（[forceCharset] なら合わせない）。
  * [escapeUnknown] なら、その文字コードにできない文字を ?escape!unicode[0xABCD] にして渡し、答えで元に戻す。
  * 呼び出しには時間の上限があり、過ぎたら [Shiori.abort] して [ShioriTimeoutException] を投げる。
@@ -41,13 +41,25 @@ class ShioriSession(
     var charset: Charset = initialCharset
         private set
 
-    suspend fun load(dir: File): Boolean = call(loadTimeoutMs, "load") { shiori.load(dir) } ?: false
+    suspend fun load(dir: File): Boolean = call(loadTimeoutMs, "load") {
+        if (!shiori.load(dir)) return@call false
+        // 2.x の栞は辞書側で文字コードを決める。最初の日本語イベントより前に確認する。
+        if (shiori.protocolVersion == ShioriProtocolVersion.V2_6) exchange(ShioriRequest(ShioriMethod.GET, "version"))
+        true
+    } ?: false
 
     suspend fun request(request: ShioriRequest): ShioriResponse? = call(requestTimeoutMs, request.id) {
-        val raw = shiori.request(request.encode(charset, sender, escapeUnknown)) ?: return@call null
-        val response = ShioriResponse.parse(raw, charset, force = forceCharset, unescape = escapeUnknown) ?: return@call null
+        exchange(request)
+    }
+
+    private fun exchange(request: ShioriRequest): ShioriResponse? {
+        val legacy = shiori.protocolVersion == ShioriProtocolVersion.V2_6
+        val encoded = if (legacy) LegacyShioriProtocol.encode(request, charset, sender, escapeUnknown)
+            ?: return ShioriResponse(204, emptyMap()) else request.encode(charset, sender, escapeUnknown)
+        val raw = shiori.request(encoded) ?: return null
+        val response = ShioriResponse.parse(raw, charset, force = forceCharset, unescape = escapeUnknown) ?: return null
         if (!forceCharset) response.charset?.let(TextCharsets::resolve)?.let { charset = it }
-        response
+        return if (legacy) LegacyShioriProtocol.convert(request, response) else response
     }
 
     suspend fun get(id: String, vararg references: String): ShioriResponse? =

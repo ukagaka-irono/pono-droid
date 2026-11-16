@@ -93,8 +93,9 @@ public:
         return out;
     }
 
-    jboolean Unload(jlong handle) {
+    jboolean Unload(JNIEnv *env, jlong handle) {
         std::lock_guard<std::mutex> guard(lock_);
+        pono_saori_attach(env);
         long id = static_cast<long>(handle - 1);
         bool ok;
         try {
@@ -236,6 +237,6 @@ private:
         JNIEnv *env, jobject, jlong handle, jbyteArray req) {                                                       \
         return g_shiori_jni.Request(env, handle, req);                                                             \
     }                                                                                                               \
-    extern "C" JNIEXPORT jboolean JNICALL Java_net_pono_shiori_yaya_##CLASS##_unload(JNIEnv *, jobject, jlong handle) { \
-        return g_shiori_jni.Unload(handle);                                                                        \
+    extern "C" JNIEXPORT jboolean JNICALL Java_net_pono_shiori_yaya_##CLASS##_unload(JNIEnv *env, jobject, jlong handle) { \
+        return g_shiori_jni.Unload(env, handle);                                                                   \
     }

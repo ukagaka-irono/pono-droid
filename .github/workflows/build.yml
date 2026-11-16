@@ -87,7 +87,7 @@ jobs:
           path: baseware/build/reports/tests/
           if-no-files-found: ignore
 
-  nashi-native-tests:
+  shiori-native-tests:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -105,7 +105,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Run nashi JNI tests
+      - name: Run nashi and legacy Kawari JNI tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api }}
@@ -114,12 +114,12 @@ jobs:
           disable-animations: true
           script: |
             adb install -t native-test/shiori-yaya-debug-androidTest.apk
-            adb shell am instrument -w -r -e class net.pono.shiori.yaya.NashiNativeTest net.pono.shiori.yaya.test/androidx.test.runner.AndroidJUnitRunner | tee nashi-results.txt
-            python3 -c "import pathlib, re; text = pathlib.Path('nashi-results.txt').read_text(); assert re.search(r'OK \(5 tests\)', text), text"
+            adb shell am instrument -w -r -e class net.pono.shiori.yaya.NashiNativeTest,net.pono.shiori.yaya.Kawari7NativeTest net.pono.shiori.yaya.test/androidx.test.runner.AndroidJUnitRunner | tee shiori-results.txt
+            python3 -c "import pathlib, re; text = pathlib.Path('shiori-results.txt').read_text(); assert re.search(r'OK \(11 tests\)', text), text"
       - name: Upload native test output
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: nashi-test-results-api-${{ matrix.api }}
-          path: nashi-results.txt
+          name: shiori-test-results-api-${{ matrix.api }}
+          path: shiori-results.txt
           if-no-files-found: ignore

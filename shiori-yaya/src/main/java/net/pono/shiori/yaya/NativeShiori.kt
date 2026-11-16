@@ -2,6 +2,7 @@ package net.pono.shiori.yaya
 
 import android.content.Context
 import net.pono.baseware.shiori.Shiori
+import net.pono.baseware.shiori.ShioriProtocolVersion
 import java.io.File
 
 /** NDK でビルドした SHIORI のライブラリ1つ分の入口（jni_common.h の PONO_DEFINE_SHIORI_JNI と対になる） */
@@ -52,6 +53,13 @@ internal object KawariNative : NativeBinding {
 
     external override fun request(id: Long, request: ByteArray): ByteArray?
 
+    external override fun unload(id: Long): Boolean
+}
+
+internal object Kawari7Native : NativeBinding {
+    init { System.loadLibrary("kawari7") }
+    external override fun load(dir: ByteArray, allowedDir: ByteArray, protectedDir: ByteArray, readableDirs: ByteArray): Long
+    external override fun request(id: Long, request: ByteArray): ByteArray?
     external override fun unload(id: Long): Boolean
 }
 
@@ -111,7 +119,7 @@ internal object NashiNative : NativeBinding {
 }
 
 /** pono-droid で動かせる SHIORI */
-enum class ShioriEngine(internal val binding: () -> NativeBinding) {
+enum class ShioriEngine(internal val binding: () -> NativeBinding, val protocolVersion: ShioriProtocolVersion = ShioriProtocolVersion.V3) {
     YAYA({ YayaNative }),
     SATORI({ SatoriNative }),
     KAWARI({ KawariNative }),
@@ -120,6 +128,7 @@ enum class ShioriEngine(internal val binding: () -> NativeBinding) {
     PASTA({ PastaNative }),
     QUICKSHIORI({ QuickShioriNative }),
     NASHI({ NashiNative }),
+    KAWARI7({ Kawari7Native }, ShioriProtocolVersion.V2_6),
     ;
 
     companion object {
@@ -128,6 +137,7 @@ enum class ShioriEngine(internal val binding: () -> NativeBinding) {
             "yaya.dll" to YAYA, "aya.dll" to YAYA, "aya5.dll" to YAYA,
             "satori.dll" to SATORI,
             "kawari.dll" to KAWARI, "kawari8.dll" to KAWARI,
+            "kawari7.dll" to KAWARI7,
             "kagari.dll" to KAGARI,
             "minato.dll" to MINATO,
             "pasta.dll" to PASTA,
@@ -140,12 +150,16 @@ enum class ShioriEngine(internal val binding: () -> NativeBinding) {
          * ghost/master にある辞書の設定ファイルで見分ける。どれでもなければ null（未対応）
          */
         fun forGhost(shioriName: String, masterDir: File): ShioriEngine? {
-            byDllName[shioriName.trim().lowercase()]?.let { return it }
             fun has(name: String) = File(masterDir, name).isFile
+            val name = shioriName.trim().lowercase()
+            // kawari.dll は 7/8 の両方に使われる。8 の設定があれば従来どおり 8 を優先する。
+            if (name == "kawari.dll" && has("kawari.ini") && !has("kawarirc.kis")) return KAWARI7
+            byDllName[name]?.let { return it }
             return when {
                 has("yaya.txt") || has("aya.txt") -> YAYA
                 has("satori_conf.txt") || masterDir.list()?.any { it.startsWith("dic") && it.endsWith(".txt") && has("satori_savedata.txt") } == true -> SATORI
-                has("kawarirc.kis") || has("kawari.ini") -> KAWARI
+                has("kawarirc.kis") -> KAWARI
+                has("kawari.ini") -> KAWARI7
                 has("index.lua") -> KAGARI
                 has("config.toml") && has("talks/main.mnt") -> MINATO
                 has("pasta.toml") -> PASTA
@@ -162,6 +176,7 @@ enum class ShioriEngine(internal val binding: () -> NativeBinding) {
  * アプリからは [RemoteShiori]（別プロセス）を使う。これは [ShioriService] の中とテストで使う。
  */
 class NativeShiori(private val engine: ShioriEngine, private val sandbox: Sandbox) : Shiori {
+    override val protocolVersion get() = engine.protocolVersion
     /**
      * ゴーストの辞書（信頼できないコード）にファイルを触らせてよい範囲。
      * [allowedDir] の下は読み書きできる。[protectedDir]（アプリの領域）はそれ以外読めない。
@@ -220,7 +235,7 @@ class NativeShiori(private val engine: ShioriEngine, private val sandbox: Sandbo
 
     override fun unload() {
         if (id > 0) {
-            native.unload(id)
+            SaoriBridge.with(saori) { native.unload(id) }
             id = 0
         }
     }
