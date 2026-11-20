@@ -38,6 +38,23 @@
 - `Kawari7NativeTest` は日本語辞書・要求、旧プロトコル、SAORI の 3 読込モード、2 インスタンスの文字コード、別プロセス接続、保存と再読み込み、書込範囲を検証する。CI では既存のなし栞 5 件と合わせて 11 件を API 26 / 35 で実行する。
 - 日本語ファイル名や Windows のパス表記を含む全辞書、および実配布ゴースト全体の動作比較は未完了。任意の Windows DLL を動かす機能ではない。
 
+### 検証結果（2026-11-20）
+
+| 検証 | 結果 |
+|---|---|
+| ローカルの本体単体テスト | 524 件中 522 件成功、2 件スキップ。旧プロトコルの追加 6 件はすべて成功 |
+| ローカルの栞モジュール / アプリ単体テスト | 9 件 / 6 件成功 |
+| APK・テスト APK | CI で arm64-v8a / armeabi-v7a / x86 / x86_64 の 4 ABI をビルド成功 |
+| API 26 / x86_64 の Android エミュレータ | 華和梨 7 の 6 件となし栞の 5 件、合計 11 件成功 |
+| API 35 / x86_64 の Android エミュレータ | 同じ 11 件すべて成功 |
+| Windows DLL ホスト | CI 成功 |
+
+対象コードは `9026e560aeb7c6a53fd148a6252f68e9f8104f33`。
+[APK・Android 試験の実行結果](https://github.com/ukagaka-irono/pono-droid/actions/runs/44722853173)、
+[Windows ホストの実行結果](https://github.com/ukagaka-irono/pono-droid/actions/runs/44722853229)。
+SAORI 試験は preload / loadoncall / noresident のそれぞれで、通常の要求、空の引数、空の応答を繰り返し確認した。
+物理 Android 端末や実配布ゴースト全体での確認は含まない。
+
 ## なし栞 2 の移植
 
 - ソース: [nashi-shiori-studio-2](https://github.com/ukagaka-irono/nashi-shiori-studio-2)、固定コミット `347c61f244532027399d7ea94f63b11f6b7e251f`。
