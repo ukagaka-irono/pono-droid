@@ -66,19 +66,29 @@ class Kawari7NativeTest {
 
     @Test fun saoriWorksInAllThreeLoadingModes() = runBlocking {
         for (mode in listOf("preload", "loadoncall", "noresident")) {
-            val dir = ghost("event.OnTest : %(callsaori calc \"\" 1+2*3)|%(callsaori host ぽの)",
+            // Kawari 7 drops an empty quoted literal; an entry expansion keeps an empty argument.
+            val dir = ghost("""
+                event.OnTest : %(callsaori calc before_floor 1+2*3)|%(callsaori host ぽの)
+                event.OnEmptyArgument : %(callsaori calc %{missing} 1+2*3)
+                event.OnEmptyResponse : %(callsaori host blank)done
+            """,
                 extra = "saori : calcs.dll,calc,$mode\nsaori : internal_test.dll,host,$mode")
             File(dir, "calcs.dll").writeBytes(ByteArray(4))
             val shiori = native(dir)
             shiori.setSaoriHandler { request, _ ->
                 val text = request.toString(TextCharsets.CP932)
+                if (text.contains("Argument0: blank\r\n")) return@setSaoriHandler ByteArray(0)
                 if (text.startsWith("EXECUTE")) assertTrue(text, text.contains("Argument0: ぽの"))
                 "SAORI/1.0 200 OK\r\nCharset: Shift_JIS\r\nResult: 日本語\r\n\r\n".toByteArray(TextCharsets.CP932)
             }
             val session = ShioriSession(shiori, Charsets.UTF_8)
             try {
                 assertTrue(session.load(dir))
-                repeat(2) { assertEquals(mode, "7|日本語", session.get("OnTest")?.value) }
+                repeat(2) {
+                    assertEquals(mode, "7|日本語", session.get("OnTest")?.value)
+                    assertEquals("$mode: empty argument", "7", session.get("OnEmptyArgument")?.value)
+                    assertEquals("$mode: empty response", "done", session.get("OnEmptyResponse")?.value)
+                }
             } finally { session.unload() }
         }
     }

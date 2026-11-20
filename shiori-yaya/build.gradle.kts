@@ -299,7 +299,14 @@ val prepareKawari7Sources = tasks.register("prepareKawari7Sources") {
                     fix("unsigned int npos=statusline.find", "size_t npos=statusline.find")
                 }
                 "libkawari/kawari_code.cpp" -> fix("unsigned int pos2 = Data.find", "size_t pos2 = Data.find")
-                "misc/phttp.cpp" -> fix("unsigned int pos=buff.find", "size_t pos=buff.find")
+                "misc/phttp.cpp" -> {
+                    fix("unsigned int pos=buff.find", "size_t pos=buff.find")
+                    // SAORI argument positions must survive even when an expansion evaluates to "".
+                    fix("if(it->second.size())", "if(it->second.size() || it->first.compare(0, 8, \"Argument\")==0)")
+                    fix("if(buff[buff.size()-1]=='\\x0d')", "if(!buff.empty() && buff[buff.size()-1]=='\\x0d')", 2)
+                    fix("size_t pos=buff.find(':');", "size_t pos=buff.find(':');\n\t\tif(pos==string::npos || pos==0) continue;")
+                    fix("while(buff[pos]==' ')", "while(pos<buff.size() && buff[pos]==' ')")
+                }
                 "misc/i18n.cpp" -> {
                     fix("int index = locale.find", "size_t index = locale.find")
                     // Modern libc++ also declares the locale overload of tolower.

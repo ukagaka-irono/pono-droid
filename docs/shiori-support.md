@@ -1,6 +1,6 @@
 # SHIORI 対応状況
 
-更新: 2026-11-16
+更新: 2026-11-20
 
 目標は全ての栞への対応。Windows 専用 DLL、古い栞、ゴースト独自の栞も対象とする。
 この表は現時点で確認した実装と候補の台帳であり、世の中の全ての栞を列挙し終えたものではない。
@@ -30,6 +30,7 @@
 - ソース: [kawari7](https://github.com/kawari/kawari7)、固定コミット `6b2586c4579e6071b5bedc58fc091d1b46a3c8af`。BSD 系の `license.txt` 全文をアプリに同梱する。
 - 華和梨 8 と独立した `libkawari7.so` として、7.5.0 の辞書・インラインスクリプト・暗号化辞書の処理をビルドする。
 - ソースを直接変更せず、生成コピーで Shift_JIS のバイトをエスケープし、64 bit の文字列位置、Sender の末尾除去、noresident SAORI の読み込みを修正する。
+- SAORI の空の Argument ヘッダを保持し、空・不正な応答を読んでも文字列の範囲外を参照しないようにする。華和梨 7 本来の構文では空の引用符だけの引数は省略されるため、空文字を渡す試験には未定義エントリの展開を使う。
 - JNI は辞書とロケールをインスタンスごとに保持する。SAORI は既存の内蔵・移植済みモジュールに接続し、ファイル操作には既存のサンドボックスを適用する。
 - 共通の終了処理でも呼び出し元の SAORI ハンドラと JNI スレッドを設定する。複数のゴーストを動かした後の OnUnload も、そのゴーストのハンドラへ渡す。
 - 共通の `ShioriSession` に SHIORI/2.6 経路を追加。Version / String / Sentence、OnCommunicate、OnTeach、OnTranslate、ownerghostname / otherghostname を変換する。3.0 の一般 NOTIFY に相当する 2.x イベントは送らない。
